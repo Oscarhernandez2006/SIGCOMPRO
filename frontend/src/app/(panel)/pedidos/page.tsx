@@ -1654,28 +1654,29 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Comanda ${comanda}</title>
   <style>
     *{font-family:Arial,sans-serif;color:#000;font-weight:bold;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{size:80mm auto;margin:0}
     html,body{background:#fff}
-    body{width:80mm;margin:0 auto;padding:8px;font-size:13px;line-height:1.35}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;font-size:12px;font-weight:bold}
+    body{width:80mm;margin:0;padding:4px 5px;font-size:15px;line-height:1.4}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;font-size:14px;font-weight:bold}
     .logo{text-align:center;margin:6px 0}
     .logo img{max-width:60mm;max-height:30mm;object-fit:contain}
     .logo .b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:6px 14px;font-weight:bold;letter-spacing:1px}
-    h1{font-size:19px;text-align:center;margin:8px 0 2px}
-    .nit{text-align:left;font-size:22px;font-weight:bold;margin:6px 0 2px}
-    .emp{text-align:center;font-size:13px;color:#000;margin-bottom:8px}
-    .row{margin:2px 0}
+    h1{font-size:23px;text-align:center;margin:8px 0 2px}
+    .nit{text-align:left;font-size:26px;font-weight:bold;margin:6px 0 2px}
+    .emp{text-align:center;font-size:15px;color:#000;margin-bottom:8px}
+    .row{margin:3px 0}
     .label{font-weight:bold}
-    .com{font-size:16px;font-weight:bold;margin:8px 0}
+    .com{font-size:19px;font-weight:bold;margin:8px 0}
     hr{border:none;border-top:2px solid #000;margin:8px 0}
-    .sec{font-weight:bold;font-size:14px;margin:6px 0 4px}
-    .prod{margin-bottom:8px;font-size:12px;border-bottom:2px solid #000;padding-bottom:8px}
+    .sec{font-weight:bold;font-size:17px;margin:6px 0 4px}
+    .prod{margin-bottom:8px;font-size:14px;border-bottom:2px solid #000;padding-bottom:8px}
     .prod:last-child{border-bottom:none}
     .pn{font-weight:bold}
     .pn-nota{color:#000}
-    .tot{font-size:17px;font-weight:bold;margin:8px 0}
+    .tot{font-size:20px;font-weight:bold;margin:8px 0}
     .qr{text-align:left;margin-top:10px}
     .qr img{width:35mm;height:35mm;image-rendering:pixelated}
-    .qr small{display:block;font-size:11px;color:#000;margin-top:2px}
+    .qr small{display:block;font-size:12px;color:#000;margin-top:2px}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
   </style></head><body>
     <div class="top"><span>${fecha}</span><span>${hora}</span></div>
