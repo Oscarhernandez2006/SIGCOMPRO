@@ -8,10 +8,36 @@ import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho } from "@/lib/pedidos";
+import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import CrearClienteModal from "@/components/CrearClienteModal";
 import QRCode from "qrcode";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
+
+/**
+ * Borrador de pedido "congelado" (en espera). Guarda el estado del wizard tal
+ * como iba el vendedor para poder retomarlo después. Se persiste en la base de
+ * datos por usuario. El consecutivo temporal (CONG-N) es solo una etiqueta; el
+ * consecutivo real del software se asigna únicamente al crear el pedido,
+ * evitando consecutivos duplicados.
+ */
+interface PedidoCongelado {
+  id: string;
+  tempConsecutivo: number;
+  creadoEn: string;
+  paso: number;
+  punto: PuntoVenta | null;
+  cliente: Cliente | null;
+  carrito: ItemCarrito[];
+  entrega: "domicilio" | "recoge" | null;
+  pago: string | null;
+  valorDomicilio: number;
+  programado: boolean;
+  fechaProgramada: string;
+  clienteNombre: string;
+  numItems: number;
+  totalParcial: number;
+}
 
 export default function PedidosPage() {
   const [wizardAbierto, setWizardAbierto] = useState(false);
@@ -19,6 +45,18 @@ export default function PedidosPage() {
   const [detalle, setDetalle] = useState<Pedido | null>(null);
   const [editando, setEditando] = useState<Pedido | null>(null);
   const [clonando, setClonando] = useState<Pedido | null>(null);
+
+  // Pedidos congelados (borradores en espera) del vendedor.
+  const [congelados, setCongelados] = useState<PedidoCongelado[]>([]);
+  const [modalCongelados, setModalCongelados] = useState(false);
+  const [borrador, setBorrador] = useState<PedidoCongelado | null>(null);
+
+  // Cargar congelados persistidos en la base de datos al iniciar.
+  useEffect(() => {
+    listarCongeladosApi<PedidoCongelado>()
+      .then(setCongelados)
+      .catch(() => setCongelados([]));
+  }, []);
 
   // Usuario actual y permisos granulares.
   const [usuario, setUsuario] = useState<ReturnType<typeof getUsuario>>(null);
@@ -51,9 +89,51 @@ export default function PedidosPage() {
     guardarPedidoApi(p).catch(() => { /* ignore */ });
   };
 
-  const abrirNuevo = () => { setEditando(null); setClonando(null); setWizardAbierto(true); };
-  const abrirEdicion = (p: Pedido) => { setEditando(p); setClonando(null); setWizardAbierto(true); };
-  const abrirClon = (p: Pedido) => { setEditando(null); setClonando(p); setWizardAbierto(true); };
+  const abrirNuevo = () => { setEditando(null); setClonando(null); setBorrador(null); setWizardAbierto(true); };
+  const abrirEdicion = (p: Pedido) => { setEditando(p); setClonando(null); setBorrador(null); setWizardAbierto(true); };
+  const abrirClon = (p: Pedido) => { setEditando(null); setClonando(p); setBorrador(null); setWizardAbierto(true); };
+  const cerrarWizard = () => { setWizardAbierto(false); setEditando(null); setClonando(null); setBorrador(null); };
+
+  // Congela (guarda en espera) el borrador actual del wizard.
+  const congelarBorrador = async (b: PedidoCongelado) => {
+    try {
+      const guardado = await guardarCongeladoApi<PedidoCongelado>(b.id, b);
+      setCongelados((prev) => {
+        const sinEste = prev.filter((x) => x.id !== guardado.id);
+        return [...sinEste, guardado];
+      });
+      cerrarWizard();
+    } catch {
+      alert("No se pudo congelar el pedido. Intenta de nuevo.");
+    }
+  };
+
+  // Descongela: saca el borrador de la lista y lo abre en el wizard.
+  const descongelar = async (b: PedidoCongelado) => {
+    try {
+      await eliminarCongeladoApi(b.id);
+    } catch {
+      alert("No se pudo descongelar el pedido. Intenta de nuevo.");
+      return;
+    }
+    setCongelados((prev) => prev.filter((x) => x.id !== b.id));
+    setEditando(null);
+    setClonando(null);
+    setBorrador(b);
+    setModalCongelados(false);
+    setWizardAbierto(true);
+  };
+
+  // Elimina un congelado sin abrirlo.
+  const eliminarCongelado = async (id: string) => {
+    try {
+      await eliminarCongeladoApi(id);
+    } catch {
+      alert("No se pudo eliminar el congelado. Intenta de nuevo.");
+      return;
+    }
+    setCongelados((prev) => prev.filter((x) => x.id !== id));
+  };
 
   // Anula un pedido (marca anulado + estado) y lo persiste.
   const anularPedido = (p: Pedido) => {
@@ -78,17 +158,33 @@ export default function PedidosPage() {
             Gestiona los pedidos de Carnes Santacruz.
           </p>
         </div>
-        <button
-          onClick={permite.crear ? abrirNuevo : sinPermiso.mostrar}
-          className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
-            permite.crear ? "" : "opacity-50"
-          }`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-          </svg>
-          Nuevo pedido
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setModalCongelados(true)}
+            className="relative inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown shadow-sm transition hover:bg-brand-cream-soft"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+            </svg>
+            Congelados
+            {congelados.length > 0 && (
+              <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-wine px-1.5 text-[11px] font-bold text-white">
+                {congelados.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={permite.crear ? abrirNuevo : sinPermiso.mostrar}
+            className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
+              permite.crear ? "" : "opacity-50"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            Nuevo pedido
+          </button>
+        </div>
       </div>
 
       {/* Lista de pedidos */}
@@ -156,11 +252,21 @@ export default function PedidosPage() {
 
       {wizardAbierto && (
         <WizardPedido
-          onCerrar={() => { setWizardAbierto(false); setEditando(null); setClonando(null); }}
+          onCerrar={cerrarWizard}
           onCrear={guardarPedido}
+          onCongelar={congelarBorrador}
           pedidos={pedidos}
           inicial={editando}
           clon={clonando}
+          borrador={borrador}
+        />
+      )}
+      {modalCongelados && (
+        <ModalCongelados
+          congelados={congelados}
+          onDescongelar={descongelar}
+          onEliminar={eliminarCongelado}
+          onCerrar={() => setModalCongelados(false)}
         />
       )}
       {detalle && <DetallePedido pedido={detalle} onCerrar={() => setDetalle(null)} />}
@@ -170,31 +276,315 @@ export default function PedidosPage() {
 }
 
 /* ---------------------------------------------------------------- */
+/* Modal de pedidos congelados (en espera)                          */
+/* ---------------------------------------------------------------- */
+function ModalCongelados({
+  congelados,
+  onDescongelar,
+  onEliminar,
+  onCerrar,
+}: {
+  congelados: PedidoCongelado[];
+  onDescongelar: (b: PedidoCongelado) => void;
+  onEliminar: (id: string) => void;
+  onCerrar: () => void;
+}) {
+  const [verCong, setVerCong] = useState<PedidoCongelado | null>(null);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
+          <div>
+            <h2 className="font-serif text-xl font-bold text-brand-wine">
+              Pedidos congelados
+            </h2>
+            <p className="text-xs text-brand-brown/50">
+              Borradores en espera. Descongela uno para retomarlo por donde ibas.
+            </p>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+            aria-label="Cerrar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {congelados.length === 0 ? (
+            <p className="px-6 py-16 text-center text-sm text-brand-brown/50">
+              No tienes pedidos congelados. Usa el botón “Congelar” dentro de un
+              pedido para dejarlo en espera.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-brand-cream-soft/80 text-left text-xs uppercase tracking-wide text-brand-brown/50">
+                <tr>
+                  <th className="px-4 py-3">Temporal</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Productos</th>
+                  <th className="px-4 py-3">Total parcial</th>
+                  <th className="px-4 py-3">Congelado</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {congelados.map((c) => (
+                  <tr key={c.id} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
+                    <td className="px-4 py-3 font-semibold text-brand-wine">
+                      CONG-{c.tempConsecutivo}
+                    </td>
+                    <td className="px-4 py-3">{c.clienteNombre}</td>
+                    <td className="px-4 py-3 text-brand-brown/70">{c.numItems}</td>
+                    <td className="px-4 py-3 font-medium">{formatoCOP(c.totalParcial)}</td>
+                    <td className="px-4 py-3 text-brand-brown/60">
+                      {new Date(c.creadoEn).toLocaleString("es-CO", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setVerCong(c)}
+                          className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          onClick={() => onDescongelar(c)}
+                          className="rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+                        >
+                          Descongelar
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
+                          }}
+                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
+          <button
+            onClick={onCerrar}
+            className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+      {verCong && (
+        <DetalleCongelado
+          congelado={verCong}
+          onCerrar={() => setVerCong(null)}
+          onDescongelar={(c) => {
+            setVerCong(null);
+            onDescongelar(c);
+          }}
+          onEliminar={(id) => {
+            setVerCong(null);
+            onEliminar(id);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Detalle de un pedido congelado                                   */
+/* ---------------------------------------------------------------- */
+function DetalleCongelado({
+  congelado,
+  onCerrar,
+  onDescongelar,
+  onEliminar,
+}: {
+  congelado: PedidoCongelado;
+  onCerrar: () => void;
+  onDescongelar: (c: PedidoCongelado) => void;
+  onEliminar: (id: string) => void;
+}) {
+  const c = congelado;
+  const cli = c.cliente;
+  const dest =
+    c.entrega === "domicilio"
+      ? "Domicilio"
+      : c.entrega === "recoge"
+        ? "Recoge en punto"
+        : "—";
+  const subtotal = c.carrito.reduce(
+    (s, i) => s + i.producto.precio * i.cantidad,
+    0,
+  );
+  const dom = c.entrega === "domicilio" ? c.valorDomicilio ?? 0 : 0;
+  const total = subtotal + dom;
+  const pasoLabel = PASOS[c.paso] ?? "—";
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-brand-brown/10 px-5 py-4">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-brand-wine">
+              Congelado CONG-{c.tempConsecutivo}
+            </h3>
+            <p className="text-xs text-brand-brown/50">
+              {new Date(c.creadoEn).toLocaleString("es-CO")} ·{" "}
+              {c.punto?.nombre ?? "Sin punto"}
+            </p>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+            aria-label="Cerrar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="space-y-4 px-5 py-4 text-sm">
+          {/* NIT/Cédula destacado */}
+          <div className="rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/50">NIT / Cédula</p>
+            <p className="text-2xl font-bold text-brand-wine">{cli?.nit_cedula || "—"}</p>
+          </div>
+          {/* Datos del borrador */}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Borrador</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Bloque titulo="Consecutivo temporal">CONG-{c.tempConsecutivo}</Bloque>
+              <Bloque titulo="Avance">
+                Paso {Math.min(c.paso + 1, PASOS.length)} de {PASOS.length} · {pasoLabel}
+              </Bloque>
+              <Bloque titulo="Punto de venta">{c.punto?.nombre ?? "—"}</Bloque>
+              <Bloque titulo="Congelado">{new Date(c.creadoEn).toLocaleString("es-CO")}</Bloque>
+              <Bloque titulo="Entrega">{dest}</Bloque>
+              <Bloque titulo="Método de pago">{c.pago || "—"}</Bloque>
+              {c.entrega === "domicilio" && dom > 0 && (
+                <Bloque titulo="Valor domicilio">{formatoCOP(dom)}</Bloque>
+              )}
+              {c.programado && (
+                <Bloque titulo="Entrega programada">{c.fechaProgramada || "—"}</Bloque>
+              )}
+            </div>
+          </div>
+          {/* Datos del cliente */}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
+            {cli ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Bloque titulo="Nombre">{cli.nombre || "—"}</Bloque>
+                <Bloque titulo="Teléfono">{cli.telefono || "—"}</Bloque>
+                <Bloque titulo="Ciudad">{cli.ciudad || "—"}</Bloque>
+                <Bloque titulo="Barrio">{cli.barrio || "—"}</Bloque>
+                <Bloque titulo="Dirección">{cli.direccion || "—"}</Bloque>
+                {cli.referencia && <Bloque titulo="Referencia">{cli.referencia}</Bloque>}
+              </div>
+            ) : (
+              <p className="text-xs italic text-brand-brown/40">Aún no se ha seleccionado un cliente.</p>
+            )}
+          </div>
+          {/* Productos */}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
+              Productos ({c.carrito.length})
+            </p>
+            {c.carrito.length > 0 ? (
+              <div className="rounded-xl border border-brand-brown/10">
+                {c.carrito.map((i) => (
+                  <div key={i.id} className="flex justify-between border-b border-brand-brown/5 px-3 py-2 last:border-0">
+                    <div className="min-w-0">
+                      <p className="font-medium text-brand-black">
+                        {i.producto.producto || i.producto.referencia}{" "}
+                        <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span>
+                      </p>
+                      <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
+                      <p className="text-xs text-brand-brown/60">Empaque al vacío: {i.alVacio ? "Sí" : "No"}</p>
+                      {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                      {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
+                    </div>
+                    <span className="whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs italic text-brand-brown/40">Sin productos todavía.</p>
+            )}
+          </div>
+          {/* Totales */}
+          <div className="space-y-1 border-t border-brand-brown/10 pt-3">
+            <div className="flex justify-between text-sm text-brand-brown/70"><span>Subtotal</span><span>{formatoCOP(subtotal)}</span></div>
+            {dom > 0 && (
+              <div className="flex justify-between text-sm text-brand-brown/70"><span>Domicilio</span><span>{formatoCOP(dom)}</span></div>
+            )}
+            <div className="flex justify-between text-base font-bold text-brand-wine"><span>Total parcial</span><span>{formatoCOP(total)}</span></div>
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
+          <button
+            onClick={() => {
+              if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
+            }}
+            className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+          >
+            Eliminar
+          </button>
+          <button
+            onClick={() => onDescongelar(c)}
+            className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white hover:bg-brand-amber/90"
+          >
+            Descongelar y continuar
+          </button>
+          <button onClick={onCerrar} className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Wizard de creación de pedido                                     */
 /* ---------------------------------------------------------------- */
-
-function WizardPedido({ onCerrar, onCrear, pedidos, inicial, clon }: { onCerrar: () => void; onCrear: (p: Pedido) => void; pedidos: Pedido[]; inicial?: Pedido | null; clon?: Pedido | null }) {
+function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, borrador }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null }) {
   // Fuente para precargar el formulario: edición o clonación.
   const base = inicial ?? clon ?? null;
-  const [paso, setPaso] = useState(0);
-  const [cliente, setCliente] = useState<Cliente | null>(base?.cliente ?? null);
+  const [paso, setPaso] = useState(borrador?.paso ?? 0);
+  const [cliente, setCliente] = useState<Cliente | null>(borrador ? borrador.cliente : base?.cliente ?? null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>(() => {
+    if (borrador) return borrador.carrito;
     const src = base?.carrito ?? [];
     // Al clonar, copiamos los ítems para no mutar el pedido original.
     return clon ? structuredClone(src) : src;
   });
-  const [entrega, setEntrega] = useState<"domicilio" | "recoge" | null>(base?.entrega ?? null);
-  const [pago, setPago] = useState<string | null>(base?.pago ?? null);
-  const [valorDomicilio, setValorDomicilio] = useState<number>(base?.valorDomicilio ?? 0);
+  const [entrega, setEntrega] = useState<"domicilio" | "recoge" | null>(borrador ? borrador.entrega : base?.entrega ?? null);
+  const [pago, setPago] = useState<string | null>(borrador ? borrador.pago : base?.pago ?? null);
+  const [valorDomicilio, setValorDomicilio] = useState<number>(borrador ? borrador.valorDomicilio : base?.valorDomicilio ?? 0);
   // Fecha de entrega: programado=false => hoy; programado=true => fecha elegida.
-  const [programado, setProgramado] = useState<boolean>(base?.entregaProgramada ?? false);
-  const [fechaProgramada, setFechaProgramada] = useState<string>(base?.fechaProgramada ?? "");
+  const [programado, setProgramado] = useState<boolean>(borrador ? borrador.programado : base?.entregaProgramada ?? false);
+  const [fechaProgramada, setFechaProgramada] = useState<string>(borrador ? borrador.fechaProgramada : base?.fechaProgramada ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
   const [editandoItem, setEditandoItem] = useState<ItemCarrito | null>(null);
 
   // Punto de venta del pedido
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
-  const [punto, setPunto] = useState<PuntoVenta | null>(base?.punto ?? null);
+  const [punto, setPunto] = useState<PuntoVenta | null>(borrador ? borrador.punto : base?.punto ?? null);
   const [cargandoPuntos, setCargandoPuntos] = useState(true);
   const [errorPuntos, setErrorPuntos] = useState<string | null>(null);
 
@@ -215,13 +605,38 @@ function WizardPedido({ onCerrar, onCrear, pedidos, inicial, clon }: { onCerrar:
   // Mientras no haya punto elegido (y haya varios), se muestra el selector.
   const eligiendoPunto = !punto;
 
+  // Congela el borrador actual (guarda por dónde va) y cierra el wizard.
+  function congelar() {
+    if (!onCongelar) return;
+    const dom = entrega === "domicilio" ? valorDomicilio : 0;
+    const totalParcial =
+      carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
+    onCongelar({
+      id: borrador?.id ?? crypto.randomUUID(),
+      tempConsecutivo: borrador?.tempConsecutivo ?? 0,
+      creadoEn: new Date().toISOString(),
+      paso,
+      punto,
+      cliente,
+      carrito,
+      entrega,
+      pago,
+      valorDomicilio,
+      programado,
+      fechaProgramada,
+      clienteNombre: cliente?.nombre || cliente?.nit_cedula || "Sin cliente",
+      numItems: carrito.length,
+      totalParcial,
+    });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/50 p-4">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Cabecera */}
         <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-6 py-4">
           <h2 className="font-serif text-xl font-bold text-brand-wine">
-            {inicial ? `Editar pedido ${inicial.comanda}` : clon ? `Clonar pedido ${clon.comanda}` : "Nuevo pedido"}
+            {inicial ? `Editar pedido ${inicial.comanda}` : clon ? `Clonar pedido ${clon.comanda}` : borrador ? `Pedido congelado CONG-${borrador.tempConsecutivo}` : "Nuevo pedido"}
           </h2>
           <div className="flex items-center gap-3">
             {punto && (
@@ -365,12 +780,26 @@ function WizardPedido({ onCerrar, onCrear, pedidos, inicial, clon }: { onCerrar:
             </div>
 
             <div className="flex items-center justify-between border-t border-brand-brown/10 px-6 py-4">
-              <button
-                onClick={() => (paso === 0 ? onCerrar() : setPaso((p) => p - 1))}
-                className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
-              >
-                {paso === 0 ? "Cancelar" : "Atrás"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => (paso === 0 ? onCerrar() : setPaso((p) => p - 1))}
+                  className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+                >
+                  {paso === 0 ? "Cancelar" : "Atrás"}
+                </button>
+                {onCongelar && (cliente || carrito.length > 0) && (
+                  <button
+                    onClick={congelar}
+                    title="Guardar este pedido en espera para retomarlo luego"
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-wine/30 bg-brand-wine/5 px-4 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-18 4 4m-4-4-4 4m4 10 4-4m-4 4-4-4M3 12h18" />
+                    </svg>
+                    Congelar
+                  </button>
+                )}
+              </div>
               {paso < PASOS.length - 1 ? (
                 <button
                   onClick={() => setPaso((p) => Math.min(PASOS.length - 1, p + 1))}

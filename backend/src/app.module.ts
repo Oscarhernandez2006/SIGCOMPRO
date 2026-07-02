@@ -9,6 +9,7 @@ import { UbicacionesModule } from './ubicaciones/ubicaciones.module';
 import { PuntosVentaModule } from './puntos-venta/puntos-venta.module';
 import { ProductosModule } from './productos/productos.module';
 import { PedidosModule } from './pedidos/pedidos.module';
+import { CongeladosModule } from './congelados/congelados.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { ConfiguracionModule } from './configuracion/configuracion.module';
     PuntosVentaModule,
     ProductosModule,
     PedidosModule,
+    CongeladosModule,
     ConfiguracionModule,
   ],
   controllers: [AppController],
