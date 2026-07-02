@@ -13,6 +13,7 @@ import {
   guardarPedidoApi,
   type DespachoMeta,
 } from "@/lib/pedidos";
+import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
 
 /** ¿La fecha corresponde al día de hoy? */
 function esHoy(fecha: string): boolean {
@@ -41,12 +42,6 @@ function tamanoPedido(kilos: number): string {
   if (kilos <= 20) return "Mediano";
   return "Grande";
 }
-
-/** Opciones del selector de porcionador (ajusta según el equipo real). */
-const PORCIONADORES = ["Porcionador 1", "Porcionador 2", "Porcionador 3"];
-
-/** Opciones del selector de domiciliario (ajusta según el equipo real). */
-const DOMICILIARIOS = ["Domiciliario 1", "Domiciliario 2", "Domiciliario 3"];
 
 /** Formatea un número como moneda colombiana: 143320 => "$ 143.320". */
 const fmtMoneda = (n: number) => "$ " + Math.round(n || 0).toLocaleString("es-CO");
@@ -236,6 +231,11 @@ export default function DespachoPage() {
   const [meta, setMeta] = useState<Record<string, DespachoMeta>>({});
   // Borrador del porcionador antes de presionar "Guardar".
   const [porcBorrador, setPorcBorrador] = useState<Record<string, string>>({});
+  // Personal de despacho (porcionadores/domiciliarios) por id de punto de venta.
+  // Cada pedido usa el de su propio punto (configurable en /admin/configuracion).
+  const [personalPorPunto, setPersonalPorPunto] = useState<
+    Record<string, PersonalDespacho>
+  >({});
   // Texto del buscador (consecutivo, nombre o NIT del cliente).
   const [busqueda, setBusqueda] = useState("");
   // Vista activa de la tabla: "activos" oculta despachados y cancelados;
@@ -320,6 +320,15 @@ export default function DespachoPage() {
         setMeta(e.meta);
         setImpresos(new Set(e.impresos));
       })
+      .catch(() => {
+        /* ignore */
+      });
+  }, []);
+
+  // Carga los selectores de porcionadores y domiciliarios por punto de venta.
+  useEffect(() => {
+    obtenerPersonalDespachoTodos()
+      .then((mapa) => setPersonalPorPunto(mapa ?? {}))
       .catch(() => {
         /* ignore */
       });
@@ -608,6 +617,13 @@ export default function DespachoPage() {
                 const estado = anulado ? "Anulado" : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
                 const porcSel = porcBorrador[p.id] ?? m.porcionador ?? "";
+                // Porcionadores y domiciliarios del punto de venta de este pedido.
+                const personal = personalPorPunto[String(p.punto?.id ?? "")] ?? {
+                  porcionadores: [],
+                  domiciliarios: [],
+                };
+                const porcionadores = personal.porcionadores;
+                const domiciliarios = personal.domiciliarios;
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
@@ -791,7 +807,10 @@ export default function DespachoPage() {
                             className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                           >
                             <option value="">Selecciona</option>
-                            {PORCIONADORES.map((nombre) => (
+                            {(porcSel && !porcionadores.includes(porcSel)
+                              ? [porcSel, ...porcionadores]
+                              : porcionadores
+                            ).map((nombre) => (
                               <option key={nombre} value={nombre}>
                                 {nombre}
                               </option>
@@ -904,7 +923,10 @@ export default function DespachoPage() {
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         >
                           <option value="">Selecciona</option>
-                          {DOMICILIARIOS.map((nombre) => (
+                          {(m.domiciliario && !domiciliarios.includes(m.domiciliario)
+                            ? [m.domiciliario, ...domiciliarios]
+                            : domiciliarios
+                          ).map((nombre) => (
                             <option key={nombre} value={nombre}>
                               {nombre}
                             </option>
