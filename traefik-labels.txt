@@ -1,0 +1,38 @@
+# ============================================================
+#  Labels de Traefik para Dokploy — SIGCOMPRO
+#  Dominio: sigcompro.grupo-santacruz.com
+#  El contenedor expone el puerto 80 (Caddy enruta /api y /).
+#
+#  DÓNDE PEGARLOS:
+#   Dokploy -> tu Application -> pestaña "Advanced" -> sección
+#   "Traefik / Labels". Pega cada línea como un label (key=value).
+#
+#  NOTA: en Dokploy normalmente basta con configurar el "Domain"
+#  desde la UI y él genera estos labels solo. Úsalos si necesitas
+#  control manual o el dominio no enruta.
+# ============================================================
+
+# Habilita Traefik para este servicio
+traefik.enable=true
+
+# ---------- Router HTTPS (443) ----------
+traefik.http.routers.sigcompro.rule=Host(`sigcompro.grupo-santacruz.com`)
+traefik.http.routers.sigcompro.entrypoints=websecure
+traefik.http.routers.sigcompro.tls=true
+traefik.http.routers.sigcompro.tls.certresolver=letsencrypt
+traefik.http.routers.sigcompro.service=sigcompro
+
+# Puerto interno del contenedor al que Traefik envía el tráfico
+traefik.http.services.sigcompro.loadbalancer.server.port=80
+
+# ---------- Router HTTP (80) -> redirige a HTTPS ----------
+traefik.http.routers.sigcompro-web.rule=Host(`sigcompro.grupo-santacruz.com`)
+traefik.http.routers.sigcompro-web.entrypoints=web
+traefik.http.routers.sigcompro-web.middlewares=sigcompro-redirect-https
+
+# Middleware de redirección HTTP -> HTTPS
+traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.scheme=https
+traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.permanent=true
+
+# Red de Dokploy (si tu instancia lo requiere en labels/compose)
+traefik.docker.network=dokploy-network
