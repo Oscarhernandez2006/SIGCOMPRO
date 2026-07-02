@@ -1,0 +1,47 @@
+# ---------- Dependencias ----------
+node_modules/
+**/node_modules/
+
+# ---------- Builds / salidas ----------
+dist/
+build/
+.next/
+out/
+**/dist/
+**/.next/
+**/build/
+
+# ---------- Variables de entorno (credenciales) ----------
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# ---------- Logs ----------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Caché / temporales ----------
+.cache/
+*.tsbuildinfo
+next-env.d.ts
+tmp-*.js
+*.tmp
+
+# ---------- Sistema operativo ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Editor ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# ---------- Archivos de datos locales ----------
+*.xlsm
+Despacho_*.xlsx
