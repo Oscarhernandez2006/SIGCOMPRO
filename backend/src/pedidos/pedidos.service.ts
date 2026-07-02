@@ -18,6 +18,7 @@ type PedidoData = Record<string, unknown> & {
   fechaProgramada?: string;
   punto?: { id?: string; nombre?: string; codigo?: string | null } | null;
   cliente?: {
+    id?: string;
     nit_cedula?: string;
     nombre?: string;
     direccion?: string;
@@ -25,6 +26,11 @@ type PedidoData = Record<string, unknown> & {
     barrio?: string;
     ciudad?: string;
     telefono?: string;
+    correo?: string;
+    lat?: number | null;
+    lng?: number | null;
+    horeca?: boolean;
+    activo?: boolean;
   } | null;
   carrito?: Array<{
     cantidad?: number;
@@ -89,7 +95,74 @@ export class PedidosService implements OnModuleInit {
       }
       if (row.impreso) impresos.push(row.id);
     }
+    await this.refrescarClientes(pedidos);
     return { pedidos, meta, impresos };
+  }
+
+  /**
+   * Sobrescribe la información personal del cliente en cada pedido con los
+   * datos actuales de la tabla `clientes` (buscando por NIT/cédula). Así, las
+   * correcciones hechas en el módulo de Clientes se reflejan en televentas,
+   * despacho y comanda sin tener que anular el pedido. El NIT es la llave y no
+   * se modifica; solo se actualiza la información personal.
+   */
+  private async refrescarClientes(pedidos: PedidoData[]): Promise<void> {
+    const nits = new Set<string>();
+    for (const p of pedidos) {
+      const nit = p.cliente?.nit_cedula
+        ? String(p.cliente.nit_cedula).trim()
+        : '';
+      if (nit) nits.add(nit);
+    }
+    if (nits.size === 0) return;
+
+    const res = await this.pool.query<{
+      nit_cedula: string;
+      nombre: string | null;
+      direccion: string | null;
+      referencia: string | null;
+      barrio: string | null;
+      ciudad: string | null;
+      telefono: string | null;
+      correo: string | null;
+      lat: number | null;
+      lng: number | null;
+      horeca: boolean | null;
+    }>(
+      `SELECT nit_cedula, nombre, direccion, referencia, barrio, ciudad,
+              telefono, correo, lat, lng, horeca
+         FROM clientes
+        WHERE nit_cedula = ANY($1)`,
+      [[...nits]],
+    );
+
+    const porNit = new Map<string, (typeof res.rows)[number]>();
+    for (const row of res.rows) {
+      porNit.set(String(row.nit_cedula).trim(), row);
+    }
+
+    for (const p of pedidos) {
+      const nit = p.cliente?.nit_cedula
+        ? String(p.cliente.nit_cedula).trim()
+        : '';
+      if (!nit) continue;
+      const actual = porNit.get(nit);
+      if (!actual) continue;
+      p.cliente = {
+        ...p.cliente,
+        nit_cedula: nit,
+        nombre: actual.nombre ?? undefined,
+        direccion: actual.direccion ?? undefined,
+        referencia: actual.referencia ?? undefined,
+        barrio: actual.barrio ?? undefined,
+        ciudad: actual.ciudad ?? undefined,
+        telefono: actual.telefono ?? undefined,
+        correo: actual.correo ?? undefined,
+        lat: actual.lat,
+        lng: actual.lng,
+        horeca: actual.horeca ?? undefined,
+      };
+    }
   }
 
   /** Crea o actualiza un pedido completo (upsert por id). */
