@@ -1,0 +1,54 @@
+# ============================================================
+#  Volando Carnes · Docker Compose de producción (Dokploy)
+#  Despliega el backend (NestJS) y el frontend (Next.js).
+#
+#  En Dokploy: crea una aplicación tipo "Compose", apunta a este
+#  archivo y define las variables de entorno en el panel.
+# ============================================================
+
+services:
+  # ----------------------- Backend API -----------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Origen permitido para CORS (dominio público del frontend)
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      # Autenticación
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      # Base de datos PostgreSQL
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSL: ${DB_SSL:-false}
+      # Integración de listas de precios
+      LISTAS_PRECIOS_URL: ${LISTAS_PRECIOS_URL:-https://apiconsulta.grupo-santacruz.com/listas-precios}
+    # Dokploy enruta el tráfico https://<dominio>/api hacia este puerto.
+    expose:
+      - "3001"
+
+  # --------------------- Frontend Next.js ---------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Se inyecta en el build (NEXT_PUBLIC_* es de tiempo de compilación).
+        # Debe ser la URL pública del backend, p. ej. https://api.tudominio.com/api
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    # Dokploy enruta el tráfico https://<dominio>/ hacia este puerto.
+    expose:
+      - "3000"
+    depends_on:
+      - backend

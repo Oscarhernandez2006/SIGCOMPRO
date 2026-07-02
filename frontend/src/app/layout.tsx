@@ -16,6 +16,11 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "Carnes Santacruz — Acceso",
   description: "Sistema de pedidos de Carnes Santacruz. Vendemos vida.",
+  icons: {
+    icon: "/LOGOCARNESSANTACRUZ.png",
+    shortcut: "/LOGOCARNESSANTACRUZ.png",
+    apple: "/LOGOCARNESSANTACRUZ.png",
+  },
 };
 
 export default function RootLayout({
