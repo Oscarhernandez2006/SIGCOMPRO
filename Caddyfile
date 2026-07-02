@@ -1,0 +1,15 @@
+# Reverse proxy interno del contenedor.
+# Expone el puerto 80 y enruta según la ruta:
+#   /api/*  -> backend NestJS (3001)  [el backend ya usa prefijo /api]
+#   /*      -> frontend Next.js (3000)
+:80 {
+	# Backend: todo lo que empiece por /api
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+
+	# Frontend: el resto
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

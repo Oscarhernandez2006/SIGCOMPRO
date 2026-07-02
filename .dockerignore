@@ -1,0 +1,23 @@
+# Dependencias y builds (se generan dentro de la imagen)
+**/node_modules
+**/dist
+**/.next
+**/out
+**/build
+
+# Variables de entorno (credenciales) — se inyectan en Dokploy
+**/.env
+**/.env.*
+
+# Git y metadatos
+.git
+.gitignore
+.gitattributes
+
+# Archivos de datos / temporales locales
+*.xlsm
+Despacho_*.xlsx
+tmp-*.js
+
+# Documentación de despliegue no necesaria en la imagen
+docker-compose.yml

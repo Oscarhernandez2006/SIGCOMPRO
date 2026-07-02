@@ -1,0 +1,4 @@
+# Fuerza saltos de línea LF en archivos sensibles a CRLF (evita fallos en Linux/Docker).
+Caddyfile text eol=lf
+Dockerfile text eol=lf
+*.sh text eol=lf
