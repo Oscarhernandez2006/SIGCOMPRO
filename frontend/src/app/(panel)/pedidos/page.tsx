@@ -81,6 +81,48 @@ export default function PedidosPage() {
       .catch(() => { /* ignore */ });
   }, []);
 
+  // Búsqueda (consecutivo, comanda, nombre o NIT) y filtro por día.
+  const [busqueda, setBusqueda] = useState("");
+  const [fechaFiltro, setFechaFiltro] = useState("");
+
+  // Ordena por fecha desc y aplica búsqueda + filtro de día.
+  const pedidosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    const ordenados = [...pedidos].sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
+    );
+    return ordenados.filter((p) => {
+      if (fechaFiltro) {
+        const d = new Date(p.fecha);
+        const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (dia !== fechaFiltro) return false;
+      }
+      if (!q) return true;
+      const consec = String(p.consecutivo ?? "");
+      const comanda = (p.comanda ?? "").toLowerCase();
+      const nombre = (p.cliente?.nombre ?? "").toLowerCase();
+      const nit = (p.cliente?.nit_cedula ?? "").toLowerCase();
+      return (
+        consec.includes(q) ||
+        comanda.includes(q) ||
+        nombre.includes(q) ||
+        nit.includes(q)
+      );
+    });
+  }, [pedidos, busqueda, fechaFiltro]);
+
+  // Desplaza el día del filtro (delta en días). Si no hay día, parte de hoy.
+  const moverDia = (delta: number) => {
+    const base = fechaFiltro ? new Date(`${fechaFiltro}T00:00:00`) : new Date();
+    base.setDate(base.getDate() + delta);
+    const dia = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+    setFechaFiltro(dia);
+  };
+  const hoyISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
   const guardarPedido = (p: Pedido) => {
     setPedidos((prev) => {
       const existe = prev.some((x) => x.id === p.id);
@@ -188,6 +230,65 @@ export default function PedidosPage() {
         </div>
       </div>
 
+      {/* Barra de búsqueda y filtro por día */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[240px] flex-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+          </svg>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por consecutivo, comanda, nombre o NIT/cédula"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => moverDia(-1)}
+            title="Día anterior"
+            className="flex h-10 w-9 items-center justify-center rounded-xl border border-brand-brown/15 bg-white text-brand-brown transition hover:bg-brand-cream-soft"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+          <input
+            type="date"
+            value={fechaFiltro}
+            onChange={(e) => setFechaFiltro(e.target.value)}
+            className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+          />
+          <button
+            onClick={() => moverDia(1)}
+            title="Día siguiente"
+            className="flex h-10 w-9 items-center justify-center rounded-xl border border-brand-brown/15 bg-white text-brand-brown transition hover:bg-brand-cream-soft"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
+        </div>
+        <button
+          onClick={() => setFechaFiltro(hoyISO())}
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+        >
+          Hoy
+        </button>
+        {(fechaFiltro || busqueda) && (
+          <button
+            onClick={() => { setFechaFiltro(""); setBusqueda(""); }}
+            className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft"
+          >
+            Limpiar
+          </button>
+        )}
+        <span className="ml-auto text-xs font-medium text-brand-brown/60">
+          {pedidosFiltrados.length} {pedidosFiltrados.length === 1 ? "pedido" : "pedidos"}
+        </span>
+      </div>
+
       {/* Lista de pedidos */}
       {pedidos.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-20 text-center">
@@ -199,6 +300,13 @@ export default function PedidosPage() {
           <p className="mt-4 font-medium text-brand-black">Aún no hay pedidos</p>
           <p className="mt-1 max-w-sm text-sm text-brand-brown/60">
             Empieza creando tu primer pedido con el botón “Nuevo pedido”.
+          </p>
+        </div>
+      ) : pedidosFiltrados.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center">
+          <p className="font-medium text-brand-black">Sin resultados</p>
+          <p className="mt-1 max-w-sm text-sm text-brand-brown/60">
+            No hay pedidos que coincidan con la búsqueda o el día seleccionado.
           </p>
         </div>
       ) : (
@@ -216,7 +324,7 @@ export default function PedidosPage() {
               </tr>
             </thead>
             <tbody>
-              {pedidos.map((p) => (
+              {pedidosFiltrados.map((p) => (
                 <tr key={p.id} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
                   <td className="px-4 py-3 font-semibold text-brand-wine">{p.comanda}</td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
@@ -2146,7 +2254,9 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     .logo img{max-width:60mm;max-height:30mm;object-fit:contain}
     .logo .b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:6px 14px;font-weight:bold;letter-spacing:1px}
     h1{font-size:23px;text-align:center;margin:8px 0 2px}
-    .nit{text-align:left;font-size:26px;font-weight:bold;margin:6px 0 2px}
+    .nit{text-align:left;margin:6px 0 2px}
+    .nitlabel{font-size:14px;font-weight:bold;display:block}
+    .nitnum{font-size:26px;font-weight:bold;display:block;line-height:1.1;word-break:break-all}
     .emp{text-align:center;font-size:15px;color:#000;margin-bottom:8px}
     .row{margin:3px 0}
     .label{font-weight:bold}
@@ -2168,7 +2278,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <h1>Detalle del pedido</h1>
     <div class="emp">Carnes Santacruz</div>
     <hr>
-    <div class="nit"><span class="label">NIT o Cédula:</span> ${cliente.nit_cedula}</div>
+    <div class="nit"><span class="nitlabel">NIT o Cédula:</span><span class="nitnum">${cliente.nit_cedula}</span></div>
     <div class="row"><span class="label">Cliente:</span> ${cliente.nombre || "—"}</div>
     ${cliente.direccion ? `<div class="row"><span class="label">Dirección:</span> ${cliente.direccion}</div>` : ""}
     ${cliente.telefono ? `<div class="row"><span class="label">Teléfono:</span> ${cliente.telefono}</div>` : ""}

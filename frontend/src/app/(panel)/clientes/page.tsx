@@ -346,9 +346,9 @@ export default function ClientesPage() {
 
       {/* Tabla */}
       <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-        <div className="overflow-x-auto">
+        <div className="max-h-[calc(100vh-300px)] overflow-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-brand-cream-soft/60 text-xs uppercase tracking-wide text-brand-brown/60">
+            <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
               <tr>
                 <th className="px-4 py-3 font-semibold">Nombre</th>
                 <th className="px-4 py-3 font-semibold">NIT/Cédula</th>

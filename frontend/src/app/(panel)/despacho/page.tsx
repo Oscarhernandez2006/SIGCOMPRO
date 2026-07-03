@@ -152,7 +152,7 @@ const ESTADOS: EstadoDef[] = [
   },
   {
     key: "liberacion",
-    label: "Retenido",
+    label: "Retenidos",
     sub: "Cartera",
     icon: Icono.tarjeta,
     match: (x) => norm(x.estado) === "liberación",
@@ -207,6 +207,15 @@ const ESTADOS: EstadoDef[] = [
     chip: "bg-red-100 text-red-500",
   },
 ];
+
+/** Estados del flujo del pedido, en orden, para el selector de administradores. */
+const ESTADOS_FLUJO = [
+  "En proceso",
+  "En producción",
+  "Alistado",
+  "Facturado",
+  "Despachado",
+] as const;
 
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -301,6 +310,12 @@ export default function DespachoPage() {
     [usuarioDesp],
   );
 
+  // ¿El usuario puede reversar estados? (administrador / administrador app / desarrollador).
+  const esAdmin = useMemo(
+    () => tieneAccesoAdministrativo(usuarioDesp?.rol),
+    [usuarioDesp],
+  );
+
   useEffect(() => {
     const u = getUsuario();
     // Los roles con acceso total ven los pedidos de todos los puntos.
@@ -391,6 +406,36 @@ export default function DespachoPage() {
       if (actualizado) guardarPedidoApi(actualizado).catch(() => { /* ignore */ });
       return next;
     });
+  };
+
+  /**
+   * Reversa/cambia el estado de un pedido (solo administradores). Limpia la
+   * metadata que corresponda para que el flujo quede consistente y se pueda
+   * volver a hacer (p. ej. al regresar a "En proceso" borra inicio/fin).
+   */
+  const reversarEstado = (id: string, nuevoEstado: Pedido["estado"]) => {
+    if (!permite.estado) {
+      sinPermiso.mostrar();
+      return;
+    }
+    const n = norm(nuevoEstado);
+    const reset: Record<string, string | null> = {};
+    if (n === "en proceso") {
+      reset.inicio = null;
+      reset.fin = null;
+      reset.despachoFin = null;
+      reset.pagoConfirmado = null;
+    } else if (n === "en producción") {
+      reset.fin = null;
+      reset.despachoFin = null;
+      reset.pagoConfirmado = null;
+    } else if (n === "alistado" || n === "facturado") {
+      reset.despachoFin = null;
+    }
+    if (Object.keys(reset).length) {
+      actualizarMeta(id, reset as Partial<DespachoMeta>);
+    }
+    cambiarEstado(id, nuevoEstado);
   };
 
   const pedidosVisibles = useMemo(() => {
@@ -619,6 +664,8 @@ export default function DespachoPage() {
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
+                // Solo se puede facturar cuando el pedido ya está alistado.
+                const alistado = norm(estado) === "alistado";
                 // Transferencia: el cobro se confirma aparte para congelar el cronómetro.
                 const transferencia = norm(p.pago) === "transferencia";
                 const pagoConfirmado = Boolean(m.pagoConfirmado);
@@ -787,6 +834,24 @@ export default function DespachoPage() {
                           </div>
                         )
                       )}
+                      {esAdmin && !anulado && (
+                        <div className="mt-1.5">
+                          <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
+                            Cambiar estado (admin)
+                          </label>
+                          <select
+                            value={ESTADOS_FLUJO.find((s) => norm(s) === norm(estado)) ?? "En proceso"}
+                            onChange={(ev) => reversarEstado(p.id, ev.target.value as Pedido["estado"])}
+                            className="w-full rounded-lg border border-brand-wine/25 bg-brand-wine/5 px-2 py-1.5 text-xs font-semibold text-brand-wine outline-none focus:ring-1 focus:ring-brand-wine"
+                          >
+                            {ESTADOS_FLUJO.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </td>
 
                     {/* Porcionador */}
@@ -854,7 +919,7 @@ export default function DespachoPage() {
                               permite.estado ? "" : "opacity-50"
                             } ${
                               m.inicio
-                                ? "bg-red-500 hover:bg-red-500/90"
+                                ? "bg-green-600 hover:bg-green-700"
                                 : "bg-brand-amber hover:bg-brand-amber/90"
                             }`}
                           >
@@ -871,7 +936,7 @@ export default function DespachoPage() {
                           type="text"
                           value={m.facturaNumero ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { facturaNumero: ev.target.value })}
-                          disabled={anulado || facturado || (transferencia && !pagoConfirmado)}
+                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado)}
                           placeholder="N° factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
@@ -884,7 +949,7 @@ export default function DespachoPage() {
                               facturaValor: ev.target.value === "" ? undefined : Number(ev.target.value),
                             })
                           }
-                          disabled={anulado || facturado || (transferencia && !pagoConfirmado)}
+                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado)}
                           placeholder="Valor factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
@@ -895,7 +960,7 @@ export default function DespachoPage() {
                         )}
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
-                        {transferencia && !pagoConfirmado && !facturado ? (
+                        {transferencia && !pagoConfirmado && !facturado && alistado ? (
                           <button
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
@@ -912,12 +977,14 @@ export default function DespachoPage() {
                             disabled={
                               anulado ||
                               facturado ||
+                              !alistado ||
                               !m.facturaNumero?.trim() ||
                               !(typeof m.facturaValor === "number" && m.facturaValor > 0)
                             }
+                            title={!alistado && !facturado ? "Debes terminar el alistamiento antes de facturar" : undefined}
                             className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                           >
-                            {facturado ? "Facturado ✓" : "Facturar"}
+                            {facturado ? "Facturado" : "Facturar"}
                           </button>
                         )}
                       </div>
@@ -949,7 +1016,7 @@ export default function DespachoPage() {
                           disabled={anulado || despachado || !m.domiciliario?.trim()}
                           className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                         >
-                          {despachado ? "Despachado ✓" : "Despachar"}
+                          {despachado ? "Despachado" : "Despachar"}
                         </button>
                       </div>
                     </td>
