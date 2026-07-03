@@ -82,8 +82,8 @@ interface EstadoDef {
   label: string;
   sub?: string;
   icon: ReactNode;
-  /** Cuenta los pedidos del día que correspondan a este estado. */
-  contar: (pedidos: Pedido[]) => number;
+  /** Predicado: ¿el pedido corresponde a este estado? (para contar y filtrar). */
+  match: (pedido: Pedido) => boolean;
   /** Clases del chip de icono (fondo + texto). */
   chip: string;
   /** ¿Resaltar la card como alerta? */
@@ -130,7 +130,7 @@ const ESTADOS: EstadoDef[] = [
     label: "Total",
     sub: "Pedidos del día",
     icon: Icono.caja,
-    contar: (p) => p.length,
+    match: () => true,
     chip: "bg-brand-wine/10 text-brand-wine",
   },
   {
@@ -138,15 +138,40 @@ const ESTADOS: EstadoDef[] = [
     label: "Pendientes",
     sub: "Sin finalizar",
     icon: Icono.reloj,
-    contar: (p) => p.filter((x) => !x.anulado && norm(x.estado) === "en proceso").length,
+    match: (x) => !x.anulado && norm(x.estado) === "en proceso",
     chip: "bg-brand-amber/12 text-brand-amber",
+  },
+  {
+    key: "atrasados",
+    label: "Atrasados",
+    sub: "No finalizados",
+    icon: Icono.alerta,
+    match: (x) => norm(x.estado) === "atrasado",
+    chip: "bg-red-100 text-red-600",
+    alerta: true,
+  },
+  {
+    key: "liberacion",
+    label: "Retenido",
+    sub: "Cartera",
+    icon: Icono.tarjeta,
+    match: (x) => norm(x.estado) === "liberación",
+    chip: "bg-brand-gold/20 text-brand-amber",
+  },
+  {
+    key: "posteriores",
+    label: "Posteriores",
+    sub: "Programados",
+    icon: Icono.calendario,
+    match: (x) => norm(x.estado) === "posterior",
+    chip: "bg-indigo-100 text-indigo-600",
   },
   {
     key: "produccion",
     label: "En producción",
     sub: "En preparación",
     icon: Icono.engranaje,
-    contar: (p) => p.filter((x) => norm(x.estado) === "en producción").length,
+    match: (x) => norm(x.estado) === "en producción",
     chip: "bg-orange-100 text-orange-600",
   },
   {
@@ -154,7 +179,7 @@ const ESTADOS: EstadoDef[] = [
     label: "Alistados",
     sub: "Listos para facturar",
     icon: Icono.caja,
-    contar: (p) => p.filter((x) => norm(x.estado) === "alistado").length,
+    match: (x) => norm(x.estado) === "alistado",
     chip: "bg-violet-100 text-violet-600",
   },
   {
@@ -162,7 +187,7 @@ const ESTADOS: EstadoDef[] = [
     label: "Facturados",
     sub: "Con factura",
     icon: Icono.recibo,
-    contar: (p) => p.filter((x) => norm(x.estado) === "facturado").length,
+    match: (x) => norm(x.estado) === "facturado",
     chip: "bg-emerald-100 text-emerald-600",
   },
   {
@@ -170,7 +195,7 @@ const ESTADOS: EstadoDef[] = [
     label: "Despachados",
     sub: "En ruta o entregados",
     icon: Icono.camion,
-    contar: (p) => p.filter((x) => norm(x.estado) === "despachado").length,
+    match: (x) => norm(x.estado) === "despachado",
     chip: "bg-teal-100 text-teal-600",
   },
   {
@@ -178,33 +203,8 @@ const ESTADOS: EstadoDef[] = [
     label: "Cancelados",
     sub: "Anulados",
     icon: Icono.xcirculo,
-    contar: (p) => p.filter((x) => x.anulado || norm(x.estado) === "anulado").length,
+    match: (x) => x.anulado || norm(x.estado) === "anulado",
     chip: "bg-red-100 text-red-500",
-  },
-  {
-    key: "atrasados",
-    label: "Atrasados",
-    sub: "No finalizados",
-    icon: Icono.alerta,
-    contar: (p) => p.filter((x) => norm(x.estado) === "atrasado").length,
-    chip: "bg-red-100 text-red-600",
-    alerta: true,
-  },
-  {
-    key: "posteriores",
-    label: "Posteriores",
-    sub: "Programados",
-    icon: Icono.calendario,
-    contar: (p) => p.filter((x) => norm(x.estado) === "posterior").length,
-    chip: "bg-indigo-100 text-indigo-600",
-  },
-  {
-    key: "liberacion",
-    label: "Retenido",
-    sub: "Cartera",
-    icon: Icono.tarjeta,
-    contar: (p) => p.filter((x) => norm(x.estado) === "liberación").length,
-    chip: "bg-brand-gold/20 text-brand-amber",
   },
 ];
 
@@ -240,7 +240,7 @@ export default function DespachoPage() {
   const [busqueda, setBusqueda] = useState("");
   // Vista activa de la tabla: "activos" oculta despachados y cancelados;
   // "despachados"/"cancelados" muestran solo esos al pulsar su card.
-  const [vista, setVista] = useState<"activos" | "despachados" | "cancelados">("activos");
+  const [vista, setVista] = useState<string | null>(null);
   // Reloj que avanza cada segundo para los cronómetros de despacho.
   const [ahora, setAhora] = useState(() => Date.now());
   // Alerta de pedidos por vencer / vencidos (modal).
@@ -417,10 +417,11 @@ export default function DespachoPage() {
   // Filtra por consecutivo, nombre del cliente o NIT/cédula del cliente.
   const pedidosFiltrados = useMemo(() => {
     const esAnulado = (p: Pedido) => p.anulado || norm(p.estado) === "anulado";
-    // Según la vista: despachados, cancelados o el resto (activos).
+    // Si hay una card de estado seleccionada, filtra por ese estado; si no,
+    // muestra la vista activa (oculta despachados y cancelados).
+    const estadoSel = vista ? ESTADOS.find((e) => e.key === vista) : null;
     const base = pedidosOrdenados.filter((p) => {
-      if (vista === "despachados") return norm(p.estado) === "despachado";
-      if (vista === "cancelados") return esAnulado(p);
+      if (estadoSel) return estadoSel.match(p);
       return norm(p.estado) !== "despachado" && !esAnulado(p);
     });
     const q = norm(busqueda);
@@ -446,16 +447,22 @@ export default function DespachoPage() {
     );
     const porVencer: Pedido[] = [];
     const vencidos: Pedido[] = [];
+    // Si el pago (transferencia) ya se confirmó, el cronómetro se congela en ese
+    // instante para que el pedido no aparezca como crítico ni en demora.
+    const refAhora = (p: Pedido) => {
+      const mm = meta[p.id];
+      return mm?.pagoConfirmado ? new Date(mm.pagoConfirmado).getTime() : ahora;
+    };
     for (const p of pendientes) {
-      const restante = msRestantesDespacho(p.fecha, ahora);
+      const restante = msRestantesDespacho(p.fecha, refAhora(p));
       if (restante <= 0) vencidos.push(p);
       else if (restante <= ALERTA_DESPACHO_MS) porVencer.push(p);
     }
     // Ordena por urgencia: menos tiempo restante primero.
     const porTiempo = (a: Pedido, b: Pedido) =>
-      msRestantesDespacho(a.fecha, ahora) - msRestantesDespacho(b.fecha, ahora);
+      msRestantesDespacho(a.fecha, refAhora(a)) - msRestantesDespacho(b.fecha, refAhora(b));
     return { porVencer: porVencer.sort(porTiempo), vencidos: vencidos.sort(porTiempo) };
-  }, [pedidosVisibles, ahora]);
+  }, [pedidosVisibles, ahora, meta]);
 
   const totalAlertas = porVencer.length + vencidos.length;
 
@@ -485,29 +492,16 @@ export default function DespachoPage() {
       {/* Grid de estados */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {ESTADOS.map((e) => {
-            const valor = e.contar(pedidosHoy);
-            // Cards interactivas: despachados y cancelados alternan su vista.
-            const vistaCard =
-              e.key === "despachados"
-                ? "despachados"
-                : e.key === "cancelados"
-                  ? "cancelados"
-                  : null;
-            const interactiva = vistaCard !== null;
-            const activo = interactiva && vista === vistaCard;
+            const valor = pedidosHoy.filter(e.match).length;
+            // Todas las cards son interactivas: filtran la tabla por su estado.
+            const activo = vista === e.key;
             return (
               <button
                 key={e.key}
                 type="button"
-                onClick={
-                  interactiva
-                    ? () => setVista((v) => (v === vistaCard ? "activos" : vistaCard))
-                    : undefined
-                }
-                aria-pressed={interactiva ? activo : undefined}
-                className={`group flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                  interactiva ? "cursor-pointer" : "cursor-default"
-                } ${
+                onClick={() => setVista((v) => (v === e.key ? null : e.key))}
+                aria-pressed={activo}
+                className={`group flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
                   activo
                     ? "border-brand-wine bg-brand-wine/5 ring-1 ring-brand-wine"
                     : e.alerta && valor > 0
@@ -523,11 +517,9 @@ export default function DespachoPage() {
                 <div className="min-w-0 pr-1">
                   <p className="text-xs font-semibold text-brand-black">{e.label}</p>
                   {e.sub && <p className="text-[10px] text-brand-brown/55">{e.sub}</p>}
-                  {interactiva && (
-                    <p className="text-[10px] font-semibold text-brand-wine">
-                      {activo ? "Mostrando · clic para ocultar" : "Clic para ver"}
-                    </p>
-                  )}
+                  <p className="text-[10px] font-semibold text-brand-wine">
+                    {activo ? "Mostrando · clic para ocultar" : "Clic para ver"}
+                  </p>
                 </div>
                 <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">
                   {valor}
@@ -627,11 +619,14 @@ export default function DespachoPage() {
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
+                // Transferencia: el cobro se confirma aparte para congelar el cronómetro.
+                const transferencia = norm(p.pago) === "transferencia";
+                const pagoConfirmado = Boolean(m.pagoConfirmado);
                 return (
                   <tr key={p.id} className={anulado ? "opacity-60" : ""}>
                     {/* Cliente: agrupa televentas, comanda y medio de pago */}
-                    <td className="border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="flex w-full items-stretch gap-3">
+                    <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className="flex w-full items-stretch gap-3 pb-12">
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-brand-black">
                             {p.cliente.nombre || p.cliente.nit_cedula}
@@ -727,7 +722,7 @@ export default function DespachoPage() {
                         </div>
                       </div>
                       {!anulado && (
-                        <div className="mt-2 flex w-full items-center gap-2">
+                        <div className="absolute inset-x-3 bottom-3 flex items-center gap-2">
                           <button
                             onClick={() => {
                               marcarImpreso(p.id);
@@ -795,59 +790,8 @@ export default function DespachoPage() {
                     </td>
 
                     {/* Porcionador */}
-                    <td className="border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="space-y-1.5">
-                        <div className="flex flex-col items-stretch gap-2">
-                          <select
-                            value={porcSel}
-                            onChange={(ev) =>
-                              setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
-                            }
-                            disabled={anulado}
-                            className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                          >
-                            <option value="">Selecciona</option>
-                            {(porcSel && !porcionadores.includes(porcSel)
-                              ? [porcSel, ...porcionadores]
-                              : porcionadores
-                            ).map((nombre) => (
-                              <option key={nombre} value={nombre}>
-                                {nombre}
-                              </option>
-                            ))}
-                          </select>
-                          {!m.fin && (
-                            <button
-                              onClick={() => {
-                                if (!m.inicio) {
-                                  actualizarMeta(p.id, {
-                                    porcionador: porcSel,
-                                    inicio: new Date().toISOString(),
-                                  });
-                                  cambiarEstado(p.id, "En producción");
-                                  setPorcBorrador((prev) => {
-                                    const next = { ...prev };
-                                    delete next[p.id];
-                                    return next;
-                                  });
-                                } else {
-                                  actualizarMeta(p.id, { fin: new Date().toISOString() });
-                                  cambiarEstado(p.id, "Alistado");
-                                }
-                              }}
-                              disabled={anulado}
-                              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
-                                permite.estado ? "" : "opacity-50"
-                              } ${
-                                m.inicio
-                                  ? "bg-red-500 hover:bg-red-500/90"
-                                  : "bg-brand-amber hover:bg-brand-amber/90"
-                              }`}
-                            >
-                              {m.inicio ? "Preparado" : "Iniciar alistamiento"}
-                            </button>
-                          )}
-                        </div>
+                    <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className="flex flex-col gap-1.5 pb-12">
                         {m.inicio && (
                           <div className="space-y-0.5 text-[11px] font-semibold text-brand-brown/60">
                             <p>
@@ -866,17 +810,68 @@ export default function DespachoPage() {
                             )}
                           </div>
                         )}
+                        <select
+                          value={porcSel}
+                          onChange={(ev) =>
+                            setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
+                          }
+                          disabled={anulado || Boolean(m.fin)}
+                          className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
+                        >
+                          <option value="">Selecciona</option>
+                          {(porcSel && !porcionadores.includes(porcSel)
+                            ? [porcSel, ...porcionadores]
+                            : porcionadores
+                          ).map((nombre) => (
+                            <option key={nombre} value={nombre}>
+                              {nombre}
+                            </option>
+                          ))}
+                        </select>
                       </div>
+                      {!m.fin && (
+                        <div className="absolute inset-x-3 bottom-3">
+                          <button
+                            onClick={() => {
+                              if (!m.inicio) {
+                                actualizarMeta(p.id, {
+                                  porcionador: porcSel,
+                                  inicio: new Date().toISOString(),
+                                });
+                                cambiarEstado(p.id, "En producción");
+                                setPorcBorrador((prev) => {
+                                  const next = { ...prev };
+                                  delete next[p.id];
+                                  return next;
+                                });
+                              } else {
+                                actualizarMeta(p.id, { fin: new Date().toISOString() });
+                                cambiarEstado(p.id, "Alistado");
+                              }
+                            }}
+                            disabled={anulado}
+                            className={`w-full whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
+                              permite.estado ? "" : "opacity-50"
+                            } ${
+                              m.inicio
+                                ? "bg-red-500 hover:bg-red-500/90"
+                                : "bg-brand-amber hover:bg-brand-amber/90"
+                            }`}
+                          >
+                            {m.inicio ? "Preparado" : "Iniciar alistamiento"}
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* Factura: número y valor (puede diferir del pedido) */}
-                    <td className="border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="flex w-full flex-col gap-1.5">
+                    <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className="flex w-full flex-col gap-1.5 pb-12">
                         <input
                           type="text"
                           value={m.facturaNumero ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { facturaNumero: ev.target.value })}
-                          disabled={anulado || facturado}
+                          disabled={anulado || facturado || (transferencia && !pagoConfirmado)}
                           placeholder="N° factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
@@ -889,7 +884,7 @@ export default function DespachoPage() {
                               facturaValor: ev.target.value === "" ? undefined : Number(ev.target.value),
                             })
                           }
-                          disabled={anulado || facturado}
+                          disabled={anulado || facturado || (transferencia && !pagoConfirmado)}
                           placeholder="Valor factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
@@ -898,24 +893,39 @@ export default function DespachoPage() {
                             {fmtMoneda(m.facturaValor)}
                           </p>
                         )}
-                        <button
-                          onClick={() => cambiarEstado(p.id, "Facturado")}
-                          disabled={
-                            anulado ||
-                            facturado ||
-                            !m.facturaNumero?.trim() ||
-                            !(typeof m.facturaValor === "number" && m.facturaValor > 0)
-                          }
-                          className={`whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
-                        >
-                          {facturado ? "Facturado ✓" : "Facturar"}
-                        </button>
+                      </div>
+                      <div className="absolute inset-x-3 bottom-3">
+                        {transferencia && !pagoConfirmado && !facturado ? (
+                          <button
+                            onClick={() =>
+                              actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
+                            }
+                            disabled={anulado}
+                            title="Detiene el cronómetro mientras el cliente realiza la transferencia"
+                            className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                          >
+                            Confirmar pago
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => cambiarEstado(p.id, "Facturado")}
+                            disabled={
+                              anulado ||
+                              facturado ||
+                              !m.facturaNumero?.trim() ||
+                              !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                            }
+                            className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                          >
+                            {facturado ? "Facturado ✓" : "Facturar"}
+                          </button>
+                        )}
                       </div>
                     </td>
 
                     {/* Domiciliario: al asignar pasa a Despachado */}
-                    <td className="border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="flex w-full flex-col gap-1.5">
+                    <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className="flex w-full flex-col gap-1.5 pb-12">
                         <select
                           value={m.domiciliario ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { domiciliario: ev.target.value })}
@@ -932,10 +942,12 @@ export default function DespachoPage() {
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="absolute inset-x-3 bottom-3">
                         <button
                           onClick={() => cambiarEstado(p.id, "Despachado")}
                           disabled={anulado || despachado || !m.domiciliario?.trim()}
-                          className={`whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                          className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                         >
                           {despachado ? "Despachado ✓" : "Despachar"}
                         </button>
@@ -950,22 +962,34 @@ export default function DespachoPage() {
                           : p.total,
                       )}
                       {!anulado && !despachado && (() => {
-                        const restante = msRestantesDespacho(p.fecha, ahora);
+                        const pausado = Boolean(m.pagoConfirmado);
+                        const refAhora = pausado
+                          ? new Date(m.pagoConfirmado as string).getTime()
+                          : ahora;
+                        const restante = msRestantesDespacho(p.fecha, refAhora);
                         const vencido = restante <= 0;
                         const enAlerta = !vencido && restante <= ALERTA_DESPACHO_MS;
-                        const clase = vencido
-                          ? "border-red-300 bg-red-50 text-red-600"
-                          : enAlerta
-                            ? "border-brand-amber/40 bg-brand-amber/10 text-brand-amber"
-                            : "border-green-200 bg-green-50 text-green-700";
+                        const clase = pausado
+                          ? "border-blue-200 bg-blue-50 text-blue-600"
+                          : vencido
+                            ? "border-red-300 bg-red-50 text-red-600"
+                            : enAlerta
+                              ? "border-brand-amber/40 bg-brand-amber/10 text-brand-amber"
+                              : "border-green-200 bg-green-50 text-green-700";
                         return (
                           <div
                             className={`mt-2 flex items-center justify-end gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold tabular-nums ${clase}`}
-                            title="Tiempo límite para despachar (2 horas)"
+                            title={pausado ? "Cronómetro detenido: pago confirmado, en espera de la transferencia" : "Tiempo límite para despachar (2 horas)"}
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
+                            {pausado ? (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                              </svg>
+                            )}
                             {vencido ? `-${fmtCronometro(restante)}` : fmtCronometro(restante)}
                           </div>
                         );

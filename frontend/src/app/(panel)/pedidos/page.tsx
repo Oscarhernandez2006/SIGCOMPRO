@@ -34,6 +34,7 @@ interface PedidoCongelado {
   valorDomicilio: number;
   programado: boolean;
   fechaProgramada: string;
+  observacion: string;
   clienteNombre: string;
   numItems: number;
   totalParcial: number;
@@ -579,6 +580,8 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   // Fecha de entrega: programado=false => hoy; programado=true => fecha elegida.
   const [programado, setProgramado] = useState<boolean>(borrador ? borrador.programado : base?.entregaProgramada ?? false);
   const [fechaProgramada, setFechaProgramada] = useState<string>(borrador ? borrador.fechaProgramada : base?.fechaProgramada ?? "");
+  // Observación general del pedido (indicaciones para despacho/cocina).
+  const [observacion, setObservacion] = useState<string>(borrador ? borrador.observacion : base?.observacion ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
   const [editandoItem, setEditandoItem] = useState<ItemCarrito | null>(null);
 
@@ -624,6 +627,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
       valorDomicilio,
       programado,
       fechaProgramada,
+      observacion,
       clienteNombre: cliente?.nombre || cliente?.nit_cedula || "Sin cliente",
       numItems: carrito.length,
       totalParcial,
@@ -767,6 +771,8 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     entrega={entrega}
                     pago={pago}
                     valorDomicilio={valorDomicilio}
+                    observacion={observacion}
+                    onObservacion={setObservacion}
                   />
                 )}
               </div>
@@ -826,14 +832,11 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     const ahora = new Date();
                     const dom = entrega === "domicilio" ? valorDomicilio : 0;
                     const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
-                    // En edición conservamos comanda/consecutivo/fecha; en alta generamos nuevo
-                    const consecutivo = inicial
-                      ? inicial.consecutivo
-                      : pedidos
-                          .filter((p) => p.punto.id === punto.id)
-                          .reduce((m, p) => Math.max(m, p.consecutivo || 0), 0) + 1;
-                    // Formato: {número del punto}CS{consecutivo de 8 dígitos}. Ej: 1CS00000001
-                    // Solo tomamos los dígitos del código del punto (ej. "2" de "2" o "2CSXXXXX").
+                    // El consecutivo y la comanda de un pedido NUEVO los asigna el
+                    // backend de forma atómica por punto (evita duplicados en ventas
+                    // simultáneas). En edición se conservan los originales. Aquí solo
+                    // enviamos un valor provisional que el servidor reemplaza.
+                    const consecutivo = inicial ? inicial.consecutivo : 0;
                     const numeroPunto = ((punto.codigo ?? "").match(/\d+/)?.[0] ?? "").trim();
                     const prefijo = `${numeroPunto}CS`;
                     const pedido: Pedido = {
@@ -848,18 +851,28 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                       pago,
                       total,
                       valorDomicilio: dom,
+                      observacion: observacion.trim() || undefined,
                       entregaProgramada: programado,
                       fechaProgramada: programado ? fechaProgramada : undefined,
                       vendedorNombre: inicial?.vendedorNombre ?? getUsuario()?.nombre ?? "",
                       vendedorCedula: inicial?.vendedorCedula ?? getUsuario()?.cedula ?? "",
                       estado: inicial?.estado ?? "En proceso",
                     };
-                    onCrear(pedido);
-                    setPedidoCreado(pedido);
-                    // Persistimos y generamos el Excel de despacho automáticamente.
+                    // Persistimos primero: el servidor devuelve el pedido con su
+                    // consecutivo/comanda definitivos. Solo entonces lo mostramos e
+                    // imprimimos, garantizando que no haya consecutivos duplicados.
+                    let finalPedido: Pedido;
                     try {
-                      await guardarPedidoApi(pedido);
-                      await descargarExcelDespacho(pedido.id);
+                      finalPedido = await guardarPedidoApi(pedido);
+                    } catch {
+                      alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
+                      return;
+                    }
+                    onCrear(finalPedido);
+                    setPedidoCreado(finalPedido);
+                    // Generamos el Excel de despacho automáticamente (no bloquea).
+                    try {
+                      await descargarExcelDespacho(finalPedido.id);
                     } catch {
                       /* el pedido ya quedó guardado; el Excel se puede bajar luego */
                     }
@@ -1674,6 +1687,17 @@ function cantidadLabel(cant: number, um: string | null): string {
   return `${n} ${cant === 1 ? "unidad" : "unidades"}`;
 }
 
+/**
+ * Convierte kilos a libras colombianas (1 kilo = 2 libras de 500 g) para que
+ * los alistadores puedan trabajar el peso en la unidad que usan. Devuelve una
+ * etiqueta lista para imprimir, p. ej. "3 libras" o "2.5 libras".
+ */
+function librasLabel(kilos: number): string {
+  const libras = kilos * 2;
+  const n = Number.isInteger(libras) ? libras : Number(libras.toFixed(2));
+  return `${n} ${libras === 1 ? "libra" : "libras"}`;
+}
+
 /* ---------------------------------------------------------------- */
 /* Paso 3: tipo de entrega                                          */
 /* ---------------------------------------------------------------- */
@@ -1861,6 +1885,8 @@ function PasoConfirmar({
   entrega,
   pago,
   valorDomicilio,
+  observacion,
+  onObservacion,
 }: {
   punto: PuntoVenta;
   cliente: Cliente | null;
@@ -1868,6 +1894,8 @@ function PasoConfirmar({
   entrega: "domicilio" | "recoge" | null;
   pago: string | null;
   valorDomicilio: number;
+  observacion: string;
+  onObservacion: (v: string) => void;
 }) {
   const dom = entrega === "domicilio" ? valorDomicilio : 0;
   const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
@@ -1926,6 +1954,21 @@ function PasoConfirmar({
           <span>Incluye domicilio</span><span className="font-semibold">{formatoCOP(dom)}</span>
         </div>
       )}
+
+      {/* Observación general del pedido */}
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-brand-brown/50">
+          Observación general del pedido
+        </label>
+        <textarea
+          value={observacion}
+          onChange={(e) => onObservacion(e.target.value)}
+          rows={3}
+          maxLength={500}
+          placeholder="Indicaciones generales para el despacho o la cocina (opcional)"
+          className="w-full resize-y rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        />
+      </div>
     </div>
   );
 }
@@ -1946,6 +1989,8 @@ interface DatosComanda {
   entrega: "domicilio" | "recoge" | null;
   pago: string | null;
   valorDomicilio?: number;
+  /** Observación general del pedido (indicaciones para despacho/cocina). */
+  observacion?: string;
 }
 
 export interface Pedido extends DatosComanda {
@@ -2038,6 +2083,12 @@ function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => v
             <div className="flex justify-between text-sm text-brand-brown/70"><span>Domicilio</span><span>{formatoCOP(pedido.valorDomicilio ?? 0)}</span></div>
           )}
           <div className="flex justify-between text-base font-bold text-brand-wine"><span>Total</span><span>{formatoCOP(pedido.total)}</span></div>
+          {pedido.observacion && (
+            <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Observación general</p>
+              <p className="mt-0.5 whitespace-pre-line text-brand-black">{pedido.observacion}</p>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
           {!pedido.anulado && (
@@ -2050,7 +2101,7 @@ function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => v
   );
 }
 
-export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, vendedorCedula, id }: Pedido) {
+export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, vendedorCedula, observacion, id }: Pedido) {
   const subtotal = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   const dom = entrega === "domicilio" ? (valorDomicilio ?? 0) : 0;
   const total = subtotal + dom;
@@ -2063,10 +2114,14 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
       if (i.porcionado) notas.push(`relajado ${i.unidades} und a ${i.gramos} grm`);
       if (i.corte) notas.push(i.corte);
       if (i.notas) notas.push(i.notas);
+      // Si el producto se vende por kilos, mostramos también el peso en libras
+      // (1 kilo = 2 libras) para que los alistadores trabajen en su unidad.
+      const esKilo = (i.producto.um || "").trim().toUpperCase() === "KG";
       return `<div class="prod">
         <div class="pi">Ítem: ${i.producto.referencia}</div>
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
         <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}</b></div>
+        ${esKilo ? `<div class="pl">Equivale a: <b>${librasLabel(i.cantidad)}</b></div>` : ""}
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
         <div class="pn-nota">Nota: ${notas.join(" | ")}</div>
       </div>`;
@@ -2130,6 +2185,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <hr>
     ${dom > 0 ? `<div class="row"><span class="label">Subtotal:</span> ${formatoCOP(subtotal)}</div><div class="row"><span class="label">Domicilio:</span> ${formatoCOP(dom)}</div>` : ""}
     <div class="tot">Total: ${formatoCOP(total)}</div>
+    ${observacion ? `<hr><div class="sec">OBSERVACIÓN</div><div class="row">${observacion}</div>` : ""}
     ${qr ? `<div class="qr"><img src="${qr}" alt="QR pedido"></div>` : ""}
   </body></html>`;
   const w = window.open("", "_blank", "width=400,height=600");

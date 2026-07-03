@@ -165,34 +165,107 @@ export class PedidosService implements OnModuleInit {
     }
   }
 
-  /** Crea o actualiza un pedido completo (upsert por id). */
-  async guardar(pedido: PedidoData): Promise<{ id: string }> {
+  /**
+   * Crea o actualiza un pedido (upsert por id).
+   *
+   * Para pedidos NUEVOS, el consecutivo y la comanda se asignan aquí, en el
+   * servidor, de forma atómica por punto de venta: se toma un lock de asesoría
+   * (`pg_advisory_xact_lock`) con la clave del punto dentro de una transacción,
+   * de modo que dos ventas simultáneas del mismo punto se serializan y "la
+   * primera en llegar" toma el consecutivo. Así se evitan consecutivos
+   * duplicados. En ediciones se conserva el consecutivo/comanda/fecha original.
+   *
+   * Devuelve el pedido final ya con el consecutivo y la comanda definitivos.
+   */
+  async guardar(pedido: PedidoData): Promise<PedidoData> {
     const id = String(pedido.id ?? '').trim();
     if (!id) {
       throw new Error('El pedido no tiene id.');
     }
-    const consecutivo =
-      typeof pedido.consecutivo === 'number' ? pedido.consecutivo : null;
     const puntoId = pedido.punto?.id ? String(pedido.punto.id) : null;
-    const estado = pedido.estado ? String(pedido.estado) : null;
-    const anulado = pedido.anulado === true;
-    const fecha = pedido.fecha ? new Date(String(pedido.fecha)) : null;
+    const finalPedido: PedidoData = { ...pedido };
 
-    await this.pool.query(
-      `INSERT INTO pedidos
-         (id, consecutivo, punto_id, estado, anulado, fecha, data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-       ON CONFLICT (id) DO UPDATE SET
-         consecutivo = EXCLUDED.consecutivo,
-         punto_id = EXCLUDED.punto_id,
-         estado = EXCLUDED.estado,
-         anulado = EXCLUDED.anulado,
-         fecha = EXCLUDED.fecha,
-         data = EXCLUDED.data,
-         actualizado_en = now()`,
-      [id, consecutivo, puntoId, estado, anulado, fecha, JSON.stringify(pedido)],
-    );
-    return { id };
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Bloquea la fila si el pedido ya existe (edición) para serializar cambios.
+      const prev = await client.query<{
+        consecutivo: number | null;
+        data: PedidoData;
+      }>(`SELECT consecutivo, data FROM pedidos WHERE id = $1 FOR UPDATE`, [id]);
+
+      if (prev.rowCount) {
+        // Edición: conserva el consecutivo, la comanda y la fecha originales
+        // para no romper la trazabilidad ni reasignar números.
+        const prevData = prev.rows[0].data ?? {};
+        finalPedido.consecutivo =
+          (typeof prevData.consecutivo === 'number'
+            ? prevData.consecutivo
+            : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
+        finalPedido.comanda = prevData.comanda ?? finalPedido.comanda;
+        finalPedido.fecha = prevData.fecha ?? finalPedido.fecha;
+      } else if (puntoId) {
+        // Nuevo pedido: asigna el consecutivo de forma atómica por punto.
+        // El lock se libera automáticamente al terminar la transacción.
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+          `pedido_consecutivo:${puntoId}`,
+        ]);
+        const max = await client.query<{ siguiente: number }>(
+          `SELECT COALESCE(MAX(consecutivo), 0) + 1 AS siguiente
+             FROM pedidos WHERE punto_id = $1`,
+          [puntoId],
+        );
+        const consecutivo = Number(max.rows[0].siguiente) || 1;
+        // Formato: {número del punto}CS{consecutivo de 8 dígitos}. Ej: 1CS00000001
+        const numeroPunto = (
+          String(pedido.punto?.codigo ?? '').match(/\d+/)?.[0] ?? ''
+        ).trim();
+        finalPedido.consecutivo = consecutivo;
+        finalPedido.comanda = `${numeroPunto}CS${String(consecutivo).padStart(8, '0')}`;
+      }
+
+      const consecutivo =
+        typeof finalPedido.consecutivo === 'number'
+          ? finalPedido.consecutivo
+          : null;
+      const estado = finalPedido.estado ? String(finalPedido.estado) : null;
+      const anulado = finalPedido.anulado === true;
+      const fecha = finalPedido.fecha
+        ? new Date(String(finalPedido.fecha))
+        : null;
+
+      await client.query(
+        `INSERT INTO pedidos
+           (id, consecutivo, punto_id, estado, anulado, fecha, data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         ON CONFLICT (id) DO UPDATE SET
+           consecutivo = EXCLUDED.consecutivo,
+           punto_id = EXCLUDED.punto_id,
+           estado = EXCLUDED.estado,
+           anulado = EXCLUDED.anulado,
+           fecha = EXCLUDED.fecha,
+           data = EXCLUDED.data,
+           actualizado_en = now()`,
+        [
+          id,
+          consecutivo,
+          puntoId,
+          estado,
+          anulado,
+          fecha,
+          JSON.stringify(finalPedido),
+        ],
+      );
+
+      await client.query('COMMIT');
+      return finalPedido;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   /** Mezcla cambios en la metadata de despacho de un pedido. */

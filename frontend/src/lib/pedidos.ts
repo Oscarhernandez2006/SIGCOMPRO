@@ -16,6 +16,13 @@ export interface DespachoMeta {
   domiciliario?: string;
   /** Instante en que el pedido pasó a "Despachado". */
   despachoFin?: string;
+  /**
+   * Instante en que se confirmó el pago (solo para transferencia). Al fijarse,
+   * congela el cronómetro de despacho: el pedido ya está alistado y solo espera
+   * que el cliente envíe la transferencia, por lo que no debe marcarse como
+   * crítico ni en demora.
+   */
+  pagoConfirmado?: string;
 }
 
 export interface EstadoPedidos {
@@ -29,9 +36,14 @@ export function cargarEstadoPedidos(): Promise<EstadoPedidos> {
   return apiFetch<EstadoPedidos>("/pedidos");
 }
 
-/** Crea o actualiza un pedido completo en la base de datos. */
-export function guardarPedidoApi(pedido: Pedido): Promise<{ id: string }> {
-  return apiFetch<{ id: string }>(`/pedidos/${pedido.id}`, {
+/**
+ * Crea o actualiza un pedido completo en la base de datos. Devuelve el pedido
+ * final tal como quedó en el servidor: para pedidos nuevos, el backend asigna
+ * el consecutivo y la comanda de forma atómica (evita duplicados en ventas
+ * simultáneas), así que hay que usar este resultado para imprimir/mostrar.
+ */
+export function guardarPedidoApi(pedido: Pedido): Promise<Pedido> {
+  return apiFetch<Pedido>(`/pedidos/${pedido.id}`, {
     method: "PUT",
     body: JSON.stringify(pedido),
   });
