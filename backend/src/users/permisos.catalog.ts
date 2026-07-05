@@ -33,6 +33,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: 'pedidos.anular', label: 'Anular pedido' },
           { key: 'pedidos.imprimir', label: 'Reimprimir comanda / Excel' },
           { key: 'pedidos.clonar', label: 'Clonar pedido' },
+          {
+            key: 'pedidos.sincronizar',
+            label: 'Sincronizar lista de precios',
+          },
         ],
       },
       {
@@ -42,6 +46,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: 'despacho.estado', label: 'Cambiar estado del pedido' },
           { key: 'despacho.pago', label: 'Cambiar método de pago / liberar cartera' },
         ],
+      },
+      {
+        key: 'historicos',
+        label: 'Históricos',
       },
       {
         key: 'clientes',

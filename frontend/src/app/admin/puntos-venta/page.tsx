@@ -227,6 +227,7 @@ export default function AdminPuntosVentaPage() {
         </div>
         <button
           onClick={abrirCrear}
+          title="Crear un nuevo punto de venta"
           className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber-light"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -252,9 +253,9 @@ export default function AdminPuntosVentaPage() {
             No hay puntos de venta registrados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Código</th>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
@@ -418,10 +419,10 @@ export default function AdminPuntosVentaPage() {
               </label>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={cerrarModal} disabled={guardando} className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
+                <button type="button" onClick={cerrarModal} disabled={guardando} title="Cancelar" className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
                   Cancelar
                 </button>
-                <button type="submit" disabled={guardando} className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60">
+                <button type="submit" disabled={guardando} title={editando ? "Guardar los cambios del punto" : "Crear el punto de venta"} className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60">
                   {guardando && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
                   {editando ? "Guardar cambios" : "Crear punto"}
                 </button>
@@ -489,10 +490,10 @@ export default function AdminPuntosVentaPage() {
             )}
 
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setAsignando(null)} disabled={guardandoAsign} className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
+              <button type="button" onClick={() => setAsignando(null)} disabled={guardandoAsign} title="Cancelar" className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
                 Cancelar
               </button>
-              <button type="button" onClick={guardarAsignacion} disabled={guardandoAsign || cargandoAsign} className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60">
+              <button type="button" onClick={guardarAsignacion} disabled={guardandoAsign || cargandoAsign} title="Guardar la asignación de usuarios" className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60">
                 {guardandoAsign && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
                 Guardar asignación
               </button>
@@ -511,10 +512,10 @@ export default function AdminPuntosVentaPage() {
               ¿Seguro que deseas eliminar <strong>{porEliminar.nombre}</strong>? Se quitarán sus asignaciones de usuarios.
             </p>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setPorEliminar(null)} disabled={eliminando} className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
+              <button type="button" onClick={() => setPorEliminar(null)} disabled={eliminando} title="Cancelar" className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
                 Cancelar
               </button>
-              <button type="button" onClick={confirmarEliminar} disabled={eliminando} className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-60">
+              <button type="button" onClick={confirmarEliminar} disabled={eliminando} title="Eliminar el punto de venta" className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-60">
                 {eliminando && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
                 Eliminar
               </button>

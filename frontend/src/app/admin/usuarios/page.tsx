@@ -163,6 +163,7 @@ export default function AdminUsuariosPage() {
         </div>
         <button
           onClick={abrirCrear}
+          title="Crear un nuevo usuario"
           className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber-light"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -190,9 +191,9 @@ export default function AdminUsuariosPage() {
             No hay usuarios registrados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
                   <th className="px-4 py-3 font-semibold">Cédula</th>
@@ -376,6 +377,7 @@ export default function AdminUsuariosPage() {
                   type="button"
                   onClick={cerrarModal}
                   disabled={guardando}
+                  title="Cancelar"
                   className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50"
                 >
                   Cancelar
@@ -383,6 +385,7 @@ export default function AdminUsuariosPage() {
                 <button
                   type="submit"
                   disabled={guardando}
+                  title={editando ? "Guardar los cambios del usuario" : "Crear el usuario"}
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60"
                 >
                   {guardando && (
@@ -416,6 +419,7 @@ export default function AdminUsuariosPage() {
               <button
                 onClick={() => setPorEliminar(null)}
                 disabled={eliminando}
+                title="Cancelar"
                 className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50"
               >
                 Cancelar
@@ -423,6 +427,7 @@ export default function AdminUsuariosPage() {
               <button
                 onClick={confirmarEliminar}
                 disabled={eliminando}
+                title="Eliminar el usuario"
                 className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine-dark disabled:opacity-60"
               >
                 {eliminando && (

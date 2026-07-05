@@ -46,6 +46,12 @@ export class ClientesController {
     return this.clientes.listarBarrios(q, ciudad);
   }
 
+  /** Estadísticas: total y cuántos tienen ubicación válida (bien creados). */
+  @Get('estadisticas')
+  estadisticas() {
+    return this.clientes.estadisticas();
+  }
+
   @Get(':id')
   obtener(@Param('id') id: string) {
     return this.clientes.obtener(id);

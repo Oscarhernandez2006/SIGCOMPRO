@@ -307,6 +307,7 @@ export class PedidosService implements OnModuleInit {
    */
   async generarExcelDespacho(
     id: string,
+    replica?: number,
   ): Promise<{ filename: string; buffer: Buffer }> {
     const res = await this.pool.query<{ data: PedidoData }>(
       `SELECT data FROM pedidos WHERE id = $1 LIMIT 1`,
@@ -319,7 +320,13 @@ export class PedidosService implements OnModuleInit {
 
     const cliente = pedido.cliente ?? {};
     const punto = pedido.punto ?? {};
-    const comanda = String(pedido.comanda ?? '');
+    // Réplica: el mismo pedido se manda por partes. El ERP lo entiende como el
+    // mismo pedido; el sufijo "-N" indica que es una réplica del consecutivo.
+    const sufijoReplica =
+      typeof replica === 'number' && replica >= 1 && replica <= 5
+        ? `-${replica}`
+        : '';
+    const comanda = `${String(pedido.comanda ?? '')}${sufijoReplica}`;
 
     // Localidad del punto: "PDV Carnes Santacruz La 70" -> "La 70".
     const localidad = String(punto.nombre ?? '')

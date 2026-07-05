@@ -101,6 +101,7 @@ export default function MapaDireccion({
             <button
               type="button"
               onClick={quitarUbicacion}
+              title="Quitar la ubicación del mapa"
               className="text-xs font-medium text-brand-brown/50 hover:text-red-600 hover:underline"
             >
               Quitar
@@ -110,6 +111,7 @@ export default function MapaDireccion({
             type="button"
             onClick={geocodificar}
             disabled={cargando}
+            title="Ubicar la dirección en el mapa"
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 disabled:opacity-50"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">

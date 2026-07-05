@@ -104,6 +104,7 @@ export default function AutocompleteInput({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => elegir(o)}
+                title={`Seleccionar ${o.value}`}
                 className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-brand-cream-soft"
               >
                 <span className="text-brand-black">{o.value}</span>

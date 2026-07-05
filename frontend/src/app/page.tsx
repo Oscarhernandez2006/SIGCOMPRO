@@ -202,6 +202,9 @@ export default function LoginPage() {
                   aria-label={
                     showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
                   }
+                  title={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-brand-brown/40 transition hover:text-brand-amber"
                 >
                   {showPassword ? (
@@ -248,6 +251,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
+              title="Iniciar sesión"
               className="group relative w-full overflow-hidden rounded-xl bg-brand-wine py-2.5 font-semibold text-brand-cream shadow-lg shadow-brand-wine/20 transition hover:bg-brand-wine-dark focus:outline-none focus:ring-2 focus:ring-brand-amber/40 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-brand-amber/30 to-transparent transition-transform duration-700 group-hover:translate-x-full" />

@@ -100,6 +100,50 @@ export class ClientesService implements OnModuleInit {
     return { items: itemsRes.rows, total: totalRes.rows[0].n };
   }
 
+  /**
+   * Estadísticas de clientes según la calidad de su ubicación:
+   * - validados: coordenadas presentes y dentro de rango válido.
+   * - incorrectos: tienen coordenadas pero son inválidas (0,0 o fuera de rango).
+   * - sinVerificar: sin coordenadas (el mapa nunca se confirmó).
+   */
+  async estadisticas(): Promise<{
+    total: number;
+    validados: number;
+    incorrectos: number;
+    sinVerificar: number;
+  }> {
+    const res = await this.pool.query<{
+      total: number;
+      validados: number;
+      incorrectos: number;
+    }>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (
+           WHERE lat IS NOT NULL AND lng IS NOT NULL
+             AND lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180
+             AND NOT (lat = 0 AND lng = 0)
+         )::int AS validados,
+         COUNT(*) FILTER (
+           WHERE lat IS NOT NULL AND lng IS NOT NULL
+             AND (
+               lat NOT BETWEEN -90 AND 90 OR lng NOT BETWEEN -180 AND 180
+               OR (lat = 0 AND lng = 0)
+             )
+         )::int AS incorrectos
+       FROM clientes`,
+    );
+    const total = res.rows[0]?.total ?? 0;
+    const validados = res.rows[0]?.validados ?? 0;
+    const incorrectos = res.rows[0]?.incorrectos ?? 0;
+    return {
+      total,
+      validados,
+      incorrectos,
+      sinVerificar: total - validados - incorrectos,
+    };
+  }
+
   async obtener(id: string): Promise<ClienteRow> {
     const res = await this.pool.query<ClienteRow>(
       `SELECT ${COLUMNS} FROM clientes WHERE id = $1 LIMIT 1`,
@@ -408,12 +452,16 @@ export class ClientesService implements OnModuleInit {
         creados += res.rowCount ?? 0;
       }
 
-      // Actualiza solo los campos provenientes del Excel.
+      // Actualiza solo los campos provenientes del Excel. Al cambiar los datos
+      // se limpian las coordenadas (lat/lng = NULL) para que el cliente quede
+      // "sin verificar" y deba revisarse en el mapa nuevamente. Los clientes
+      // sin cambios no se tocan, así conservan su ubicación validada.
       for (const r of cambiados) {
         const res = await cliente.query(
           `UPDATE clientes
              SET nombre = $2, direccion = $3, referencia = $4,
-                 barrio = $5, ciudad = $6, telefono = $7
+                 barrio = $5, ciudad = $6, telefono = $7,
+                 lat = NULL, lng = NULL
            WHERE nit_cedula = $1`,
           [
             r.nit,

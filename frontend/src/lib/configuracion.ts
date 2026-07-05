@@ -1,9 +1,21 @@
 import { apiFetch } from "./api";
 
-/** Personal de despacho configurable (porcionadores y domiciliarios). */
+/** Personal de despacho de un punto (porcionadores y domiciliarios). */
 export interface PersonalDespacho {
   porcionadores: string[];
   domiciliarios: string[];
+}
+
+/** Una persona con los puntos de venta donde está asignada. */
+export interface PersonaAsignada {
+  nombre: string;
+  puntos: string[];
+}
+
+/** Registro global de personas (centrado en la persona, no en el punto). */
+export interface RegistroPersonal {
+  porcionadores: PersonaAsignada[];
+  domiciliarios: PersonaAsignada[];
 }
 
 /** Personal de despacho de todos los puntos, indexado por id de punto de venta. */
@@ -13,25 +25,17 @@ export function obtenerPersonalDespachoTodos(): Promise<
   return apiFetch<Record<string, PersonalDespacho>>("/configuracion/despacho");
 }
 
-/** Personal de despacho de un punto de venta específico. */
-export function obtenerPersonalDespachoPunto(
-  puntoId: string,
-): Promise<PersonalDespacho> {
-  return apiFetch<PersonalDespacho>(
-    `/configuracion/despacho/${encodeURIComponent(puntoId)}`,
-  );
+/** Registro global de porcionadores y domiciliarios con sus puntos asignados. */
+export function obtenerRegistroPersonal(): Promise<RegistroPersonal> {
+  return apiFetch<RegistroPersonal>("/configuracion/personal");
 }
 
-/** Guarda (reemplaza) el personal de despacho de un punto. Solo administradores. */
-export function guardarPersonalDespachoPunto(
-  puntoId: string,
-  datos: PersonalDespacho,
-): Promise<PersonalDespacho> {
-  return apiFetch<PersonalDespacho>(
-    `/configuracion/despacho/${encodeURIComponent(puntoId)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(datos),
-    },
-  );
+/** Guarda (reemplaza) el registro global de personas. Solo administradores. */
+export function guardarRegistroPersonal(
+  datos: RegistroPersonal,
+): Promise<RegistroPersonal> {
+  return apiFetch<RegistroPersonal>("/configuracion/personal", {
+    method: "PUT",
+    body: JSON.stringify(datos),
+  });
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listarClientes, type Cliente } from "@/lib/clientes";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
-import { listarProductos, listarListasPrecio, type ProductoPrecio } from "@/lib/productos";
+import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
@@ -34,6 +34,7 @@ interface PedidoCongelado {
   valorDomicilio: number;
   programado: boolean;
   fechaProgramada: string;
+  horaDespacho: string;
   observacion: string;
   clienteNombre: string;
   numItems: number;
@@ -70,6 +71,7 @@ export default function PedidosPage() {
       anular: puedeAccion(usuario, "pedidos.anular"),
       imprimir: puedeAccion(usuario, "pedidos.imprimir"),
       clonar: puedeAccion(usuario, "pedidos.clonar"),
+      sincronizar: puedeAccion(usuario, "pedidos.sincronizar"),
     }),
     [usuario],
   );
@@ -189,6 +191,21 @@ export default function PedidosPage() {
     descargarExcelDespacho(p.id).catch(() => alert("No se pudo generar el Excel de despacho."));
   };
 
+  // Sincroniza la lista de precios desde la API externa (permiso pedidos.sincronizar).
+  const [sincronizando, setSincronizando] = useState(false);
+  const sincronizarPrecios = async () => {
+    if (sincronizando) return;
+    setSincronizando(true);
+    try {
+      const r = await sincronizarProductos();
+      alert(`Lista de precios actualizada: ${r.total} productos en ${r.listas} listas.`);
+    } catch {
+      alert("No se pudo sincronizar la lista de precios. Intenta de nuevo.");
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
   return (
     <div>
       {/* Encabezado */}
@@ -202,8 +219,22 @@ export default function PedidosPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {permite.sincronizar && (
+            <button
+              onClick={sincronizarPrecios}
+              disabled={sincronizando}
+              title="Actualiza la lista de precios desde el sistema"
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown shadow-sm transition hover:bg-brand-cream-soft disabled:opacity-50"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 ${sincronizando ? "animate-spin" : ""}`}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+              {sincronizando ? "Sincronizando…" : "Sincronizar precios"}
+            </button>
+          )}
           <button
             onClick={() => setModalCongelados(true)}
+            title="Ver pedidos congelados en espera"
             className="relative inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown shadow-sm transition hover:bg-brand-cream-soft"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -218,6 +249,7 @@ export default function PedidosPage() {
           </button>
           <button
             onClick={permite.crear ? abrirNuevo : sinPermiso.mostrar}
+            title="Crear un nuevo pedido"
             className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
               permite.crear ? "" : "opacity-50"
             }`}
@@ -272,6 +304,7 @@ export default function PedidosPage() {
         </div>
         <button
           onClick={() => setFechaFiltro(hoyISO())}
+          title="Filtrar por el día de hoy"
           className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
         >
           Hoy
@@ -279,6 +312,7 @@ export default function PedidosPage() {
         {(fechaFiltro || busqueda) && (
           <button
             onClick={() => { setFechaFiltro(""); setBusqueda(""); }}
+            title="Limpiar búsqueda y filtros"
             className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft"
           >
             Limpiar
@@ -311,20 +345,21 @@ export default function PedidosPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-brand-cream-soft/60 text-left text-xs uppercase tracking-wide text-brand-brown/50">
-              <tr>
-                <th className="px-4 py-3">Comanda</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Punto</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pedidosFiltrados.map((p) => (
+          <div className="max-h-[calc(100vh-300px)] overflow-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3">Comanda</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Punto</th>
+                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pedidosFiltrados.map((p) => (
                 <tr key={p.id} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
                   <td className="px-4 py-3 font-semibold text-brand-wine">{p.comanda}</td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
@@ -338,24 +373,25 @@ export default function PedidosPage() {
                   <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      <button onClick={() => setDetalle(p)} className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Ver</button>
+                      <button onClick={() => setDetalle(p)} title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Ver</button>
                       {!p.anulado && (
                         <>
-                          <button onClick={permite.imprimir ? () => imprimirComanda(p) : sinPermiso.mostrar} className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Reimprimir</button>
-                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Excel</button>
-                          <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>Editar</button>
-                          <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} className={`rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>Anular</button>
+                          <button onClick={permite.imprimir ? () => imprimirComanda(p) : sinPermiso.mostrar} title="Reimprimir la comanda del pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Reimprimir</button>
+                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Excel</button>
+                          <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>Editar</button>
+                          <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} title="Anular el pedido" className={`rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>Anular</button>
                         </>
                       )}
                       {p.anulado && (
-                        <button onClick={permite.clonar ? () => abrirClon(p) : sinPermiso.mostrar} className={`rounded-lg border border-brand-amber/40 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/10 ${permite.clonar ? "" : "opacity-50"}`}>Clonar</button>
+                        <button onClick={permite.clonar ? () => abrirClon(p) : sinPermiso.mostrar} title="Clonar el pedido" className={`rounded-lg border border-brand-amber/40 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/10 ${permite.clonar ? "" : "opacity-50"}`}>Clonar</button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -415,6 +451,7 @@ function ModalCongelados({
             onClick={onCerrar}
             className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
             aria-label="Cerrar"
+            title="Cerrar"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -461,12 +498,14 @@ function ModalCongelados({
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => setVerCong(c)}
+                          title="Ver detalle del pedido congelado"
                           className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
                         >
                           Ver
                         </button>
                         <button
                           onClick={() => onDescongelar(c)}
+                          title="Descongelar y retomar el pedido"
                           className="rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/20"
                         >
                           Descongelar
@@ -475,6 +514,7 @@ function ModalCongelados({
                           onClick={() => {
                             if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
                           }}
+                          title="Eliminar el pedido congelado"
                           className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                         >
                           Eliminar
@@ -491,6 +531,7 @@ function ModalCongelados({
         <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
           <button
             onClick={onCerrar}
+            title="Cerrar"
             className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
           >
             Cerrar
@@ -562,6 +603,7 @@ function DetalleCongelado({
             onClick={onCerrar}
             className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
             aria-label="Cerrar"
+            title="Cerrar"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -651,17 +693,19 @@ function DetalleCongelado({
             onClick={() => {
               if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
             }}
+            title="Eliminar el pedido congelado"
             className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
           >
             Eliminar
           </button>
           <button
             onClick={() => onDescongelar(c)}
+            title="Descongelar y continuar el pedido"
             className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white hover:bg-brand-amber/90"
           >
             Descongelar y continuar
           </button>
-          <button onClick={onCerrar} className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Cerrar</button>
+          <button onClick={onCerrar} title="Cerrar" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Cerrar</button>
         </div>
       </div>
     </div>
@@ -688,6 +732,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   // Fecha de entrega: programado=false => hoy; programado=true => fecha elegida.
   const [programado, setProgramado] = useState<boolean>(borrador ? borrador.programado : base?.entregaProgramada ?? false);
   const [fechaProgramada, setFechaProgramada] = useState<string>(borrador ? borrador.fechaProgramada : base?.fechaProgramada ?? "");
+  const [horaDespacho, setHoraDespacho] = useState<string>(borrador ? borrador.horaDespacho ?? "" : base?.horaDespacho ?? "");
   // Observación general del pedido (indicaciones para despacho/cocina).
   const [observacion, setObservacion] = useState<string>(borrador ? borrador.observacion : base?.observacion ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
@@ -735,6 +780,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
       valorDomicilio,
       programado,
       fechaProgramada,
+      horaDespacho,
       observacion,
       clienteNombre: cliente?.nombre || cliente?.nit_cedula || "Sin cliente",
       numItems: carrito.length,
@@ -763,6 +809,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               onClick={onCerrar}
               className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
               aria-label="Cerrar"
+              title="Cerrar"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -789,6 +836,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button
                   onClick={() => imprimirComanda(pedidoCreado)}
+                  title="Imprimir la comanda del pedido"
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -798,6 +846,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                 </button>
                 <button
                   onClick={() => descargarExcelDespacho(pedidoCreado.id)}
+                  title="Descargar el Excel de despacho"
                   className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 px-6 py-3 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -810,6 +859,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
             <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
               <button
                 onClick={onCerrar}
+                title="Cerrar"
                 className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
               >
                 Cerrar
@@ -829,6 +879,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
             <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
               <button
                 onClick={onCerrar}
+                title="Cancelar y cerrar"
                 className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
               >
                 Cancelar
@@ -868,6 +919,8 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                       onCambiar={setProgramado}
                       fecha={fechaProgramada}
                       onFecha={setFechaProgramada}
+                      hora={horaDespacho}
+                      onHora={setHoraDespacho}
                     />
                   </div>
                 )}
@@ -897,6 +950,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => (paso === 0 ? onCerrar() : setPaso((p) => p - 1))}
+                  title={paso === 0 ? "Cancelar el pedido" : "Volver al paso anterior"}
                   className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
                 >
                   {paso === 0 ? "Cancelar" : "Atrás"}
@@ -922,6 +976,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     (paso === 1 && carrito.length === 0) ||
                     (paso === 2 && (!entrega || !pago))
                   }
+                  title="Continuar al siguiente paso"
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Continuar
@@ -962,6 +1017,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                       observacion: observacion.trim() || undefined,
                       entregaProgramada: programado,
                       fechaProgramada: programado ? fechaProgramada : undefined,
+                      horaDespacho: horaDespacho || undefined,
                       vendedorNombre: inicial?.vendedorNombre ?? getUsuario()?.nombre ?? "",
                       vendedorCedula: inicial?.vendedorCedula ?? getUsuario()?.cedula ?? "",
                       estado: inicial?.estado ?? "En proceso",
@@ -985,6 +1041,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                       /* el pedido ya quedó guardado; el Excel se puede bajar luego */
                     }
                   }}
+                  title={inicial ? "Guardar los cambios del pedido" : clon ? "Clonar el pedido" : "Confirmar y crear el pedido"}
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90"
                 >
                   {inicial ? "Guardar cambios" : clon ? "Clonar pedido" : "Confirmar pedido"}
@@ -1069,6 +1126,7 @@ function PasoPunto({
             <button
               key={p.id}
               onClick={() => onSeleccionar(p)}
+              title={`Seleccionar el punto de venta ${p.nombre}`}
               className="flex items-center gap-3 rounded-xl border border-brand-brown/10 bg-white px-4 py-3 text-left transition hover:border-brand-amber/50 hover:bg-brand-cream-soft/40"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
@@ -1207,6 +1265,7 @@ function PasoCliente({
             <p className="text-sm text-brand-brown/50">No se encontraron clientes.</p>
             <button
               onClick={() => setCreando(true)}
+              title="Crear un nuevo cliente"
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-amber px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -1222,6 +1281,7 @@ function PasoCliente({
               <button
                 key={c.id}
                 onClick={() => onSeleccionar(c)}
+                title={`Seleccionar el cliente ${c.nombre || c.nit_cedula}`}
                 className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
                   activo
                     ? "border-brand-amber bg-brand-amber/5 ring-1 ring-brand-amber"
@@ -1392,6 +1452,7 @@ function PasoProductos({
                 <button
                   key={h.id}
                   onClick={() => setConfig(p)}
+                  title={`Agregar ${p.producto || "producto"} al pedido`}
                   className={`flex flex-col rounded-lg border p-2 text-left transition ${
                     enCarrito(p.id)
                       ? "border-brand-amber bg-brand-amber/10"
@@ -1449,6 +1510,7 @@ function PasoProductos({
               <button
                 key={p.id}
                 onClick={() => setConfig(p)}
+                title={`Agregar ${p.producto || "producto"} al pedido`}
                 className={`flex flex-col rounded-xl border p-3 text-left transition ${
                   enCarrito(p.id)
                     ? "border-brand-amber bg-brand-amber/5"
@@ -1561,6 +1623,7 @@ function ResumenPedido({
                       }}
                       className="shrink-0 text-brand-brown/30 hover:text-red-600"
                       aria-label="Quitar"
+                      title="Quitar el producto del pedido"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1649,7 +1712,7 @@ function ConfigProducto({
               Ref {producto.referencia} · {formatoCOP(producto.precio)} / {producto.um || "U"}
             </p>
           </div>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+          <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -1665,6 +1728,7 @@ function ConfigProducto({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setCantidad(String(Math.max(minimo, +(cant - paso).toFixed(2))))}
+                title="Disminuir la cantidad"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-brown/15 text-lg text-brand-brown hover:bg-brand-cream-soft"
               >−</button>
               <input
@@ -1680,6 +1744,7 @@ function ConfigProducto({
               />
               <button
                 onClick={() => setCantidad(String(+(cant + paso).toFixed(2)))}
+                title="Aumentar la cantidad"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-brown/15 text-lg text-brand-brown hover:bg-brand-cream-soft"
               >+</button>
               <span className="ml-auto text-lg font-bold text-brand-wine">{formatoCOP(subtotal)}</span>
@@ -1691,6 +1756,7 @@ function ConfigProducto({
             <span className="text-sm font-medium text-brand-black">Empaque al vacío</span>
             <button
               onClick={() => setAlVacio((v) => !v)}
+              title="Activar o desactivar empaque al vacío"
               className={`relative h-6 w-11 rounded-full transition ${alVacio ? "bg-brand-wine" : "bg-brand-brown/20"}`}
             >
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${alVacio ? "left-5" : "left-0.5"}`} />
@@ -1702,6 +1768,7 @@ function ConfigProducto({
             <span className="text-sm font-medium text-brand-black">Porcionado</span>
             <button
               onClick={() => setPorcionado((v) => !v)}
+              title="Activar o desactivar porcionado"
               className={`relative h-6 w-11 rounded-full transition ${porcionado ? "bg-brand-wine" : "bg-brand-brown/20"}`}
             >
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${porcionado ? "left-5" : "left-0.5"}`} />
@@ -1756,12 +1823,13 @@ function ConfigProducto({
         </div>
 
         <div className="flex gap-2 border-t border-brand-brown/10 px-5 py-4">
-          <button onClick={onCerrar} className="flex-1 rounded-xl border border-brand-brown/15 py-2.5 text-sm font-medium text-brand-brown hover:bg-brand-cream-soft">
+          <button onClick={onCerrar} title="Cancelar" className="flex-1 rounded-xl border border-brand-brown/15 py-2.5 text-sm font-medium text-brand-brown hover:bg-brand-cream-soft">
             Cancelar
           </button>
           <button
             onClick={confirmar}
             disabled={cant <= 0 || (porcionado && (g <= 0 || u <= 0 || fueraRango))}
+            title={inicial ? "Guardar los cambios del producto" : "Agregar el producto al pedido"}
             className="flex-1 rounded-xl bg-brand-amber py-2.5 text-sm font-semibold text-white hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {inicial ? "Guardar cambios" : "Agregar"}
@@ -1780,7 +1848,7 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function formatoCOP(v: number) {
+export function formatoCOP(v: number) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
     currency: "COP",
@@ -1845,6 +1913,7 @@ function PasoEntrega({
           <button
             key={o.id}
             onClick={() => onCambiar(o.id)}
+            title={`Elegir entrega: ${o.titulo}`}
             className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
               valor === o.id
                 ? "border-brand-amber bg-brand-amber/5 ring-1 ring-brand-amber"
@@ -1907,6 +1976,7 @@ function PasoPago({
           <button
             key={m}
             onClick={() => onCambiar(m)}
+            title={`Pagar con ${m}`}
             className={`rounded-2xl border p-4 text-left font-semibold transition ${
               valor === m
                 ? "border-brand-amber bg-brand-amber/5 text-brand-wine ring-1 ring-brand-amber"
@@ -1930,11 +2000,15 @@ function PasoFechaEntrega({
   onCambiar,
   fecha,
   onFecha,
+  hora,
+  onHora,
 }: {
   programado: boolean;
   onCambiar: (v: boolean) => void;
   fecha: string;
   onFecha: (v: string) => void;
+  hora: string;
+  onHora: (v: string) => void;
 }) {
   // Fecha mínima seleccionable: mañana (no se puede programar para hoy ni atrás).
   const manana = new Date();
@@ -1953,6 +2027,7 @@ function PasoFechaEntrega({
           <button
             key={String(o.id)}
             onClick={() => onCambiar(o.id)}
+            title={o.titulo}
             className={`rounded-2xl border p-4 text-left transition ${
               programado === o.id
                 ? "border-brand-amber bg-brand-amber/5 ring-1 ring-brand-amber"
@@ -1978,6 +2053,21 @@ function PasoFechaEntrega({
           />
         </div>
       )}
+      <div className="mt-4">
+        <label className="mb-1.5 block text-xs font-medium text-brand-brown/70">
+          Hora de despacho (opcional)
+        </label>
+        <input
+          type="time"
+          value={hora}
+          onChange={(e) => onHora(e.target.value)}
+          className="w-full rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber sm:w-auto"
+        />
+        <p className="mt-1 text-xs text-brand-brown/50">
+          Si el cliente pide una hora (ej. 4:00 p. m.), la ventana de 2 horas se
+          activa 2 horas antes para cumplir la promesa.
+        </p>
+      </div>
     </div>
   );
 }
@@ -2117,9 +2207,11 @@ export interface Pedido extends DatosComanda {
   entregaProgramada?: boolean;
   /** Fecha programada de entrega (YYYY-MM-DD) cuando entregaProgramada es true. */
   fechaProgramada?: string;
+  /** Hora de despacho pedida por el cliente (HH:MM). La ventana de 2h se activa 2h antes. */
+  horaDespacho?: string;
 }
 
-function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => void }) {
+export function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => void }) {
   const dest = pedido.entrega === "domicilio" ? "Domicilio" : pedido.entrega === "recoge" ? "Recoge en punto" : "—";
   const c = pedido.cliente;
   return (
@@ -2130,7 +2222,7 @@ function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => v
             <h3 className="font-serif text-lg font-bold text-brand-wine">Pedido {pedido.comanda}</h3>
             <p className="text-xs text-brand-brown/50">{new Date(pedido.fecha).toLocaleString("es-CO")} · {pedido.punto.nombre}{pedido.anulado ? " · ANULADO" : ""}</p>
           </div>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+          <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -2200,22 +2292,31 @@ function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => v
         </div>
         <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
           {!pedido.anulado && (
-            <button onClick={() => imprimirComanda(pedido)} className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Reimprimir</button>
+            <button onClick={() => imprimirComanda(pedido)} title="Reimprimir la comanda del pedido" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Reimprimir</button>
           )}
-          <button onClick={onCerrar} className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
+          <button onClick={onCerrar} title="Cerrar" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
         </div>
       </div>
     </div>
   );
 }
 
-export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, vendedorCedula, observacion, id }: Pedido) {
+export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, horaDespacho, id }: Pedido) {
   const subtotal = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   const dom = entrega === "domicilio" ? (valorDomicilio ?? 0) : 0;
   const total = subtotal + dom;
   const f = new Date(fechaIso);
   const fecha = f.toLocaleDateString("es-CO");
   const hora = f.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
+  // Hora de despacho pedida por el cliente (si la hay), en formato 12h.
+  let horaDespTxt = "";
+  const horaDesp = (horaDespacho ?? "").trim();
+  if (/^\d{1,2}:\d{2}$/.test(horaDesp)) {
+    const [hh, mm] = horaDesp.split(":").map(Number);
+    const ampm = hh >= 12 ? "p. m." : "a. m.";
+    const h12 = ((hh + 11) % 12) + 1;
+    horaDespTxt = `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+  }
   const filas = carrito
     .map((i) => {
       const notas: string[] = [`Empaque al vacío: ${i.alVacio ? "SÍ" : "NO"}`];
@@ -2277,18 +2378,19 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <div class="logo"><img src="${logo}" alt="Carnes Santacruz" onerror="this.style.display='none'"></div>
     <h1>Detalle del pedido</h1>
     <div class="emp">Carnes Santacruz</div>
+    <div class="row" style="text-align:center">${punto.nombre}</div>
     <hr>
+    <div class="com">COMANDA: ${comanda}</div>
     <div class="nit"><span class="nitlabel">NIT o Cédula:</span><span class="nitnum">${cliente.nit_cedula}</span></div>
     <div class="row"><span class="label">Cliente:</span> ${cliente.nombre || "—"}</div>
     ${cliente.direccion ? `<div class="row"><span class="label">Dirección:</span> ${cliente.direccion}</div>` : ""}
     ${cliente.telefono ? `<div class="row"><span class="label">Teléfono:</span> ${cliente.telefono}</div>` : ""}
     ${ciudad ? `<div class="row"><span class="label">Ciudad:</span> ${ciudad}</div>` : ""}
-    <div class="com">COMANDA: ${comanda}</div>
     <div class="row"><span class="label">Medio de pago:</span> ${pago || "—"}</div>
-    <div class="row"><span class="label">Punto de venta:</span> ${punto.nombre}</div>
-    <div class="row"><span class="label">Vendedor:</span> ${vendedorNombre || "—"}${vendedorCedula ? ` (${vendedorCedula})` : ""}</div>
+    <div class="row"><span class="label">Vendedor:</span> ${vendedorNombre || "—"}</div>
     <div class="row"><span class="label">Entrega:</span> ${dest}</div>
     <div class="row"><span class="label">Fecha entrega:</span> ${fecha}</div>
+    ${horaDespTxt ? `<div class="row"><span class="label">Hora de despacho:</span> ${horaDespTxt}</div>` : ""}
     <hr>
     <div class="sec">PRODUCTOS</div>
     ${filas}

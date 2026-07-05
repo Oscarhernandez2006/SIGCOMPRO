@@ -155,6 +155,7 @@ export default function AdminPermisosPage() {
                   <li key={u.id}>
                     <button
                       onClick={() => seleccionar(u)}
+                      title={`Gestionar permisos de ${u.nombre}`}
                       className={`flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition ${
                         activo
                           ? "bg-brand-amber/10"
@@ -203,6 +204,7 @@ export default function AdminPermisosPage() {
                   <button
                     onClick={guardar}
                     disabled={guardando}
+                    title="Guardar los permisos del usuario"
                     className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-amber-light disabled:opacity-60"
                   >
                     {guardando && (

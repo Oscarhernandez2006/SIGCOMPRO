@@ -9,8 +9,8 @@ import {
 } from '@nestjs/common';
 import { ProductosService } from './productos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermisosGuard } from '../auth/guards/permisos.guard';
+import { Permisos } from '../auth/decorators/permisos.decorator';
 
 @Controller('productos')
 @UseGuards(JwtAuthGuard)
@@ -32,10 +32,15 @@ export class ProductosController {
     return this.productos.listar(lista, buscar);
   }
 
+  /**
+   * Sincroniza la lista de precios desde la API externa. Disponible para los
+   * roles con acceso total y para los usuarios (p. ej. televentas) que tengan
+   * el permiso 'pedidos.sincronizar', para poder actualizarla antes de las 8am.
+   */
   @Post('sincronizar')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles('administrador', 'desarrollador')
+  @UseGuards(PermisosGuard)
+  @Permisos('pedidos.sincronizar')
   sincronizar() {
     return this.productos.sincronizar();
   }

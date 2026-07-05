@@ -163,6 +163,7 @@ export default function DireccionInput({
           <button
             type="button"
             onClick={activarModoEstructurado}
+            title="Cambiar al formato guiado"
             className="shrink-0 text-xs font-medium text-brand-amber hover:underline"
           >
             Usar formato guiado
@@ -261,6 +262,7 @@ export default function DireccionInput({
         <button
           type="button"
           onClick={activarModoLibre}
+          title="Cambiar al formato libre"
           className="shrink-0 text-xs font-medium text-brand-brown/50 hover:text-brand-amber hover:underline"
         >
           Formato libre

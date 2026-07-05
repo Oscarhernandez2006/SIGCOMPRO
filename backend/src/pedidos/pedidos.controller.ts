@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Put,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -33,8 +34,16 @@ export class PedidosController {
 
   /** Descarga el Excel de despacho del pedido (formato del software de ruteo). */
   @Get(':id/excel')
-  async excel(@Param('id') id: string, @Res() res: Response) {
-    const { filename, buffer } = await this.pedidos.generarExcelDespacho(id);
+  async excel(
+    @Param('id') id: string,
+    @Query('replica') replica: string | undefined,
+    @Res() res: Response,
+  ) {
+    const n = replica ? Number(replica) : undefined;
+    const { filename, buffer } = await this.pedidos.generarExcelDespacho(
+      id,
+      Number.isFinite(n) ? n : undefined,
+    );
     res.set({
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -1,289 +1,516 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
 import {
-  guardarPersonalDespachoPunto,
-  obtenerPersonalDespachoPunto,
+  guardarRegistroPersonal,
+  obtenerRegistroPersonal,
+  type PersonaAsignada,
+  type RegistroPersonal,
 } from "@/lib/configuracion";
 import { listarPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 
+type Rol = "porcionador" | "domiciliario";
+
+/** Persona con su rol (vista unificada para la tabla). */
+interface PersonaConRol extends PersonaAsignada {
+  rol: Rol;
+}
+
+const CAT: Record<Rol, keyof RegistroPersonal> = {
+  porcionador: "porcionadores",
+  domiciliario: "domiciliarios",
+};
+
+const ETIQUETA_ROL: Record<Rol, string> = {
+  porcionador: "Porcionador",
+  domiciliario: "Domiciliario",
+};
+
+const CHIP_ROL: Record<Rol, string> = {
+  porcionador: "bg-violet-100 text-violet-700",
+  domiciliario: "bg-teal-100 text-teal-700",
+};
+
 export default function AdminConfiguracionPage() {
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
-  const [puntoId, setPuntoId] = useState<string>("");
-  const [porcionadores, setPorcionadores] = useState<string[]>([]);
-  const [domiciliarios, setDomiciliarios] = useState<string[]>([]);
-  const [cargandoPuntos, setCargandoPuntos] = useState(true);
-  const [cargandoPersonal, setCargandoPersonal] = useState(false);
+  const [registro, setRegistro] = useState<RegistroPersonal>({
+    porcionadores: [],
+    domiciliarios: [],
+  });
+  const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
-  const [guardadoOk, setGuardadoOk] = useState(false);
 
-  // Carga los puntos de venta disponibles para seleccionar.
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroRol, setFiltroRol] = useState<"todos" | Rol>("todos");
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [asignando, setAsignando] = useState<PersonaConRol | null>(null);
+
   useEffect(() => {
-    setCargandoPuntos(true);
+    setCargando(true);
     setErrorCarga(null);
-    listarPuntosVenta()
-      .then((ps) => setPuntos(ps))
+    Promise.all([listarPuntosVenta(), obtenerRegistroPersonal()])
+      .then(([ps, reg]) => {
+        setPuntos(ps);
+        setRegistro({
+          porcionadores: reg.porcionadores ?? [],
+          domiciliarios: reg.domiciliarios ?? [],
+        });
+      })
       .catch((e) =>
         setErrorCarga(
           e instanceof ApiError
             ? e.message
-            : "No se pudieron cargar los puntos de venta",
+            : "No se pudo cargar la configuración",
         ),
       )
-      .finally(() => setCargandoPuntos(false));
+      .finally(() => setCargando(false));
   }, []);
 
-  // Carga el personal del punto seleccionado.
-  const cargarPersonal = useCallback(async (id: string) => {
-    if (!id) {
-      setPorcionadores([]);
-      setDomiciliarios([]);
-      return;
-    }
-    setCargandoPersonal(true);
-    setErrorCarga(null);
-    setGuardadoOk(false);
-    try {
-      const datos = await obtenerPersonalDespachoPunto(id);
-      setPorcionadores(datos.porcionadores ?? []);
-      setDomiciliarios(datos.domiciliarios ?? []);
-    } catch (e) {
-      setErrorCarga(
-        e instanceof ApiError
-          ? e.message
-          : "No se pudo cargar la configuración del punto",
-      );
-    } finally {
-      setCargandoPersonal(false);
-    }
-  }, []);
+  const nombrePunto = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const p of puntos) mapa.set(String(p.id), p.nombre);
+    return (id: string) => mapa.get(String(id)) ?? id;
+  }, [puntos]);
 
-  function seleccionarPunto(id: string) {
-    setPuntoId(id);
-    setErrorGuardar(null);
-    setGuardadoOk(false);
-    cargarPersonal(id);
-  }
+  // Lista unificada, ordenada alfabéticamente.
+  const personas = useMemo<PersonaConRol[]>(() => {
+    const lista: PersonaConRol[] = [
+      ...registro.porcionadores.map((p) => ({ ...p, rol: "porcionador" as Rol })),
+      ...registro.domiciliarios.map((p) => ({ ...p, rol: "domiciliario" as Rol })),
+    ];
+    return lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [registro]);
 
-  async function guardar() {
-    if (!puntoId) return;
-    setErrorGuardar(null);
-    setGuardadoOk(false);
+  const filtradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return personas.filter((p) => {
+      if (filtroRol !== "todos" && p.rol !== filtroRol) return false;
+      if (q && !p.nombre.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [personas, busqueda, filtroRol]);
+
+  const totalPorc = registro.porcionadores.length;
+  const totalDomi = registro.domiciliarios.length;
+
+  // Persiste todo el registro (guardado optimista).
+  async function persistir(nuevo: RegistroPersonal) {
+    setRegistro(nuevo);
     setGuardando(true);
+    setErrorGuardar(null);
     try {
-      const datos = await guardarPersonalDespachoPunto(puntoId, {
-        porcionadores,
-        domiciliarios,
+      const g = await guardarRegistroPersonal(nuevo);
+      setRegistro({
+        porcionadores: g.porcionadores ?? [],
+        domiciliarios: g.domiciliarios ?? [],
       });
-      setPorcionadores(datos.porcionadores ?? []);
-      setDomiciliarios(datos.domiciliarios ?? []);
-      setGuardadoOk(true);
     } catch (e) {
       setErrorGuardar(
-        e instanceof ApiError ? e.message : "No se pudo guardar la configuración",
+        e instanceof ApiError ? e.message : "No se pudo guardar el cambio",
       );
     } finally {
       setGuardando(false);
     }
   }
 
+  function agregarPersona(nombre: string, rol: Rol): boolean {
+    const limpio = nombre.trim();
+    if (!limpio) return false;
+    const cat = CAT[rol];
+    const existe = registro[cat].some(
+      (p) => p.nombre.toLowerCase() === limpio.toLowerCase(),
+    );
+    if (existe) return false;
+    persistir({ ...registro, [cat]: [...registro[cat], { nombre: limpio, puntos: [] }] });
+    return true;
+  }
+
+  function eliminarPersona(p: PersonaConRol) {
+    if (!confirm(`¿Eliminar a ${p.nombre} (${ETIQUETA_ROL[p.rol]})?`)) return;
+    const cat = CAT[p.rol];
+    persistir({
+      ...registro,
+      [cat]: registro[cat].filter(
+        (x) => x.nombre.toLowerCase() !== p.nombre.toLowerCase(),
+      ),
+    });
+  }
+
+  function asignarPuntos(p: PersonaConRol, puntosIds: string[]) {
+    const cat = CAT[p.rol];
+    persistir({
+      ...registro,
+      [cat]: registro[cat].map((x) =>
+        x.nombre.toLowerCase() === p.nombre.toLowerCase()
+          ? { ...x, puntos: puntosIds }
+          : x,
+      ),
+    });
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-wine">
-          Configuración
-        </h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
-          Ajustes generales del sistema y de los módulos del panel operativo.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">
+            Configuración
+          </h1>
+          <p className="mt-1 text-sm text-brand-brown/70">
+            Personal de despacho: porcionadores y domiciliarios, con sus puntos
+            de venta asignados.
+          </p>
+        </div>
+        <button
+          onClick={() => setModalNuevo(true)}
+          title="Agregar una nueva persona"
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+          </svg>
+          Nueva persona
+        </button>
       </div>
 
-      <section className="rounded-2xl border border-brand-brown/15 bg-white p-6">
-        <div className="mb-5">
-          <h2 className="font-serif text-xl font-bold text-brand-wine">
-            Selectores de despacho por punto de venta
-          </h2>
-          <p className="mt-1 text-sm text-brand-brown/70">
-            Selecciona un punto de venta y administra sus{" "}
-            <strong>Porcionadores</strong> y <strong>Domiciliarios</strong>. Cada
-            punto tiene su propia lista: los usuarios de ese punto solo verán a su
-            personal en el módulo de despacho.
-          </p>
+      {/* Toolbar: buscar + filtro por rol + contadores */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[240px] flex-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+          </svg>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+          />
         </div>
-
-        {/* Selector de punto de venta */}
-        <div className="mb-6 max-w-md">
-          <label className="mb-1 block text-sm font-semibold text-brand-brown">
-            Punto de venta
-          </label>
-          <select
-            value={puntoId}
-            onChange={(e) => seleccionarPunto(e.target.value)}
-            disabled={cargandoPuntos}
-            className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-brown outline-none focus:border-brand-wine disabled:opacity-60"
-          >
-            <option value="">
-              {cargandoPuntos ? "Cargando puntos…" : "Selecciona un punto de venta"}
-            </option>
-            {puntos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-                {p.codigo ? ` (${p.codigo})` : ""}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-1 rounded-xl border border-brand-brown/15 bg-white p-1">
+          {([
+            ["todos", `Todos (${totalPorc + totalDomi})`],
+            ["porcionador", `Porcionadores (${totalPorc})`],
+            ["domiciliario", `Domiciliarios (${totalDomi})`],
+          ] as const).map(([valor, etiqueta]) => (
+            <button
+              key={valor}
+              onClick={() => setFiltroRol(valor)}
+              title={`Filtrar: ${etiqueta}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                filtroRol === valor
+                  ? "bg-brand-wine text-white"
+                  : "text-brand-brown hover:bg-brand-cream-soft"
+              }`}
+            >
+              {etiqueta}
+            </button>
+          ))}
         </div>
+        {guardando && (
+          <span className="text-xs font-medium text-brand-brown/60">Guardando…</span>
+        )}
+        {errorGuardar && (
+          <span className="text-xs font-semibold text-red-600">{errorGuardar}</span>
+        )}
+      </div>
 
-        {errorCarga && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorCarga}
+      {errorCarga && (
+        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorCarga}
+        </div>
+      )}
+
+      {/* Tabla */}
+      {cargando ? (
+        <p className="text-sm text-brand-brown/60">Cargando…</p>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
+          <div className="max-h-[calc(100vh-320px)] overflow-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Nombre</th>
+                  <th className="px-4 py-3 font-semibold">Rol</th>
+                  <th className="px-4 py-3 font-semibold">Puntos de venta</th>
+                  <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-brown/5">
+                {filtradas.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-brand-brown/50">
+                      {personas.length === 0
+                        ? "Aún no hay personas. Agrega la primera con “Nueva persona”."
+                        : "No se encontraron resultados."}
+                    </td>
+                  </tr>
+                ) : (
+                  filtradas.map((p) => (
+                    <tr key={`${p.rol}-${p.nombre}`} className="hover:bg-brand-cream-soft/40">
+                      <td className="px-4 py-3 font-medium text-brand-black">{p.nombre}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP_ROL[p.rol]}`}>
+                          {ETIQUETA_ROL[p.rol]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.puntos.length === 0 ? (
+                          <span className="text-xs text-brand-brown/40">Sin puntos asignados</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {p.puntos.map((id) => (
+                              <span
+                                key={id}
+                                className="rounded-full bg-brand-wine/10 px-2 py-0.5 text-[11px] font-semibold text-brand-wine"
+                              >
+                                {nombrePunto(id)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setAsignando(p)}
+                            title={`Asignar puntos de venta a ${p.nombre}`}
+                            className="rounded-lg border border-brand-wine/30 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+                          >
+                            Asignar PDV
+                          </button>
+                          <button
+                            onClick={() => eliminarPersona(p)}
+                            title={`Eliminar a ${p.nombre}`}
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
+      )}
 
-        {!puntoId ? (
-          <p className="rounded-xl border border-dashed border-brand-brown/20 bg-brand-cream/20 px-4 py-8 text-center text-sm text-brand-brown/60">
-            Selecciona un punto de venta para configurar su personal de despacho.
-          </p>
-        ) : cargandoPersonal ? (
-          <p className="text-sm text-brand-brown/60">Cargando personal…</p>
-        ) : (
-          <>
-            <div className="grid gap-6 md:grid-cols-2">
-              <ListaEditor
-                titulo="Porcionadores"
-                descripcion="Personas que porcionan/alistan el pedido."
-                placeholder="Nombre del porcionador"
-                items={porcionadores}
-                onChange={(items) => {
-                  setPorcionadores(items);
-                  setGuardadoOk(false);
-                }}
-              />
-              <ListaEditor
-                titulo="Domiciliarios"
-                descripcion="Personas que realizan la entrega a domicilio."
-                placeholder="Nombre del domiciliario"
-                items={domiciliarios}
-                onChange={(items) => {
-                  setDomiciliarios(items);
-                  setGuardadoOk(false);
-                }}
-              />
-            </div>
+      {modalNuevo && (
+        <ModalNuevaPersona
+          onCerrar={() => setModalNuevo(false)}
+          onAgregar={(nombre, rol) => {
+            const ok = agregarPersona(nombre, rol);
+            if (ok) setModalNuevo(false);
+            return ok;
+          }}
+        />
+      )}
 
-            <div className="mt-6 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={guardar}
-                disabled={guardando}
-                className="rounded-lg bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {guardando ? "Guardando…" : "Guardar cambios"}
-              </button>
-              {guardadoOk && (
-                <span className="text-sm font-medium text-green-700">
-                  Configuración guardada correctamente.
-                </span>
-              )}
-              {errorGuardar && (
-                <span className="text-sm font-medium text-red-700">
-                  {errorGuardar}
-                </span>
-              )}
-            </div>
-          </>
-        )}
-      </section>
+      {asignando && (
+        <ModalAsignarPuntos
+          persona={asignando}
+          puntos={puntos}
+          onCerrar={() => setAsignando(null)}
+          onGuardar={(ids) => {
+            asignarPuntos(asignando, ids);
+            setAsignando(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Editor de una lista de nombres: agregar (input + Enter/botón) y eliminar. */
-function ListaEditor({
-  titulo,
-  descripcion,
-  placeholder,
-  items,
-  onChange,
+/* ---------------------------------------------------------------- */
+/* Modal: nueva persona (nombre + rol)                              */
+/* ---------------------------------------------------------------- */
+function ModalNuevaPersona({
+  onCerrar,
+  onAgregar,
 }: {
-  titulo: string;
-  descripcion: string;
-  placeholder: string;
-  items: string[];
-  onChange: (items: string[]) => void;
+  onCerrar: () => void;
+  onAgregar: (nombre: string, rol: Rol) => boolean;
 }) {
-  const [nuevo, setNuevo] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [rol, setRol] = useState<Rol>("porcionador");
+  const [error, setError] = useState<string | null>(null);
 
   function agregar() {
-    const nombre = nuevo.trim();
-    if (!nombre) return;
-    const existe = items.some((i) => i.toLowerCase() === nombre.toLowerCase());
-    if (!existe) {
-      onChange([...items, nombre]);
+    if (!nombre.trim()) {
+      setError("Escribe el nombre de la persona.");
+      return;
     }
-    setNuevo("");
-  }
-
-  function eliminar(index: number) {
-    onChange(items.filter((_, i) => i !== index));
+    const ok = onAgregar(nombre, rol);
+    if (!ok) setError("Ya existe una persona con ese nombre en ese rol.");
   }
 
   return (
-    <div className="rounded-xl border border-brand-brown/15 bg-brand-cream/30 p-4">
-      <h3 className="font-semibold text-brand-wine">{titulo}</h3>
-      <p className="mt-0.5 text-xs text-brand-brown/60">{descripcion}</p>
-
-      <div className="mt-3 flex gap-2">
-        <input
-          type="text"
-          value={nuevo}
-          placeholder={placeholder}
-          onChange={(e) => setNuevo(e.target.value)}
-          onBlur={agregar}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              agregar();
-            }
-          }}
-          className="min-w-0 flex-1 rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-brown outline-none focus:border-brand-wine"
-        />
-        <button
-          type="button"
-          onClick={agregar}
-          className="shrink-0 rounded-lg border border-brand-wine px-3 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine hover:text-white"
-        >
-          Agregar
-        </button>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+          <h2 className="font-serif text-lg font-bold text-brand-wine">Nueva persona</h2>
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-brand-brown">Nombre</label>
+            <input
+              type="text"
+              value={nombre}
+              autoFocus
+              onChange={(e) => { setNombre(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") agregar(); }}
+              placeholder="Nombre completo"
+              className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-brand-brown">Rol</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["porcionador", "domiciliario"] as Rol[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRol(r)}
+                  title={`Rol: ${ETIQUETA_ROL[r]}`}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    rol === r
+                      ? "border-brand-wine bg-brand-wine/5 text-brand-wine ring-1 ring-brand-wine"
+                      : "border-brand-brown/20 text-brand-brown hover:bg-brand-cream-soft"
+                  }`}
+                >
+                  {ETIQUETA_ROL[r]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
+          <button onClick={onCerrar} title="Cancelar" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">
+            Cancelar
+          </button>
+          <button onClick={agregar} title="Agregar la persona" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">
+            Agregar
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {items.length === 0 ? (
-        <p className="mt-3 text-sm text-brand-brown/50">
-          Aún no hay nombres. Agrega el primero.
-        </p>
-      ) : (
-        <ul className="mt-3 space-y-1.5">
-          {items.map((nombre, index) => (
-            <li
-              key={`${nombre}-${index}`}
-              className="flex items-center justify-between rounded-lg border border-brand-brown/10 bg-white px-3 py-2 text-sm text-brand-brown"
-            >
-              <span className="truncate">{nombre}</span>
-              <button
-                type="button"
-                onClick={() => eliminar(index)}
-                className="ml-3 shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                aria-label={`Eliminar ${nombre}`}
-              >
-                Eliminar
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+/* ---------------------------------------------------------------- */
+/* Modal: asignar puntos de venta a una persona                     */
+/* ---------------------------------------------------------------- */
+function ModalAsignarPuntos({
+  persona,
+  puntos,
+  onCerrar,
+  onGuardar,
+}: {
+  persona: PersonaConRol;
+  puntos: PuntoVenta[];
+  onCerrar: () => void;
+  onGuardar: (puntosIds: string[]) => void;
+}) {
+  const [seleccion, setSeleccion] = useState<string[]>(persona.puntos);
+  const [busca, setBusca] = useState("");
+
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return puntos;
+    return puntos.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(q) ||
+        (p.codigo ?? "").toLowerCase().includes(q),
+    );
+  }, [puntos, busca]);
+
+  function alternar(id: string) {
+    setSeleccion((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+          <div>
+            <h2 className="font-serif text-lg font-bold text-brand-wine">Asignar puntos de venta</h2>
+            <p className="text-xs text-brand-brown/50">
+              {persona.nombre} · {ETIQUETA_ROL[persona.rol]}
+            </p>
+          </div>
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="border-b border-brand-brown/10 px-5 py-3">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar punto de venta"
+            className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {filtrados.length === 0 ? (
+            <p className="px-2 py-6 text-center text-sm text-brand-brown/50">
+              No se encontraron puntos de venta.
+            </p>
+          ) : (
+            filtrados.map((pv) => {
+              const id = String(pv.id);
+              const marcado = seleccion.includes(id);
+              return (
+                <label
+                  key={id}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm text-brand-brown hover:bg-brand-cream-soft/60"
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcado}
+                    onChange={() => alternar(id)}
+                    className="h-4 w-4 accent-brand-wine"
+                  />
+                  <span className="min-w-0 truncate">
+                    {pv.nombre}
+                    {pv.codigo ? <span className="text-brand-brown/40"> ({pv.codigo})</span> : null}
+                  </span>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-brand-brown/10 px-5 py-4">
+          <span className="text-xs font-medium text-brand-brown/60">
+            {seleccion.length} seleccionado{seleccion.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex gap-2">
+            <button onClick={onCerrar} title="Cancelar" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">
+              Cancelar
+            </button>
+            <button onClick={() => onGuardar(seleccion)} title="Guardar los puntos asignados" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

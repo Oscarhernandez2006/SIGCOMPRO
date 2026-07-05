@@ -112,6 +112,7 @@ export default function SeleccionarPanelPage() {
               <button
                 key={panel.key}
                 onClick={() => router.push(panel.href)}
+                title={`Ingresar al panel ${panel.label}`}
                 className={`group flex flex-col items-start rounded-3xl border border-white/30 bg-brand-cream/95 p-6 text-left shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md transition hover:-translate-y-1 ${p.hover}`}
               >
                 <span
@@ -142,6 +143,7 @@ export default function SeleccionarPanelPage() {
         <div className="mt-8 text-center">
           <button
             onClick={cerrarSesion}
+            title="Cerrar sesión"
             className="text-sm font-medium text-brand-cream/70 underline-offset-4 transition hover:text-brand-cream hover:underline"
           >
             Cerrar sesión

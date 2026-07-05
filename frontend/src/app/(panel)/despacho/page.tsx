@@ -11,20 +11,10 @@ import {
   actualizarMetaApi,
   marcarImpresoApi,
   guardarPedidoApi,
+  descargarExcelDespacho,
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
-
-/** ¿La fecha corresponde al día de hoy? */
-function esHoy(fecha: string): boolean {
-  const f = new Date(fecha);
-  const hoy = new Date();
-  return (
-    f.getFullYear() === hoy.getFullYear() &&
-    f.getMonth() === hoy.getMonth() &&
-    f.getDate() === hoy.getDate()
-  );
-}
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
 
@@ -63,9 +53,65 @@ const LIMITE_DESPACHO_MS = 2 * 60 * 60 * 1000;
 /** Umbral de advertencia: queda 1 hora o menos para vencer. */
 const ALERTA_DESPACHO_MS = 60 * 60 * 1000;
 
+/**
+ * Instante objetivo de despacho (deadline). Si el pedido tiene una hora de
+ * despacho definida por el cliente, el objetivo es esa hora (y la promesa de
+ * 2h se cuenta hacia atrás desde ahí, es decir, se activa 2h antes). Si no,
+ * el objetivo es la creación del pedido + 2 horas.
+ */
+function objetivoDespacho(p: Pedido): number {
+  const hora = (p.horaDespacho ?? "").trim();
+  const m = hora.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const base =
+      p.entregaProgramada && p.fechaProgramada
+        ? new Date(`${p.fechaProgramada}T00:00:00`)
+        : new Date(p.fecha);
+    base.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    return base.getTime();
+  }
+  return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
+}
+
 /** Milisegundos restantes para despachar un pedido (puede ser negativo si venció). */
-function msRestantesDespacho(fechaIso: string, ahora: number): number {
-  return new Date(fechaIso).getTime() + LIMITE_DESPACHO_MS - ahora;
+function msRestantesDespacho(p: Pedido, ref: number): number {
+  return objetivoDespacho(p) - ref;
+}
+
+/** Fecha de hoy en formato YYYY-MM-DD (local). */
+function hoyISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** ¿La fecha ISO corresponde al día de hoy (local)? */
+function esHoyFecha(iso?: string): boolean {
+  if (!iso) return false;
+  const f = new Date(iso);
+  const h = new Date();
+  return (
+    f.getFullYear() === h.getFullYear() &&
+    f.getMonth() === h.getMonth() &&
+    f.getDate() === h.getDate()
+  );
+}
+/** ¿El pedido es para HOY? (programado con fecha de hoy, o no programado creado hoy). */
+function esDeHoy(p: Pedido): boolean {
+  if (p.entregaProgramada) {
+    return Boolean(p.fechaProgramada && p.fechaProgramada === hoyISO());
+  }
+  return esHoyFecha(p.fecha);
+}
+/** ¿El pedido es un "posterior" (programado para un día futuro)? */
+function esPosteriorFuturo(p: Pedido): boolean {
+  return Boolean(
+    p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoyISO(),
+  );
+}
+/** ¿El pedido fue programado justo para hoy? (para darle prioridad en la tabla). */
+function programadoParaHoy(p: Pedido): boolean {
+  return Boolean(
+    p.entregaProgramada && p.fechaProgramada && p.fechaProgramada === hoyISO(),
+  );
 }
 
 /** Formatea milisegundos como cronómetro "1:59:32" (h:mm:ss) usando el valor absoluto. */
@@ -128,9 +174,12 @@ const ESTADOS: EstadoDef[] = [
   {
     key: "total",
     label: "Total",
-    sub: "Pedidos del día",
+    sub: "Activos de hoy",
     icon: Icono.caja,
-    match: () => true,
+    match: (x) =>
+      !x.anulado &&
+      norm(x.estado) !== "despachado" &&
+      norm(x.estado) !== "anulado",
     chip: "bg-brand-wine/10 text-brand-wine",
   },
   {
@@ -438,24 +487,105 @@ export default function DespachoPage() {
     cambiarEstado(id, nuevoEstado);
   };
 
+  /* --- Réplicas del pedido (el mismo pedido enviado por partes) --- */
+  // Agrega la siguiente réplica en secuencia (máx. 5).
+  const activarReplica = (id: string) => {
+    const actuales = meta[id]?.replicas ?? [];
+    const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
+    if (max >= 5) return;
+    actualizarMeta(id, {
+      replicas: [...actuales, { numero: max + 1, domiciliario: "" }],
+    });
+  };
+  // Quita la última réplica (para mantener la secuencia).
+  const quitarUltimaReplica = (id: string) => {
+    const actuales = meta[id]?.replicas ?? [];
+    if (actuales.length === 0) return;
+    const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
+    actualizarMeta(id, { replicas: actuales.filter((r) => r.numero !== max) });
+  };
+  const setReplicaDomi = (id: string, numero: number, domiciliario: string) => {
+    const actuales = meta[id]?.replicas ?? [];
+    actualizarMeta(id, {
+      replicas: actuales.map((r) =>
+        r.numero === numero ? { ...r, domiciliario } : r,
+      ),
+    });
+  };
+  const descargarReplica = (p: Pedido, numero: number) => {
+    descargarExcelDespacho(p.id, numero).catch(() =>
+      alert("No se pudo generar el Excel de la réplica."),
+    );
+  };
+
   const pedidosVisibles = useMemo(() => {
     if (!filtro.listo) return [];
     if (!filtro.ids) return pedidos; // acceso total: todos los puntos
     return pedidos.filter((p) => p.punto?.id && filtro.ids!.has(p.punto.id));
   }, [pedidos, filtro]);
 
-  const pedidosHoy = useMemo(
-    () => pedidosVisibles.filter((p) => p.fecha && esHoy(p.fecha)),
+  // "De hoy": pedidos para hoy (programados con fecha de hoy o no programados
+  // creados hoy). Los contadores y cronómetros del día se basan en estos.
+  const pedidosDeHoy = useMemo(
+    () => pedidosVisibles.filter(esDeHoy),
     [pedidosVisibles],
+  );
+  // Posteriores: programados para un día futuro (se ven en su card aparte).
+  const posterioresFuturos = useMemo(
+    () => pedidosVisibles.filter(esPosteriorFuturo),
+    [pedidosVisibles],
+  );
+
+  // Número del día (turno / orden de llegada): 1, 2, 3… por cada día de
+  // creación. Reinicia solo cada día (al agrupar por fecha de creación). Sirve
+  // para marcar las bolsas según el orden en que van llegando los pedidos.
+  const numeroDelDiaPorId = useMemo(() => {
+    const porDia = new Map<string, Pedido[]>();
+    for (const p of pedidosVisibles) {
+      if (!p.fecha) continue;
+      const d = new Date(p.fecha);
+      const dia = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const arr = porDia.get(dia);
+      if (arr) arr.push(p);
+      else porDia.set(dia, [p]);
+    }
+    const mapa = new Map<string, number>();
+    for (const grupo of porDia.values()) {
+      grupo.sort(
+        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+      );
+      grupo.forEach((p, i) => mapa.set(p.id, i + 1));
+    }
+    return mapa;
+  }, [pedidosVisibles]);
+
+  // Pedidos atrasados del día: vencieron las 2h y siguen sin despachar.
+  const atrasados = useMemo(() => {
+    return pedidosDeHoy.filter((p) => {
+      if (p.anulado) return false;
+      const e = norm(p.estado);
+      if (e === "despachado" || e === "anulado") return false;
+      const mm = meta[p.id];
+      const ref = mm?.pagoConfirmado
+        ? new Date(mm.pagoConfirmado).getTime()
+        : ahora;
+      return msRestantesDespacho(p, ref) <= 0;
+    });
+  }, [pedidosDeHoy, meta, ahora]);
+  const atrasadosIds = useMemo(
+    () => new Set(atrasados.map((p) => p.id)),
+    [atrasados],
   );
 
   const pedidosOrdenados = useMemo(
     () =>
-      pedidosVisibles
-        .slice()
-        .sort(
-          (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
-        ),
+      pedidosVisibles.slice().sort((a, b) => {
+        // Los pedidos programados justo para HOY salen de primeros.
+        const pa = programadoParaHoy(a) ? 1 : 0;
+        const pb = programadoParaHoy(b) ? 1 : 0;
+        if (pa !== pb) return pb - pa;
+        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+      }),
     [pedidosVisibles],
   );
 
@@ -466,8 +596,17 @@ export default function DespachoPage() {
     // muestra la vista activa (oculta despachados y cancelados).
     const estadoSel = vista ? ESTADOS.find((e) => e.key === vista) : null;
     const base = pedidosOrdenados.filter((p) => {
-      if (estadoSel) return estadoSel.match(p);
-      return norm(p.estado) !== "despachado" && !esAnulado(p);
+      if (vista === "atrasados") return atrasadosIds.has(p.id);
+      if (vista === "posteriores") return esPosteriorFuturo(p);
+      if (estadoSel) return esDeHoy(p) && estadoSel.match(p);
+      // Vista por defecto: activos de HOY + posteriores aún no impresos (para
+      // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
+      // la card de Posteriores).
+      const activo = norm(p.estado) !== "despachado" && !esAnulado(p);
+      if (!activo) return false;
+      if (esDeHoy(p)) return true;
+      if (esPosteriorFuturo(p) && !impresos.has(p.id)) return true;
+      return false;
     });
     const q = norm(busqueda);
     if (!q) return base;
@@ -483,11 +622,11 @@ export default function DespachoPage() {
         nit.includes(q)
       );
     });
-  }, [pedidosOrdenados, busqueda, vista]);
+  }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos]);
 
   // Pedidos pendientes (ni despachados ni anulados) clasificados por su cronómetro.
   const { porVencer, vencidos } = useMemo(() => {
-    const pendientes = pedidosVisibles.filter(
+    const pendientes = pedidosDeHoy.filter(
       (p) => !p.anulado && norm(p.estado) !== "despachado" && norm(p.estado) !== "anulado",
     );
     const porVencer: Pedido[] = [];
@@ -499,15 +638,15 @@ export default function DespachoPage() {
       return mm?.pagoConfirmado ? new Date(mm.pagoConfirmado).getTime() : ahora;
     };
     for (const p of pendientes) {
-      const restante = msRestantesDespacho(p.fecha, refAhora(p));
+      const restante = msRestantesDespacho(p, refAhora(p));
       if (restante <= 0) vencidos.push(p);
       else if (restante <= ALERTA_DESPACHO_MS) porVencer.push(p);
     }
     // Ordena por urgencia: menos tiempo restante primero.
     const porTiempo = (a: Pedido, b: Pedido) =>
-      msRestantesDespacho(a.fecha, refAhora(a)) - msRestantesDespacho(b.fecha, refAhora(b));
+      msRestantesDespacho(a, refAhora(a)) - msRestantesDespacho(b, refAhora(b));
     return { porVencer: porVencer.sort(porTiempo), vencidos: vencidos.sort(porTiempo) };
-  }, [pedidosVisibles, ahora, meta]);
+  }, [pedidosDeHoy, ahora, meta]);
 
   const totalAlertas = porVencer.length + vencidos.length;
 
@@ -537,7 +676,12 @@ export default function DespachoPage() {
       {/* Grid de estados */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {ESTADOS.map((e) => {
-            const valor = pedidosHoy.filter(e.match).length;
+            const valor =
+              e.key === "atrasados"
+                ? atrasados.length
+                : e.key === "posteriores"
+                  ? posterioresFuturos.length
+                  : pedidosDeHoy.filter(e.match).length;
             // Todas las cards son interactivas: filtran la tabla por su estado.
             const activo = vista === e.key;
             return (
@@ -546,6 +690,7 @@ export default function DespachoPage() {
                 type="button"
                 onClick={() => setVista((v) => (v === e.key ? null : e.key))}
                 aria-pressed={activo}
+                title={activo ? `Ocultar filtro: ${e.label}` : `Filtrar pedidos por: ${e.label}`}
                 className={`group flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
                   activo
                     ? "border-brand-wine bg-brand-wine/5 ring-1 ring-brand-wine"
@@ -604,6 +749,7 @@ export default function DespachoPage() {
               <button
                 onClick={() => setBusqueda("")}
                 aria-label="Limpiar búsqueda"
+                title="Limpiar la búsqueda"
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-brand-brown/50 hover:bg-brand-cream-soft"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -627,9 +773,9 @@ export default function DespachoPage() {
             onMouseMove={onArrastreMover}
             onMouseUp={onArrastreFin}
             onMouseLeave={onArrastreFin}
-            className="cursor-grab overflow-auto"
+            className="max-h-[calc(100vh-340px)] cursor-grab overflow-auto"
           >
-          <table className="w-full table-fixed text-sm">
+          <table className="w-full min-w-[1000px] table-fixed text-sm">
             <colgroup>
               <col className="w-[28%]" />
               <col className="w-[17%]" />
@@ -645,7 +791,7 @@ export default function DespachoPage() {
                 <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Porcionador</th>
                 <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Factura</th>
                 <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Domiciliario</th>
-                <th className="px-3 py-2.5 font-semibold">Valor</th>
+                <th className="px-3 py-2.5 font-semibold">Temporizador</th>
               </tr>
             </thead>
             <tbody className="divide-y-4 divide-double divide-brand-brown/20">
@@ -766,6 +912,9 @@ export default function DespachoPage() {
                           <p className="mt-1.5 whitespace-nowrap text-[11px] text-brand-brown/50">
                             Recibido: {fmtHora(p.fecha)}
                           </p>
+                          <p className="mt-1 whitespace-nowrap text-sm font-bold text-brand-wine">
+                            {fmtMoneda(p.total)}
+                          </p>
                         </div>
                       </div>
                       {!anulado && (
@@ -775,6 +924,7 @@ export default function DespachoPage() {
                               marcarImpreso(p.id);
                               imprimirComanda(p);
                             }}
+                            title="Imprimir la comanda del pedido"
                             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
@@ -795,7 +945,8 @@ export default function DespachoPage() {
                     </td>
 
                     {/* Estado */}
-                    <td className="border-r border-brand-brown/10 px-3 py-3 align-top">
+                    <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className={esAdmin && !anulado ? "pb-14" : ""}>
                       <div
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
                           anulado
@@ -834,8 +985,9 @@ export default function DespachoPage() {
                           </div>
                         )
                       )}
+                      </div>
                       {esAdmin && !anulado && (
-                        <div className="mt-1.5">
+                        <div className="absolute inset-x-3 bottom-3">
                           <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
                             Cambiar estado (admin)
                           </label>
@@ -915,6 +1067,7 @@ export default function DespachoPage() {
                               }
                             }}
                             disabled={anulado}
+                            title={m.inicio ? "Marcar el alistamiento como preparado" : "Iniciar el alistamiento del pedido"}
                             className={`w-full whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
                               permite.estado ? "" : "opacity-50"
                             } ${
@@ -955,7 +1108,7 @@ export default function DespachoPage() {
                         />
                         {typeof m.facturaValor === "number" && m.facturaValor > 0 && (
                           <p className="text-[11px] font-semibold text-brand-wine">
-                            {fmtMoneda(m.facturaValor)}
+                            Valor factura: {fmtMoneda(m.facturaValor)}
                           </p>
                         )}
                       </div>
@@ -981,10 +1134,10 @@ export default function DespachoPage() {
                               !m.facturaNumero?.trim() ||
                               !(typeof m.facturaValor === "number" && m.facturaValor > 0)
                             }
-                            title={!alistado && !facturado ? "Debes terminar el alistamiento antes de facturar" : undefined}
+                            title={!alistado && !facturado ? "Debes terminar el alistamiento antes de facturar" : "Marcar el pedido como facturado"}
                             className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                           >
-                            {facturado ? "Facturado" : "Facturar"}
+                            Facturado
                           </button>
                         )}
                       </div>
@@ -996,7 +1149,8 @@ export default function DespachoPage() {
                         <select
                           value={m.domiciliario ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { domiciliario: ev.target.value })}
-                          disabled={anulado || despachado}
+                          disabled={anulado || despachado || !facturado}
+                          title={!facturado && !despachado ? "Debes facturar el pedido antes de asignar domiciliario" : undefined}
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         >
                           <option value="">Selecciona</option>
@@ -1009,58 +1163,226 @@ export default function DespachoPage() {
                             </option>
                           ))}
                         </select>
+
+                        {/* Réplicas del pedido: el mismo pedido enviado por partes */}
+                        <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
+                          <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                            Réplicas (mismo pedido por partes)
+                          </p>
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((n) => {
+                              const reps = m.replicas ?? [];
+                              const activa = reps.some((r) => r.numero === n);
+                              const maxN = reps.reduce((mx, r) => Math.max(mx, r.numero), 0);
+                              const esSiguiente = n === maxN + 1;
+                              const esUltima = n === maxN;
+                              const deshabilitado = anulado || (!activa && !esSiguiente);
+                              return (
+                                <button
+                                  key={n}
+                                  disabled={deshabilitado}
+                                  onClick={() =>
+                                    activa
+                                      ? esUltima
+                                        ? quitarUltimaReplica(p.id)
+                                        : undefined
+                                      : activarReplica(p.id)
+                                  }
+                                  title={
+                                    activa
+                                      ? esUltima
+                                        ? "Quitar esta réplica"
+                                        : "Réplica activa"
+                                      : esSiguiente
+                                        ? "Agregar réplica"
+                                        : "Marca las réplicas en orden"
+                                  }
+                                  className={`flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-bold transition disabled:cursor-not-allowed ${
+                                    activa
+                                      ? "border-brand-wine bg-brand-wine text-white"
+                                      : esSiguiente
+                                        ? "border-brand-wine/40 bg-white text-brand-wine hover:bg-brand-wine/10"
+                                        : "border-brand-brown/15 bg-white text-brand-brown/30"
+                                  }`}
+                                >
+                                  {n}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {(m.replicas ?? [])
+                            .slice()
+                            .sort((a, b) => a.numero - b.numero)
+                            .map((r) => (
+                              <div
+                                key={r.numero}
+                                className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/30 p-1.5"
+                              >
+                                <p className="mb-1 text-[10px] font-bold text-brand-wine">
+                                  Réplica -{r.numero}
+                                </p>
+                                <select
+                                  value={r.domiciliario ?? ""}
+                                  onChange={(ev) => setReplicaDomi(p.id, r.numero, ev.target.value)}
+                                  disabled={anulado}
+                                  className="mb-1 w-full rounded-md border border-brand-brown/15 bg-white px-2 py-1 text-[11px] font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
+                                >
+                                  <option value="">Domiciliario…</option>
+                                  {(r.domiciliario && !domiciliarios.includes(r.domiciliario)
+                                    ? [r.domiciliario, ...domiciliarios]
+                                    : domiciliarios
+                                  ).map((nombre) => (
+                                    <option key={nombre} value={nombre}>
+                                      {nombre}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => descargarReplica(p, r.numero)}
+                                  title={`Descargar el Excel de la réplica -${r.numero}`}
+                                  className="flex w-full items-center justify-center gap-1 rounded-md border border-brand-brown/15 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                  </svg>
+                                  Excel -{r.numero}
+                                </button>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
                         <button
                           onClick={() => cambiarEstado(p.id, "Despachado")}
-                          disabled={anulado || despachado || !m.domiciliario?.trim()}
+                          disabled={anulado || despachado || !facturado || !m.domiciliario?.trim()}
+                          title={!facturado && !despachado ? "Debes facturar el pedido antes de despachar" : "Marcar el pedido como despachado"}
                           className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                         >
-                          {despachado ? "Despachado" : "Despachar"}
+                          Despachado
                         </button>
                       </div>
                     </td>
 
-                    {/* Valor: usa el de la factura si existe; si no, el del pedido */}
-                    <td className="px-3 py-3 align-top whitespace-nowrap text-right font-bold text-brand-wine">
-                      {fmtMoneda(
-                        typeof m.facturaValor === "number" && m.facturaValor > 0
-                          ? m.facturaValor
-                          : p.total,
-                      )}
-                      {!anulado && !despachado && (() => {
-                        const pausado = Boolean(m.pagoConfirmado);
-                        const refAhora = pausado
-                          ? new Date(m.pagoConfirmado as string).getTime()
-                          : ahora;
-                        const restante = msRestantesDespacho(p.fecha, refAhora);
-                        const vencido = restante <= 0;
-                        const enAlerta = !vencido && restante <= ALERTA_DESPACHO_MS;
-                        const clase = pausado
-                          ? "border-blue-200 bg-blue-50 text-blue-600"
-                          : vencido
-                            ? "border-red-300 bg-red-50 text-red-600"
-                            : enAlerta
-                              ? "border-brand-amber/40 bg-brand-amber/10 text-brand-amber"
-                              : "border-green-200 bg-green-50 text-green-700";
-                        return (
-                          <div
-                            className={`mt-2 flex items-center justify-end gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold tabular-nums ${clase}`}
-                            title={pausado ? "Cronómetro detenido: pago confirmado, en espera de la transferencia" : "Tiempo límite para despachar (2 horas)"}
-                          >
-                            {pausado ? (
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                              </svg>
-                            ) : (
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                              </svg>
-                            )}
-                            {vencido ? `-${fmtCronometro(restante)}` : fmtCronometro(restante)}
-                          </div>
-                        );
-                      })()}
+                    {/* Temporizador: preparación (1h) y entrega (2h) */}
+                    <td className="relative px-3 pb-9 pt-3 align-top">
+                      {/* Número del día (orden de llegada) para marcar las bolsas */}
+                      <span
+                        title="Número del día (orden de llegada)"
+                        className="absolute bottom-2 right-2 z-10 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-brand-wine px-1.5 text-xs font-extrabold text-white shadow-sm"
+                      >
+                        {numeroDelDiaPorId.get(p.id) ?? "—"}
+                      </span>
+                      {!anulado &&
+                        (() => {
+                          // Posterior (programado para otro día): no corre el
+                          // cronómetro, solo se muestra el día programado.
+                          if (esPosteriorFuturo(p)) {
+                            return (
+                              <div className="flex items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-600">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                                </svg>
+                                Programado {p.fechaProgramada}
+                              </div>
+                            );
+                          }
+                          const pausado = Boolean(m.pagoConfirmado);
+                          const refAhora = pausado
+                            ? new Date(m.pagoConfirmado as string).getTime()
+                            : ahora;
+                          const deadlineEntrega = objetivoDespacho(p);
+                          const deadlinePrep = deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
+                          const restEntrega = deadlineEntrega - refAhora;
+                          const restPrep = deadlinePrep - refAhora;
+                          const horaObj = (p.horaDespacho ?? "").trim();
+                          // Antes de activar: hay hora pedida y faltan más de 2h.
+                          const antesDeActivar =
+                            !pausado && horaObj !== "" && restEntrega > LIMITE_DESPACHO_MS;
+
+                          const box =
+                            "flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold tabular-nums";
+                          const claseTiempo = (rest: number, alertaMs: number) =>
+                            rest <= 0
+                              ? "border-red-300 bg-red-50 text-red-600"
+                              : rest <= alertaMs
+                                ? "border-brand-amber/40 bg-brand-amber/10 text-brand-amber"
+                                : "border-green-200 bg-green-50 text-green-700";
+                          const iconoReloj = (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                          );
+                          const iconoOk = (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3 w-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                          );
+
+                          // Preparación (1h): meta = marcar "Alistado" (m.fin).
+                          let prep;
+                          if (m.fin) {
+                            const aTiempo = new Date(m.fin).getTime() <= deadlinePrep;
+                            prep = (
+                              <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
+                                {aTiempo ? iconoOk : null}
+                                {aTiempo ? "Cumplido" : "Fuera de tiempo"}
+                              </div>
+                            );
+                          } else if (antesDeActivar) {
+                            prep = <div className={`${box} border-indigo-200 bg-indigo-50 text-indigo-600`}>Programado</div>;
+                          } else {
+                            prep = (
+                              <div className={`${box} ${claseTiempo(restPrep, 15 * 60 * 1000)}`}>
+                                {iconoReloj}
+                                {restPrep <= 0 ? "-" : ""}{fmtCronometro(restPrep)}
+                              </div>
+                            );
+                          }
+
+                          // Entrega (2h): meta = marcar "Despachado" (m.despachoFin).
+                          let entrega;
+                          if (m.despachoFin) {
+                            const aTiempo = new Date(m.despachoFin).getTime() <= deadlineEntrega;
+                            entrega = (
+                              <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
+                                {aTiempo ? iconoOk : null}
+                                {aTiempo ? "Cumplido" : "Fuera de tiempo"}
+                              </div>
+                            );
+                          } else if (antesDeActivar) {
+                            entrega = <div className={`${box} border-indigo-200 bg-indigo-50 text-indigo-600`}>Programado</div>;
+                          } else if (pausado) {
+                            entrega = (
+                              <div className={`${box} border-blue-200 bg-blue-50 text-blue-600`}>
+                                {fmtCronometro(restEntrega)}
+                              </div>
+                            );
+                          } else {
+                            entrega = (
+                              <div className={`${box} ${claseTiempo(restEntrega, ALERTA_DESPACHO_MS)}`}>
+                                {iconoReloj}
+                                {restEntrega <= 0 ? "-" : ""}{fmtCronometro(restEntrega)}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-2">
+                              <div>
+                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                  Preparación (1h)
+                                </p>
+                                {prep}
+                              </div>
+                              <div>
+                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                  Entrega (2h)
+                                </p>
+                                {entrega}
+                              </div>
+                            </div>
+                          );
+                        })()}
                     </td>
                   </tr>
                 );
@@ -1076,6 +1398,7 @@ export default function DespachoPage() {
         <button
           type="button"
           onClick={() => setAlertaCerrada(false)}
+          title="Ver los pedidos en riesgo de vencerse"
           className="fixed right-6 top-6 z-40 flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-red-700"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -1105,6 +1428,7 @@ export default function DespachoPage() {
                 onClick={() => setAlertaCerrada(true)}
                 className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-white hover:text-brand-brown"
                 aria-label="Cerrar"
+                title="Cerrar alerta"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1131,7 +1455,7 @@ export default function DespachoPage() {
                           </span>
                         </span>
                         <span className="shrink-0 font-bold tabular-nums text-brand-amber">
-                          {fmtCronometro(msRestantesDespacho(p.fecha, ahora))}
+                          {fmtCronometro(msRestantesDespacho(p, ahora))}
                         </span>
                       </li>
                     ))}
@@ -1157,7 +1481,7 @@ export default function DespachoPage() {
                           </span>
                         </span>
                         <span className="shrink-0 font-bold tabular-nums text-red-600">
-                          -{fmtCronometro(msRestantesDespacho(p.fecha, ahora))}
+                          -{fmtCronometro(msRestantesDespacho(p, ahora))}
                         </span>
                       </li>
                     ))}
@@ -1173,6 +1497,7 @@ export default function DespachoPage() {
               </span>
               <button
                 onClick={() => setAlertaCerrada(true)}
+                title="Cerrar la alerta de despacho"
                 className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
               >
                 Entendido

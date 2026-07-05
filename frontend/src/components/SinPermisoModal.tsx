@@ -35,6 +35,7 @@ export function ModalSinPermiso({
         <p className="mt-2 text-sm text-brand-brown/70">{mensaje}</p>
         <button
           onClick={onCerrar}
+          title="Entendido, cerrar"
           className="mt-6 w-full rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
         >
           Entendido

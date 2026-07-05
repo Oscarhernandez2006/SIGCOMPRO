@@ -8,9 +8,12 @@ import {
   eliminarCliente,
   buscarBarrios,
   importarClientesDB,
+  estadisticasClientes,
+  estadoUbicacion,
   type Cliente,
   type ClienteInput,
   type ImportacionResumen,
+  type EstadisticasClientes,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
 import { aNombrePropio } from "@/lib/format";
@@ -44,6 +47,7 @@ const FORM_VACIO: FormState = {
 export default function ClientesPage() {
   const [items, setItems] = useState<Cliente[]>([]);
   const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<EstadisticasClientes | null>(null);
   const [pagina, setPagina] = useState(0);
   const [busqueda, setBusqueda] = useState("");
   const [busquedaInput, setBusquedaInput] = useState("");
@@ -94,6 +98,9 @@ export default function ClientesPage() {
       const data = await listarClientes(busqueda, POR_PAGINA, pagina * POR_PAGINA);
       setItems(data.items);
       setTotal(data.total);
+      estadisticasClientes()
+        .then(setStats)
+        .catch(() => { /* ignore */ });
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudieron cargar los clientes");
     } finally {
@@ -261,6 +268,7 @@ export default function ClientesPage() {
         </div>
         <button
           onClick={permite.crear ? abrirCrear : sinPermiso.mostrar}
+          title="Crear un nuevo cliente"
           className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
             permite.crear ? "" : "opacity-50"
           }`}
@@ -285,6 +293,7 @@ export default function ClientesPage() {
           <button
             onClick={() => inputArchivoRef.current?.click()}
             disabled={importando}
+            title="Importar clientes desde un archivo Excel (.xlsx, .xlsm)"
             className="inline-flex items-center gap-2 rounded-xl border border-brand-wine bg-white px-4 py-2.5 text-sm font-semibold text-brand-wine shadow-sm transition hover:bg-brand-wine hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -323,6 +332,54 @@ export default function ClientesPage() {
         </div>
       )}
 
+      {/* Estadísticas de calidad de datos */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/50">
+            Total clientes
+          </p>
+          <p className="mt-1 text-2xl font-bold text-brand-brown">
+            {stats ? stats.total.toLocaleString("es-CO") : "—"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 shadow-sm">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-green-700">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Validados
+          </p>
+          <p className="mt-1 text-2xl font-bold text-green-700">
+            {stats ? stats.validados.toLocaleString("es-CO") : "—"}
+          </p>
+          <p className="text-[11px] text-green-700/70">Con dirección en el mapa</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            Sin verificar
+          </p>
+          <p className="mt-1 text-2xl font-bold text-amber-600">
+            {stats ? stats.sinVerificar.toLocaleString("es-CO") : "—"}
+          </p>
+          <p className="text-[11px] text-amber-600/70">Falta abrir el mapa</p>
+        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-red-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+            Dirección incorrecta
+          </p>
+          <p className="mt-1 text-2xl font-bold text-red-600">
+            {stats ? stats.incorrectos.toLocaleString("es-CO") : "—"}
+          </p>
+          <p className="text-[11px] text-red-600/70">Coordenadas inválidas</p>
+        </div>
+      </div>
+
       {/* Buscador */}
       <div className="mb-4 max-w-md">
         <div className="relative">
@@ -347,7 +404,7 @@ export default function ClientesPage() {
       {/* Tabla */}
       <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
         <div className="max-h-[calc(100vh-300px)] overflow-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
               <tr>
                 <th className="px-4 py-3 font-semibold">Nombre</th>
@@ -355,19 +412,20 @@ export default function ClientesPage() {
                 <th className="px-4 py-3 font-semibold">Teléfono</th>
                 <th className="px-4 py-3 font-semibold">Barrio</th>
                 <th className="px-4 py-3 font-semibold">Ciudad</th>
+                <th className="px-4 py-3 text-center font-semibold">Dirección</th>
                 <th className="px-4 py-3 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-brown/5">
               {cargando ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={7} className="px-4 py-10 text-center text-brand-brown/50">
                     Cargando clientes…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={7} className="px-4 py-10 text-center text-brand-brown/50">
                     No se encontraron clientes.
                   </td>
                 </tr>
@@ -389,11 +447,51 @@ export default function ClientesPage() {
                     <td className="px-4 py-3 text-brand-brown/80">{c.barrio || "—"}</td>
                     <td className="px-4 py-3 text-brand-brown/80">{c.ciudad || "—"}</td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const estado = estadoUbicacion(c);
+                        if (estado === "validado") {
+                          return (
+                            <span
+                              title="Validado"
+                              className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-700"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </span>
+                          );
+                        }
+                        if (estado === "incorrecto") {
+                          return (
+                            <span
+                              title="Con dirección incorrecta"
+                              className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                              </svg>
+                            </span>
+                          );
+                        }
+                        return (
+                          <span
+                            title="Sin verificar"
+                            className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-600"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                              <circle cx="12" cy="12" r="9" />
+                            </svg>
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={permite.editar ? () => abrirEditar(c) : sinPermiso.mostrar}
                           className={`rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-brand-amber/10 hover:text-brand-amber ${permite.editar ? "" : "opacity-50"}`}
                           aria-label="Editar"
+                          title="Editar cliente"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
@@ -403,6 +501,7 @@ export default function ClientesPage() {
                           onClick={permite.eliminar ? () => setAEliminar(c) : sinPermiso.mostrar}
                           className={`rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-red-50 hover:text-red-600 ${permite.eliminar ? "" : "opacity-50"}`}
                           aria-label="Eliminar"
+                          title="Eliminar cliente"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -424,6 +523,7 @@ export default function ClientesPage() {
             <button
               onClick={() => setPagina((p) => Math.max(0, p - 1))}
               disabled={pagina === 0 || cargando}
+              title="Ir a la página anterior"
               className="rounded-lg border border-brand-brown/15 px-3 py-1.5 transition hover:bg-brand-cream-soft disabled:cursor-not-allowed disabled:opacity-40"
             >
               Anterior
@@ -434,6 +534,7 @@ export default function ClientesPage() {
             <button
               onClick={() => setPagina((p) => (p + 1 < totalPaginas ? p + 1 : p))}
               disabled={pagina + 1 >= totalPaginas || cargando}
+              title="Ir a la página siguiente"
               className="rounded-lg border border-brand-brown/15 px-3 py-1.5 transition hover:bg-brand-cream-soft disabled:cursor-not-allowed disabled:opacity-40"
             >
               Siguiente
@@ -450,6 +551,7 @@ export default function ClientesPage() {
               onClick={() => setModalAbierto(false)}
               disabled={guardando}
               aria-label="Cerrar"
+              title="Cerrar sin guardar"
               className="sticky top-0 z-20 float-right -mr-2 -mt-2 rounded-lg bg-white p-1.5 text-brand-brown/50 shadow-sm transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -628,6 +730,7 @@ export default function ClientesPage() {
               <button
                 onClick={() => setModalAbierto(false)}
                 disabled={guardando}
+                title="Cancelar y cerrar sin guardar"
                 className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
               >
                 Cancelar
@@ -635,6 +738,7 @@ export default function ClientesPage() {
               <button
                 onClick={guardar}
                 disabled={guardando}
+                title="Guardar los datos del cliente"
                 className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 disabled:opacity-50"
               >
                 {guardando ? "Guardando…" : "Guardar"}
@@ -662,6 +766,7 @@ export default function ClientesPage() {
               <button
                 onClick={() => setAEliminar(null)}
                 disabled={eliminando}
+                title="Cancelar"
                 className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
               >
                 Cancelar
@@ -669,6 +774,7 @@ export default function ClientesPage() {
               <button
                 onClick={confirmarEliminar}
                 disabled={eliminando}
+                title="Eliminar el cliente definitivamente"
                 className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {eliminando ? "Eliminando…" : "Eliminar"}

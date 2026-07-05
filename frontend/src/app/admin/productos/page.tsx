@@ -123,6 +123,7 @@ export default function AdminProductosPage() {
         <button
           onClick={sincronizar}
           disabled={sincronizando}
+          title="Sincronizar productos y precios con la API"
           className="inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber-light disabled:opacity-60"
         >
           {sincronizando ? (
@@ -179,9 +180,9 @@ export default function AdminProductosPage() {
             No hay productos. Pulsa «Sincronizar» para traerlos de la API.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-340px)] overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Referencia</th>
                   <th className="px-4 py-3 font-semibold">Producto</th>

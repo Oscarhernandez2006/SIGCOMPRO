@@ -51,6 +51,36 @@ export function listarClientes(
   return apiFetch<ListarClientesResp>(`/clientes?${params.toString()}`);
 }
 
+/** Estadísticas de clientes según la calidad de su ubicación. */
+export interface EstadisticasClientes {
+  total: number;
+  validados: number;
+  incorrectos: number;
+  sinVerificar: number;
+}
+export function estadisticasClientes(): Promise<EstadisticasClientes> {
+  return apiFetch<EstadisticasClientes>("/clientes/estadisticas");
+}
+
+export type EstadoUbicacion = "validado" | "incorrecto" | "sin";
+
+/**
+ * Clasifica la ubicación de un cliente:
+ * - "validado": coordenadas presentes y dentro de rango válido.
+ * - "incorrecto": tiene coordenadas pero son inválidas (0,0 o fuera de rango).
+ * - "sin": sin coordenadas (el mapa nunca se abrió/confirmó).
+ */
+export function estadoUbicacion(c: {
+  lat: number | null;
+  lng: number | null;
+}): EstadoUbicacion {
+  if (c.lat == null || c.lng == null) return "sin";
+  const latOk = c.lat >= -90 && c.lat <= 90;
+  const lngOk = c.lng >= -180 && c.lng <= 180;
+  if (!latOk || !lngOk || (c.lat === 0 && c.lng === 0)) return "incorrecto";
+  return "validado";
+}
+
 export function crearCliente(input: ClienteInput): Promise<Cliente> {
   return apiFetch<Cliente>("/clientes", {
     method: "POST",

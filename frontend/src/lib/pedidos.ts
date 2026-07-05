@@ -23,6 +23,12 @@ export interface DespachoMeta {
    * crítico ni en demora.
    */
   pagoConfirmado?: string;
+  /**
+   * Réplicas del pedido (el mismo pedido enviado por partes). Cada réplica
+   * tiene un número (sufijo -N en el consecutivo del Excel) y puede llevar su
+   * propio domiciliario. Deben ser secuenciales (1, 2, 3, 4, 5).
+   */
+  replicas?: { numero: number; domiciliario?: string }[];
 }
 
 export interface EstadoPedidos {
@@ -79,10 +85,15 @@ export function vaciarPedidosApi(): Promise<{ eliminados: number }> {
 /**
  * Descarga el Excel de despacho del pedido (formato del software de ruteo).
  * Usa fetch directo para recibir el binario y dispara la descarga en el navegador.
+ * Si se indica `replica` (1-5), el consecutivo del Excel lleva el sufijo "-N".
  */
-export async function descargarExcelDespacho(id: string): Promise<void> {
+export async function descargarExcelDespacho(
+  id: string,
+  replica?: number,
+): Promise<void> {
   const token = getToken();
-  const res = await fetch(`${API_URL}/pedidos/${id}/excel`, {
+  const qs = replica ? `?replica=${replica}` : "";
+  const res = await fetch(`${API_URL}/pedidos/${id}/excel${qs}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (!res.ok) {
