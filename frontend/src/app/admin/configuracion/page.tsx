@@ -47,6 +47,7 @@ export default function AdminConfiguracionPage() {
   const [filtroRol, setFiltroRol] = useState<"todos" | Rol>("todos");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [asignando, setAsignando] = useState<PersonaConRol | null>(null);
+  const [editando, setEditando] = useState<PersonaConRol | null>(null);
 
   useEffect(() => {
     setCargando(true);
@@ -137,6 +138,41 @@ export default function AdminConfiguracionPage() {
         (x) => x.nombre.toLowerCase() !== p.nombre.toLowerCase(),
       ),
     });
+  }
+
+  // Edita nombre y/o rol. Si cambia el rol, mueve la persona de categoría
+  // conservando sus puntos asignados.
+  function editarPersona(
+    original: PersonaConRol,
+    nuevoNombre: string,
+    nuevoRol: Rol,
+  ): boolean {
+    const limpio = nuevoNombre.trim();
+    if (!limpio) return false;
+    const catOrig = CAT[original.rol];
+    const catNuevo = CAT[nuevoRol];
+    const duplicado = registro[catNuevo].some(
+      (p) =>
+        p.nombre.toLowerCase() === limpio.toLowerCase() &&
+        !(
+          original.rol === nuevoRol &&
+          p.nombre.toLowerCase() === original.nombre.toLowerCase()
+        ),
+    );
+    if (duplicado) return false;
+
+    let nuevo: RegistroPersonal = {
+      ...registro,
+      [catOrig]: registro[catOrig].filter(
+        (x) => x.nombre.toLowerCase() !== original.nombre.toLowerCase(),
+      ),
+    };
+    nuevo = {
+      ...nuevo,
+      [catNuevo]: [...nuevo[catNuevo], { nombre: limpio, puntos: original.puntos }],
+    };
+    persistir(nuevo);
+    return true;
   }
 
   function asignarPuntos(p: PersonaConRol, puntosIds: string[]) {
@@ -282,6 +318,13 @@ export default function AdminConfiguracionPage() {
                             Asignar PDV
                           </button>
                           <button
+                            onClick={() => setEditando(p)}
+                            title={`Editar nombre y rol de ${p.nombre}`}
+                            className="rounded-lg border border-brand-brown/20 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                          >
+                            Editar
+                          </button>
+                          <button
                             onClick={() => eliminarPersona(p)}
                             title={`Eliminar a ${p.nombre}`}
                             className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
@@ -318,6 +361,18 @@ export default function AdminConfiguracionPage() {
           onGuardar={(ids) => {
             asignarPuntos(asignando, ids);
             setAsignando(null);
+          }}
+        />
+      )}
+
+      {editando && (
+        <ModalEditarPersona
+          persona={editando}
+          onCerrar={() => setEditando(null)}
+          onGuardar={(nombre, rol) => {
+            const ok = editarPersona(editando, nombre, rol);
+            if (ok) setEditando(null);
+            return ok;
           }}
         />
       )}
@@ -509,6 +564,90 @@ function ModalAsignarPuntos({
               Guardar
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Modal: editar persona (nombre + rol)                             */
+/* ---------------------------------------------------------------- */
+function ModalEditarPersona({
+  persona,
+  onCerrar,
+  onGuardar,
+}: {
+  persona: PersonaConRol;
+  onCerrar: () => void;
+  onGuardar: (nombre: string, rol: Rol) => boolean;
+}) {
+  const [nombre, setNombre] = useState(persona.nombre);
+  const [rol, setRol] = useState<Rol>(persona.rol);
+  const [error, setError] = useState<string | null>(null);
+
+  function guardar() {
+    if (!nombre.trim()) {
+      setError("Escribe el nombre de la persona.");
+      return;
+    }
+    const ok = onGuardar(nombre, rol);
+    if (!ok) setError("Ya existe una persona con ese nombre en ese rol.");
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+          <h2 className="font-serif text-lg font-bold text-brand-wine">Editar persona</h2>
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-brand-brown">Nombre</label>
+            <input
+              type="text"
+              value={nombre}
+              autoFocus
+              onChange={(e) => { setNombre(e.target.value); setError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") guardar(); }}
+              placeholder="Nombre completo"
+              className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-brand-brown">Rol</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["porcionador", "domiciliario"] as Rol[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { setRol(r); setError(null); }}
+                  title={`Rol: ${ETIQUETA_ROL[r]}`}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    rol === r
+                      ? "border-brand-wine bg-brand-wine/5 text-brand-wine ring-1 ring-brand-wine"
+                      : "border-brand-brown/20 text-brand-brown hover:bg-brand-cream-soft"
+                  }`}
+                >
+                  {ETIQUETA_ROL[r]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
+          <button onClick={onCerrar} title="Cancelar" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">
+            Cancelar
+          </button>
+          <button onClick={guardar} title="Guardar los cambios" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">
+            Guardar
+          </button>
         </div>
       </div>
     </div>

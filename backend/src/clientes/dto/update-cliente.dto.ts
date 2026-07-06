@@ -24,6 +24,11 @@ export class UpdateClienteDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  apellidos?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   direccion?: string;
 
   @IsOptional()
@@ -58,6 +63,10 @@ export class UpdateClienteDto {
   @IsOptional()
   @IsBoolean()
   horeca?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  direccion_incorrecta?: boolean;
 
   @IsOptional()
   @IsLatitude()

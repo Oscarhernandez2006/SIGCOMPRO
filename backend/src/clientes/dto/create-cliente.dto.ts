@@ -20,6 +20,11 @@ export class CreateClienteDto {
   @MaxLength(255)
   nombre!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  apellidos?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(255)
@@ -57,6 +62,10 @@ export class CreateClienteDto {
   @IsOptional()
   @IsBoolean()
   horeca?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  direccion_incorrecta?: boolean;
 
   @IsOptional()
   @IsLatitude()

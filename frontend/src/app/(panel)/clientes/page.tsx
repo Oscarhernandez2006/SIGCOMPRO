@@ -16,7 +16,7 @@ import {
   type EstadisticasClientes,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { aNombrePropio } from "@/lib/format";
+import { onChangeNombrePropio } from "@/lib/format";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
@@ -42,6 +42,7 @@ const FORM_VACIO: FormState = {
   lng: null,
   activo: true,
   horeca: false,
+  direccion_incorrecta: false,
 };
 
 export default function ClientesPage() {
@@ -148,12 +149,24 @@ export default function ClientesPage() {
       lng: c.lng,
       activo: c.activo,
       horeca: c.horeca,
+      direccion_incorrecta: c.direccion_incorrecta ?? false,
     });
-    // Repartimos el nombre guardado: mitad nombres, mitad apellidos.
-    const palabras = (c.nombre ?? "").trim().split(/\s+/).filter(Boolean);
-    const corte = palabras.length >= 4 ? Math.ceil(palabras.length / 2) : Math.max(1, palabras.length - 1);
-    setNombres(palabras.slice(0, corte).join(" "));
-    setApellidos(palabras.slice(corte).join(" "));
+    // Si el cliente ya tiene apellidos guardados, respetamos la división exacta.
+    const apel = (c.apellidos ?? "").trim();
+    const full = (c.nombre ?? "").trim();
+    if (apel && full.endsWith(apel)) {
+      setNombres(full.slice(0, full.length - apel.length).trim());
+      setApellidos(apel);
+    } else if (apel) {
+      setNombres(full);
+      setApellidos(apel);
+    } else {
+      // Datos antiguos sin apellidos separados: repartimos por heurística.
+      const palabras = full.split(/\s+/).filter(Boolean);
+      const corte = palabras.length >= 4 ? Math.ceil(palabras.length / 2) : Math.max(1, palabras.length - 1);
+      setNombres(palabras.slice(0, corte).join(" "));
+      setApellidos(palabras.slice(corte).join(" "));
+    }
     setTipoCliente(c.horeca ? "horeca" : "hogar");
     setErrorForm(null);
     setModalAbierto(true);
@@ -189,6 +202,7 @@ export default function ClientesPage() {
       const datos = {
         ...form,
         nombre: nombreCompleto,
+        apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       };
@@ -453,10 +467,14 @@ export default function ClientesPage() {
                           return (
                             <span
                               title="Validado"
-                              className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-700"
+                              className="mx-auto flex h-6 w-6 items-center justify-center text-green-600"
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              <svg viewBox="0 0 24 24" className="h-5 w-5">
+                                <path
+                                  fill="currentColor"
+                                  d="M12 2a7 7 0 0 0-7 7c0 4.6 6.1 12.2 6.36 12.53a.82.82 0 0 0 1.28 0C12.9 21.2 19 13.6 19 9a7 7 0 0 0-7-7Z"
+                                />
+                                <circle cx="12" cy="9" r="2.6" fill="#fff" />
                               </svg>
                             </span>
                           );
@@ -465,10 +483,15 @@ export default function ClientesPage() {
                           return (
                             <span
                               title="Con dirección incorrecta"
-                              className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600"
+                              className="mx-auto flex h-6 w-6 items-center justify-center text-red-600"
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                                <path d="M13 2.5H6.5A1.5 1.5 0 0 0 5 4v16a1.5 1.5 0 0 0 1.5 1.5h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M13 2.5 18 7.5V12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M8 8h4.5M8 11h5.5M8 14h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                                <path d="M17.3 13.2 21.7 21a1 1 0 0 1-.87 1.5h-8.76A1 1 0 0 1 11.2 21l4.4-7.8a1 1 0 0 1 1.7 0Z" fill="currentColor" />
+                                <rect x="15.7" y="16.6" width="1.5" height="3" rx="0.5" fill="#fff" />
+                                <circle cx="16.45" cy="20.6" r="0.8" fill="#fff" />
                               </svg>
                             </span>
                           );
@@ -476,10 +499,16 @@ export default function ClientesPage() {
                         return (
                           <span
                             title="Sin verificar"
-                            className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-600"
+                            className="mx-auto flex h-6 w-6 items-center justify-center text-amber-500"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                              <circle cx="12" cy="12" r="9" />
+                            <svg viewBox="0 0 24 24" className="h-5 w-5">
+                              <g fill="currentColor">
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M9 13c-3.9 0-7 2.4-7 5.4V20h9.06A6.5 6.5 0 0 1 15 13.9 9.8 9.8 0 0 0 9 13Z" />
+                                <circle cx="17.5" cy="17.5" r="5.5" />
+                              </g>
+                              <circle cx="17.5" cy="15" r="0.95" fill="#fff" />
+                              <rect x="16.75" y="16.4" width="1.5" height="4" rx="0.5" fill="#fff" />
                             </svg>
                           </span>
                         );
@@ -598,14 +627,14 @@ export default function ClientesPage() {
                     <Campo label="Nombres *">
                       <input
                         value={nombres}
-                        onChange={(e) => setNombres(aNombrePropio(e.target.value))}
+                        onChange={onChangeNombrePropio(setNombres)}
                         className="campo"
                       />
                     </Campo>
                     <Campo label="Apellidos *">
                       <input
                         value={apellidos}
-                        onChange={(e) => setApellidos(aNombrePropio(e.target.value))}
+                        onChange={onChangeNombrePropio(setApellidos)}
                         className="campo"
                       />
                     </Campo>
@@ -654,19 +683,6 @@ export default function ClientesPage() {
 
               {/* Columna derecha: ubicación + barrio y ciudad */}
               <div className="space-y-3">
-                <Bloque titulo="Ubicación del pedido">
-                  <MapaDireccion
-                    direccion={form.direccion ?? ""}
-                    barrio={form.barrio ?? ""}
-                    ciudad={form.ciudad ?? ""}
-                    lat={form.lat ?? null}
-                    lng={form.lng ?? null}
-                    onUbicacion={(la, lo) =>
-                      setForm((p) => ({ ...p, lat: la, lng: lo }))
-                    }
-                  />
-                </Bloque>
-
                 {/* Bloque 4: barrio y ciudad */}
                 <Bloque titulo="Barrio y ciudad">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -696,6 +712,21 @@ export default function ClientesPage() {
                       />
                     </Campo>
                   </div>
+                </Bloque>
+
+                <Bloque titulo="Ubicación del pedido">
+                  <MapaDireccion
+                    direccion={form.direccion ?? ""}
+                    barrio={form.barrio ?? ""}
+                    ciudad={form.ciudad ?? ""}
+                    lat={form.lat ?? null}
+                    lng={form.lng ?? null}
+                    onUbicacion={(la, lo) =>
+                      setForm((p) => ({ ...p, lat: la, lng: lo }))
+                    }
+                    onBarrio={(b) => cambiar("barrio", b)}
+                    onCiudad={(ci) => cambiar("ciudad", ci)}
+                  />
                 </Bloque>
 
                 <Bloque titulo="Clasificación">

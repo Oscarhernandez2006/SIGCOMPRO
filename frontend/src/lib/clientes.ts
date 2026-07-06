@@ -6,6 +6,7 @@ export interface Cliente {
   id: string;
   nit_cedula: string;
   nombre: string | null;
+  apellidos: string | null;
   direccion: string | null;
   referencia: string | null;
   barrio: string | null;
@@ -16,6 +17,7 @@ export interface Cliente {
   lng: number | null;
   activo: boolean;
   horeca: boolean;
+  direccion_incorrecta: boolean;
   creado_en: string;
 }
 
@@ -27,6 +29,7 @@ export interface ListarClientesResp {
 export interface ClienteInput {
   nit_cedula: string;
   nombre?: string;
+  apellidos?: string;
   direccion?: string;
   referencia?: string;
   barrio?: string;
@@ -37,6 +40,7 @@ export interface ClienteInput {
   lng?: number | null;
   activo?: boolean;
   horeca?: boolean;
+  direccion_incorrecta?: boolean;
 }
 
 export function listarClientes(
@@ -66,14 +70,17 @@ export type EstadoUbicacion = "validado" | "incorrecto" | "sin";
 
 /**
  * Clasifica la ubicación de un cliente:
+ * - "incorrecto": marcada manualmente como incorrecta (para revisión), o con
+ *   coordenadas inválidas (0,0 o fuera de rango).
  * - "validado": coordenadas presentes y dentro de rango válido.
- * - "incorrecto": tiene coordenadas pero son inválidas (0,0 o fuera de rango).
  * - "sin": sin coordenadas (el mapa nunca se abrió/confirmó).
  */
 export function estadoUbicacion(c: {
   lat: number | null;
   lng: number | null;
+  direccion_incorrecta?: boolean | null;
 }): EstadoUbicacion {
+  if (c.direccion_incorrecta) return "incorrecto";
   if (c.lat == null || c.lng == null) return "sin";
   const latOk = c.lat >= -90 && c.lat <= 90;
   const lngOk = c.lng >= -180 && c.lng <= 180;

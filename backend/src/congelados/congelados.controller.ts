@@ -20,10 +20,10 @@ import { Permisos } from '../auth/decorators/permisos.decorator';
 export class CongeladosController {
   constructor(private readonly congelados: CongeladosService) {}
 
-  /** Congelados del usuario autenticado. */
+  /** Congelados visibles para el usuario (por sus puntos de venta). */
   @Get()
   listar(@Req() req: Request & { user?: JwtPayload }) {
-    return this.congelados.listar(req.user!.sub);
+    return this.congelados.listar(req.user!);
   }
 
   /** Crea o actualiza un congelado del usuario. */
@@ -33,7 +33,7 @@ export class CongeladosController {
     @Body() data: Record<string, unknown>,
     @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.congelados.guardar(req.user!.sub, id, data);
+    return this.congelados.guardar(req.user!, id, data);
   }
 
   /** Elimina un congelado del usuario. */
@@ -42,6 +42,6 @@ export class CongeladosController {
     @Param('id') id: string,
     @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.congelados.eliminar(req.user!.sub, id);
+    return this.congelados.eliminar(req.user!, id);
   }
 }

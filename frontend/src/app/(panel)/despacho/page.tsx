@@ -270,6 +270,17 @@ function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+/**
+ * Fecha de entrega/despacho del pedido: la programada si el pedido se dejó para
+ * otro día, o la de creación si es para hoy/sin programar.
+ */
+function fechaEntregaISO(p: Pedido): string {
+  if (p.entregaProgramada && p.fechaProgramada) {
+    return `${p.fechaProgramada}T00:00:00`;
+  }
+  return p.fecha;
+}
+
 function fmtHora(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
@@ -303,6 +314,12 @@ export default function DespachoPage() {
   const [ahora, setAhora] = useState(() => Date.now());
   // Alerta de pedidos por vencer / vencidos (modal).
   const [alertaCerrada, setAlertaCerrada] = useState(false);
+  // Modal de réplica: crear (elegir domiciliario) o ver detalle (solo lectura).
+  const [modalReplica, setModalReplica] = useState<{
+    pedido: Pedido;
+    numero: number;
+    modo: "crear" | "ver";
+  } | null>(null);
   const firmaAlertaRef = useRef("");
   // Arrastre con click sostenido para desplazar la tabla horizontal/verticalmente.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -488,13 +505,13 @@ export default function DespachoPage() {
   };
 
   /* --- Réplicas del pedido (el mismo pedido enviado por partes) --- */
-  // Agrega la siguiente réplica en secuencia (máx. 5).
-  const activarReplica = (id: string) => {
+  // Agrega la siguiente réplica en secuencia (máx. 5) con su domiciliario.
+  const crearReplica = (id: string, domiciliario: string) => {
     const actuales = meta[id]?.replicas ?? [];
     const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
     if (max >= 5) return;
     actualizarMeta(id, {
-      replicas: [...actuales, { numero: max + 1, domiciliario: "" }],
+      replicas: [...actuales, { numero: max + 1, domiciliario }],
     });
   };
   // Quita la última réplica (para mantener la secuencia).
@@ -503,14 +520,6 @@ export default function DespachoPage() {
     if (actuales.length === 0) return;
     const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
     actualizarMeta(id, { replicas: actuales.filter((r) => r.numero !== max) });
-  };
-  const setReplicaDomi = (id: string, numero: number, domiciliario: string) => {
-    const actuales = meta[id]?.replicas ?? [];
-    actualizarMeta(id, {
-      replicas: actuales.map((r) =>
-        r.numero === numero ? { ...r, domiciliario } : r,
-      ),
-    });
   };
   const descargarReplica = (p: Pedido, numero: number) => {
     descargarExcelDespacho(p.id, numero).catch(() =>
@@ -536,21 +545,34 @@ export default function DespachoPage() {
     [pedidosVisibles],
   );
 
-  // Número del día (turno / orden de llegada): 1, 2, 3… por cada día de
-  // creación. Reinicia solo cada día (al agrupar por fecha de creación). Sirve
-  // para marcar las bolsas según el orden en que van llegando los pedidos.
+  // Número del día (turno): 1, 2, 3… por cada DÍA EFECTIVO DE DESPACHO.
+  // El día efectivo es la fecha programada (si el pedido se dejó para otro día)
+  // o, en su defecto, el día de creación. Así, un pedido que quedó pendiente de
+  // ayer para hoy entra en la numeración de HOY y, al estar creado antes, toma
+  // los primeros números (1, 2, 3…); los que entran después siguen la secuencia.
   const numeroDelDiaPorId = useMemo(() => {
+    const claveDia = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    };
+    const diaEfectivo = (p: Pedido): string | null => {
+      if (p.entregaProgramada && p.fechaProgramada)
+        return claveDia(`${p.fechaProgramada}T00:00:00`);
+      if (!p.fecha) return null;
+      return claveDia(p.fecha);
+    };
     const porDia = new Map<string, Pedido[]>();
     for (const p of pedidosVisibles) {
-      if (!p.fecha) continue;
-      const d = new Date(p.fecha);
-      const dia = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const dia = diaEfectivo(p);
+      if (!dia) continue;
       const arr = porDia.get(dia);
       if (arr) arr.push(p);
       else porDia.set(dia, [p]);
     }
     const mapa = new Map<string, number>();
     for (const grupo of porDia.values()) {
+      // Orden por creación: los pedidos que venían de días anteriores (creados
+      // antes) quedan primeros; los nuevos del día siguen en orden de llegada.
       grupo.sort(
         (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
       );
@@ -676,12 +698,20 @@ export default function DespachoPage() {
       {/* Grid de estados */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {ESTADOS.map((e) => {
-            const valor =
-              e.key === "atrasados"
+            const valorDeCard = (def: EstadoDef) =>
+              def.key === "atrasados"
                 ? atrasados.length
-                : e.key === "posteriores"
+                : def.key === "posteriores"
                   ? posterioresFuturos.length
-                  : pedidosDeHoy.filter(e.match).length;
+                  : pedidosDeHoy.filter(def.match).length;
+            // El Total es la suma de todas las demás cards.
+            const valor =
+              e.key === "total"
+                ? ESTADOS.reduce(
+                    (s, d) => (d.key === "total" ? s : s + valorDeCard(d)),
+                    0,
+                  )
+                : valorDeCard(e);
             // Todas las cards son interactivas: filtran la tabla por su estado.
             const activo = vista === e.key;
             return (
@@ -834,7 +864,7 @@ export default function DespachoPage() {
                             <p className="text-xs text-brand-brown/60">Tel: {p.cliente.telefono}</p>
                           )}
                           <p className="text-xs text-brand-brown/50">
-                            <span className="font-semibold text-brand-black">Despacho:</span> {fmtFecha(p.fecha)}
+                            <span className="font-semibold text-brand-black">Despacho:</span> {fmtFecha(fechaEntregaISO(p))}
                           </p>
                           <div className="mt-1.5 flex flex-col items-start gap-1">
                             {(() => {
@@ -922,7 +952,7 @@ export default function DespachoPage() {
                           <button
                             onClick={() => {
                               marcarImpreso(p.id);
-                              imprimirComanda(p);
+                              imprimirComanda(p, numeroDelDiaPorId.get(p.id));
                             }}
                             title="Imprimir la comanda del pedido"
                             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90"
@@ -957,7 +987,7 @@ export default function DespachoPage() {
                         <span className="uppercase tracking-wide">{norm(estado) === "en proceso" ? "Pendiente" : estado}</span>
                       </div>
                       <div className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-1.5 text-center text-xs font-semibold text-brand-brown/70">
-                        ENTREGA: {fmtFecha(p.fecha)}
+                        ENTREGA: {fmtFecha(fechaEntregaISO(p))}
                       </div>
                       {!anulado && norm(estado) === "despachado" ? (
                         <div className="mt-1.5 space-y-0.5 rounded-lg border border-brand-wine/20 bg-brand-wine/5 px-3 py-1.5 text-[11px] font-semibold text-brand-brown/70">
@@ -1175,31 +1205,29 @@ export default function DespachoPage() {
                               const activa = reps.some((r) => r.numero === n);
                               const maxN = reps.reduce((mx, r) => Math.max(mx, r.numero), 0);
                               const esSiguiente = n === maxN + 1;
-                              const esUltima = n === maxN;
+                              // Secuencial: solo el siguiente número (crear) o los ya
+                              // generados (ver detalle) son clickeables.
                               const deshabilitado = anulado || (!activa && !esSiguiente);
                               return (
                                 <button
                                   key={n}
                                   disabled={deshabilitado}
-                                  onClick={() =>
-                                    activa
-                                      ? esUltima
-                                        ? quitarUltimaReplica(p.id)
-                                        : undefined
-                                      : activarReplica(p.id)
-                                  }
+                                  onClick={() => {
+                                    if (activa)
+                                      setModalReplica({ pedido: p, numero: n, modo: "ver" });
+                                    else if (esSiguiente)
+                                      setModalReplica({ pedido: p, numero: n, modo: "crear" });
+                                  }}
                                   title={
                                     activa
-                                      ? esUltima
-                                        ? "Quitar esta réplica"
-                                        : "Réplica activa"
+                                      ? "Ver detalle de la réplica"
                                       : esSiguiente
-                                        ? "Agregar réplica"
+                                        ? "Crear réplica"
                                         : "Marca las réplicas en orden"
                                   }
                                   className={`flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-bold transition disabled:cursor-not-allowed ${
                                     activa
-                                      ? "border-brand-wine bg-brand-wine text-white"
+                                      ? "border-brand-wine bg-brand-wine text-white hover:bg-brand-wine/90"
                                       : esSiguiente
                                         ? "border-brand-wine/40 bg-white text-brand-wine hover:bg-brand-wine/10"
                                         : "border-brand-brown/15 bg-white text-brand-brown/30"
@@ -1210,45 +1238,6 @@ export default function DespachoPage() {
                               );
                             })}
                           </div>
-                          {(m.replicas ?? [])
-                            .slice()
-                            .sort((a, b) => a.numero - b.numero)
-                            .map((r) => (
-                              <div
-                                key={r.numero}
-                                className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/30 p-1.5"
-                              >
-                                <p className="mb-1 text-[10px] font-bold text-brand-wine">
-                                  Réplica -{r.numero}
-                                </p>
-                                <select
-                                  value={r.domiciliario ?? ""}
-                                  onChange={(ev) => setReplicaDomi(p.id, r.numero, ev.target.value)}
-                                  disabled={anulado}
-                                  className="mb-1 w-full rounded-md border border-brand-brown/15 bg-white px-2 py-1 text-[11px] font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                                >
-                                  <option value="">Domiciliario…</option>
-                                  {(r.domiciliario && !domiciliarios.includes(r.domiciliario)
-                                    ? [r.domiciliario, ...domiciliarios]
-                                    : domiciliarios
-                                  ).map((nombre) => (
-                                    <option key={nombre} value={nombre}>
-                                      {nombre}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  onClick={() => descargarReplica(p, r.numero)}
-                                  title={`Descargar el Excel de la réplica -${r.numero}`}
-                                  className="flex w-full items-center justify-center gap-1 rounded-md border border-brand-brown/15 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-                                >
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                  </svg>
-                                  Excel -{r.numero}
-                                </button>
-                              </div>
-                            ))}
                         </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
@@ -1301,12 +1290,11 @@ export default function DespachoPage() {
 
                           const box =
                             "flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold tabular-nums";
-                          const claseTiempo = (rest: number, alertaMs: number) =>
-                            rest <= 0
+                          // Rojo al llegar a la mitad del tiempo (o menos); verde antes.
+                          const claseTiempo = (rest: number, mitadMs: number) =>
+                            rest <= mitadMs
                               ? "border-red-300 bg-red-50 text-red-600"
-                              : rest <= alertaMs
-                                ? "border-brand-amber/40 bg-brand-amber/10 text-brand-amber"
-                                : "border-green-200 bg-green-50 text-green-700";
+                              : "border-green-200 bg-green-50 text-green-700";
                           const iconoReloj = (
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -1332,7 +1320,7 @@ export default function DespachoPage() {
                             prep = <div className={`${box} border-indigo-200 bg-indigo-50 text-indigo-600`}>Programado</div>;
                           } else {
                             prep = (
-                              <div className={`${box} ${claseTiempo(restPrep, 15 * 60 * 1000)}`}>
+                              <div className={`${box} ${claseTiempo(restPrep, 30 * 60 * 1000)}`}>
                                 {iconoReloj}
                                 {restPrep <= 0 ? "-" : ""}{fmtCronometro(restPrep)}
                               </div>
@@ -1506,7 +1494,208 @@ export default function DespachoPage() {
           </div>
         </div>
       )}
+      {modalReplica && (
+        <ModalReplica
+          pedido={modalReplica.pedido}
+          numero={modalReplica.numero}
+          modo={modalReplica.modo}
+          domiciliarios={
+            personalPorPunto[String(modalReplica.pedido.punto?.id ?? "")]?.domiciliarios ?? []
+          }
+          domiciliarioAsignado={
+            (meta[modalReplica.pedido.id]?.replicas ?? []).find(
+              (r) => r.numero === modalReplica.numero,
+            )?.domiciliario ?? ""
+          }
+          esUltima={
+            modalReplica.numero ===
+            (meta[modalReplica.pedido.id]?.replicas ?? []).reduce(
+              (mx, r) => Math.max(mx, r.numero),
+              0,
+            )
+          }
+          onCrear={(domi) => {
+            crearReplica(modalReplica.pedido.id, domi);
+            setModalReplica(null);
+          }}
+          onDescargar={() =>
+            descargarReplica(modalReplica.pedido, modalReplica.numero)
+          }
+          onQuitar={() => {
+            quitarUltimaReplica(modalReplica.pedido.id);
+            setModalReplica(null);
+          }}
+          onCerrar={() => setModalReplica(null)}
+        />
+      )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Modal de réplica: crear (elegir domiciliario) o ver detalle      */
+/* ---------------------------------------------------------------- */
+function ModalReplica({
+  pedido,
+  numero,
+  modo,
+  domiciliarios,
+  domiciliarioAsignado,
+  esUltima,
+  onCrear,
+  onDescargar,
+  onQuitar,
+  onCerrar,
+}: {
+  pedido: Pedido;
+  numero: number;
+  modo: "crear" | "ver";
+  domiciliarios: string[];
+  domiciliarioAsignado: string;
+  esUltima: boolean;
+  onCrear: (domiciliario: string) => void;
+  onDescargar: () => void;
+  onQuitar: () => void;
+  onCerrar: () => void;
+}) {
+  const [domi, setDomi] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const codigoReplica = `${pedido.comanda}-${numero}`;
+
+  function confirmar() {
+    if (!domi.trim()) {
+      setError("Selecciona el domiciliario para esta réplica.");
+      return;
+    }
+    onCrear(domi);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+          <h2 className="font-serif text-lg font-bold text-brand-wine">
+            {modo === "crear" ? "Nueva réplica" : `Réplica -${numero}`}
+          </h2>
+          <button
+            onClick={onCerrar}
+            className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+            aria-label="Cerrar"
+            title="Cerrar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2 text-sm">
+            <p className="text-brand-brown/70">
+              {modo === "crear"
+                ? "Estás haciendo una réplica del pedido"
+                : "Este pedido es una réplica del pedido"}{" "}
+              <span className="font-bold text-brand-wine">#{pedido.comanda}</span>
+            </p>
+            {pedido.cliente?.nombre && (
+              <p className="mt-0.5 text-xs text-brand-brown/50">{pedido.cliente.nombre}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+                Consecutivo del pedido
+              </p>
+              <p className="font-bold text-brand-black">
+                {pedido.consecutivo ?? pedido.comanda}
+              </p>
+            </div>
+            <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+                Consecutivo de la réplica
+              </p>
+              <p className="font-bold text-brand-black">{codigoReplica}</p>
+            </div>
+          </div>
+
+          {modo === "crear" ? (
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-brand-brown">
+                Domiciliario
+              </label>
+              <select
+                value={domi}
+                autoFocus
+                onChange={(e) => {
+                  setDomi(e.target.value);
+                  setError(null);
+                }}
+                className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
+              >
+                <option value="">Selecciona…</option>
+                {domiciliarios.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              {error && <p className="mt-1 text-sm font-medium text-red-600">{error}</p>}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+                Domiciliario asignado
+              </p>
+              <p className="font-bold text-brand-black">{domiciliarioAsignado || "—"}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-brand-brown/10 px-5 py-4">
+          {modo === "ver" && esUltima ? (
+            <button
+              onClick={onQuitar}
+              title="Quitar esta réplica"
+              className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+            >
+              Quitar
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={onCerrar}
+              title={modo === "crear" ? "Cancelar" : "Cerrar"}
+              className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft"
+            >
+              {modo === "crear" ? "Cancelar" : "Cerrar"}
+            </button>
+            {modo === "crear" ? (
+              <button
+                onClick={confirmar}
+                title="Confirmar y crear la réplica"
+                className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90"
+              >
+                Confirmar
+              </button>
+            ) : (
+              <button
+                onClick={onDescargar}
+                title={`Descargar el Excel de la réplica -${numero}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Excel -{numero}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

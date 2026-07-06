@@ -1,12 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const MapaLeaflet = dynamic(() => import("./MapaLeaflet"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[170px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
+    <div className="flex h-[197px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
       Cargando mapa…
     </div>
   ),
@@ -20,6 +20,68 @@ interface Estado {
   msg: string;
 }
 
+/** Resultado de geocodificación de Nominatim (con detalles de dirección). */
+interface SugerenciaGeo {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: Record<string, string>;
+}
+
+/** Quita la placa (después de "#") para quedarnos con la vía principal. */
+function soloVia(direccion: string): string {
+  return direccion.split("#")[0].replace(/\s+/g, " ").trim();
+}
+
+/** Normaliza para comparar (minúsculas, sin tildes ni espacios extra). */
+function normaliza(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Arma varias consultas, de la más específica a la más general, para mejorar
+ * los aciertos en Colombia (OSM rara vez tiene la placa exacta).
+ */
+function construirConsultas(
+  direccion: string,
+  barrio: string,
+  ciudad: string,
+): string[] {
+  const dir = direccion.trim();
+  const via = soloVia(dir);
+  const b = barrio.trim();
+  const ci = ciudad.trim();
+  const arma = (partes: string[]) => partes.filter(Boolean).join(", ");
+  const consultas = [
+    arma([dir, b, ci, "Colombia"]), // dirección completa
+    arma([via, b, ci, "Colombia"]), // vía sin placa + barrio + ciudad
+    arma([via, ci, "Colombia"]), // vía + ciudad
+    arma([b, ci, "Colombia"]), // barrio + ciudad
+    arma([ci, "Colombia"]), // solo ciudad
+  ];
+  return [...new Set(consultas)].filter((q) => q && q !== "Colombia");
+}
+
+/** Consulta Nominatim (OSM) y devuelve la lista de coincidencias. */
+async function consultarNominatim(
+  q: string,
+  limit: number,
+): Promise<SugerenciaGeo[]> {
+  const r = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=co&limit=${limit}&addressdetails=1&q=${encodeURIComponent(
+      q,
+    )}`,
+    { headers: { "Accept-Language": "es" } },
+  );
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
+}
+
 export default function MapaDireccion({
   direccion,
   barrio,
@@ -27,6 +89,8 @@ export default function MapaDireccion({
   lat,
   lng,
   onUbicacion,
+  onBarrio,
+  onCiudad,
 }: {
   direccion: string;
   barrio: string;
@@ -34,37 +98,54 @@ export default function MapaDireccion({
   lat: number | null;
   lng: number | null;
   onUbicacion: (lat: number | null, lng: number | null) => void;
+  onBarrio?: (barrio: string) => void;
+  onCiudad?: (ciudad: string) => void;
 }) {
   const [abierto, setAbierto] = useState(lat != null && lng != null);
   const [cargando, setCargando] = useState(false);
   const [estado, setEstado] = useState<Estado | null>(null);
   const [sugerencia, setSugerencia] = useState("");
+  // Sugerencias de dirección (variantes) en modal emergente.
+  const [sugerencias, setSugerencias] = useState<SugerenciaGeo[]>([]);
+  const [modalSug, setModalSug] = useState(false);
+  const [cargandoSug, setCargandoSug] = useState(false);
+
+  // Hay información previa suficiente para pedir sugerencias.
+  const hayInfo = Boolean(
+    direccion.trim() || barrio.trim() || ciudad.trim(),
+  );
+
+  // El mensaje (toast) se cierra solo a los 5 segundos.
+  useEffect(() => {
+    if (!estado) return;
+    const t = setTimeout(() => setEstado(null), 5000);
+    return () => clearTimeout(t);
+  }, [estado]);
 
   async function geocodificar() {
-    if (!direccion.trim()) {
+    if (!direccion.trim() && !barrio.trim() && !ciudad.trim()) {
       setEstado({ tipo: "error", msg: "Escribe la dirección primero." });
       return;
     }
-    const partes = [direccion, barrio, ciudad, "Colombia"].filter((p) =>
-      p.trim(),
-    );
+    const consultas = construirConsultas(direccion, barrio, ciudad);
     setCargando(true);
     setEstado(null);
     try {
-      const q = encodeURIComponent(partes.join(", "));
-      const r = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=co&limit=1&addressdetails=1&q=${q}`,
-        { headers: { "Accept-Language": "es" } },
-      );
-      const data = await r.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const it = data[0];
-        const la = parseFloat(it.lat);
-        const lo = parseFloat(it.lon);
+      let encontrado: SugerenciaGeo | null = null;
+      for (const q of consultas) {
+        const data = await consultarNominatim(q, 1);
+        if (data.length > 0) {
+          encontrado = data[0];
+          break;
+        }
+      }
+      if (encontrado) {
+        const la = parseFloat(encontrado.lat);
+        const lo = parseFloat(encontrado.lon);
         onUbicacion(la, lo);
-        setSugerencia(it.display_name ?? "");
+        setSugerencia(encontrado.display_name ?? "");
         setAbierto(true);
-        setEstado({ tipo: "ok", msg: "Dirección encontrada en el mapa." });
+        setEstado({ tipo: "ok", msg: "Dirección aproximada encontrada en el mapa." });
       } else {
         setAbierto(true);
         setEstado({
@@ -84,6 +165,68 @@ export default function MapaDireccion({
     setSugerencia("");
     setEstado(null);
     setAbierto(false);
+  }
+
+  // Busca varias coincidencias (variantes) para que la persona elija la correcta.
+  async function verSugerencias() {
+    if (!hayInfo) {
+      setEstado({
+        tipo: "error",
+        msg: "Escribe algo de la dirección, barrio o ciudad para poder sugerir.",
+      });
+      return;
+    }
+    const consultas = construirConsultas(direccion, barrio, ciudad);
+    setCargandoSug(true);
+    setEstado(null);
+    try {
+      let lista: SugerenciaGeo[] = [];
+      for (const q of consultas) {
+        const data = await consultarNominatim(q, 8);
+        if (data.length > 0) {
+          lista = data;
+          break;
+        }
+      }
+      setSugerencias(lista);
+      setModalSug(true);
+      if (lista.length === 0) {
+        setEstado({
+          tipo: "error",
+          msg: "No se encontraron sugerencias. Ubica la dirección manualmente en el mapa.",
+        });
+      }
+    } catch {
+      setEstado({ tipo: "error", msg: "No se pudo consultar las sugerencias." });
+    } finally {
+      setCargandoSug(false);
+    }
+  }
+
+  // Aplica una sugerencia: marca la ubicación y sobrescribe barrio y ciudad.
+  function elegirSugerencia(s: SugerenciaGeo) {
+    const la = parseFloat(s.lat);
+    const lo = parseFloat(s.lon);
+    if (!Number.isNaN(la) && !Number.isNaN(lo)) onUbicacion(la, lo);
+    const a = s.address ?? {};
+    const nuevoBarrio =
+      a.neighbourhood ||
+      a.suburb ||
+      a.quarter ||
+      a.residential ||
+      a.city_district ||
+      "";
+    const nuevaCiudad =
+      a.city || a.town || a.municipality || a.village || a.county || "";
+    if (nuevoBarrio && onBarrio) onBarrio(nuevoBarrio);
+    if (nuevaCiudad && onCiudad) onCiudad(nuevaCiudad);
+    setSugerencia(s.display_name ?? "");
+    setAbierto(true);
+    setModalSug(false);
+    setEstado({
+      tipo: "ok",
+      msg: "Sugerencia aplicada. Revisa y presiona Guardar.",
+    });
   }
 
   const centroLat = lat ?? CENTRO_POR_DEFECTO.lat;
@@ -109,6 +252,22 @@ export default function MapaDireccion({
           )}
           <button
             type="button"
+            onClick={verSugerencias}
+            disabled={cargandoSug || !hayInfo}
+            title={
+              hayInfo
+                ? "Ver sugerencias de dirección para corregirla"
+                : "Escribe algo de la dirección, barrio o ciudad primero"
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand-amber/50 bg-white px-3 py-1.5 text-xs font-semibold text-brand-amber shadow-sm transition hover:bg-brand-amber/10 disabled:opacity-40"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+            </svg>
+            {cargandoSug ? "Buscando…" : "Ver sugerencias"}
+          </button>
+          <button
+            type="button"
             onClick={geocodificar}
             disabled={cargando}
             title="Ubicar la dirección en el mapa"
@@ -125,13 +284,14 @@ export default function MapaDireccion({
 
       {estado && (
         <div
-          className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+          className={`fixed right-4 top-4 z-[1300] max-w-xs rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg ${
             estado.tipo === "ok"
-              ? "bg-green-50 text-green-700"
+              ? "bg-green-600"
               : estado.tipo === "error"
-                ? "bg-red-50 text-red-700"
-                : "bg-amber-50 text-amber-700"
+                ? "bg-red-600"
+                : "bg-amber-500"
           }`}
+          role="status"
         >
           {estado.msg}
         </div>
@@ -152,6 +312,159 @@ export default function MapaDireccion({
           )}
         </div>
       )}
+
+      {modalSug && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-brand-black/50 p-4">
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-brand-wine">
+                  Sugerencias de dirección
+                </h3>
+                <p className="text-xs text-brand-brown/50">
+                  Elige la que más se parezca; se corregirá barrio, ciudad y ubicación.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalSug(false)}
+                className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+                aria-label="Cerrar"
+                title="Cerrar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Lo que escribió la persona, para comparar con las sugerencias. */}
+            <div className="border-b border-brand-brown/10 bg-brand-cream-soft/40 px-5 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-brand-brown/50">
+                Lo que escribiste
+              </p>
+              <p className="mt-0.5 text-sm font-semibold text-brand-black">
+                {direccion.trim() || "—"}
+              </p>
+              <p className="text-xs text-brand-brown/60">
+                {[barrio, ciudad].filter((x) => x.trim()).join(" · ") ||
+                  "Sin barrio ni ciudad"}
+              </p>
+              <p className="mt-1 text-[11px] text-brand-brown/45">
+                Compara con cada sugerencia para ver qué cambió (número, barrio o ciudad).
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 py-2">
+              {sugerencias.length === 0 ? (
+                <p className="px-2 py-8 text-center text-sm text-brand-brown/50">
+                  No se encontraron sugerencias para esa dirección.
+                </p>
+              ) : (
+                sugerencias.map((s, i) => {
+                  const a = s.address ?? {};
+                  const viaSug = [a.road, a.house_number]
+                    .filter(Boolean)
+                    .join(" # ");
+                  const bSug =
+                    a.neighbourhood || a.suburb || a.quarter || a.residential || a.city_district || "";
+                  const ciSug =
+                    a.city || a.town || a.municipality || a.village || a.county || "";
+                  // ¿Coincide con lo que escribió? (para señalar la diferencia)
+                  const barrioIgual = bSug && normaliza(bSug) === normaliza(barrio);
+                  const ciudadIgual = ciSug && normaliza(ciSug) === normaliza(ciudad);
+                  return (
+                    <button
+                      key={`${s.lat}-${s.lon}-${i}`}
+                      type="button"
+                      onClick={() => elegirSugerencia(s)}
+                      title="Usar esta sugerencia"
+                      className="mb-1.5 flex w-full items-start gap-2 rounded-xl border border-brand-brown/10 bg-white px-3 py-2 text-left transition hover:border-brand-amber/50 hover:bg-brand-amber/5"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-0.5 h-4 w-4 shrink-0 text-brand-amber">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                      </svg>
+                      <span className="min-w-0 flex-1 space-y-0.5">
+                        <CampoSugerencia
+                          etiqueta="Vía"
+                          valor={viaSug || "No la ubicó (solo el sector)"}
+                          resaltar={!viaSug}
+                        />
+                        <CampoSugerencia
+                          etiqueta="Barrio"
+                          valor={bSug || "—"}
+                          igual={Boolean(barrioIgual)}
+                          distinto={Boolean(bSug) && !barrioIgual && Boolean(barrio.trim())}
+                        />
+                        <CampoSugerencia
+                          etiqueta="Ciudad"
+                          valor={ciSug || "—"}
+                          igual={Boolean(ciudadIgual)}
+                          distinto={Boolean(ciSug) && !ciudadIgual && Boolean(ciudad.trim())}
+                        />
+                        <span className="mt-0.5 block text-[10px] leading-snug text-brand-brown/40">
+                          {s.display_name}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-brand-brown/10 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setModalSug(false)}
+                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Fila etiqueta: valor de una sugerencia, con marca de coincide / cambia. */
+function CampoSugerencia({
+  etiqueta,
+  valor,
+  igual,
+  distinto,
+  resaltar,
+}: {
+  etiqueta: string;
+  valor: string;
+  igual?: boolean;
+  distinto?: boolean;
+  resaltar?: boolean;
+}) {
+  return (
+    <span className="flex items-center gap-1.5 text-[12px] leading-tight">
+      <span className="w-11 shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+        {etiqueta}
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate font-medium ${
+          distinto || resaltar ? "text-amber-700" : "text-brand-black"
+        }`}
+      >
+        {valor}
+      </span>
+      {igual && (
+        <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">
+          Coincide
+        </span>
+      )}
+      {distinto && (
+        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+          Cambia
+        </span>
+      )}
+    </span>
   );
 }

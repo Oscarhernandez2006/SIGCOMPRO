@@ -16,6 +16,7 @@ export interface ClienteRow {
   id: string;
   nit_cedula: string;
   nombre: string | null;
+  apellidos: string | null;
   direccion: string | null;
   referencia: string | null;
   barrio: string | null;
@@ -26,6 +27,7 @@ export interface ClienteRow {
   lng: number | null;
   activo: boolean;
   horeca: boolean;
+  direccion_incorrecta: boolean;
   creado_en: string;
 }
 
@@ -48,7 +50,7 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca, direccion_incorrecta, creado_en';
 
 @Injectable()
 export class ClientesService implements OnModuleInit {
@@ -60,6 +62,12 @@ export class ClientesService implements OnModuleInit {
     );
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS correo text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS apellidos text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS direccion_incorrecta boolean NOT NULL DEFAULT false`,
     );
   }
 
@@ -120,15 +128,19 @@ export class ClientesService implements OnModuleInit {
       `SELECT
          COUNT(*)::int AS total,
          COUNT(*) FILTER (
-           WHERE lat IS NOT NULL AND lng IS NOT NULL
+           WHERE direccion_incorrecta = false
+             AND lat IS NOT NULL AND lng IS NOT NULL
              AND lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180
              AND NOT (lat = 0 AND lng = 0)
          )::int AS validados,
          COUNT(*) FILTER (
-           WHERE lat IS NOT NULL AND lng IS NOT NULL
-             AND (
-               lat NOT BETWEEN -90 AND 90 OR lng NOT BETWEEN -180 AND 180
-               OR (lat = 0 AND lng = 0)
+           WHERE direccion_incorrecta = true
+             OR (
+               lat IS NOT NULL AND lng IS NOT NULL
+               AND (
+                 lat NOT BETWEEN -90 AND 90 OR lng NOT BETWEEN -180 AND 180
+                 OR (lat = 0 AND lng = 0)
+               )
              )
          )::int AS incorrectos
        FROM clientes`,
@@ -197,12 +209,13 @@ export class ClientesService implements OnModuleInit {
 
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca, direccion_incorrecta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING ${COLUMNS}`,
       [
         nit,
         dto.nombre?.trim() ?? null,
+        dto.apellidos?.trim() ?? null,
         dto.direccion?.trim() ?? null,
         dto.referencia?.trim() ?? null,
         dto.barrio?.trim() ?? null,
@@ -213,6 +226,7 @@ export class ClientesService implements OnModuleInit {
         dto.lng ?? null,
         dto.activo ?? true,
         dto.horeca ?? false,
+        dto.direccion_incorrecta ?? false,
       ],
     );
     return res.rows[0];
@@ -235,6 +249,7 @@ export class ClientesService implements OnModuleInit {
     const campos: Array<[keyof UpdateClienteDto, string]> = [
       ['nit_cedula', 'nit_cedula'],
       ['nombre', 'nombre'],
+      ['apellidos', 'apellidos'],
       ['direccion', 'direccion'],
       ['referencia', 'referencia'],
       ['barrio', 'barrio'],
@@ -261,6 +276,11 @@ export class ClientesService implements OnModuleInit {
     if (dto.horeca !== undefined) {
       sets.push(`horeca = $${i++}`);
       valores.push(dto.horeca);
+    }
+
+    if (dto.direccion_incorrecta !== undefined) {
+      sets.push(`direccion_incorrecta = $${i++}`);
+      valores.push(dto.direccion_incorrecta);
     }
 
     if (sets.length === 0) {

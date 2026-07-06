@@ -8,7 +8,7 @@ import {
   type Cliente,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { aNombrePropio } from "@/lib/format";
+import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -27,6 +27,7 @@ const FORM_VACIO: ClienteInput = {
   lng: null,
   activo: true,
   horeca: false,
+  direccion_incorrecta: false,
 };
 
 /**
@@ -84,6 +85,7 @@ export default function CrearClienteModal({
       const nuevo = await crearCliente({
         ...form,
         nombre: nombreCompleto,
+        apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       });
@@ -117,147 +119,145 @@ export default function CrearClienteModal({
           </div>
         )}
 
-        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[1fr_1fr]">
-          <div className="space-y-3">
-            <Bloque titulo="Identificación">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Campo label="NIT / Cédula *">
-                  <input
-                    value={form.nit_cedula}
-                    onChange={(e) => cambiar("nit_cedula", e.target.value)}
-                    autoFocus={!form.nit_cedula}
-                    className="campo"
-                  />
-                </Campo>
-                <label className="flex items-end gap-2 pb-2 text-sm text-brand-brown/80">
-                  <input
-                    type="checkbox"
-                    checked={form.activo ?? true}
-                    onChange={(e) => cambiar("activo", e.target.checked)}
-                    className="h-4 w-4 accent-brand-amber"
-                  />
-                  Cliente activo
-                </label>
-                <Campo label="Nombres *">
-                  <input
-                    value={nombres}
-                    onChange={(e) => setNombres(aNombrePropio(e.target.value))}
-                    className="campo"
-                  />
-                </Campo>
-                <Campo label="Apellidos *">
-                  <input
-                    value={apellidos}
-                    onChange={(e) => setApellidos(aNombrePropio(e.target.value))}
-                    className="campo"
-                  />
-                </Campo>
-              </div>
-            </Bloque>
-
-            <Bloque titulo="Dirección">
-              <DireccionInput
-                value={form.direccion ?? ""}
-                onChange={(v) => cambiar("direccion", v)}
-              />
-            </Bloque>
-
-            <Bloque titulo="Contacto y referencia">
-              <div className="flex flex-wrap gap-3">
-                <Campo label="Teléfono">
-                  <input
-                    value={form.telefono ?? ""}
-                    onChange={(e) => cambiar("telefono", e.target.value)}
-                    inputMode="tel"
-                    maxLength={15}
-                    className="campo max-w-[10rem]"
-                  />
-                </Campo>
-                <Campo label="Correo electrónico">
-                  <input
-                    value={form.correo ?? ""}
-                    onChange={(e) => cambiar("correo", e.target.value)}
-                    type="email"
-                    inputMode="email"
-                    placeholder="correo@ejemplo.com"
-                    className="campo min-w-[14rem]"
-                  />
-                </Campo>
-              </div>
-              <div className="mt-3">
-                <ReferenciaInput
-                  value={form.referencia ?? ""}
-                  onChange={(v) => cambiar("referencia", v)}
+        <div className="mt-3 grid items-stretch gap-3 lg:grid-cols-2">
+          <Bloque titulo="Identificación">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="NIT / Cédula *">
+                <input
+                  value={form.nit_cedula}
+                  onChange={(e) => cambiar("nit_cedula", e.target.value)}
+                  autoFocus={!form.nit_cedula}
+                  className="campo"
                 />
-              </div>
-            </Bloque>
-          </div>
+              </Campo>
+              <label className="flex items-end gap-2 pb-2 text-sm text-brand-brown/80">
+                <input
+                  type="checkbox"
+                  checked={form.activo ?? true}
+                  onChange={(e) => cambiar("activo", e.target.checked)}
+                  className="h-4 w-4 accent-brand-amber"
+                />
+                Cliente activo
+              </label>
+              <Campo label="Nombres *">
+                <input
+                  value={nombres}
+                  onChange={onChangeNombrePropio(setNombres)}
+                  className="campo"
+                />
+              </Campo>
+              <Campo label="Apellidos *">
+                <input
+                  value={apellidos}
+                  onChange={onChangeNombrePropio(setApellidos)}
+                  className="campo"
+                />
+              </Campo>
+            </div>
+          </Bloque>
 
-          <div className="space-y-3">
-            <Bloque titulo="Ubicación del pedido">
-              <MapaDireccion
-                direccion={form.direccion ?? ""}
-                barrio={form.barrio ?? ""}
-                ciudad={form.ciudad ?? ""}
-                lat={form.lat ?? null}
-                lng={form.lng ?? null}
-                onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
+          <Bloque titulo="Barrio y ciudad">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Barrio">
+                <AutocompleteInput
+                  value={form.barrio ?? ""}
+                  onChange={(v) => cambiar("barrio", v)}
+                  onBuscar={async (q) =>
+                    (await buscarBarrios(q, form.ciudad)).map((b) => ({ value: b }))
+                  }
+                  placeholder="Barrio"
+                />
+              </Campo>
+              <Campo label="Ciudad">
+                <AutocompleteInput
+                  value={form.ciudad ?? ""}
+                  onChange={(v) => cambiar("ciudad", v)}
+                  onBuscar={async (q) =>
+                    (await buscarCiudades(q)).map((c) => ({
+                      value: c.nombre,
+                      hint: c.departamento ?? undefined,
+                    }))
+                  }
+                  placeholder="Ciudad"
+                />
+              </Campo>
+            </div>
+          </Bloque>
+
+          <Bloque titulo="Dirección">
+            <DireccionInput
+              value={form.direccion ?? ""}
+              onChange={(v) => cambiar("direccion", v)}
+            />
+          </Bloque>
+
+          <Bloque titulo="Ubicación del pedido">
+            <MapaDireccion
+              direccion={form.direccion ?? ""}
+              barrio={form.barrio ?? ""}
+              ciudad={form.ciudad ?? ""}
+              lat={form.lat ?? null}
+              lng={form.lng ?? null}
+              onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
+              onBarrio={(b) => cambiar("barrio", b)}
+              onCiudad={(ci) => cambiar("ciudad", ci)}
+            />
+          </Bloque>
+
+          <Bloque titulo="Contacto y referencia">
+            <div className="flex flex-wrap gap-3">
+              <Campo label="Teléfono">
+                <input
+                  value={form.telefono ?? ""}
+                  onChange={(e) => cambiar("telefono", e.target.value)}
+                  inputMode="tel"
+                  maxLength={15}
+                  className="campo max-w-[10rem]"
+                />
+              </Campo>
+              <Campo label="Correo electrónico">
+                <input
+                  value={form.correo ?? ""}
+                  onChange={(e) => cambiar("correo", e.target.value)}
+                  type="email"
+                  inputMode="email"
+                  placeholder="correo@ejemplo.com"
+                  className="campo min-w-[14rem]"
+                />
+              </Campo>
+            </div>
+            <div className="mt-3">
+              <ReferenciaInput
+                value={form.referencia ?? ""}
+                onChange={(v) => cambiar("referencia", v)}
               />
-            </Bloque>
+            </div>
+          </Bloque>
 
-            <Bloque titulo="Barrio y ciudad">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Campo label="Barrio">
-                  <AutocompleteInput
-                    value={form.barrio ?? ""}
-                    onChange={(v) => cambiar("barrio", v)}
-                    onBuscar={async (q) =>
-                      (await buscarBarrios(q, form.ciudad)).map((b) => ({ value: b }))
-                    }
-                    placeholder="Barrio"
-                  />
-                </Campo>
-                <Campo label="Ciudad">
-                  <AutocompleteInput
-                    value={form.ciudad ?? ""}
-                    onChange={(v) => cambiar("ciudad", v)}
-                    onBuscar={async (q) =>
-                      (await buscarCiudades(q)).map((c) => ({
-                        value: c.nombre,
-                        hint: c.departamento ?? undefined,
-                      }))
-                    }
-                    placeholder="Ciudad"
-                  />
-                </Campo>
-              </div>
-            </Bloque>
-
-            <Bloque titulo="Clasificación">
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <label className="flex items-center gap-2 text-sm text-brand-brown/80">
-                  <input
-                    type="radio"
-                    name="tipo-cliente"
-                    checked={tipoCliente === "hogar"}
-                    onChange={() => setTipoCliente("hogar")}
-                    className="h-4 w-4 accent-brand-amber"
-                  />
-                  Cliente hogar
-                </label>
-                <label className="flex items-center gap-2 text-sm text-brand-brown/80">
-                  <input
-                    type="radio"
-                    name="tipo-cliente"
-                    checked={tipoCliente === "horeca"}
-                    onChange={() => setTipoCliente("horeca")}
-                    className="h-4 w-4 accent-brand-amber"
-                  />
-                  Cliente HORECA (hotel, restaurante o café)
-                </label>
-              </div>
-            </Bloque>
-          </div>
+          <Bloque titulo="Clasificación">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                <input
+                  type="radio"
+                  name="tipo-cliente"
+                  checked={tipoCliente === "hogar"}
+                  onChange={() => setTipoCliente("hogar")}
+                  className="h-4 w-4 accent-brand-amber"
+                />
+                Cliente hogar
+              </label>
+              <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                <input
+                  type="radio"
+                  name="tipo-cliente"
+                  checked={tipoCliente === "horeca"}
+                  onChange={() => setTipoCliente("horeca")}
+                  className="h-4 w-4 accent-brand-amber"
+                />
+                Cliente HORECA (hotel, restaurante o café)
+              </label>
+            </div>
+          </Bloque>
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
@@ -302,7 +302,7 @@ function Campo({
 
 function Bloque({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 p-3">
+    <section className="flex h-full flex-col rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 p-3">
       <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-wine">{titulo}</h3>
       {children}
     </section>
