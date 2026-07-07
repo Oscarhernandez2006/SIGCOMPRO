@@ -83,34 +83,32 @@ function hoyISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-/** ¿La fecha ISO corresponde al día de hoy (local)? */
-function esHoyFecha(iso?: string): boolean {
-  if (!iso) return false;
-  const f = new Date(iso);
-  const h = new Date();
-  return (
-    f.getFullYear() === h.getFullYear() &&
-    f.getMonth() === h.getMonth() &&
-    f.getDate() === h.getDate()
-  );
+/** Día de entrega efectivo (YYYY-MM-DD): el programado o el de creación. */
+function diaEntregaISO(p: Pedido): string {
+  if (p.entregaProgramada && p.fechaProgramada) return p.fechaProgramada;
+  const d = new Date(p.fecha);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-/** ¿El pedido es para HOY? (programado con fecha de hoy, o no programado creado hoy). */
+/**
+ * ¿El pedido es para HOY? Incluye los ARRASTRADOS: pedidos aún activos (no
+ * despachados ni anulados) que quedaron de días anteriores y nunca se
+ * despacharon, para que no desaparezcan de despacho al cambiar el día.
+ */
 function esDeHoy(p: Pedido): boolean {
-  if (p.entregaProgramada) {
-    return Boolean(p.fechaProgramada && p.fechaProgramada === hoyISO());
+  const dia = diaEntregaISO(p);
+  const hoy = hoyISO();
+  if (dia === hoy) return true;
+  if (dia < hoy) {
+    // Quedó de un día anterior: solo se arrastra si sigue activo.
+    const e = norm(p.estado);
+    return !p.anulado && e !== "despachado" && e !== "anulado";
   }
-  return esHoyFecha(p.fecha);
+  return false;
 }
 /** ¿El pedido es un "posterior" (programado para un día futuro)? */
 function esPosteriorFuturo(p: Pedido): boolean {
   return Boolean(
     p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoyISO(),
-  );
-}
-/** ¿El pedido fue programado justo para hoy? (para darle prioridad en la tabla). */
-function programadoParaHoy(p: Pedido): boolean {
-  return Boolean(
-    p.entregaProgramada && p.fechaProgramada && p.fechaProgramada === hoyISO(),
   );
 }
 
@@ -546,20 +544,20 @@ export default function DespachoPage() {
   );
 
   // Número del día (turno): 1, 2, 3… por cada DÍA EFECTIVO DE DESPACHO.
-  // El día efectivo es la fecha programada (si el pedido se dejó para otro día)
-  // o, en su defecto, el día de creación. Así, un pedido que quedó pendiente de
-  // ayer para hoy entra en la numeración de HOY y, al estar creado antes, toma
-  // los primeros números (1, 2, 3…); los que entran después siguen la secuencia.
+  // El día efectivo es la fecha programada, o el día de creación. Además, un
+  // pedido ACTIVO que quedó pendiente de días anteriores (arrastrado) cuenta
+  // para HOY y, al estar creado antes, toma los primeros números (1, 2, 3…),
+  // garantizando que se despache primero; los que entran después siguen.
   const numeroDelDiaPorId = useMemo(() => {
-    const claveDia = (iso: string) => {
-      const d = new Date(iso);
-      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    };
-    const diaEfectivo = (p: Pedido): string | null => {
-      if (p.entregaProgramada && p.fechaProgramada)
-        return claveDia(`${p.fechaProgramada}T00:00:00`);
-      if (!p.fecha) return null;
-      return claveDia(p.fecha);
+    const hoy = hoyISO();
+    const diaEfectivo = (p: Pedido): string => {
+      const dia = diaEntregaISO(p);
+      // Arrastrado activo de un día anterior -> se numera dentro de HOY.
+      if (dia < hoy) {
+        const e = norm(p.estado);
+        if (!p.anulado && e !== "despachado" && e !== "anulado") return hoy;
+      }
+      return dia;
     };
     const porDia = new Map<string, Pedido[]>();
     for (const p of pedidosVisibles) {
@@ -602,13 +600,18 @@ export default function DespachoPage() {
   const pedidosOrdenados = useMemo(
     () =>
       pedidosVisibles.slice().sort((a, b) => {
-        // Los pedidos programados justo para HOY salen de primeros.
-        const pa = programadoParaHoy(a) ? 1 : 0;
-        const pb = programadoParaHoy(b) ? 1 : 0;
-        if (pa !== pb) return pb - pa;
-        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+        // Los posteriores (programados a futuro) van al final.
+        const fa = esPosteriorFuturo(a) ? 1 : 0;
+        const fb = esPosteriorFuturo(b) ? 1 : 0;
+        if (fa !== fb) return fa - fb;
+        // Orden por número del día (turno) ascendente: el pendiente arrastrado
+        // de días anteriores toma el 1 y sale de primero para despacharse antes.
+        const na = numeroDelDiaPorId.get(a.id) ?? 99999;
+        const nb = numeroDelDiaPorId.get(b.id) ?? 99999;
+        if (na !== nb) return na - nb;
+        return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
       }),
-    [pedidosVisibles],
+    [pedidosVisibles, numeroDelDiaPorId],
   );
 
   // Filtra por consecutivo, nombre del cliente o NIT/cédula del cliente.

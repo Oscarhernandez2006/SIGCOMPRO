@@ -115,6 +115,10 @@ export default function PedidosPage() {
     });
   }, [pedidos, busqueda, fechaFiltro]);
 
+  // Número del día (turno) por pedido, para que la comanda impresa desde aquí
+  // muestre el mismo número que en Despacho.
+  const numerosDia = useMemo(() => numerosDelDia(pedidos), [pedidos]);
+
   // Desplaza el día del filtro (delta en días). Si no hay día, parte de hoy.
   const moverDia = (delta: number) => {
     const base = fechaFiltro ? new Date(`${fechaFiltro}T00:00:00`) : new Date();
@@ -378,7 +382,7 @@ export default function PedidosPage() {
                       <button onClick={() => setDetalle(p)} title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Ver</button>
                       {!p.anulado && (
                         <>
-                          <button onClick={permite.imprimir ? () => imprimirComanda(p) : sinPermiso.mostrar} title="Reimprimir la comanda del pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Reimprimir</button>
+                          <button onClick={permite.imprimir ? () => imprimirComanda(p, numerosDia.get(p.id)) : sinPermiso.mostrar} title="Reimprimir la comanda del pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Reimprimir</button>
                           <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Excel</button>
                           <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>Editar</button>
                           <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} title="Anular el pedido" className={`rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>Anular</button>
@@ -416,7 +420,7 @@ export default function PedidosPage() {
           onCerrar={() => setModalCongelados(false)}
         />
       )}
-      {detalle && <DetallePedido pedido={detalle} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} numeroDia={numerosDia.get(detalle.id)} onCerrar={() => setDetalle(null)} />}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
     </div>
   );
@@ -844,7 +848,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => imprimirComanda(pedidoCreado)}
+                  onClick={() => imprimirComanda(pedidoCreado, numerosDelDia([...pedidos, pedidoCreado]).get(pedidoCreado.id))}
                   title="Imprimir la comanda del pedido"
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90"
                 >
@@ -1415,7 +1419,7 @@ function PasoCliente({
       )}
 
       {verPedido && (
-        <DetallePedido pedido={verPedido} onCerrar={() => setVerPedido(null)} />
+        <DetallePedido pedido={verPedido} numeroDia={numerosDelDia(pedidos).get(verPedido.id)} onCerrar={() => setVerPedido(null)} />
       )}
     </div>
   );
@@ -2290,7 +2294,48 @@ export interface Pedido extends DatosComanda {
   horaDespacho?: string;
 }
 
-export function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: () => void }) {
+/**
+ * Calcula el "número del día" (turno) por pedido, igual que en despacho: agrupa
+ * por día efectivo de entrega (programado o creación); los pedidos ACTIVOS
+ * arrastrados de días anteriores cuentan para HOY y toman los primeros números.
+ * Así la comanda impresa desde Pedidos coincide con la de Despacho.
+ */
+export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const claveISO = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const hoy = claveISO(new Date());
+  const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+  const diaEntrega = (p: Pedido) =>
+    p.entregaProgramada && p.fechaProgramada
+      ? p.fechaProgramada
+      : claveISO(new Date(p.fecha));
+  const diaEfectivo = (p: Pedido) => {
+    const dia = diaEntrega(p);
+    if (dia < hoy) {
+      const e = norm(p.estado);
+      if (!p.anulado && e !== "despachado" && e !== "anulado") return hoy;
+    }
+    return dia;
+  };
+  const porDia = new Map<string, Pedido[]>();
+  for (const p of pedidos) {
+    const dia = diaEfectivo(p);
+    const arr = porDia.get(dia);
+    if (arr) arr.push(p);
+    else porDia.set(dia, [p]);
+  }
+  const mapa = new Map<string, number>();
+  for (const grupo of porDia.values()) {
+    grupo.sort(
+      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+    );
+    grupo.forEach((p, i) => mapa.set(p.id, i + 1));
+  }
+  return mapa;
+}
+
+export function DetallePedido({ pedido, onCerrar, numeroDia }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number }) {
   const dest = pedido.entrega === "domicilio" ? "Domicilio" : pedido.entrega === "recoge" ? "Recoge en punto" : "—";
   const c = pedido.cliente;
   return (
@@ -2371,7 +2416,7 @@ export function DetallePedido({ pedido, onCerrar }: { pedido: Pedido; onCerrar: 
         </div>
         <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
           {!pedido.anulado && (
-            <button onClick={() => imprimirComanda(pedido)} title="Reimprimir la comanda del pedido" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Reimprimir</button>
+            <button onClick={() => imprimirComanda(pedido, numeroDia)} title="Reimprimir la comanda del pedido" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Reimprimir</button>
           )}
           <button onClick={onCerrar} title="Cerrar" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
         </div>
