@@ -11,6 +11,7 @@ import { ProductosModule } from './productos/productos.module';
 import { PedidosModule } from './pedidos/pedidos.module';
 import { CongeladosModule } from './congelados/congelados.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
+import { MotivosModule } from './motivos/motivos.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ConfiguracionModule } from './configuracion/configuracion.module';
     PedidosModule,
     CongeladosModule,
     ConfiguracionModule,
+    MotivosModule,
   ],
   controllers: [AppController],
 })

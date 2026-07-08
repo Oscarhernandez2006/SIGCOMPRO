@@ -3,6 +3,19 @@ import * as XLSX from 'xlsx';
 import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
+import { JwtPayload } from '../auth/guards/jwt-auth.guard';
+
+/** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
+export interface TrazaEvento {
+  tipo: 'creacion' | 'estado' | 'anulacion';
+  estadoAnterior?: string | null;
+  estadoNuevo?: string | null;
+  /** Fecha/hora del evento (ISO, hora del servidor). */
+  fecha: string;
+  usuarioId?: string | null;
+  usuarioNombre?: string | null;
+  usuarioCedula?: string | null;
+}
 
 /** Estructura libre del pedido tal como la maneja el frontend. */
 type PedidoData = Record<string, unknown> & {
@@ -16,6 +29,8 @@ type PedidoData = Record<string, unknown> & {
   entregaProgramada?: boolean;
   /** Fecha programada de entrega (YYYY-MM-DD) cuando entregaProgramada es true. */
   fechaProgramada?: string;
+  /** Historial de cambios (creación, estados, anulación). */
+  trazabilidad?: TrazaEvento[];
   punto?: { id?: string; nombre?: string; codigo?: string | null } | null;
   cliente?: {
     id?: string;
@@ -177,7 +192,7 @@ export class PedidosService implements OnModuleInit {
    *
    * Devuelve el pedido final ya con el consecutivo y la comanda definitivos.
    */
-  async guardar(pedido: PedidoData): Promise<PedidoData> {
+  async guardar(pedido: PedidoData, user?: JwtPayload): Promise<PedidoData> {
     const id = String(pedido.id ?? '').trim();
     if (!id) {
       throw new Error('El pedido no tiene id.');
@@ -195,16 +210,19 @@ export class PedidosService implements OnModuleInit {
         data: PedidoData;
       }>(`SELECT consecutivo, data FROM pedidos WHERE id = $1 FOR UPDATE`, [id]);
 
+      const prevData: PedidoData | null = prev.rowCount
+        ? (prev.rows[0].data ?? {})
+        : null;
+
       if (prev.rowCount) {
         // Edición: conserva el consecutivo, la comanda y la fecha originales
         // para no romper la trazabilidad ni reasignar números.
-        const prevData = prev.rows[0].data ?? {};
         finalPedido.consecutivo =
-          (typeof prevData.consecutivo === 'number'
-            ? prevData.consecutivo
+          (typeof prevData!.consecutivo === 'number'
+            ? prevData!.consecutivo
             : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
-        finalPedido.comanda = prevData.comanda ?? finalPedido.comanda;
-        finalPedido.fecha = prevData.fecha ?? finalPedido.fecha;
+        finalPedido.comanda = prevData!.comanda ?? finalPedido.comanda;
+        finalPedido.fecha = prevData!.fecha ?? finalPedido.fecha;
       } else if (puntoId) {
         // Nuevo pedido: asigna el consecutivo de forma atómica por punto.
         // El lock se libera automáticamente al terminar la transacción.
@@ -234,6 +252,55 @@ export class PedidosService implements OnModuleInit {
       const fecha = finalPedido.fecha
         ? new Date(String(finalPedido.fecha))
         : null;
+
+      // --- Trazabilidad: registra creación / cambio de estado / anulación ---
+      const trazaPrevia: TrazaEvento[] = Array.isArray(prevData?.trazabilidad)
+        ? (prevData!.trazabilidad as TrazaEvento[])
+        : [];
+      const estadoAnterior = prevData
+        ? prevData.estado
+          ? String(prevData.estado)
+          : null
+        : null;
+      const anuladoAnterior = prevData ? prevData.anulado === true : false;
+
+      let tipoEvento: TrazaEvento['tipo'] | null = null;
+      if (!prev.rowCount) {
+        tipoEvento = 'creacion';
+      } else if (anulado && !anuladoAnterior) {
+        tipoEvento = 'anulacion';
+      } else if (estado !== estadoAnterior) {
+        tipoEvento = 'estado';
+      }
+
+      if (tipoEvento) {
+        let usuarioNombre: string | null = null;
+        let usuarioCedula: string | null = user?.cedula ?? null;
+        if (user?.sub) {
+          try {
+            const u = await client.query<{ nombre: string; cedula: string }>(
+              `SELECT nombre, cedula FROM usuarios WHERE id = $1::bigint LIMIT 1`,
+              [user.sub],
+            );
+            usuarioNombre = u.rows[0]?.nombre ?? null;
+            usuarioCedula = u.rows[0]?.cedula ?? usuarioCedula;
+          } catch {
+            /* si falla la consulta, se registra sin nombre */
+          }
+        }
+        const evento: TrazaEvento = {
+          tipo: tipoEvento,
+          estadoAnterior,
+          estadoNuevo: estado,
+          fecha: new Date().toISOString(),
+          usuarioId: user?.sub ?? null,
+          usuarioNombre,
+          usuarioCedula,
+        };
+        finalPedido.trazabilidad = [...trazaPrevia, evento];
+      } else {
+        finalPedido.trazabilidad = trazaPrevia;
+      }
 
       await client.query(
         `INSERT INTO pedidos

@@ -2,17 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listarClientes, type Cliente } from "@/lib/clientes";
-import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
+import {
+  misPuntosVenta,
+  puntoMasCercano,
+  distanciaKm,
+  calcularValorDomicilio,
+  domicilioGratisAplica,
+  coordenadasValidas,
+  type PuntoVenta,
+} from "@/lib/puntos-venta";
 import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
+import { listarMotivos, type Motivo } from "@/lib/motivos";
 import CrearClienteModal from "@/components/CrearClienteModal";
 import QRCode from "qrcode";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
+
+// Motivos por tipo de baja. Anular = errores internos (televentas); Cancelar =
+// causas externas (el cliente no recibió el pedido / devolución).
+const MOTIVOS_ANULAR = ["Pedido Doble", "Error dirección", "Inventario Agotados"] as const;
+const MOTIVOS_CANCELAR = ["Cliente Cerrado", "Promesa no Cumplida"] as const;
 
 /**
  * Borrador de pedido "congelado" (en espera). Guarda el estado del wizard tal
@@ -46,9 +60,20 @@ interface PedidoCongelado {
 export default function PedidosPage() {
   const [wizardAbierto, setWizardAbierto] = useState(false);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  // Metadata de despacho por pedido (porcionador, domiciliario, horas, etc.).
+  const [meta, setMeta] = useState<Record<string, DespachoMeta>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
   const [editando, setEditando] = useState<Pedido | null>(null);
   const [clonando, setClonando] = useState<Pedido | null>(null);
+  // Modal para elegir el motivo al anular o cancelar un pedido.
+  const [motivoModal, setMotivoModal] = useState<{ pedido: Pedido; tipo: "anular" | "cancelar" } | null>(null);
+  // Motivos activos (anular/cancelar) cargados desde la base de datos.
+  const [motivos, setMotivos] = useState<Motivo[]>([]);
+  useEffect(() => {
+    listarMotivos({ soloActivos: true })
+      .then(setMotivos)
+      .catch(() => setMotivos([]));
+  }, []);
 
   // Pedidos congelados (borradores en espera) del vendedor.
   const [congelados, setCongelados] = useState<PedidoCongelado[]>([]);
@@ -81,7 +106,10 @@ export default function PedidosPage() {
   // Cargar pedidos desde la base de datos.
   useEffect(() => {
     cargarEstadoPedidos()
-      .then((e) => setPedidos(e.pedidos))
+      .then((e) => {
+        setPedidos(e.pedidos);
+        setMeta(e.meta ?? {});
+      })
       .catch(() => { /* ignore */ });
   }, []);
 
@@ -187,9 +215,28 @@ export default function PedidosPage() {
   };
 
   // Anula un pedido (marca anulado + estado) y lo persiste.
+  // Anular = motivo INTERNO (error de la televendedora).
   const anularPedido = (p: Pedido) => {
-    if (!confirm(`¿Anular el pedido ${p.comanda}? Esta acción no se puede deshacer.`)) return;
-    guardarPedido({ ...p, anulado: true, estado: "Anulado" });
+    setMotivoModal({ pedido: p, tipo: "anular" });
+  };
+
+  // Cancela un pedido (motivo EXTERNO: el cliente no lo recibió / devolución).
+  // También sale del flujo activo (anulado=true) pero con estado "Cancelado".
+  const cancelarPedido = (p: Pedido) => {
+    setMotivoModal({ pedido: p, tipo: "cancelar" });
+  };
+
+  // Confirma la anulación/cancelación con el motivo elegido y lo persiste.
+  const confirmarMotivo = (motivo: string) => {
+    if (!motivoModal) return;
+    const { pedido, tipo } = motivoModal;
+    guardarPedido({
+      ...pedido,
+      anulado: true,
+      estado: tipo === "anular" ? "Anulado" : "Cancelado",
+      motivo,
+    });
+    setMotivoModal(null);
   };
 
   // Reimprime/descarga el Excel de despacho del pedido.
@@ -372,24 +419,57 @@ export default function PedidosPage() {
                   <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
                   <td className="px-4 py-3 font-medium">{formatoCOP(p.total)}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
-                      {p.anulado ? "Anulado" : p.estado || "En proceso"}
+                    <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
+                      {p.anulado ? (p.estado || "Anulado") : p.estado || "En proceso"}
                     </span>
+                    {p.motivo && (
+                      <p className="mt-0.5 text-[11px] text-brand-brown/50">{p.motivo}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      <button onClick={() => setDetalle(p)} title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Ver</button>
+                      <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                      </button>
                       {!p.anulado && (
                         <>
-                          <button onClick={permite.imprimir ? () => imprimirComanda(p, numerosDia.get(p.id)) : sinPermiso.mostrar} title="Reimprimir la comanda del pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Reimprimir</button>
-                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>Excel</button>
-                          <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>Editar</button>
-                          <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} title="Anular el pedido" className={`rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>Anular</button>
+                          <button onClick={permite.imprimir ? () => imprimirComanda(p, numerosDia.get(p.id)) : sinPermiso.mostrar} aria-label="Reimprimir comanda" title="Reimprimir la comanda del pedido" className={`rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
+                            </svg>
+                          </button>
+                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} aria-label="Descargar Excel" title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
+                            </svg>
+                          </button>
+                          <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} aria-label="Editar pedido" title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 p-1.5 text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                            </svg>
+                          </button>
+                          <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} aria-label="Anular pedido" title="Anular el pedido (error interno de la televendedora)" className={`rounded-lg border border-red-200 p-1.5 text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
+                          </button>
+                          <button onClick={permite.anular ? () => cancelarPedido(p) : sinPermiso.mostrar} aria-label="Cancelar pedido" title="Cancelar el pedido (motivo externo: el cliente no lo recibió / devolución)" className={`rounded-lg border border-orange-200 p-1.5 text-orange-600 transition hover:bg-orange-50 ${permite.anular ? "" : "opacity-50"}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                            </svg>
+                          </button>
                         </>
                       )}
                       {p.anulado && (
-                        <button onClick={permite.clonar ? () => abrirClon(p) : sinPermiso.mostrar} title="Clonar el pedido" className={`rounded-lg border border-brand-amber/40 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/10 ${permite.clonar ? "" : "opacity-50"}`}>Clonar</button>
+                        <button onClick={permite.clonar ? () => abrirClon(p) : sinPermiso.mostrar} aria-label="Clonar pedido" title="Clonar el pedido" className={`rounded-lg border border-brand-amber/40 p-1.5 text-brand-amber transition hover:bg-brand-amber/10 ${permite.clonar ? "" : "opacity-50"}`}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m11.25 4.125v3.375" />
+                          </svg>
+                        </button>
                       )}
                     </div>
                   </td>
@@ -420,8 +500,114 @@ export default function PedidosPage() {
           onCerrar={() => setModalCongelados(false)}
         />
       )}
-      {detalle && <DetallePedido pedido={detalle} numeroDia={numerosDia.get(detalle.id)} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} numeroDia={numerosDia.get(detalle.id)} meta={meta[detalle.id]} onCerrar={() => setDetalle(null)} />}
+      {motivoModal && (
+        <ModalMotivo
+          pedido={motivoModal.pedido}
+          tipo={motivoModal.tipo}
+          motivos={motivos}
+          onConfirmar={confirmarMotivo}
+          onCerrar={() => setMotivoModal(null)}
+        />
+      )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Modal para elegir el motivo al anular o cancelar un pedido       */
+/* ---------------------------------------------------------------- */
+
+function ModalMotivo({
+  pedido,
+  tipo,
+  motivos,
+  onConfirmar,
+  onCerrar,
+}: {
+  pedido: Pedido;
+  tipo: "anular" | "cancelar";
+  motivos: Motivo[];
+  onConfirmar: (motivo: string) => void;
+  onCerrar: () => void;
+}) {
+  const esAnular = tipo === "anular";
+  // Motivos configurados en el módulo Motivos; si no hay, se usan los de defecto.
+  const deTipo = motivos.filter((m) => m.tipo === tipo).map((m) => m.nombre);
+  const opciones = deTipo.length ? deTipo : [...(esAnular ? MOTIVOS_ANULAR : MOTIVOS_CANCELAR)];
+  const [motivo, setMotivo] = useState<string>("");
+  const claseSel = esAnular
+    ? "border-red-400 bg-red-50 text-red-700"
+    : "border-orange-400 bg-orange-50 text-orange-700";
+  const claseRadio = esAnular ? "accent-red-600" : "accent-orange-600";
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={onCerrar} />
+      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <button
+          type="button"
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          title="Cerrar"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h2 className="font-serif text-xl font-bold text-brand-wine">
+          {esAnular ? "Anular pedido" : "Cancelar pedido"}
+        </h2>
+        <p className="mt-1 text-sm text-brand-brown/70">
+          Pedido <b>{pedido.comanda}</b>. Elige el motivo. Esta acción no se
+          puede deshacer.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {opciones.map((m) => (
+            <label
+              key={m}
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition ${
+                motivo === m
+                  ? claseSel
+                  : "border-brand-brown/15 hover:bg-brand-cream-soft"
+              }`}
+            >
+              <input
+                type="radio"
+                name="motivo"
+                value={m}
+                checked={motivo === m}
+                onChange={() => setMotivo(m)}
+                className={`h-4 w-4 ${claseRadio}`}
+              />
+              <span className="font-medium">{m}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+          >
+            Volver
+          </button>
+          <button
+            type="button"
+            disabled={!motivo}
+            onClick={() => motivo && onConfirmar(motivo)}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              esAnular ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"
+            }`}
+          >
+            {esAnular ? "Anular pedido" : "Cancelar pedido"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -598,7 +784,7 @@ function DetalleCongelado({
   const pasoLabel = PASOS[c.paso] ?? "—";
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">
@@ -620,60 +806,59 @@ function DetalleCongelado({
             </svg>
           </button>
         </div>
-        <div className="space-y-4 px-5 py-4 text-sm">
+        <div className="flex-1 overflow-y-auto px-5 py-4 text-sm">
           {/* NIT/Cédula destacado */}
-          <div className="rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
+          <div className="mb-4 rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/50">NIT / Cédula</p>
             <p className="text-2xl font-bold text-brand-wine">{cli?.nit_cedula || "—"}</p>
           </div>
-          {/* Datos del borrador */}
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Borrador</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Bloque titulo="Consecutivo temporal">CONG-{c.tempConsecutivo}</Bloque>
-              <Bloque titulo="Avance">
-                Paso {Math.min(c.paso + 1, PASOS.length)} de {PASOS.length} · {pasoLabel}
-              </Bloque>
-              <Bloque titulo="Punto de venta">{c.punto?.nombre ?? "—"}</Bloque>
-              <Bloque titulo="Congelado por">{c.congeladoPor || "—"}</Bloque>
-              <Bloque titulo="Congelado">{new Date(c.creadoEn).toLocaleString("es-CO")}</Bloque>
-              <Bloque titulo="Entrega">{dest}</Bloque>
-              <Bloque titulo="Método de pago">{c.pago || "—"}</Bloque>
-              {c.entrega === "domicilio" && dom > 0 && (
-                <Bloque titulo="Valor domicilio">{formatoCOP(dom)}</Bloque>
-              )}
-              {c.programado && (
-                <Bloque titulo="Entrega programada">{c.fechaProgramada || "—"}</Bloque>
-              )}
-            </div>
-          </div>
-          {/* Datos del cliente */}
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
-            {cli ? (
-              <div className="grid grid-cols-2 gap-2">
-                <Bloque titulo="Nombre">{cli.nombre || "—"}</Bloque>
-                <Bloque titulo="Teléfono">{cli.telefono || "—"}</Bloque>
-                <Bloque titulo="Ciudad">{cli.ciudad || "—"}</Bloque>
-                <Bloque titulo="Barrio">{cli.barrio || "—"}</Bloque>
-                <Bloque titulo="Dirección">{cli.direccion || "—"}</Bloque>
-                {cli.referencia && <Bloque titulo="Referencia">{cli.referencia}</Bloque>}
-              </div>
-            ) : (
+          {/* Secciones en 2 columnas (van bajando) para ahorrar espacio */}
+          <div className="gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid lg:columns-2">
+          {/* Cliente */}
+          {cli ? (
+            <Seccion titulo="Cliente">
+              <Dato label="Nombre">{cli.nombre || "—"}</Dato>
+              <Dato label="Teléfono">{cli.telefono || "—"}</Dato>
+              <Dato label="Ciudad">{cli.ciudad || "—"}</Dato>
+              <Dato label="Barrio">{cli.barrio || "—"}</Dato>
+              <Dato label="Dirección">{cli.direccion || "—"}</Dato>
+              <Dato label="Referencia">{cli.referencia || "—"}</Dato>
+            </Seccion>
+          ) : (
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
               <p className="text-xs italic text-brand-brown/40">Aún no se ha seleccionado un cliente.</p>
+            </div>
+          )}
+          {/* Borrador */}
+          <Seccion titulo="Borrador">
+            <Dato label="Consecutivo temporal">CONG-{c.tempConsecutivo}</Dato>
+            <Dato label="Avance">
+              Paso {Math.min(c.paso + 1, PASOS.length)} de {PASOS.length} · {pasoLabel}
+            </Dato>
+            <Dato label="Punto de venta">{c.punto?.nombre ?? "—"}</Dato>
+            <Dato label="Congelado por">{c.congeladoPor || "—"}</Dato>
+            <Dato label="Congelado">{new Date(c.creadoEn).toLocaleString("es-CO")}</Dato>
+            <Dato label="Entrega">{dest}</Dato>
+            <Dato label="Método de pago">{c.pago || "—"}</Dato>
+            {c.entrega === "domicilio" && dom > 0 && (
+              <Dato label="Valor domicilio">{formatoCOP(dom)}</Dato>
             )}
-          </div>
+            {c.programado && (
+              <Dato label="Entrega programada">{c.fechaProgramada || "—"}</Dato>
+            )}
+          </Seccion>
           {/* Productos */}
           <div>
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
               Productos ({c.carrito.length})
             </p>
             {c.carrito.length > 0 ? (
-              <div className="rounded-xl border border-brand-brown/10">
+              <div className="grid max-h-[20rem] gap-2 overflow-y-auto rounded-xl border border-brand-brown/10 p-2 sm:grid-cols-2">
                 {c.carrito.map((i) => (
-                  <div key={i.id} className="flex justify-between border-b border-brand-brown/5 px-3 py-2 last:border-0">
+                  <div key={i.id} className="flex justify-between gap-2 rounded-lg bg-brand-cream-soft/30 px-3 py-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-brand-black">
+                      <p className="font-medium text-brand-black break-words">
                         {i.producto.producto || i.producto.referencia}{" "}
                         <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span>
                       </p>
@@ -682,21 +867,22 @@ function DetalleCongelado({
                       {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
                       {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
                     </div>
-                    <span className="whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
+                    <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <p className="text-xs italic text-brand-brown/40">Sin productos todavía.</p>
             )}
+            {/* Totales */}
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
+              <span className="text-sm text-brand-brown/70">Subtotal: {formatoCOP(subtotal)}</span>
+              {dom > 0 && (
+                <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(dom)}</span>
+              )}
+              <span className="text-base font-bold text-brand-wine">Total parcial: {formatoCOP(total)}</span>
+            </div>
           </div>
-          {/* Totales */}
-          <div className="space-y-1 border-t border-brand-brown/10 pt-3">
-            <div className="flex justify-between text-sm text-brand-brown/70"><span>Subtotal</span><span>{formatoCOP(subtotal)}</span></div>
-            {dom > 0 && (
-              <div className="flex justify-between text-sm text-brand-brown/70"><span>Domicilio</span><span>{formatoCOP(dom)}</span></div>
-            )}
-            <div className="flex justify-between text-base font-bold text-brand-wine"><span>Total parcial</span><span>{formatoCOP(total)}</span></div>
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
@@ -729,7 +915,10 @@ function DetalleCongelado({
 function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, borrador }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null }) {
   // Fuente para precargar el formulario: edición o clonación.
   const base = inicial ?? clon ?? null;
-  const [paso, setPaso] = useState(borrador?.paso ?? 0);
+  // En modo edición solo se permite cambiar entrega/pago/fecha (paso 2). Para
+  // corregir cliente o productos hay que anular y clonar el pedido.
+  const modoEdicion = !!inicial;
+  const [paso, setPaso] = useState(modoEdicion ? 2 : borrador?.paso ?? 0);
   const [cliente, setCliente] = useState<Cliente | null>(borrador ? borrador.cliente : base?.cliente ?? null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>(() => {
     if (borrador) return borrador.carrito;
@@ -770,7 +959,64 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   }, []);
 
   // Mientras no haya punto elegido (y haya varios), se muestra el selector.
-  const eligiendoPunto = !punto;
+  // El paso 0 (cliente) puede verse sin punto: al elegir cliente se sugiere el
+  // punto más cercano. A partir del paso 1 el punto es obligatorio.
+  const eligiendoPunto = !punto && paso >= 1;
+
+  // Selecciona el cliente y sugiere el punto de venta más cercano (según las
+  // coordenadas del cliente y de los puntos asignados a la televendedora).
+  function seleccionarCliente(c: Cliente) {
+    setCliente(c);
+    if (coordenadasValidas(c.lat, c.lng)) {
+      const cercano = puntoMasCercano(puntos, c.lat as number, c.lng as number);
+      if (cercano) setPunto(cercano.punto);
+    }
+    setPaso(1);
+  }
+
+  // Distancia (km) en línea recta entre el cliente y el punto seleccionado.
+  const distanciaClientePunto = useMemo(() => {
+    if (
+      !punto ||
+      !cliente ||
+      !coordenadasValidas(punto.lat, punto.lng) ||
+      !coordenadasValidas(cliente.lat, cliente.lng)
+    )
+      return null;
+    return distanciaKm(
+      cliente.lat as number,
+      cliente.lng as number,
+      punto.lat as number,
+      punto.lng as number,
+    );
+  }, [punto, cliente]);
+
+  // Valor de la factura (solo productos, sin domicilio). Es el que decide si el
+  // pedido califica para domicilio gratis.
+  const subtotalProductos = useMemo(
+    () => carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0),
+    [carrito],
+  );
+
+  // ¿El pedido califica para domicilio gratis según la tarifa del punto?
+  const domicilioGratis = useMemo(
+    () => (punto ? domicilioGratisAplica(punto, subtotalProductos) : false),
+    [punto, subtotalProductos],
+  );
+
+  // Valor de domicilio sugerido según la tarifa del punto y la distancia.
+  // Si el pedido califica para domicilio gratis, el sugerido es 0.
+  const domicilioSugerido = useMemo(() => {
+    if (!punto) return null;
+    if (domicilioGratis) return 0;
+    if (distanciaClientePunto == null) return null;
+    return calcularValorDomicilio(punto, distanciaClientePunto);
+  }, [distanciaClientePunto, punto, domicilioGratis]);
+
+  // Al calificar para domicilio gratis (y estar en modo domicilio), se pone en 0.
+  useEffect(() => {
+    if (domicilioGratis && entrega === "domicilio") setValorDomicilio(0);
+  }, [domicilioGratis, entrega]);
 
   // Congela el borrador actual (guarda por dónde va) y cierra el wizard.
   function congelar() {
@@ -801,6 +1047,63 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     });
   }
 
+  // Crea o actualiza el pedido y muestra la pantalla de confirmación.
+  async function finalizarPedido() {
+    if (!punto || !cliente) return;
+    if (programado && !fechaProgramada) {
+      alert("Selecciona la fecha de entrega programada.");
+      return;
+    }
+    const ahora = new Date();
+    const dom = entrega === "domicilio" ? valorDomicilio : 0;
+    const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
+    // El consecutivo y la comanda de un pedido NUEVO los asigna el
+    // backend de forma atómica por punto (evita duplicados en ventas
+    // simultáneas). En edición se conservan los originales. Aquí solo
+    // enviamos un valor provisional que el servidor reemplaza.
+    const consecutivo = inicial ? inicial.consecutivo : 0;
+    const numeroPunto = ((punto.codigo ?? "").match(/\d+/)?.[0] ?? "").trim();
+    const prefijo = `${numeroPunto}CS`;
+    const pedido: Pedido = {
+      id: inicial?.id ?? crypto.randomUUID(),
+      consecutivo,
+      comanda: inicial?.comanda ?? `${prefijo}${String(consecutivo).padStart(8, "0")}`,
+      fecha: inicial?.fecha ?? ahora.toISOString(),
+      punto,
+      cliente,
+      carrito,
+      entrega,
+      pago,
+      total,
+      valorDomicilio: dom,
+      observacion: observacion.trim() || undefined,
+      entregaProgramada: programado,
+      fechaProgramada: programado ? fechaProgramada : undefined,
+      horaDespacho: horaDespacho || undefined,
+      vendedorNombre: inicial?.vendedorNombre ?? getUsuario()?.nombre ?? "",
+      vendedorCedula: inicial?.vendedorCedula ?? getUsuario()?.cedula ?? "",
+      estado: inicial?.estado ?? "En proceso",
+    };
+    // Persistimos primero: el servidor devuelve el pedido con su
+    // consecutivo/comanda definitivos. Solo entonces lo mostramos e
+    // imprimimos, garantizando que no haya consecutivos duplicados.
+    let finalPedido: Pedido;
+    try {
+      finalPedido = await guardarPedidoApi(pedido);
+    } catch {
+      alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
+      return;
+    }
+    onCrear(finalPedido);
+    setPedidoCreado(finalPedido);
+    // Generamos el Excel de despacho automáticamente (no bloquea).
+    try {
+      await descargarExcelDespacho(finalPedido.id);
+    } catch {
+      /* el pedido ya quedó guardado; el Excel se puede bajar luego */
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/50 p-4">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -811,12 +1114,26 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
           </h2>
           <div className="flex items-center gap-3">
             {punto && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!modoEdicion && puntos.length > 1) setPunto(null);
+                }}
+                title={!modoEdicion && puntos.length > 1 ? "Cambiar el punto de venta" : punto.nombre}
+                className={`inline-flex items-center gap-1.5 rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine transition ${
+                  !modoEdicion && puntos.length > 1 ? "hover:bg-brand-wine/20" : "cursor-default"
+                }`}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
                 </svg>
                 {punto.nombre}
-              </span>
+                {puntos.length > 1 && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 opacity-70">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                )}
+              </button>
             )}
             <button
               onClick={onCerrar}
@@ -899,6 +1216,54 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               </button>
             </div>
           </>
+        ) : modoEdicion ? (
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 px-4 py-3 text-sm text-brand-brown">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-0.5 h-4 w-4 shrink-0 text-brand-amber">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                </svg>
+                <span>
+                  En edición solo puedes cambiar la <strong>entrega</strong>, el{" "}
+                  <strong>método de pago</strong> y la <strong>fecha/hora de
+                  entrega</strong>. Para corregir el cliente o los productos, anula
+                  el pedido y clónalo.
+                </span>
+              </div>
+              <div className="space-y-6">
+                <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} />
+                <PasoPago valor={pago} onCambiar={setPago} />
+                <PasoFechaEntrega
+                  programado={programado}
+                  onCambiar={setProgramado}
+                  fecha={fechaProgramada}
+                  onFecha={setFechaProgramada}
+                  hora={horaDespacho}
+                  onHora={setHoraDespacho}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-brand-brown/10 px-6 py-4">
+              <button
+                onClick={onCerrar}
+                title="Cancelar y cerrar"
+                className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={finalizarPedido}
+                disabled={!entrega || !pago}
+                title="Guardar los cambios del pedido"
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Guardar cambios
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </button>
+            </div>
+          </>
         ) : (
           <>
             <Stepper paso={paso} />
@@ -909,10 +1274,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                   <PasoCliente
                     seleccionado={cliente}
                     pedidos={pedidos}
-                    onSeleccionar={(c) => {
-                      setCliente(c);
-                      setPaso(1);
-                    }}
+                    onSeleccionar={seleccionarCliente}
                   />
                 )}
                 {paso === 1 && (
@@ -926,7 +1288,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                 )}
                 {paso === 2 && (
                   <div className="space-y-6">
-                    <PasoEntrega cliente={cliente} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} />
+                    <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} />
                     <PasoPago valor={pago} onCambiar={setPago} />
                     <PasoFechaEntrega
                       programado={programado}
@@ -1000,61 +1362,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                 </button>
               ) : (
                 <button
-                  onClick={async () => {
-                    if (!punto || !cliente) return;
-                    if (programado && !fechaProgramada) {
-                      alert("Selecciona la fecha de entrega programada.");
-                      return;
-                    }
-                    const ahora = new Date();
-                    const dom = entrega === "domicilio" ? valorDomicilio : 0;
-                    const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
-                    // El consecutivo y la comanda de un pedido NUEVO los asigna el
-                    // backend de forma atómica por punto (evita duplicados en ventas
-                    // simultáneas). En edición se conservan los originales. Aquí solo
-                    // enviamos un valor provisional que el servidor reemplaza.
-                    const consecutivo = inicial ? inicial.consecutivo : 0;
-                    const numeroPunto = ((punto.codigo ?? "").match(/\d+/)?.[0] ?? "").trim();
-                    const prefijo = `${numeroPunto}CS`;
-                    const pedido: Pedido = {
-                      id: inicial?.id ?? crypto.randomUUID(),
-                      consecutivo,
-                      comanda: inicial?.comanda ?? `${prefijo}${String(consecutivo).padStart(8, "0")}`,
-                      fecha: inicial?.fecha ?? ahora.toISOString(),
-                      punto,
-                      cliente,
-                      carrito,
-                      entrega,
-                      pago,
-                      total,
-                      valorDomicilio: dom,
-                      observacion: observacion.trim() || undefined,
-                      entregaProgramada: programado,
-                      fechaProgramada: programado ? fechaProgramada : undefined,
-                      horaDespacho: horaDespacho || undefined,
-                      vendedorNombre: inicial?.vendedorNombre ?? getUsuario()?.nombre ?? "",
-                      vendedorCedula: inicial?.vendedorCedula ?? getUsuario()?.cedula ?? "",
-                      estado: inicial?.estado ?? "En proceso",
-                    };
-                    // Persistimos primero: el servidor devuelve el pedido con su
-                    // consecutivo/comanda definitivos. Solo entonces lo mostramos e
-                    // imprimimos, garantizando que no haya consecutivos duplicados.
-                    let finalPedido: Pedido;
-                    try {
-                      finalPedido = await guardarPedidoApi(pedido);
-                    } catch {
-                      alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
-                      return;
-                    }
-                    onCrear(finalPedido);
-                    setPedidoCreado(finalPedido);
-                    // Generamos el Excel de despacho automáticamente (no bloquea).
-                    try {
-                      await descargarExcelDespacho(finalPedido.id);
-                    } catch {
-                      /* el pedido ya quedó guardado; el Excel se puede bajar luego */
-                    }
-                  }}
+                  onClick={finalizarPedido}
                   title={inicial ? "Guardar los cambios del pedido" : clon ? "Clonar el pedido" : "Confirmar y crear el pedido"}
                   className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90"
                 >
@@ -1638,7 +1946,7 @@ function ResumenPedido({
   onQuitar,
   onEditar,
 }: {
-  punto: PuntoVenta;
+  punto: PuntoVenta | null;
   cliente: Cliente | null;
   carrito: ItemCarrito[];
   onQuitar: (id: string) => void;
@@ -1646,42 +1954,45 @@ function ResumenPedido({
 }) {
   const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   return (
-    <aside className="hidden w-[300px] shrink-0 flex-col border-l border-brand-brown/10 bg-brand-cream-soft/30 lg:flex">
+    <aside className="hidden w-[300px] shrink-0 flex-col overflow-hidden border-l border-brand-brown/10 bg-brand-cream-soft/30 lg:flex">
       <div className="border-b border-brand-brown/10 px-4 py-3">
         <p className="font-serif text-sm font-bold text-brand-wine">Detalle del pedido</p>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
-        {/* Punto */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Punto de venta</p>
-          <p className="font-medium text-brand-black">{punto.nombre}</p>
+      <div className="flex min-h-0 flex-1 flex-col text-sm">
+        {/* Punto + Cliente (fijos) */}
+        <div className="shrink-0 space-y-3 p-4 pb-2">
+          {/* Punto */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Punto de venta</p>
+            <p className="font-medium text-brand-black">{punto?.nombre ?? "Sin asignar"}</p>
+          </div>
+          {/* Cliente */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
+            {cliente ? (
+              <div className="rounded-xl border border-brand-brown/10 bg-white px-3 py-2">
+                <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
+                <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
+                {(cliente.direccion || cliente.barrio) && (
+                  <p className="mt-0.5 text-xs text-brand-brown/60">
+                    {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs italic text-brand-brown/40">Sin seleccionar</p>
+            )}
+          </div>
         </div>
-        {/* Cliente */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
-          {cliente ? (
-            <div className="rounded-xl border border-brand-brown/10 bg-white px-3 py-2">
-              <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
-              <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
-              {(cliente.direccion || cliente.barrio) && (
-                <p className="mt-0.5 text-xs text-brand-brown/60">
-                  {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs italic text-brand-brown/40">Sin seleccionar</p>
-          )}
-        </div>
-        {/* Productos */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
+        {/* Productos (scroll interno) */}
+        <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+          <p className="shrink-0 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
             Productos ({carrito.length})
           </p>
           {carrito.length === 0 ? (
             <p className="text-xs italic text-brand-brown/40">Aún sin productos</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
               {carrito.map((i) => (
                 <div
                   key={i.id}
@@ -1963,16 +2274,24 @@ function librasLabel(kilos: number): string {
 
 function PasoEntrega({
   cliente,
+  punto,
   valor,
   onCambiar,
   domicilio,
   onDomicilio,
+  sugerido,
+  distancia,
+  gratis,
 }: {
   cliente: Cliente | null;
+  punto: PuntoVenta | null;
   valor: "domicilio" | "recoge" | null;
   onCambiar: (v: "domicilio" | "recoge") => void;
   domicilio: number;
   onDomicilio: (n: number) => void;
+  sugerido: number | null;
+  distancia: number | null;
+  gratis: boolean;
 }) {
   const ops = [
     {
@@ -1988,6 +2307,15 @@ function PasoEntrega({
       icon: "M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25",
     },
   ];
+
+  // Al elegir "domicilio" se autocompleta el valor sugerido si aún está en 0.
+  function elegir(id: "domicilio" | "recoge") {
+    onCambiar(id);
+    if (id === "domicilio" && sugerido != null && !domicilio) {
+      onDomicilio(sugerido);
+    }
+  }
+
   return (
     <div>
       <p className="mb-4 text-sm font-medium text-brand-black">¿Cómo se entrega el pedido?</p>
@@ -1995,7 +2323,7 @@ function PasoEntrega({
         {ops.map((o) => (
           <button
             key={o.id}
-            onClick={() => onCambiar(o.id)}
+            onClick={() => elegir(o.id)}
             title={`Elegir entrega: ${o.titulo}`}
             className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
               valor === o.id
@@ -2020,6 +2348,14 @@ function PasoEntrega({
         <div className="mt-4 rounded-2xl border border-brand-amber/40 bg-brand-amber/5 p-4">
           <label className="mb-1.5 block text-sm font-semibold text-brand-wine">Valor del domicilio</label>
           <p className="mb-2 text-xs text-brand-brown/60">Costo adicional del envío. Se suma al total del pedido.</p>
+          {gratis && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+              Este pedido califica para domicilio GRATIS
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-brand-brown/60">$</span>
             <input
@@ -2035,6 +2371,36 @@ function PasoEntrega({
             />
             <span className="ml-2 text-sm font-bold text-brand-wine">{formatoCOP(domicilio)}</span>
           </div>
+
+          {sugerido != null ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-brand-brown/70">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-wine/10 px-2.5 py-1 font-medium text-brand-wine">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+                Sugerido {gratis ? "GRATIS" : formatoCOP(sugerido)}
+                {distancia != null && ` · ${distancia.toFixed(1)} km`}
+              </span>
+              {domicilio !== sugerido && (
+                <button
+                  type="button"
+                  onClick={() => onDomicilio(sugerido)}
+                  className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                >
+                  Aplicar sugerido
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-brand-brown/50">
+              {!punto?.lat || !punto?.lng
+                ? "El punto de venta no tiene ubicación configurada para calcular el domicilio."
+                : !cliente?.lat || !cliente?.lng
+                  ? "El cliente no tiene ubicación en el mapa para calcular el domicilio."
+                  : ""}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -2263,6 +2629,30 @@ function Bloque({ titulo, children }: { titulo: string; children: React.ReactNod
   );
 }
 
+/** Par etiqueta/valor compacto (sin borde), para agrupar varios en una sola card. */
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">{label}</p>
+      <div className="break-words text-brand-black">{children}</div>
+    </div>
+  );
+}
+
+/** Sección con título y UNA sola card que agrupa varios Dato en grilla (2 columnas). */
+function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">{titulo}</p>
+      <div className="rounded-xl border border-brand-brown/10 bg-white p-3">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface DatosComanda {
   punto: PuntoVenta;
   cliente: Cliente;
@@ -2282,8 +2672,10 @@ export interface Pedido extends DatosComanda {
   total: number;
   vendedorNombre?: string;
   vendedorCedula?: string;
-  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "Anulado";
+  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "Anulado" | "Cancelado";
   anulado?: boolean;
+  /** Motivo de anulación o cancelación (se guarda al anular/cancelar). */
+  motivo?: string;
   /** ¿Retenido por cartera? Si es falso/indefinido, el pago está liberado. */
   retenido?: boolean;
   /** ¿Pedido programado para otra fecha? Si es falso/indefinido, es para hoy. */
@@ -2292,6 +2684,19 @@ export interface Pedido extends DatosComanda {
   fechaProgramada?: string;
   /** Hora de despacho pedida por el cliente (HH:MM). La ventana de 2h se activa 2h antes. */
   horaDespacho?: string;
+  /** Historial de cambios (creación, estados, anulación). Lo asigna el backend. */
+  trazabilidad?: TrazaEvento[];
+}
+
+/** Evento de trazabilidad del pedido (lo registra el backend con hora del servidor). */
+export interface TrazaEvento {
+  tipo: "creacion" | "estado" | "anulacion";
+  estadoAnterior?: string | null;
+  estadoNuevo?: string | null;
+  fecha: string;
+  usuarioId?: string | null;
+  usuarioNombre?: string | null;
+  usuarioCedula?: string | null;
 }
 
 /**
@@ -2335,85 +2740,111 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   return mapa;
 }
 
-export function DetallePedido({ pedido, onCerrar, numeroDia }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number }) {
+export function DetallePedido({ pedido, onCerrar, numeroDia, meta }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta }) {
   const dest = pedido.entrega === "domicilio" ? "Domicilio" : pedido.entrega === "recoge" ? "Recoge en punto" : "—";
   const c = pedido.cliente;
+  const fH = (iso?: string) => (iso ? new Date(iso).toLocaleString("es-CO") : "—");
+  const hayDespacho = Boolean(
+    meta &&
+      (meta.porcionador ||
+        meta.domiciliario ||
+        meta.inicio ||
+        meta.fin ||
+        meta.despachoFin ||
+        meta.pagoConfirmado ||
+        meta.facturaNumero ||
+        (meta.replicas && meta.replicas.length > 0)),
+  );
+  const [verTraza, setVerTraza] = useState(false);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/40 p-4">
-      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">Pedido {pedido.comanda}</h3>
             <p className="text-xs text-brand-brown/50">{new Date(pedido.fecha).toLocaleString("es-CO")} · {pedido.punto.nombre}{pedido.anulado ? " · ANULADO" : ""}</p>
           </div>
-          <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVerTraza(true)}
+              title="Ver la trazabilidad del pedido"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-wine/30 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />
+              </svg>
+              Ver trazabilidad
+            </button>
+            <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
         </div>
-        <div className="space-y-4 px-5 py-4 text-sm">
-          {/* NIT/Cédula destacado */}
-          <div className="rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
+
+        <div className="flex-1 overflow-hidden px-5 py-4 text-sm">
+          {/* NIT / Cédula destacado */}
+          <div className="mb-4 rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/50">NIT / Cédula</p>
             <p className="text-2xl font-bold text-brand-wine">{c.nit_cedula}</p>
           </div>
-          {/* Datos del pedido */}
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Pedido</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Bloque titulo="Comanda">{pedido.comanda}</Bloque>
-              <Bloque titulo="Estado">{pedido.anulado ? "Anulado" : pedido.estado || "En proceso"}</Bloque>
-              <Bloque titulo="Punto de venta">{pedido.punto.nombre}</Bloque>
-              <Bloque titulo="Consecutivo">{pedido.consecutivo}</Bloque>
-              <Bloque titulo="Entrega">{dest}</Bloque>
-              <Bloque titulo="Método de pago">{pedido.pago || "—"}</Bloque>
-              {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
-                <Bloque titulo="Valor domicilio">{formatoCOP(pedido.valorDomicilio ?? 0)}</Bloque>
-              )}
-              <Bloque titulo="Vendedor">{pedido.vendedorNombre || "—"}</Bloque>
-              <Bloque titulo="Cédula vendedor">{pedido.vendedorCedula || "—"}</Bloque>
-            </div>
-          </div>
-          {/* Datos del cliente */}
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Bloque titulo="Nombre">{c.nombre || "—"}</Bloque>
-              <Bloque titulo="Teléfono">{c.telefono || "—"}</Bloque>
-              <Bloque titulo="Ciudad">{c.ciudad || "—"}</Bloque>
-              <Bloque titulo="Barrio">{c.barrio || "—"}</Bloque>
-              <Bloque titulo="Dirección">{c.direccion || "—"}</Bloque>
-              {c.referencia && <Bloque titulo="Referencia">{c.referencia}</Bloque>}
-            </div>
-          </div>
+
+          {/* Secciones en 2 columnas (van bajando) para ahorrar espacio */}
+          <div className="gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid lg:columns-2">
+          {/* Cliente */}
+          <Seccion titulo="Cliente">
+            <Dato label="Nombre">{c.nombre || "—"}</Dato>
+            <Dato label="Teléfono">{c.telefono || "—"}</Dato>
+            <Dato label="Ciudad">{c.ciudad || "—"}</Dato>
+            <Dato label="Barrio">{c.barrio || "—"}</Dato>
+            <Dato label="Dirección">{c.direccion || "—"}</Dato>
+            <Dato label="Referencia">{c.referencia || "—"}</Dato>
+          </Seccion>
+
+          {/* Pedido */}
+          <Seccion titulo="Pedido">
+            <Dato label="Comanda">{pedido.comanda}</Dato>
+            <Dato label="Estado">{pedido.anulado ? "Anulado" : pedido.estado || "En proceso"}</Dato>
+            <Dato label="Consecutivo">{pedido.consecutivo}</Dato>
+            <Dato label="Entrega">{dest}</Dato>
+            <Dato label="Punto de venta">{pedido.punto.nombre}</Dato>
+            <Dato label="Método de pago">{pedido.pago || "—"}</Dato>
+            {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
+              <Dato label="Valor domicilio">{formatoCOP(pedido.valorDomicilio ?? 0)}</Dato>
+            )}
+            {pedido.entregaProgramada && pedido.fechaProgramada && (
+              <Dato label="Entrega programada">{pedido.fechaProgramada}</Dato>
+            )}
+            <Dato label="Vendedor">{pedido.vendedorNombre || "—"}</Dato>
+            <Dato label="Cédula vendedor">{pedido.vendedorCedula || "—"}</Dato>
+          </Seccion>
+
           {/* Productos */}
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Productos</p>
-            <div className="rounded-xl border border-brand-brown/10">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Productos ({pedido.carrito.length})</p>
+            <div className="grid max-h-[20rem] gap-2 overflow-y-auto rounded-xl border border-brand-brown/10 p-2 sm:grid-cols-2">
               {pedido.carrito.map((i) => (
-                <div key={i.id} className="flex justify-between border-b border-brand-brown/5 px-3 py-2 last:border-0">
+                <div key={i.id} className="flex justify-between gap-2 rounded-lg bg-brand-cream-soft/30 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-brand-black">{i.producto.producto} <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span></p>
+                    <p className="font-medium text-brand-black break-words">{i.producto.producto} <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span></p>
                     <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
                     <p className="text-xs text-brand-brown/60">Empaque al vacío: {i.alVacio ? "Sí" : "No"}</p>
                     {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
                     {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
                   </div>
-                  <span className="whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
+                  <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                 </div>
               ))}
             </div>
-          </div>
-          {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
-            <div className="flex justify-between text-sm text-brand-brown/70"><span>Domicilio</span><span>{formatoCOP(pedido.valorDomicilio ?? 0)}</span></div>
-          )}
-          <div className="flex justify-between text-base font-bold text-brand-wine"><span>Total</span><span>{formatoCOP(pedido.total)}</span></div>
-          {pedido.observacion && (
-            <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Observación general</p>
-              <p className="mt-0.5 whitespace-pre-line text-brand-black">{pedido.observacion}</p>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
+              {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
+                <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(pedido.valorDomicilio ?? 0)}</span>
+              )}
+              <span className="text-base font-bold text-brand-wine">Total: {formatoCOP(pedido.total)}</span>
             </div>
-          )}
+          </div>
+          </div>
         </div>
+
         <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
           {!pedido.anulado && (
             <button onClick={() => imprimirComanda(pedido, numeroDia)} title="Reimprimir la comanda del pedido" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Reimprimir</button>
@@ -2421,6 +2852,69 @@ export function DetallePedido({ pedido, onCerrar, numeroDia }: { pedido: Pedido;
           <button onClick={onCerrar} title="Cerrar" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
         </div>
       </div>
+
+      {verTraza && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4" onClick={() => setVerTraza(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-brand-wine">Trazabilidad del pedido</h3>
+                <p className="text-xs text-brand-brown/50">Pedido {pedido.comanda}</p>
+              </div>
+              <button onClick={() => setVerTraza(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 text-sm">
+              {/* Despacho: personal y horas del proceso */}
+              {hayDespacho ? (
+                <div className="mb-4">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Despacho</p>
+                  <div className="rounded-xl border border-brand-brown/10 bg-white p-3">
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                      {meta?.porcionador && <Dato label="Porcionador">{meta.porcionador}</Dato>}
+                      {meta?.domiciliario && <Dato label="Domiciliario">{meta.domiciliario}</Dato>}
+                      {meta?.inicio && <Dato label="Inició alistamiento">{fH(meta.inicio)}</Dato>}
+                      {meta?.fin && <Dato label="Alistado (listo)">{fH(meta.fin)}</Dato>}
+                      {meta?.pagoConfirmado && <Dato label="Pago confirmado">{fH(meta.pagoConfirmado)}</Dato>}
+                      {meta?.despachoFin && <Dato label="Despachado">{fH(meta.despachoFin)}</Dato>}
+                      {meta?.facturaNumero && <Dato label="N° factura">{meta.facturaNumero}</Dato>}
+                      {typeof meta?.facturaValor === "number" && meta.facturaValor > 0 && (
+                        <Dato label="Valor facturado">{formatoCOP(meta.facturaValor)}</Dato>
+                      )}
+                    </div>
+                    {meta?.replicas && meta.replicas.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {meta.replicas
+                          .slice()
+                          .sort((a, b) => a.numero - b.numero)
+                          .map((r) => (
+                            <span
+                              key={r.numero}
+                              className="inline-flex items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown"
+                            >
+                              Réplica -{r.numero}
+                              {r.domiciliario ? (
+                                <span className="font-normal text-brand-brown/60">· {r.domiciliario}</span>
+                              ) : null}
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/50">
+                  Este pedido aún no tiene información de despacho.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-brand-brown/10 px-5 py-3">
+              <button onClick={() => setVerTraza(false)} className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

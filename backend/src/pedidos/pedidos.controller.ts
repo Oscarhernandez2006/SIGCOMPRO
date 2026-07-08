@@ -9,12 +9,13 @@ import {
   Patch,
   Put,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { PedidosService } from './pedidos.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard, JwtPayload } from '../auth/guards/jwt-auth.guard';
 import { PermisosGuard } from '../auth/guards/permisos.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Permisos } from '../auth/decorators/permisos.decorator';
@@ -55,8 +56,12 @@ export class PedidosController {
 
   /** Crea o actualiza un pedido completo. */
   @Put(':id')
-  guardar(@Param('id') _id: string, @Body() pedido: Record<string, unknown>) {
-    return this.pedidos.guardar(pedido);
+  guardar(
+    @Param('id') _id: string,
+    @Body() pedido: Record<string, unknown>,
+    @Req() req: Request & { user?: JwtPayload },
+  ) {
+    return this.pedidos.guardar(pedido, req.user);
   }
 
   /** Mezcla cambios en la metadata de despacho de un pedido. */

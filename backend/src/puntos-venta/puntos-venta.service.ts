@@ -17,6 +17,20 @@ export interface PuntoVentaRow {
   direccion: string | null;
   telefono: string | null;
   lista_precio: string | null;
+  barrio: string | null;
+  ciudad: string | null;
+  lat: number | null;
+  lng: number | null;
+  /** Km incluidos en la tarifa base del domicilio. */
+  dom_km_base: number;
+  /** Valor base del domicilio (cubre hasta dom_km_base km). */
+  dom_valor_base: number;
+  /** Valor por cada km adicional pasado dom_km_base. */
+  dom_valor_km: number;
+  /** Valor del pedido a partir del cual el domicilio es gratis (0 = sin gratis). */
+  dom_gratis_desde: number;
+  /** Margen de error hacia abajo para aplicar el domicilio gratis. */
+  dom_gratis_margen: number;
   activo: boolean;
   creado_en: string;
 }
@@ -25,7 +39,8 @@ export interface PuntoVentaConUsuarios extends PuntoVentaRow {
   usuarios: number;
 }
 
-const COLUMNS = 'id, nombre, codigo, direccion, telefono, lista_precio, activo, creado_en';
+const COLUMNS =
+  'id, nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, activo, creado_en';
 
 @Injectable()
 export class PuntosVentaService implements OnModuleInit {
@@ -35,12 +50,45 @@ export class PuntosVentaService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS lista_precio text`,
     );
+    // Coordenadas del punto (para calcular el domicilio por distancia).
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS barrio text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS ciudad text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS lat double precision`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS lng double precision`,
+    );
+    // Tarifa de domicilio por punto: base cubre dom_km_base km; luego +dom_valor_km por km.
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_km_base int NOT NULL DEFAULT 4`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_valor_base int NOT NULL DEFAULT 4000`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_valor_km int NOT NULL DEFAULT 1000`,
+    );
+    // Domicilio gratis: si el valor del pedido alcanza dom_gratis_desde (menos
+    // el margen dom_gratis_margen), el domicilio no se cobra. 0 = sin gratis.
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_gratis_desde int NOT NULL DEFAULT 225000`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_gratis_margen int NOT NULL DEFAULT 3000`,
+    );
   }
 
   /** Lista todos los puntos de venta con su número de usuarios asignados. */
   async listar(): Promise<PuntoVentaConUsuarios[]> {
     const res = await this.pool.query<PuntoVentaConUsuarios>(
       `SELECT p.id, p.nombre, p.codigo, p.direccion, p.telefono, p.lista_precio,
+              p.barrio, p.ciudad, p.lat, p.lng, p.dom_km_base, p.dom_valor_base, p.dom_valor_km,
+              p.dom_gratis_desde, p.dom_gratis_margen,
               p.activo, p.creado_en,
               COUNT(upv.usuario_id)::int AS usuarios
        FROM puntos_venta p
@@ -75,8 +123,8 @@ export class PuntosVentaService implements OnModuleInit {
       }
     }
     const res = await this.pool.query<PuntoVentaRow>(
-      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, activo)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, activo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING ${COLUMNS}`,
       [
         dto.nombre.trim(),
@@ -84,6 +132,15 @@ export class PuntosVentaService implements OnModuleInit {
         dto.direccion?.trim() || null,
         dto.telefono?.trim() || null,
         dto.lista_precio?.trim() || null,
+        dto.barrio?.trim() || null,
+        dto.ciudad?.trim() || null,
+        dto.lat ?? null,
+        dto.lng ?? null,
+        dto.dom_km_base ?? 4,
+        dto.dom_valor_base ?? 4000,
+        dto.dom_valor_km ?? 1000,
+        dto.dom_gratis_desde ?? 225000,
+        dto.dom_gratis_margen ?? 3000,
         dto.activo ?? true,
       ],
     );
@@ -126,6 +183,42 @@ export class PuntosVentaService implements OnModuleInit {
     if (dto.lista_precio !== undefined) {
       sets.push(`lista_precio = $${i++}`);
       valores.push(dto.lista_precio.trim() || null);
+    }
+    if (dto.barrio !== undefined) {
+      sets.push(`barrio = $${i++}`);
+      valores.push(dto.barrio.trim() || null);
+    }
+    if (dto.ciudad !== undefined) {
+      sets.push(`ciudad = $${i++}`);
+      valores.push(dto.ciudad.trim() || null);
+    }
+    if (dto.lat !== undefined) {
+      sets.push(`lat = $${i++}`);
+      valores.push(dto.lat);
+    }
+    if (dto.lng !== undefined) {
+      sets.push(`lng = $${i++}`);
+      valores.push(dto.lng);
+    }
+    if (dto.dom_km_base !== undefined) {
+      sets.push(`dom_km_base = $${i++}`);
+      valores.push(dto.dom_km_base);
+    }
+    if (dto.dom_valor_base !== undefined) {
+      sets.push(`dom_valor_base = $${i++}`);
+      valores.push(dto.dom_valor_base);
+    }
+    if (dto.dom_valor_km !== undefined) {
+      sets.push(`dom_valor_km = $${i++}`);
+      valores.push(dto.dom_valor_km);
+    }
+    if (dto.dom_gratis_desde !== undefined) {
+      sets.push(`dom_gratis_desde = $${i++}`);
+      valores.push(dto.dom_gratis_desde);
+    }
+    if (dto.dom_gratis_margen !== undefined) {
+      sets.push(`dom_gratis_margen = $${i++}`);
+      valores.push(dto.dom_gratis_margen);
     }
     if (dto.activo !== undefined) {
       sets.push(`activo = $${i++}`);

@@ -37,19 +37,23 @@ interface Partes {
 
 const VACIO: Partes = { tipoVia: "", via: "", cruce: "", placa: "" };
 
-/** Normaliza un segmento de número con letra opcional: 1-3 dígitos + 1 letra. */
+/** Normaliza un segmento de número con letra opcional: dígitos + letra opcional
+ *  + dígitos opcionales (ej. "8B", "42B1"). */
 function limpiarSegmento(v: string): string {
   const m = v
     .toUpperCase()
     .replace(/[^0-9A-Z]/g, "")
-    .match(/^(\d{1,3})([A-Z]?)/);
-  return m ? m[1] + m[2] : "";
+    .match(/^(\d{1,3})([A-Z]?)(\d{0,2})/);
+  return m ? m[1] + m[2] + m[3] : "";
 }
 
-/** Solo dígitos para la placa final (1-4 dígitos). */
+/** Placa final: 1-4 dígitos con letra opcional (ej. "294", "82A"). */
 function limpiarPlaca(v: string): string {
-  const m = v.replace(/[^0-9]/g, "").match(/^\d{1,4}/);
-  return m ? m[0] : "";
+  const m = v
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "")
+    .match(/^(\d{1,4})([A-Z]?)/);
+  return m ? m[1] + m[2] : "";
 }
 
 /** Recompone las partes en la dirección canónica (vacío si falta algo). */
@@ -65,7 +69,7 @@ function parsear(valor: string): Partes | null {
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
   const re = new RegExp(
-    `^(${tipos})\\s+(\\d{1,3}[A-Z]?)\\s*#\\s*(\\d{1,3}[A-Z]?)\\s*-\\s*(\\d{1,4})$`,
+    `^(${tipos})\\s+(\\d{1,3}[A-Z]?\\d{0,2})\\s*#\\s*(\\d{1,3}[A-Z]?\\d{0,2})\\s*-\\s*(\\d{1,4}[A-Z]?)$`,
     "i",
   );
   const m = valor.trim().match(re);

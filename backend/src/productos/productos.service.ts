@@ -36,9 +36,30 @@ interface ApiProducto {
   FECHA_INACTIVACION?: string;
 }
 
-const CIA = 4;
 const TOKEN =
   '1b301e683240d8ab5ddb6eb061b112224e15bbe8d28a6e78f0251bdfaef0e4c2';
+
+// Compañía 4: se cargan todas sus listas TPV/PDV (puntos existentes).
+// Compañía 6: solo estas listas adicionales (por su DESC_LISTA, normalizado).
+const CIAS = [4, 6] as const;
+const LISTAS_CIA6_PERMITIDAS = new Set([
+  'TPV CONCORD',
+  'TPV ALAMEDA',
+  'TPV ALAMEDA 2',
+]);
+
+/** Normaliza el nombre de una lista para compararlo con la lista blanca. */
+function nombreLista(desc?: string | null): string {
+  return (desc ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+/** Indica si una fila debe cargarse según su compañía de origen. */
+function listaPermitida(ciaFuente: number, desc?: string | null): boolean {
+  const nombre = nombreLista(desc);
+  if (ciaFuente === 6) return LISTAS_CIA6_PERMITIDAS.has(nombre);
+  // Compañía 4 (o cualquier otra): todas las listas TPV/PDV.
+  return nombre.includes('TPV') || nombre.includes('PDV');
+}
 
 @Injectable()
 export class ProductosService implements OnModuleInit {
@@ -68,12 +89,30 @@ export class ProductosService implements OnModuleInit {
     `);
   }
 
-  private apiUrl(): string {
+  private apiUrl(cia: number): string {
     const base = this.config.get<string>(
       'LISTAS_PRECIOS_URL',
       'https://apiconsulta.grupo-santacruz.com/listas-precios',
     );
-    return `${base}?cia=${CIA}&token=${TOKEN}`;
+    return `${base}?cia=${cia}&token=${TOKEN}`;
+  }
+
+  /** Descarga las filas crudas de una compañía. */
+  private async descargar(cia: number): Promise<ApiProducto[]> {
+    const res = await fetch(this.apiUrl(cia));
+    if (!res.ok) {
+      throw new Error(`La API (cia ${cia}) respondió ${res.status}`);
+    }
+    const payload = (await res.json()) as
+      | ApiProducto[]
+      | { data: ApiProducto[] };
+    const datos = Array.isArray(payload) ? payload : payload?.data;
+    if (!Array.isArray(datos)) {
+      throw new Error(
+        `Respuesta inesperada de la API de listas de precios (cia ${cia})`,
+      );
+    }
+    return datos;
   }
 
   /** Actualiza la lista de precios automáticamente todos los días a las 7:50 a.m. */
@@ -102,16 +141,17 @@ export class ProductosService implements OnModuleInit {
     return fecha ? fecha.slice(0, 10) : null;
   }
 
-  /** Descarga la lista de precios de la compañía 4 y actualiza la tabla. */
+  /**
+   * Descarga las listas de precios de las compañías 4 y 6 y actualiza la tabla.
+   * De cia 4 se conservan todas las listas TPV/PDV; de cia 6 solo Concord,
+   * Alameda y Alameda 2 (adicionales a las que ya existían).
+   */
   async sincronizar(): Promise<{ total: number; listas: number }> {
-    const res = await fetch(this.apiUrl());
-    if (!res.ok) {
-      throw new Error(`La API respondió ${res.status}`);
-    }
-    const payload = (await res.json()) as ApiProducto[] | { data: ApiProducto[] };
-    const datos = Array.isArray(payload) ? payload : payload?.data;
-    if (!Array.isArray(datos)) {
-      throw new Error('Respuesta inesperada de la API de listas de precios');
+    // Descarga cada compañía y etiqueta cada fila con su compañía de origen.
+    const datos: Array<{ p: ApiProducto; ciaFuente: number }> = [];
+    for (const cia of CIAS) {
+      const filasCia = await this.descargar(cia);
+      for (const p of filasCia) datos.push({ p, ciaFuente: cia });
     }
 
     // Normaliza y descarta filas inválidas antes de insertar.
@@ -129,13 +169,12 @@ export class ProductosService implements OnModuleInit {
         fi: string | null;
       }
     >();
-    for (const p of datos) {
+    for (const { p, ciaFuente } of datos) {
       const lista = String(p.LISTA_PRECIO ?? '').trim();
       const referencia = String(p.REFERENCIA ?? '').trim();
       if (!lista || !referencia) continue;
-      // Solo listas de puntos de venta (TPV/PDV).
-      const nombre = (p.DESC_LISTA ?? '').toUpperCase();
-      if (!nombre.includes('TPV') && !nombre.includes('PDV')) continue;
+      // cia 4: todas TPV/PDV · cia 6: solo Concord/Alameda/Alameda 2.
+      if (!listaPermitida(ciaFuente, p.DESC_LISTA)) continue;
       const clave = `${lista}|${referencia}`;
       const fa = this.toFecha(p.FECHA_ACTIVACION);
       const existente = unicas.get(clave);
@@ -146,7 +185,7 @@ export class ProductosService implements OnModuleInit {
         referencia,
         desc: p.DESC_LISTA ?? null,
         producto: p.PRODUCTO ?? null,
-        cia: p.CIA != null ? Number(p.CIA) : CIA,
+        cia: p.CIA != null ? Number(p.CIA) : ciaFuente,
         um: p.UM ?? null,
         precio: p.PRECIO != null ? Number(p.PRECIO) : 0,
         fa,
@@ -190,11 +229,18 @@ export class ProductosService implements OnModuleInit {
         );
         total += lote.length;
       }
-      // Elimina listas que no sean de puntos de venta (TPV/PDV).
+      // Conserva solo: listas TPV/PDV de otras compañías (cia 4) y las 3
+      // listas permitidas de cia 6. Elimina cualquier otra residual.
       await cliente.query(
         `DELETE FROM productos_precios
-         WHERE upper(coalesce(desc_lista,'')) NOT LIKE '%TPV%'
-           AND upper(coalesce(desc_lista,'')) NOT LIKE '%PDV%'`,
+         WHERE upper(btrim(regexp_replace(coalesce(desc_lista,''), '\\s+', ' ', 'g'))) NOT IN (
+           'TPV CONCORD', 'TPV ALAMEDA', 'TPV ALAMEDA 2'
+         )
+         AND NOT (
+           (upper(coalesce(desc_lista,'')) LIKE '%TPV%'
+             OR upper(coalesce(desc_lista,'')) LIKE '%PDV%')
+           AND coalesce(cia, 0) <> 6
+         )`,
       );
       // Elimina listas residuales/duplicadas con muy pocos productos.
       await cliente.query(

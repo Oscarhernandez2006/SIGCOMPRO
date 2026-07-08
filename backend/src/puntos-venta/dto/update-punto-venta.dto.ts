@@ -1,8 +1,12 @@
 import {
   IsBoolean,
+  IsInt,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -32,6 +36,53 @@ export class UpdatePuntoVentaDto {
   @IsString()
   @MaxLength(40)
   lista_precio?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  barrio?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  ciudad?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dom_km_base?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dom_valor_base?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dom_valor_km?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dom_gratis_desde?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dom_gratis_margen?: number;
 
   @IsOptional()
   @IsBoolean()
