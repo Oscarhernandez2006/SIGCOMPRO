@@ -1277,7 +1277,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     onSeleccionar={seleccionarCliente}
                   />
                 )}
-                {paso === 1 && (
+                {paso === 1 && punto && (
                   <PasoProductos
                     punto={punto}
                     carrito={carrito}
@@ -1300,7 +1300,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     />
                   </div>
                 )}
-                {paso === 3 && (
+                {paso === 3 && punto && (
                   <PasoConfirmar
                     punto={punto}
                     cliente={cliente}
