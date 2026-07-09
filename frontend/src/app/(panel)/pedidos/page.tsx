@@ -959,20 +959,28 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   }, []);
 
   // Mientras no haya punto elegido (y haya varios), se muestra el selector.
-  // El paso 0 (cliente) puede verse sin punto: al elegir cliente se sugiere el
-  // punto más cercano. A partir del paso 1 el punto es obligatorio.
+  // El paso 0 (cliente) puede verse sin punto. A partir del paso 1, si el
+  // usuario tiene varios puntos asignados, debe elegirlo MANUALMENTE.
   const eligiendoPunto = !punto && paso >= 1;
 
-  // Selecciona el cliente y sugiere el punto de venta más cercano (según las
-  // coordenadas del cliente y de los puntos asignados a la televendedora).
+  // Selecciona el cliente y avanza. La selección del punto de venta es MANUAL
+  // cuando hay varios puntos (no se auto-asigna). Si solo hay 1 punto, ya está
+  // preseleccionado por el efecto de misPuntosVenta.
   function seleccionarCliente(c: Cliente) {
     setCliente(c);
-    if (coordenadasValidas(c.lat, c.lng)) {
-      const cercano = puntoMasCercano(puntos, c.lat as number, c.lng as number);
-      if (cercano) setPunto(cercano.punto);
-    }
     setPaso(1);
   }
+
+  // Punto de venta MÁS CERCANO al cliente (según su dirección). Se conserva la
+  // lógica de "redirección por dirección" solo como SUGERENCIA: se resalta en
+  // el selector manual, pero no se auto-selecciona.
+  const puntoSugerido = useMemo(() => {
+    if (!cliente || !coordenadasValidas(cliente.lat, cliente.lng)) return null;
+    return (
+      puntoMasCercano(puntos, cliente.lat as number, cliente.lng as number)
+        ?.punto ?? null
+    );
+  }, [cliente, puntos]);
 
   // Distancia (km) en línea recta entre el cliente y el punto seleccionado.
   const distanciaClientePunto = useMemo(() => {
@@ -1204,6 +1212,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                 cargando={cargandoPuntos}
                 error={errorPuntos}
                 onSeleccionar={setPunto}
+                sugeridoId={puntoSugerido ? String(puntoSugerido.id) : undefined}
               />
             </div>
             <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
@@ -1401,11 +1410,13 @@ function PasoPunto({
   cargando,
   error,
   onSeleccionar,
+  sugeridoId,
 }: {
   puntos: PuntoVenta[];
   cargando: boolean;
   error: string | null;
   onSeleccionar: (p: PuntoVenta) => void;
+  sugeridoId?: string;
 }) {
   const [descripciones, setDescripciones] = useState<Record<string, string>>({});
 
@@ -1444,30 +1455,44 @@ function PasoPunto({
         </p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
-          {puntos.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onSeleccionar(p)}
-              title={`Seleccionar el punto de venta ${p.nombre}`}
-              className="flex items-center gap-3 rounded-xl border border-brand-brown/10 bg-white px-4 py-3 text-left transition hover:border-brand-amber/50 hover:bg-brand-cream-soft/40"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
-                </svg>
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate font-semibold text-brand-black">
-                  {p.nombre}
+          {puntos.map((p) => {
+            const recomendado = sugeridoId != null && String(p.id) === sugeridoId;
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSeleccionar(p)}
+                title={`Seleccionar el punto de venta ${p.nombre}`}
+                className={`flex items-center gap-3 rounded-xl border bg-white px-4 py-3 text-left transition hover:bg-brand-cream-soft/40 ${
+                  recomendado
+                    ? "border-brand-amber ring-1 ring-brand-amber/40"
+                    : "border-brand-brown/10 hover:border-brand-amber/50"
+                }`}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                  </svg>
                 </span>
-                <span className="block truncate text-xs text-brand-brown/60">
-                  {p.lista_precio
-                    ? descripciones[p.lista_precio] ?? `Lista ${p.lista_precio}`
-                    : "Sin lista asignada"}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-brand-black">
+                      {p.nombre}
+                    </span>
+                    {recomendado && (
+                      <span className="shrink-0 rounded-full bg-brand-amber/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-amber">
+                        Recomendado
+                      </span>
+                    )}
+                  </span>
+                  <span className="block truncate text-xs text-brand-brown/60">
+                    {p.lista_precio
+                      ? descripciones[p.lista_precio] ?? `Lista ${p.lista_precio}`
+                      : "Sin lista asignada"}
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
