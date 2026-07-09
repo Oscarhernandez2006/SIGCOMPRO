@@ -388,7 +388,7 @@ export default function DespachoPage() {
       return;
     }
     misPuntosVenta()
-      .then((ps) => setFiltro({ listo: true, ids: new Set(ps.map((p) => p.id)) }))
+      .then((ps) => setFiltro({ listo: true, ids: new Set(ps.map((p) => String(p.id))) }))
       .catch(() => setFiltro({ listo: true, ids: new Set() }));
   }, []);
 
@@ -528,7 +528,7 @@ export default function DespachoPage() {
   const pedidosVisibles = useMemo(() => {
     if (!filtro.listo) return [];
     if (!filtro.ids) return pedidos; // acceso total: todos los puntos
-    return pedidos.filter((p) => p.punto?.id && filtro.ids!.has(p.punto.id));
+    return pedidos.filter((p) => p.punto?.id != null && filtro.ids!.has(String(p.punto.id)));
   }, [pedidos, filtro]);
 
   // "De hoy": pedidos para hoy (programados con fecha de hoy o no programados

@@ -12,7 +12,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
-import { getUsuario } from "@/lib/auth";
+import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
@@ -113,17 +113,33 @@ export default function PedidosPage() {
       .catch(() => { /* ignore */ });
   }, []);
 
+  // Puntos de venta asignados al usuario (para acotar lo que ve). Los roles
+  // administrativos ven TODOS los puntos; el resto SOLO sus puntos asignados.
+  const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
+  const [idsPuntos, setIdsPuntos] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (esAdmin) {
+      setIdsPuntos(null); // admin: sin restricción
+      return;
+    }
+    misPuntosVenta()
+      .then((ps) => setIdsPuntos(new Set(ps.map((p) => String(p.id)))))
+      .catch(() => setIdsPuntos(new Set()));
+  }, [esAdmin]);
+
   // Búsqueda (consecutivo, comanda, nombre o NIT) y filtro por día.
   const [busqueda, setBusqueda] = useState("");
   const [fechaFiltro, setFechaFiltro] = useState("");
 
-  // Ordena por fecha desc y aplica búsqueda + filtro de día.
+  // Ordena por fecha desc y aplica el alcance por punto + búsqueda + filtro de día.
   const pedidosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     const ordenados = [...pedidos].sort(
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
     );
     return ordenados.filter((p) => {
+      // Alcance por punto de venta asignado (los admin ven todo).
+      if (idsPuntos && !idsPuntos.has(String(p.punto?.id))) return false;
       if (fechaFiltro) {
         const d = new Date(p.fecha);
         const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -141,7 +157,7 @@ export default function PedidosPage() {
         nit.includes(q)
       );
     });
-  }, [pedidos, busqueda, fechaFiltro]);
+  }, [pedidos, busqueda, fechaFiltro, idsPuntos]);
 
   // Número del día (turno) por pedido, para que la comanda impresa desde aquí
   // muestre el mismo número que en Despacho.
