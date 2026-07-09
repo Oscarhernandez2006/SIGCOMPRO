@@ -29,6 +29,20 @@ export function tieneAccesoAdministrativo(rol?: string | null): boolean {
   );
 }
 
+/**
+ * Roles que pueden ELEGIR un punto de venta para ver su información en Pedidos
+ * y Despacho (uno a la vez, entre sus puntos asignados). El resto de usuarios
+ * ve únicamente lo de sus puntos asignados (unión), sin selector.
+ */
+export const ROLES_SELECTOR_PUNTO = ["administrador app", "desarrollador"] as const;
+
+/** ¿El rol puede usar el selector de punto de venta en Pedidos/Despacho? */
+export function puedeSeleccionarPuntoVenta(rol?: string | null): boolean {
+  return ROLES_SELECTOR_PUNTO.includes(
+    (rol ?? "").trim().toLowerCase() as (typeof ROLES_SELECTOR_PUNTO)[number],
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Sesión en cookies (no se usa localStorage en ninguna parte del ecosistema) */
 /* -------------------------------------------------------------------------- */

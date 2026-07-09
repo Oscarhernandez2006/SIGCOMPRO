@@ -12,13 +12,14 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
-import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
+import { getUsuario, puedeSeleccionarPuntoVenta } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import CrearClienteModal from "@/components/CrearClienteModal";
+import SelectorPuntoModal from "@/components/SelectorPuntoModal";
 import QRCode from "qrcode";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
@@ -113,19 +114,37 @@ export default function PedidosPage() {
       .catch(() => { /* ignore */ });
   }, []);
 
-  // Puntos de venta asignados al usuario (para acotar lo que ve). Los roles
-  // administrativos ven TODOS los puntos; el resto SOLO sus puntos asignados.
-  const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
-  const [idsPuntos, setIdsPuntos] = useState<Set<string> | null>(null);
+  // Puntos de venta asignados al usuario. Alcance de lo que ve:
+  //  - Roles con selector (administrador app / desarrollador): eligen UN punto
+  //    (de sus asignados) y ven solo ese; pueden cambiarlo cuando quieran.
+  //  - Resto de usuarios: ven la UNIÓN de sus puntos asignados (sin selector).
+  const esSelector = puedeSeleccionarPuntoVenta(usuario?.rol);
+  const [puntosAsignados, setPuntosAsignados] = useState<PuntoVenta[]>([]);
+  const [puntoActivoId, setPuntoActivoId] = useState<string | null>(null);
+  const [mostrarSelector, setMostrarSelector] = useState(false);
+
   useEffect(() => {
-    if (esAdmin) {
-      setIdsPuntos(null); // admin: sin restricción
-      return;
-    }
+    if (!usuario) return;
     misPuntosVenta()
-      .then((ps) => setIdsPuntos(new Set(ps.map((p) => String(p.id)))))
-      .catch(() => setIdsPuntos(new Set()));
-  }, [esAdmin]);
+      .then((ps) => {
+        setPuntosAsignados(ps);
+        if (puedeSeleccionarPuntoVenta(usuario.rol)) {
+          if (ps.length === 1) setPuntoActivoId(String(ps[0].id));
+          else if (ps.length > 1) setMostrarSelector(true);
+        }
+      })
+      .catch(() => setPuntosAsignados([]));
+  }, [usuario]);
+
+  // Conjunto de IDs de punto permitidos para la vista actual.
+  const idsPuntos = useMemo(() => {
+    if (esSelector) {
+      return puntoActivoId ? new Set([puntoActivoId]) : new Set<string>();
+    }
+    return new Set(puntosAsignados.map((p) => String(p.id)));
+  }, [esSelector, puntoActivoId, puntosAsignados]);
+
+  const puntoActivo = puntosAsignados.find((p) => String(p.id) === puntoActivoId) ?? null;
 
   // Búsqueda (consecutivo, comanda, nombre o NIT) y filtro por día.
   const [busqueda, setBusqueda] = useState("");
@@ -138,8 +157,8 @@ export default function PedidosPage() {
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
     );
     return ordenados.filter((p) => {
-      // Alcance por punto de venta asignado (los admin ven todo).
-      if (idsPuntos && !idsPuntos.has(String(p.punto?.id))) return false;
+      // Alcance por punto de venta.
+      if (!idsPuntos.has(String(p.punto?.id))) return false;
       if (fechaFiltro) {
         const d = new Date(p.fecha);
         const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -286,6 +305,21 @@ export default function PedidosPage() {
           <p className="mt-1 text-sm text-brand-brown/70">
             Gestiona los pedidos de Carnes Santacruz.
           </p>
+          {esSelector && (
+            <button
+              onClick={() => setMostrarSelector(true)}
+              title="Cambiar el punto de venta que estás viendo"
+              className="mt-2 inline-flex items-center gap-2 rounded-full border border-brand-wine/20 bg-brand-wine/5 px-3 py-1 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+              </svg>
+              {puntoActivo ? puntoActivo.nombre : "Elegir punto de venta"}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 opacity-70">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {permite.sincronizar && (
@@ -524,6 +558,17 @@ export default function PedidosPage() {
           motivos={motivos}
           onConfirmar={confirmarMotivo}
           onCerrar={() => setMotivoModal(null)}
+        />
+      )}
+      {esSelector && mostrarSelector && (
+        <SelectorPuntoModal
+          puntos={puntosAsignados}
+          seleccionadoId={puntoActivoId}
+          onSeleccionar={(id) => {
+            setPuntoActivoId(id);
+            setMostrarSelector(false);
+          }}
+          onCerrar={puntoActivoId ? () => setMostrarSelector(false) : undefined}
         />
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
