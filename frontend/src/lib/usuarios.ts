@@ -79,6 +79,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: "pedidos.imprimir", label: "Reimprimir comanda / Excel" },
           { key: "pedidos.clonar", label: "Clonar pedido" },
           { key: "pedidos.sincronizar", label: "Sincronizar lista de precios" },
+          { key: "pedidos.multipunto", label: "Ver y cambiar entre varios puntos de venta (Pedidos y Despacho)" },
         ],
       },
       {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
-import { getUsuario, tieneAccesoAdministrativo, puedeSeleccionarPuntoVenta } from "@/lib/auth";
+import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import SelectorPuntoModal from "@/components/SelectorPuntoModal";
@@ -375,10 +375,11 @@ export default function DespachoPage() {
     [usuarioDesp],
   );
 
-  // Alcance por punto: roles con selector (administrador app / desarrollador)
-  // eligen UN punto de sus asignados; el resto ve la unión de sus asignados.
+  // Alcance por punto: roles con selector (administrador app / desarrollador) o
+  // usuarios con el permiso "pedidos.multipunto" eligen UN punto de sus
+  // asignados; el resto ve la unión de sus asignados.
   const esSelector = useMemo(
-    () => puedeSeleccionarPuntoVenta(usuarioDesp?.rol),
+    () => puedeMultiPunto(usuarioDesp),
     [usuarioDesp],
   );
   const [puntosAsignados, setPuntosAsignados] = useState<PuntoVenta[]>([]);
@@ -391,7 +392,7 @@ export default function DespachoPage() {
     misPuntosVenta()
       .then((ps) => {
         setPuntosAsignados(ps);
-        if (puedeSeleccionarPuntoVenta(usuarioDesp.rol)) {
+        if (puedeMultiPunto(usuarioDesp)) {
           if (ps.length === 1) setPuntoActivoId(String(ps[0].id));
           else if (ps.length > 1) setMostrarSelector(true);
         }

@@ -43,6 +43,20 @@ export function puedeSeleccionarPuntoVenta(rol?: string | null): boolean {
   );
 }
 
+/**
+ * ¿El usuario tiene el selector de punto (ver/cambiar entre varios puntos)?
+ * Lo tienen: los roles con selector (administrador app / desarrollador) O
+ * cualquier usuario con el permiso explícito "pedidos.multipunto" en su lista.
+ * Se usa la lista `permisos` directa (no puedeAccion) para que el rol
+ * "administrador" a secas NO lo obtenga automáticamente.
+ */
+export function puedeMultiPunto(usuario?: Usuario | null): boolean {
+  return (
+    puedeSeleccionarPuntoVenta(usuario?.rol) ||
+    (usuario?.permisos ?? []).includes("pedidos.multipunto")
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Sesión en cookies (no se usa localStorage en ninguna parte del ecosistema) */
 /* -------------------------------------------------------------------------- */

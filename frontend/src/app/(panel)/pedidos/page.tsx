@@ -12,7 +12,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
-import { getUsuario, puedeSeleccionarPuntoVenta } from "@/lib/auth";
+import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
@@ -118,7 +118,7 @@ export default function PedidosPage() {
   //  - Roles con selector (administrador app / desarrollador): eligen UN punto
   //    (de sus asignados) y ven solo ese; pueden cambiarlo cuando quieran.
   //  - Resto de usuarios: ven la UNIÓN de sus puntos asignados (sin selector).
-  const esSelector = puedeSeleccionarPuntoVenta(usuario?.rol);
+  const esSelector = puedeMultiPunto(usuario);
   const [puntosAsignados, setPuntosAsignados] = useState<PuntoVenta[]>([]);
   const [puntoActivoId, setPuntoActivoId] = useState<string | null>(null);
   const [mostrarSelector, setMostrarSelector] = useState(false);
@@ -128,7 +128,7 @@ export default function PedidosPage() {
     misPuntosVenta()
       .then((ps) => {
         setPuntosAsignados(ps);
-        if (puedeSeleccionarPuntoVenta(usuario.rol)) {
+        if (puedeMultiPunto(usuario)) {
           if (ps.length === 1) setPuntoActivoId(String(ps[0].id));
           else if (ps.length > 1) setMostrarSelector(true);
         }
