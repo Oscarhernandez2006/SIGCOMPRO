@@ -2960,6 +2960,76 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta }: { pedido: P
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 text-sm">
+              {/* Aviso de anulación/cancelación con su motivo */}
+              {pedido.anulado && (
+                <div
+                  className={`mb-4 rounded-xl border px-4 py-3 ${
+                    pedido.estado === "Cancelado"
+                      ? "border-orange-200 bg-orange-50"
+                      : "border-red-200 bg-red-50"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-bold ${
+                      pedido.estado === "Cancelado" ? "text-orange-700" : "text-red-600"
+                    }`}
+                  >
+                    Pedido {pedido.estado === "Cancelado" ? "cancelado" : "anulado"}
+                  </p>
+                  {pedido.motivo && (
+                    <p className="mt-0.5 text-xs text-brand-brown/70">
+                      Motivo: <span className="font-semibold">{pedido.motivo}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Historial: creación, cambios de estado y anulación (quién y cuándo) */}
+              {pedido.trazabilidad && pedido.trazabilidad.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Historial</p>
+                  <ol className="relative space-y-3 border-l border-brand-brown/15 pl-4">
+                    {pedido.trazabilidad.map((ev, i) => {
+                      const esAnul = ev.tipo === "anulacion";
+                      const esCancel = esAnul && ev.estadoNuevo === "Cancelado";
+                      const color =
+                        ev.tipo === "creacion"
+                          ? "bg-emerald-500"
+                          : esAnul
+                            ? esCancel
+                              ? "bg-orange-500"
+                              : "bg-red-500"
+                            : "bg-brand-amber";
+                      const titulo =
+                        ev.tipo === "creacion"
+                          ? "Pedido creado"
+                          : esAnul
+                            ? esCancel
+                              ? "Pedido cancelado"
+                              : "Pedido anulado"
+                            : `Cambió a ${ev.estadoNuevo ?? "—"}${ev.estadoAnterior ? ` desde ${ev.estadoAnterior}` : ""}`;
+                      return (
+                        <li key={i} className="relative">
+                          <span className={`absolute -left-[1.30rem] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white ${color}`} />
+                          <p className="font-semibold text-brand-black">{titulo}</p>
+                          {esAnul && pedido.motivo && (
+                            <p className="text-xs text-brand-brown/70">
+                              Motivo: <span className="font-medium">{pedido.motivo}</span>
+                            </p>
+                          )}
+                          <p className="text-xs text-brand-brown/50">
+                            {ev.usuarioNombre ? `Por ${ev.usuarioNombre}` : "Usuario no registrado"}
+                            {ev.usuarioCedula ? ` · ${ev.usuarioCedula}` : ""}
+                            {" · "}
+                            {fH(ev.fecha)}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+
               {/* Despacho: personal y horas del proceso */}
               {hayDespacho ? (
                 <div className="mb-4">
