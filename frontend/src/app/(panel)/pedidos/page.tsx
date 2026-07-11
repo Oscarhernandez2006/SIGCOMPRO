@@ -2016,6 +2016,9 @@ function PasoProductos({
           onAgregar={(item) => {
             onCambiar([...carrito, item]);
             setConfig(null);
+            // Limpia el buscador para agregar el siguiente sin borrar a mano.
+            setInput("");
+            setBusqueda("");
           }}
         />
       )}
@@ -2772,6 +2775,8 @@ export interface Pedido extends DatosComanda {
   horaDespacho?: string;
   /** Historial de cambios (creación, estados, anulación). Lo asigna el backend. */
   trazabilidad?: TrazaEvento[];
+  /** Número del día (turno) por punto. Lo asigna el backend de forma atómica. */
+  numeroDia?: number;
 }
 
 /** Evento de trazabilidad del pedido (lo registra el backend con hora del servidor). */
@@ -2811,17 +2816,20 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   };
   const porDia = new Map<string, Pedido[]>();
   for (const p of pedidos) {
-    const dia = diaEfectivo(p);
-    const arr = porDia.get(dia);
+    // Agrupa por PUNTO + día efectivo: la numeración es independiente por punto
+    // (puede existir un 31 en un punto y otro 31 en otro, pero no dos 31 en el
+    // mismo punto el mismo día).
+    const clave = `${String(p.punto?.id ?? "?")}|${diaEfectivo(p)}`;
+    const arr = porDia.get(clave);
     if (arr) arr.push(p);
-    else porDia.set(dia, [p]);
+    else porDia.set(clave, [p]);
   }
   const mapa = new Map<string, number>();
   for (const grupo of porDia.values()) {
     grupo.sort(
       (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
     );
-    grupo.forEach((p, i) => mapa.set(p.id, i + 1));
+    grupo.forEach((p, i) => mapa.set(p.id, p.numeroDia ?? i + 1));
   }
   return mapa;
 }
@@ -3005,7 +3013,10 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta }: { pedido: P
   );
 }
 
-export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, horaDespacho, id, entregaProgramada, fechaProgramada }: Pedido, numeroDia?: number) {
+export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, horaDespacho, id, entregaProgramada, fechaProgramada, numeroDia: numeroDiaGuardado }: Pedido, numeroDia?: number) {
+  // Prefiere el número del día asignado por el backend (estable y único por
+  // punto); si el pedido es antiguo y no lo tiene, usa el calculado localmente.
+  const numeroDiaFinal = numeroDiaGuardado ?? numeroDia;
   const subtotal = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   const dom = entrega === "domicilio" ? (valorDomicilio ?? 0) : 0;
   const total = subtotal + dom;
@@ -3088,7 +3099,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <div class="top"><span>${fecha}</span><span>${hora}</span></div>
     <div class="logo"><img src="${logo}" alt="Carnes Santacruz" onerror="this.style.display='none'"></div>
     <h1>Detalle del pedido</h1>
-    ${numeroDia != null ? `<div class="ndia">N° del día: <b>${numeroDia}</b></div>` : ""}
+    ${numeroDiaFinal != null ? `<div class="ndia">N° del día: <b>${numeroDiaFinal}</b></div>` : ""}
     <div class="emp">Carnes Santacruz</div>
     <div class="row" style="text-align:center">${punto.nombre}</div>
     <hr>

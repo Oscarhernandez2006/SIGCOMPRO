@@ -31,6 +31,8 @@ type PedidoData = Record<string, unknown> & {
   fechaProgramada?: string;
   /** Historial de cambios (creación, estados, anulación). */
   trazabilidad?: TrazaEvento[];
+  /** Número del día (turno) por punto, asignado atómicamente por el backend. */
+  numeroDia?: number;
   punto?: { id?: string; nombre?: string; codigo?: string | null } | null;
   cliente?: {
     id?: string;
@@ -223,6 +225,8 @@ export class PedidosService implements OnModuleInit {
             : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
         finalPedido.comanda = prevData!.comanda ?? finalPedido.comanda;
         finalPedido.fecha = prevData!.fecha ?? finalPedido.fecha;
+        // Conserva el número del día original (no se reasigna al editar).
+        finalPedido.numeroDia = prevData!.numeroDia ?? finalPedido.numeroDia;
       } else if (puntoId) {
         // Nuevo pedido: asigna el consecutivo de forma atómica por punto.
         // El lock se libera automáticamente al terminar la transacción.
@@ -241,6 +245,19 @@ export class PedidosService implements OnModuleInit {
         ).trim();
         finalPedido.consecutivo = consecutivo;
         finalPedido.comanda = `${numeroPunto}CS${String(consecutivo).padStart(8, '0')}`;
+
+        // Número del día (turno) por punto: secuencial y ATÓMICO por día de
+        // creación (zona America/Bogota). Bajo el mismo lock del punto, así
+        // dos pedidos del mismo punto NUNCA reciben el mismo número el mismo
+        // día (aunque se creen desde dispositivos distintos a la vez).
+        const nd = await client.query<{ n: string }>(
+          `SELECT COUNT(*) + 1 AS n FROM pedidos
+             WHERE punto_id = $1
+               AND (fecha AT TIME ZONE 'America/Bogota')::date
+                   = (now() AT TIME ZONE 'America/Bogota')::date`,
+          [puntoId],
+        );
+        finalPedido.numeroDia = Number(nd.rows[0].n) || 1;
       }
 
       const consecutivo =
