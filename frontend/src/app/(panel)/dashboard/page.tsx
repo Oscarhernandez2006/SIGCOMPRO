@@ -937,7 +937,7 @@ function TablaTop({
       </thead>
       <tbody>
         {filas.map((f, i) => (
-          <tr key={f.nombre} className="border-b border-brand-brown/5 last:border-0">
+          <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 last:border-0">
             <td className="py-2 pr-3">
               <div className="flex items-center gap-2">
                 <span className="w-4 shrink-0 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>

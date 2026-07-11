@@ -51,16 +51,31 @@ function fmtDuracion(inicio: string, fin: string): string {
 
 /** Tiempo límite para despachar un pedido desde que entra: 2 horas. */
 const LIMITE_DESPACHO_MS = 2 * 60 * 60 * 1000;
+/** Transferencia: 1 hora, y SOLO desde que se confirma la transferencia. */
+const LIMITE_TRANSFERENCIA_MS = 60 * 60 * 1000;
 /** Umbral de advertencia: queda 1 hora o menos para vencer. */
 const ALERTA_DESPACHO_MS = 60 * 60 * 1000;
 
+/** ¿El pedido se paga por transferencia? */
+function esTransferencia(p: Pedido): boolean {
+  return (p.pago ?? "").trim().toLowerCase() === "transferencia";
+}
+
 /**
- * Instante objetivo de despacho (deadline). Si el pedido tiene una hora de
- * despacho definida por el cliente, el objetivo es esa hora (y la promesa de
- * 2h se cuenta hacia atrás desde ahí, es decir, se activa 2h antes). Si no,
- * el objetivo es la creación del pedido + 2 horas.
+ * Instante objetivo de despacho (deadline).
+ * - TRANSFERENCIA: el cronómetro solo corre DESDE que se confirma la
+ *   transferencia (pagoConfirmado) y la ventana es de 1 hora. Sin confirmar,
+ *   no hay cuenta regresiva (Infinity: nunca vence ni urge).
+ * - Resto: si hay hora de despacho pedida, ese es el objetivo (la promesa de 2h
+ *   se activa 2h antes); si no, creación + 2 horas.
  */
-function objetivoDespacho(p: Pedido): number {
+function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): number {
+  if (esTransferencia(p)) {
+    if (pagoConfirmado) {
+      return new Date(pagoConfirmado).getTime() + LIMITE_TRANSFERENCIA_MS;
+    }
+    return Infinity;
+  }
   const hora = (p.horaDespacho ?? "").trim();
   const m = hora.match(/^(\d{1,2}):(\d{2})$/);
   if (m) {
@@ -75,8 +90,8 @@ function objetivoDespacho(p: Pedido): number {
 }
 
 /** Milisegundos restantes para despachar un pedido (puede ser negativo si venció). */
-function msRestantesDespacho(p: Pedido, ref: number): number {
-  return objetivoDespacho(p) - ref;
+function msRestantesDespacho(p: Pedido, ref: number, pagoConfirmado?: string | null): number {
+  return objetivoDespacho(p, pagoConfirmado) - ref;
 }
 
 /** Fecha de hoy en formato YYYY-MM-DD (local). */
@@ -596,17 +611,14 @@ export default function DespachoPage() {
     return mapa;
   }, [pedidosVisibles]);
 
-  // Pedidos atrasados del día: vencieron las 2h y siguen sin despachar.
+  // Pedidos atrasados del día: venció su ventana y siguen sin despachar.
   const atrasados = useMemo(() => {
     return pedidosDeHoy.filter((p) => {
       if (p.anulado) return false;
       const e = norm(p.estado);
       if (e === "despachado" || e === "anulado") return false;
-      const mm = meta[p.id];
-      const ref = mm?.pagoConfirmado
-        ? new Date(mm.pagoConfirmado).getTime()
-        : ahora;
-      return msRestantesDespacho(p, ref) <= 0;
+      // Transferencia sin confirmar -> objetivo Infinity -> nunca atrasado.
+      return msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado) <= 0;
     });
   }, [pedidosDeHoy, meta, ahora]);
   const atrasadosIds = useMemo(
@@ -621,12 +633,12 @@ export default function DespachoPage() {
         const fa = esPosteriorFuturo(a) ? 1 : 0;
         const fb = esPosteriorFuturo(b) ? 1 : 0;
         if (fa !== fb) return fa - fb;
-        // Orden por número del día (turno) ascendente: el pendiente arrastrado
-        // de días anteriores toma el 1 y sale de primero para despacharse antes.
-        const na = numeroDelDiaPorId.get(a.id) ?? 99999;
-        const nb = numeroDelDiaPorId.get(b.id) ?? 99999;
-        if (na !== nb) return na - nb;
-        return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+        // Orden por número del día (turno) DESCENDENTE: el último que entra
+        // aparece ARRIBA y los anteriores van bajando (10, 9, 8, … 1).
+        const na = numeroDelDiaPorId.get(a.id) ?? 0;
+        const nb = numeroDelDiaPorId.get(b.id) ?? 0;
+        if (na !== nb) return nb - na;
+        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
       }),
     [pedidosVisibles, numeroDelDiaPorId],
   );
@@ -673,20 +685,19 @@ export default function DespachoPage() {
     );
     const porVencer: Pedido[] = [];
     const vencidos: Pedido[] = [];
-    // Si el pago (transferencia) ya se confirmó, el cronómetro se congela en ese
-    // instante para que el pedido no aparezca como crítico ni en demora.
-    const refAhora = (p: Pedido) => {
-      const mm = meta[p.id];
-      return mm?.pagoConfirmado ? new Date(mm.pagoConfirmado).getTime() : ahora;
-    };
     for (const p of pendientes) {
-      const restante = msRestantesDespacho(p, refAhora(p));
+      const pc = meta[p.id]?.pagoConfirmado;
+      const restante = msRestantesDespacho(p, ahora, pc);
+      if (!Number.isFinite(restante)) continue; // transferencia sin confirmar
+      // Transferencia (ventana 1h) avisa con 30 min; el resto con 1h.
+      const umbral = esTransferencia(p) ? 30 * 60 * 1000 : ALERTA_DESPACHO_MS;
       if (restante <= 0) vencidos.push(p);
-      else if (restante <= ALERTA_DESPACHO_MS) porVencer.push(p);
+      else if (restante <= umbral) porVencer.push(p);
     }
     // Ordena por urgencia: menos tiempo restante primero.
     const porTiempo = (a: Pedido, b: Pedido) =>
-      msRestantesDespacho(a, refAhora(a)) - msRestantesDespacho(b, refAhora(b));
+      msRestantesDespacho(a, ahora, meta[a.id]?.pagoConfirmado) -
+      msRestantesDespacho(b, ahora, meta[b.id]?.pagoConfirmado);
     return { porVencer: porVencer.sort(porTiempo), vencidos: vencidos.sort(porTiempo) };
   }, [pedidosDeHoy, ahora, meta]);
 
@@ -1178,16 +1189,16 @@ export default function DespachoPage() {
                         )}
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
-                        {transferencia && !pagoConfirmado && !facturado && alistado ? (
+                        {transferencia && !pagoConfirmado && !facturado && !despachado ? (
                           <button
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
                             }
                             disabled={anulado}
-                            title="Detiene el cronómetro mientras el cliente realiza la transferencia"
+                            title="Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"
                             className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                           >
-                            Confirmar pago
+                            Confirmar transferencia
                           </button>
                         ) : (
                           <button
@@ -1310,26 +1321,8 @@ export default function DespachoPage() {
                               </div>
                             );
                           }
-                          const pausado = Boolean(m.pagoConfirmado);
-                          const refAhora = pausado
-                            ? new Date(m.pagoConfirmado as string).getTime()
-                            : ahora;
-                          const deadlineEntrega = objetivoDespacho(p);
-                          const deadlinePrep = deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
-                          const restEntrega = deadlineEntrega - refAhora;
-                          const restPrep = deadlinePrep - refAhora;
-                          const horaObj = (p.horaDespacho ?? "").trim();
-                          // Antes de activar: hay hora pedida y faltan más de 2h.
-                          const antesDeActivar =
-                            !pausado && horaObj !== "" && restEntrega > LIMITE_DESPACHO_MS;
-
                           const box =
                             "flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold tabular-nums";
-                          // Rojo al llegar a la mitad del tiempo (o menos); verde antes.
-                          const claseTiempo = (rest: number, mitadMs: number) =>
-                            rest <= mitadMs
-                              ? "border-red-300 bg-red-50 text-red-600"
-                              : "border-green-200 bg-green-50 text-green-700";
                           const iconoReloj = (
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -1340,6 +1333,66 @@ export default function DespachoPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                             </svg>
                           );
+
+                          // Transferencia: el cronómetro (1 hora) corre SOLO desde
+                          // que se confirma la transferencia. Antes: sin cuenta.
+                          if (esTransferencia(p)) {
+                            if (!m.pagoConfirmado) {
+                              return (
+                                <div className={`${box} border-blue-200 bg-blue-50 text-blue-600`}>
+                                  Esperando transferencia
+                                </div>
+                              );
+                            }
+                            const deadline = objetivoDespacho(p, m.pagoConfirmado);
+                            const rest = deadline - ahora;
+                            let cont;
+                            if (m.despachoFin) {
+                              const aTiempo = new Date(m.despachoFin).getTime() <= deadline;
+                              cont = (
+                                <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
+                                  {aTiempo ? iconoOk : null}
+                                  {aTiempo ? "Cumplido" : "Fuera de tiempo"}
+                                </div>
+                              );
+                            } else {
+                              const clase =
+                                rest <= 30 * 60 * 1000
+                                  ? "border-red-300 bg-red-50 text-red-600"
+                                  : "border-green-200 bg-green-50 text-green-700";
+                              cont = (
+                                <div className={`${box} ${clase}`}>
+                                  {iconoReloj}
+                                  {rest <= 0 ? "-" : ""}
+                                  {fmtCronometro(rest)}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div>
+                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                  Producción (1h)
+                                </p>
+                                {cont}
+                              </div>
+                            );
+                          }
+
+                          // Resto de pagos: preparación (1h) + entrega (2h) desde que entra.
+                          const deadlineEntrega = objetivoDespacho(p);
+                          const deadlinePrep = deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
+                          const restEntrega = deadlineEntrega - ahora;
+                          const restPrep = deadlinePrep - ahora;
+                          const horaObj = (p.horaDespacho ?? "").trim();
+                          // Antes de activar: hay hora pedida y faltan más de 2h.
+                          const antesDeActivar =
+                            horaObj !== "" && restEntrega > LIMITE_DESPACHO_MS;
+
+                          // Rojo al llegar a la mitad del tiempo (o menos); verde antes.
+                          const claseTiempo = (rest: number, mitadMs: number) =>
+                            rest <= mitadMs
+                              ? "border-red-300 bg-red-50 text-red-600"
+                              : "border-green-200 bg-green-50 text-green-700";
 
                           // Preparación (1h): meta = marcar "Alistado" (m.fin).
                           let prep;
@@ -1374,12 +1427,6 @@ export default function DespachoPage() {
                             );
                           } else if (antesDeActivar) {
                             entrega = <div className={`${box} border-indigo-200 bg-indigo-50 text-indigo-600`}>Programado</div>;
-                          } else if (pausado) {
-                            entrega = (
-                              <div className={`${box} border-blue-200 bg-blue-50 text-blue-600`}>
-                                {fmtCronometro(restEntrega)}
-                              </div>
-                            );
                           } else {
                             entrega = (
                               <div className={`${box} ${claseTiempo(restEntrega, ALERTA_DESPACHO_MS)}`}>
@@ -1478,7 +1525,7 @@ export default function DespachoPage() {
                           </span>
                         </span>
                         <span className="shrink-0 font-bold tabular-nums text-brand-amber">
-                          {fmtCronometro(msRestantesDespacho(p, ahora))}
+                          {fmtCronometro(msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado))}
                         </span>
                       </li>
                     ))}
@@ -1504,7 +1551,7 @@ export default function DespachoPage() {
                           </span>
                         </span>
                         <span className="shrink-0 font-bold tabular-nums text-red-600">
-                          -{fmtCronometro(msRestantesDespacho(p, ahora))}
+                          -{fmtCronometro(msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado))}
                         </span>
                       </li>
                     ))}
