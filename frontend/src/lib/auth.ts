@@ -44,6 +44,14 @@ export function puedeSeleccionarPuntoVenta(rol?: string | null): boolean {
 }
 
 /**
+ * ¿El usuario puede ver el Dashboard? Solo los roles "administrador app" y
+ * "desarrollador" (NO el "administrador" a secas).
+ */
+export function puedeVerDashboard(rol?: string | null): boolean {
+  return puedeSeleccionarPuntoVenta(rol);
+}
+
+/**
  * ¿El usuario tiene el selector de punto (ver/cambiar entre varios puntos)?
  * Lo tienen: los roles con selector (administrador app / desarrollador) O
  * cualquier usuario con el permiso explícito "pedidos.multipunto" en su lista.

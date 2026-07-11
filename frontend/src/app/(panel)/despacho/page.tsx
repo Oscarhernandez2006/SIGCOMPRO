@@ -16,6 +16,13 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
+import {
+  ALERTA_DESPACHO_MS,
+  LIMITE_DESPACHO_MS,
+  esTransferencia,
+  objetivoDespacho,
+  msRestantesDespacho,
+} from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
 
@@ -49,50 +56,7 @@ function fmtDuracion(inicio: string, fin: string): string {
   return `${h} h ${min % 60} min`;
 }
 
-/** Tiempo límite para despachar un pedido desde que entra: 2 horas. */
-const LIMITE_DESPACHO_MS = 2 * 60 * 60 * 1000;
-/** Transferencia: 1 hora, y SOLO desde que se confirma la transferencia. */
-const LIMITE_TRANSFERENCIA_MS = 60 * 60 * 1000;
-/** Umbral de advertencia: queda 1 hora o menos para vencer. */
-const ALERTA_DESPACHO_MS = 60 * 60 * 1000;
-
-/** ¿El pedido se paga por transferencia? */
-function esTransferencia(p: Pedido): boolean {
-  return (p.pago ?? "").trim().toLowerCase() === "transferencia";
-}
-
-/**
- * Instante objetivo de despacho (deadline).
- * - TRANSFERENCIA: el cronómetro solo corre DESDE que se confirma la
- *   transferencia (pagoConfirmado) y la ventana es de 1 hora. Sin confirmar,
- *   no hay cuenta regresiva (Infinity: nunca vence ni urge).
- * - Resto: si hay hora de despacho pedida, ese es el objetivo (la promesa de 2h
- *   se activa 2h antes); si no, creación + 2 horas.
- */
-function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): number {
-  if (esTransferencia(p)) {
-    if (pagoConfirmado) {
-      return new Date(pagoConfirmado).getTime() + LIMITE_TRANSFERENCIA_MS;
-    }
-    return Infinity;
-  }
-  const hora = (p.horaDespacho ?? "").trim();
-  const m = hora.match(/^(\d{1,2}):(\d{2})$/);
-  if (m) {
-    const base =
-      p.entregaProgramada && p.fechaProgramada
-        ? new Date(`${p.fechaProgramada}T00:00:00`)
-        : new Date(p.fecha);
-    base.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    return base.getTime();
-  }
-  return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
-}
-
-/** Milisegundos restantes para despachar un pedido (puede ser negativo si venció). */
-function msRestantesDespacho(p: Pedido, ref: number, pagoConfirmado?: string | null): number {
-  return objetivoDespacho(p, pagoConfirmado) - ref;
-}
+// La lógica de deadlines vive en lib/despacho (compartida con el Dashboard).
 
 /** Fecha de hoy en formato YYYY-MM-DD (local). */
 function hoyISO(): string {

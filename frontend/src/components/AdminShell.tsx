@@ -9,6 +9,7 @@ import {
   getUsuario,
   limpiarSesion,
   tieneAccesoAdministrativo,
+  puedeVerDashboard,
   type Usuario,
 } from "@/lib/auth";
 import { panelesAccesibles } from "@/lib/permisos";
@@ -17,6 +18,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: ReactNode;
+  /** Si es true, solo lo ven administrador app / desarrollador. */
+  soloDashboard?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -26,6 +29,16 @@ const navItems: NavItem[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955a1.5 1.5 0 0 1 2.122 0L22.5 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+      </svg>
+    ),
+  },
+  {
+    label: "Dashboard",
+    href: "/admin/dashboard",
+    soloDashboard: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
       </svg>
     ),
   },
@@ -172,7 +185,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <nav className="flex flex-1 flex-col gap-1 px-3">
-        {navItems.map((item) => {
+        {navItems
+          .filter((item) => !item.soloDashboard || puedeVerDashboard(usuario?.rol))
+          .map((item) => {
           const active =
             item.href === "/admin"
               ? pathname === "/admin"

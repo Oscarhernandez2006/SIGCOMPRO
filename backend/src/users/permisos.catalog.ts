@@ -25,10 +25,6 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
     label: 'Módulos operativos',
     modulos: [
       {
-        key: 'dashboard',
-        label: 'Dashboard',
-      },
-      {
         key: 'pedidos',
         label: 'Pedidos',
         acciones: [

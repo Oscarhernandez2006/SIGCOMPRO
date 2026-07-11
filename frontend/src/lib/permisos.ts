@@ -20,7 +20,6 @@ export interface PanelAccesible {
 
 /** Ruta de cada módulo de negocio en el panel operativo. */
 export const RUTA_MODULO: Record<string, string> = {
-  dashboard: "/dashboard",
   pedidos: "/pedidos",
   despacho: "/despacho",
   clientes: "/clientes",

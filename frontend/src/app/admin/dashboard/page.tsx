@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
-import { puedeVerModulo } from "@/lib/permisos";
+import { getUsuario, tieneAccesoAdministrativo, puedeVerDashboard, type Usuario } from "@/lib/auth";
 import {
   listarPuntosVenta,
   misPuntosVenta,
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
+import { objetivoDespacho, deadlinePreparacion } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -143,7 +143,7 @@ export default function DashboardPage() {
         : "Todos mis puntos"
       : puntos.find((p) => String(p.id) === puntoSel)?.nombre ?? "Punto";
 
-  const sinAcceso = usuario && !puedeVerModulo(usuario, "dashboard");
+  const sinAcceso = usuario && !puedeVerDashboard(usuario.rol);
 
   if (sinAcceso) {
     return (
@@ -272,6 +272,42 @@ export default function DashboardPage() {
               <MiniStat titulo="Domicilios" valor={`${num(m.domicilios)}`} sub={cop(m.valorDomicilios)} icon="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.834 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.125-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
               <MiniStat titulo="Anulados / Cancelados" valor={`${num(m.anulados)} / ${num(m.cancelados)}`} sub={`${m.pctBaja.toFixed(1)}%`} icon="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               <MiniStat titulo="Clientes atendidos" valor={num(m.clientes)} icon="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+            </div>
+          </section>
+
+          {/* Cumplimiento de despacho */}
+          <section>
+            <Eyebrow>Cumplimiento de despacho</Eyebrow>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Panel>
+                <CardHead titulo="Despachados" desc="Pedidos entregados en el periodo" />
+                <p className="font-display text-3xl font-extrabold tabular-nums text-brand-black">
+                  {num(m.despachados)}
+                  <span className="ml-2 text-base font-bold text-brand-brown/50">
+                    de {num(m.numPedidos)}
+                  </span>
+                </p>
+                <p className="mt-1 text-sm text-brand-brown/60">
+                  {m.pctDespachados.toFixed(1)}% del total · {cop(m.valorDespachado)}
+                </p>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-brand-cream-soft">
+                  <div className="h-full rounded-full bg-brand-wine" style={{ width: `${Math.min(100, m.pctDespachados)}%` }} />
+                </div>
+              </Panel>
+              <Cumplimiento
+                titulo="Entregas a tiempo"
+                desc="Despachados dentro del tiempo"
+                pct={m.pctEntrega}
+                aTiempo={m.entregaATiempo}
+                total={m.entregaConDato}
+              />
+              <Cumplimiento
+                titulo="Alistados a tiempo"
+                desc="Alistamiento dentro del tiempo"
+                pct={m.pctAlistado}
+                aTiempo={m.alistadosATiempo}
+                total={m.alistadosCount}
+              />
             </div>
           </section>
 
@@ -465,6 +501,33 @@ function métricas(
   const numPedidos = validos.length;
   const ticket = numPedidos ? ventas / numPedidos : 0;
 
+  // --- Cumplimiento de despacho (usa la metadata de despacho) ---
+  let despachados = 0;
+  let valorDespachado = 0;
+  let entregaConDato = 0; // despachados con hora de despacho registrada
+  let entregaATiempo = 0;
+  let alistadosCount = 0; // pedidos marcados como alistados (m.fin)
+  let alistadosATiempo = 0;
+  for (const p of validos) {
+    const dm = metaMap[p.id];
+    const pc = dm?.pagoConfirmado;
+    if (p.estado === "Despachado" || dm?.despachoFin) {
+      despachados += 1;
+      valorDespachado += Number(p.total) || 0;
+    }
+    if (dm?.despachoFin) {
+      entregaConDato += 1;
+      if (new Date(dm.despachoFin).getTime() <= objetivoDespacho(p, pc)) entregaATiempo += 1;
+    }
+    if (dm?.fin) {
+      alistadosCount += 1;
+      if (new Date(dm.fin).getTime() <= deadlinePreparacion(p, pc)) alistadosATiempo += 1;
+    }
+  }
+  const pctEntrega = entregaConDato ? (entregaATiempo / entregaConDato) * 100 : 0;
+  const pctAlistado = alistadosCount ? (alistadosATiempo / alistadosCount) * 100 : 0;
+  const pctDespachados = numPedidos ? (despachados / numPedidos) * 100 : 0;
+
   const anulados = lista.filter((p) => p.estado === "Anulado").length;
   const cancelados = lista.filter((p) => p.estado === "Cancelado").length;
   const pctBaja = lista.length ? ((anulados + cancelados) / lista.length) * 100 : 0;
@@ -610,6 +673,15 @@ function métricas(
     facturado,
     numPedidos,
     ticket,
+    despachados,
+    valorDespachado,
+    pctDespachados,
+    entregaConDato,
+    entregaATiempo,
+    pctEntrega,
+    alistadosCount,
+    alistadosATiempo,
+    pctAlistado,
     anulados,
     cancelados,
     pctBaja,
@@ -679,6 +751,71 @@ function CardHead({ titulo, desc }: { titulo: string; desc?: string }) {
       <h3 className="font-display text-base font-bold tracking-tight text-brand-black">{titulo}</h3>
       {desc && <p className="mt-0.5 text-xs text-brand-brown/55">{desc}</p>}
     </div>
+  );
+}
+
+/** Tarjeta de cumplimiento con anillo de porcentaje (verde/ámbar/rojo). */
+function Cumplimiento({
+  titulo,
+  desc,
+  pct,
+  aTiempo,
+  total,
+}: {
+  titulo: string;
+  desc: string;
+  pct: number;
+  aTiempo: number;
+  total: number;
+}) {
+  const color = total === 0 ? "#c9bfb3" : pct >= 90 ? "#2e7d63" : pct >= 70 ? "#d98c2b" : "#c0392b";
+  const R = 42;
+  const C = 2 * Math.PI * R;
+  const dash = (Math.min(100, Math.max(0, pct)) / 100) * C;
+  return (
+    <Panel>
+      <CardHead titulo={titulo} desc={desc} />
+      {total === 0 ? (
+        <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-brown/50">
+          Sin datos en el periodo.
+        </p>
+      ) : (
+        <div className="flex items-center gap-4">
+          <div className="relative h-28 w-28 shrink-0">
+            <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
+              <circle cx="50" cy="50" r={R} fill="none" stroke="#f1eae2" strokeWidth="12" />
+              <circle
+                cx="50"
+                cy="50"
+                r={R}
+                fill="none"
+                stroke={color}
+                strokeWidth="12"
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${C - dash}`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="font-display text-xl font-extrabold tabular-nums text-brand-black">
+                {pct.toFixed(0)}%
+              </span>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <p className="font-display text-2xl font-bold tabular-nums text-brand-black">
+              {num(aTiempo)}
+              <span className="ml-1.5 text-sm font-semibold text-brand-brown/50">de {num(total)}</span>
+            </p>
+            <p className="mt-1 text-xs text-brand-brown/60">a tiempo</p>
+            {total - aTiempo > 0 && (
+              <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-500">
+                {num(total - aTiempo)} fuera de tiempo
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }
 
