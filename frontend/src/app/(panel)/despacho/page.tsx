@@ -6,7 +6,6 @@ import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import SelectorPuntoModal from "@/components/SelectorPuntoModal";
 import {
   cargarEstadoPedidos,
   actualizarMetaApi,
@@ -363,7 +362,6 @@ export default function DespachoPage() {
   );
   const [puntosAsignados, setPuntosAsignados] = useState<PuntoVenta[]>([]);
   const [puntoActivoId, setPuntoActivoId] = useState<string | null>(null);
-  const [mostrarSelector, setMostrarSelector] = useState(false);
   const [filtroListo, setFiltroListo] = useState(false);
 
   useEffect(() => {
@@ -371,9 +369,9 @@ export default function DespachoPage() {
     misPuntosVenta()
       .then((ps) => {
         setPuntosAsignados(ps);
-        if (puedeMultiPunto(usuarioDesp)) {
-          if (ps.length === 1) setPuntoActivoId(String(ps[0].id));
-          else if (ps.length > 1) setMostrarSelector(true);
+        // Roles con selector: por defecto el primer punto; se cambia en el select.
+        if (puedeMultiPunto(usuarioDesp) && ps.length > 0) {
+          setPuntoActivoId((prev) => prev ?? String(ps[0].id));
         }
       })
       .catch(() => setPuntosAsignados([]))
@@ -386,8 +384,6 @@ export default function DespachoPage() {
     }
     return new Set(puntosAsignados.map((p) => String(p.id)));
   }, [esSelector, puntoActivoId, puntosAsignados]);
-
-  const puntoActivo = puntosAsignados.find((p) => String(p.id) === puntoActivoId) ?? null;
 
   useEffect(() => {
     cargarEstadoPedidos()
@@ -688,20 +684,30 @@ export default function DespachoPage() {
         <p className="mt-1 text-sm text-brand-brown/70">
           Seguimiento de los pedidos del día en Carnes Santacruz.
         </p>
-        {esSelector && (
-          <button
-            onClick={() => setMostrarSelector(true)}
-            title="Cambiar el punto de venta que estás viendo"
-            className="mt-2 inline-flex items-center gap-2 rounded-full border border-brand-wine/20 bg-brand-wine/5 px-3 py-1 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
-            </svg>
-            {puntoActivo ? puntoActivo.nombre : "Elegir punto de venta"}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 opacity-70">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-            </svg>
-          </button>
+        {esSelector && puntosAsignados.length > 0 && (
+          <label className="mt-2 inline-flex items-center gap-2">
+            <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+            <div className="relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+              </svg>
+              <select
+                value={puntoActivoId ?? ""}
+                onChange={(e) => setPuntoActivoId(e.target.value)}
+                title="Punto de venta que estás viendo"
+                className="cursor-pointer appearance-none rounded-full border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-8 text-xs font-semibold text-brand-wine outline-none transition hover:bg-brand-wine/10 focus:border-brand-wine/40"
+              >
+                {puntosAsignados.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-brand-wine/70">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            </div>
+          </label>
         )}
       </div>
 
@@ -1572,17 +1578,6 @@ export default function DespachoPage() {
             setModalReplica(null);
           }}
           onCerrar={() => setModalReplica(null)}
-        />
-      )}
-      {esSelector && mostrarSelector && (
-        <SelectorPuntoModal
-          puntos={puntosAsignados}
-          seleccionadoId={puntoActivoId}
-          onSeleccionar={(id) => {
-            setPuntoActivoId(id);
-            setMostrarSelector(false);
-          }}
-          onCerrar={puntoActivoId ? () => setMostrarSelector(false) : undefined}
         />
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
