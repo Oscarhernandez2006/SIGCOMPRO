@@ -18,6 +18,7 @@ import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
+import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import CrearClienteModal from "@/components/CrearClienteModal";
 import QRCode from "qrcode";
 
@@ -195,8 +196,17 @@ export default function PedidosPage() {
       const existe = prev.some((x) => x.id === p.id);
       return existe ? prev.map((x) => (x.id === p.id ? p : x)) : [p, ...prev];
     });
-    // Persistimos en la base de datos.
-    guardarPedidoApi(p).catch(() => { /* ignore */ });
+    // Persistimos en la base de datos y actualizamos con la versión del backend,
+    // que incluye la trazabilidad completa (quién y a qué hora creó/anuló).
+    guardarPedidoApi(p)
+      .then((guardado) => {
+        if (guardado) {
+          setPedidos((prev) =>
+            prev.map((x) => (x.id === guardado.id ? guardado : x)),
+          );
+        }
+      })
+      .catch(() => { /* ignore */ });
   };
 
   const abrirNuevo = () => { setEditando(null); setClonando(null); setBorrador(null); setWizardAbierto(true); };
@@ -1995,6 +2005,11 @@ function PasoProductos({
                 <span className="mt-1 text-[11px] text-brand-brown/50">
                   {p.referencia} · {p.um || "U"}
                 </span>
+                {p.categoria && (
+                  <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    {p.categoria.replace(/^\s*\d+\s*-\s*/, "")}
+                  </span>
+                )}
                 <span className="mt-2 text-sm font-bold text-brand-wine">
                   {formatoCOP(p.precio)}
                 </span>
@@ -2144,9 +2159,14 @@ function ConfigProducto({
   const [alVacio, setAlVacio] = useState(inicial?.alVacio ?? false);
   const [porcionado, setPorcionado] = useState(inicial?.porcionado ?? false);
   const [corte, setCorte] = useState(inicial?.corte ?? "");
+  const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
   const [notas, setNotas] = useState(inicial?.notas ?? "");
+
+  useEffect(() => {
+    obtenerTiposCorteCache().then(setCortes).catch(() => {});
+  }, []);
 
   const esKilo = (producto.um || "").trim().toUpperCase() === "KG";
   const paso = esKilo ? 0.5 : 1;
@@ -2255,12 +2275,23 @@ function ConfigProducto({
 
           {porcionado && (
             <div className="rounded-xl bg-brand-cream-soft/50 p-3">
-              <input
+              <select
                 value={corte}
                 onChange={(e) => setCorte(e.target.value)}
-                placeholder="Tipo de corte (cómo lo necesita)"
                 className="mb-2 w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-              />
+              >
+                <option value="">Tipo de corte (cómo lo necesita)</option>
+                {corte && !cortes.includes(corte) && (
+                  <option value={corte}>{corte}</option>
+                )}
+                {[...cortes]
+                  .sort((a, b) => a.localeCompare(b, "es"))
+                  .map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+              </select>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number" min="0" value={gramos}
@@ -3102,16 +3133,16 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     const h12 = ((hh + 11) % 12) + 1;
     horaDespTxt = `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
   }
-  const filas = carrito
-    .map((i) => {
-      const notas: string[] = [`Empaque al vacío: ${i.alVacio ? "SÍ" : "NO"}`];
-      if (i.porcionado) notas.push(`relajado ${i.unidades} und a ${i.gramos} grm`);
-      if (i.corte) notas.push(i.corte);
-      if (i.notas) notas.push(i.notas);
-      // Si el producto se vende por kilos, mostramos también el peso en libras
-      // (1 kilo = 2 libras) para que los alistadores trabajen en su unidad.
-      const esKilo = (i.producto.um || "").trim().toUpperCase() === "KG";
-      return `<div class="prod">
+  // Renderiza un producto de la comanda.
+  const renderItem = (i: ItemCarrito) => {
+    const notas: string[] = [`Empaque al vacío: ${i.alVacio ? "SÍ" : "NO"}`];
+    if (i.porcionado) notas.push(`relajado ${i.unidades} und a ${i.gramos} grm`);
+    if (i.corte) notas.push(i.corte);
+    if (i.notas) notas.push(i.notas);
+    // Si el producto se vende por kilos, mostramos también el peso en libras
+    // (1 kilo = 2 libras) para que los alistadores trabajen en su unidad.
+    const esKilo = (i.producto.um || "").trim().toUpperCase() === "KG";
+    return `<div class="prod">
         <div class="pi">Ítem: ${i.producto.referencia}</div>
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
         <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}</b></div>
@@ -3119,7 +3150,25 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
         <div class="pn-nota">Nota: ${notas.join(" | ")}</div>
       </div>`;
-    })
+  };
+  // Agrupa los productos por categoría (conservando el orden de aparición):
+  // cada categoría muestra su nombre como encabezado y debajo sus productos.
+  const gruposCategoria = new Map<string, ItemCarrito[]>();
+  for (const i of carrito) {
+    const cat =
+      (i.producto.categoria || "")
+        .replace(/^\s*\d+\s*-\s*/, "")
+        .trim()
+        .toUpperCase() || "SIN CATEGORÍA";
+    const arr = gruposCategoria.get(cat);
+    if (arr) arr.push(i);
+    else gruposCategoria.set(cat, [i]);
+  }
+  const filas = [...gruposCategoria.entries()]
+    .map(
+      ([cat, items]) =>
+        `<div class="catsec">${cat}</div>${items.map(renderItem).join("")}`,
+    )
     .join("");
   const dest = entrega === "domicilio" ? "Domicilio" : entrega === "recoge" ? "Recoge en punto" : "—";
   const ciudad = [cliente.barrio, cliente.ciudad].filter(Boolean).join(", ");
@@ -3151,6 +3200,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     .com{font-size:19px;font-weight:bold;margin:8px 0}
     hr{border:none;border-top:2px solid #000;margin:8px 0}
     .sec{font-weight:bold;font-size:17px;margin:6px 0 4px}
+    .catsec{font-weight:bold;font-size:15px;margin:8px 0 4px;background:#000;color:#fff;padding:3px 8px;border-radius:4px;text-align:center;letter-spacing:.5px}
     .prod{margin-bottom:8px;font-size:14px;border-bottom:2px solid #000;padding-bottom:8px}
     .prod:last-child{border-bottom:none}
     .pn{font-weight:bold}

@@ -24,8 +24,9 @@ const TIPOS_CONJUNTO = [
 interface Partes {
   tipoConjunto: string;
   nombre: string;
-  unidad: string;
+  unidad: string; // solo el número/identificador del apto, ej. "5B" (se antepone "Apto")
   piso: string;
+  bloque: string;
   torre: string;
 }
 
@@ -34,6 +35,7 @@ const VACIO: Partes = {
   nombre: "",
   unidad: "",
   piso: "",
+  bloque: "",
   torre: "",
 };
 
@@ -46,8 +48,9 @@ function componer(p: Partes): string {
   const conjunto = norm(`${p.tipoConjunto} ${p.nombre}`);
   if (conjunto) segmentos.push(conjunto);
   const unidad = norm(p.unidad);
-  if (unidad) segmentos.push(unidad);
+  if (unidad) segmentos.push(`Apto ${unidad}`);
   if (p.piso.trim()) segmentos.push(`Piso ${p.piso.trim()}`);
+  if (p.bloque.trim()) segmentos.push(`Bloque ${p.bloque.trim()}`);
   if (p.torre.trim()) segmentos.push(`T${p.torre.trim()}`);
   return segmentos.join(" - ");
 }
@@ -66,8 +69,16 @@ function parsear(valor: string): Partes | null {
       r.torre = m[1];
       continue;
     }
+    if (!r.bloque && (m = p.match(/^Bloque\s+(.+)$/i))) {
+      r.bloque = m[1].trim();
+      continue;
+    }
     if (!r.piso && (m = p.match(/^Piso\s+(.+)$/i))) {
       r.piso = m[1].trim();
+      continue;
+    }
+    if (!r.unidad && (m = p.match(/^Apto\s+(.+)$/i))) {
+      r.unidad = m[1].trim();
       continue;
     }
     if (
@@ -83,10 +94,6 @@ function parsear(valor: string): Partes | null {
       };
       r.tipoConjunto = mapa[m[1].toLowerCase()] ?? m[1];
       r.nombre = m[2].trim();
-      continue;
-    }
-    if (!r.unidad) {
-      r.unidad = p;
       continue;
     }
     if (!r.nombre) {
@@ -206,16 +213,26 @@ export default function ReferenciaInput({
       </div>
 
       <div className="mt-2 flex flex-wrap items-end gap-2">
-        <div className="w-32">
+        <div className="w-36">
           <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
-            Unidad
+            Apartamento
           </span>
-          <input
-            value={partes.unidad}
-            onChange={(e) => cambiarParte("unidad", e.target.value)}
-            placeholder="Apto 355"
-            className="campo"
-          />
+          <div className="flex items-center">
+            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+              Apto
+            </span>
+            <input
+              value={partes.unidad}
+              onChange={(e) =>
+                cambiarParte(
+                  "unidad",
+                  e.target.value.replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
+                )
+              }
+              placeholder="355"
+              className="campo text-center"
+            />
+          </div>
         </div>
         <div className="w-20">
           <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
@@ -223,8 +240,25 @@ export default function ReferenciaInput({
           </span>
           <input
             value={partes.piso}
-            onChange={(e) => cambiarParte("piso", e.target.value)}
+            onChange={(e) => cambiarParte("piso", e.target.value.replace(/\D+/g, ""))}
             placeholder="3"
+            inputMode="numeric"
+            className="campo text-center"
+          />
+        </div>
+        <div className="w-24">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+            Bloque
+          </span>
+          <input
+            value={partes.bloque}
+            onChange={(e) =>
+              cambiarParte(
+                "bloque",
+                e.target.value.replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
+              )
+            }
+            placeholder="A"
             className="campo text-center"
           />
         </div>
@@ -256,7 +290,7 @@ export default function ReferenciaInput({
               </span>
             </>
           ) : (
-            "Ej. Conjunto Torino - Apto 355 - T9"
+            "Ej. Conjunto Torino - Apto 355 - Piso 3 - Bloque A - T9"
           )}
         </span>
         <button

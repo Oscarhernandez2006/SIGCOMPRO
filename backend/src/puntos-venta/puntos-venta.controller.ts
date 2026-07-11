@@ -17,6 +17,7 @@ import { PuntosVentaService } from './puntos-venta.service';
 import { CreatePuntoVentaDto } from './dto/create-punto-venta.dto';
 import { UpdatePuntoVentaDto } from './dto/update-punto-venta.dto';
 import { AsignarUsuariosDto } from './dto/asignar-usuarios.dto';
+import { AsignarPuntosDto } from './dto/asignar-puntos.dto';
 import { JwtAuthGuard, JwtPayload } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -44,6 +45,25 @@ export class PuntosVentaController {
   @Roles('administrador', 'desarrollador')
   usuarios(@Param('id') id: string) {
     return this.puntos.usuariosDe(id);
+  }
+
+  /** IDs de puntos asignados a un usuario (asistente de administración). */
+  @Get('de-usuario/:usuarioId')
+  @UseGuards(RolesGuard)
+  @Roles('administrador', 'desarrollador')
+  puntosDeUsuario(@Param('usuarioId') usuarioId: string) {
+    return this.puntos.idsPuntosDeUsuario(usuarioId);
+  }
+
+  /** Reemplaza los puntos asignados a un usuario. */
+  @Put('de-usuario/:usuarioId')
+  @UseGuards(RolesGuard)
+  @Roles('administrador', 'desarrollador')
+  asignarPuntosUsuario(
+    @Param('usuarioId') usuarioId: string,
+    @Body() dto: AsignarPuntosDto,
+  ) {
+    return this.puntos.asignarPuntosAUsuario(usuarioId, dto.puntoIds);
   }
 
   @Get(':id')

@@ -12,6 +12,7 @@ export interface ProductoPrecio {
   desc_lista: string | null;
   referencia: string;
   producto: string | null;
+  categoria: string | null;
   cia: number | null;
   um: string | null;
   precio: number;

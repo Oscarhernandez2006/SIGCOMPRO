@@ -8,7 +8,7 @@ import {
   type Cliente,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
+import { aNombrePropio, onChangeSoloTexto, onChangeSoloDigitos, aTextoLimpio } from "@/lib/format";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -125,7 +125,8 @@ export default function CrearClienteModal({
               <Campo label="NIT / Cédula *">
                 <input
                   value={form.nit_cedula}
-                  onChange={(e) => cambiar("nit_cedula", e.target.value)}
+                  onChange={onChangeSoloDigitos((v) => cambiar("nit_cedula", v))}
+                  inputMode="numeric"
                   autoFocus={!form.nit_cedula}
                   className="campo"
                 />
@@ -142,14 +143,14 @@ export default function CrearClienteModal({
               <Campo label="Nombres *">
                 <input
                   value={nombres}
-                  onChange={onChangeNombrePropio(setNombres)}
+                  onChange={onChangeSoloTexto(setNombres)}
                   className="campo"
                 />
               </Campo>
               <Campo label="Apellidos *">
                 <input
                   value={apellidos}
-                  onChange={onChangeNombrePropio(setApellidos)}
+                  onChange={onChangeSoloTexto(setApellidos)}
                   className="campo"
                 />
               </Campo>
@@ -161,7 +162,7 @@ export default function CrearClienteModal({
               <Campo label="Barrio">
                 <AutocompleteInput
                   value={form.barrio ?? ""}
-                  onChange={(v) => cambiar("barrio", v)}
+                  onChange={(v) => cambiar("barrio", aTextoLimpio(v))}
                   onBuscar={async (q) =>
                     (await buscarBarrios(q, form.ciudad)).map((b) => ({ value: b }))
                   }
@@ -171,7 +172,7 @@ export default function CrearClienteModal({
               <Campo label="Ciudad">
                 <AutocompleteInput
                   value={form.ciudad ?? ""}
-                  onChange={(v) => cambiar("ciudad", v)}
+                  onChange={(v) => cambiar("ciudad", aTextoLimpio(v))}
                   onBuscar={async (q) =>
                     (await buscarCiudades(q)).map((c) => ({
                       value: c.nombre,
@@ -209,7 +210,7 @@ export default function CrearClienteModal({
               <Campo label="Teléfono">
                 <input
                   value={form.telefono ?? ""}
-                  onChange={(e) => cambiar("telefono", e.target.value)}
+                  onChange={onChangeSoloDigitos((v) => cambiar("telefono", v))}
                   inputMode="tel"
                   maxLength={15}
                   className="campo max-w-[10rem]"

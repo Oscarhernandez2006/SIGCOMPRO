@@ -10,6 +10,7 @@ export interface ProductoPrecioRow {
   desc_lista: string | null;
   referencia: string;
   producto: string | null;
+  categoria: string | null;
   cia: number | null;
   um: string | null;
   precio: number;
@@ -29,6 +30,7 @@ interface ApiProducto {
   DESC_LISTA?: string;
   REFERENCIA: string | number;
   PRODUCTO?: string;
+  CATEGORIA?: string;
   CIA?: string | number;
   UM?: string;
   PRECIO?: string | number;
@@ -87,6 +89,10 @@ export class ProductosService implements OnModuleInit {
         UNIQUE (lista_precio, referencia)
       )
     `);
+    // Categoría del producto (agregada al cambiar el API). ALTER idempotente.
+    await this.pool.query(
+      `ALTER TABLE productos_precios ADD COLUMN IF NOT EXISTS categoria text`,
+    );
   }
 
   private apiUrl(cia: number): string {
@@ -162,6 +168,7 @@ export class ProductosService implements OnModuleInit {
         referencia: string;
         desc: string | null;
         producto: string | null;
+        categoria: string | null;
         cia: number;
         um: string | null;
         precio: number;
@@ -185,6 +192,7 @@ export class ProductosService implements OnModuleInit {
         referencia,
         desc: p.DESC_LISTA ?? null,
         producto: p.PRODUCTO ?? null,
+        categoria: p.CATEGORIA?.trim() || null,
         cia: p.CIA != null ? Number(p.CIA) : ciaFuente,
         um: p.UM ?? null,
         precio: p.PRECIO != null ? Number(p.PRECIO) : 0,
@@ -204,21 +212,22 @@ export class ProductosService implements OnModuleInit {
         const lote = filas.slice(i, i + LOTE);
         const valores: unknown[] = [];
         const placeholders = lote.map((f, n) => {
-          const b = n * 9;
+          const b = n * 10;
           valores.push(
-            f.lista, f.desc, f.referencia, f.producto, f.cia,
+            f.lista, f.desc, f.referencia, f.producto, f.categoria, f.cia,
             f.um, f.precio, f.fa, f.fi,
           );
-          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9}, now())`;
+          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10}, now())`;
         });
         await cliente.query(
           `INSERT INTO productos_precios
-             (lista_precio, desc_lista, referencia, producto, cia, um, precio,
+             (lista_precio, desc_lista, referencia, producto, categoria, cia, um, precio,
               fecha_activacion, fecha_inactivacion, sincronizado_en)
            VALUES ${placeholders.join(',')}
            ON CONFLICT (lista_precio, referencia) DO UPDATE SET
              desc_lista = EXCLUDED.desc_lista,
              producto = EXCLUDED.producto,
+             categoria = EXCLUDED.categoria,
              cia = EXCLUDED.cia,
              um = EXCLUDED.um,
              precio = EXCLUDED.precio,
@@ -288,13 +297,15 @@ export class ProductosService implements OnModuleInit {
       params.push(listaPrecio);
     }
     if (buscar?.trim()) {
-      cond.push(`(producto ILIKE $${i} OR referencia ILIKE $${i})`);
+      cond.push(
+        `(producto ILIKE $${i} OR referencia ILIKE $${i} OR categoria ILIKE $${i})`,
+      );
       params.push(`%${buscar.trim()}%`);
       i++;
     }
     const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
     const res = await this.pool.query<ProductoPrecioRow>(
-      `SELECT id, lista_precio, desc_lista, referencia, producto, cia, um,
+      `SELECT id, lista_precio, desc_lista, referencia, producto, categoria, cia, um,
               precio, fecha_activacion, fecha_inactivacion, sincronizado_en
        FROM productos_precios
        ${where}

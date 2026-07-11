@@ -535,38 +535,13 @@ export default function DespachoPage() {
     [pedidosVisibles],
   );
 
-  // Número del día (turno): 1, 2, 3… por cada DÍA EFECTIVO DE DESPACHO.
-  // El día efectivo es la fecha programada, o el día de creación. Además, un
-  // pedido ACTIVO que quedó pendiente de días anteriores (arrastrado) cuenta
-  // para HOY y, al estar creado antes, toma los primeros números (1, 2, 3…),
-  // garantizando que se despache primero; los que entran después siguen.
+  // Número del día (turno) por punto: lo asigna el BACKEND de forma rodante
+  // (arrastra pendientes de días anteriores al día de hoy, reinicia por punto y
+  // por día). Aquí solo se lee p.numeroDia para ordenar/mostrar.
   const numeroDelDiaPorId = useMemo(() => {
-    const hoy = hoyISO();
-    const diaEfectivo = (p: Pedido): string => {
-      const dia = diaEntregaISO(p);
-      // Arrastrado activo de un día anterior -> se numera dentro de HOY.
-      if (dia < hoy) {
-        const e = norm(p.estado);
-        if (!p.anulado && e !== "despachado" && e !== "anulado") return hoy;
-      }
-      return dia;
-    };
-    const porDia = new Map<string, Pedido[]>();
-    for (const p of pedidosVisibles) {
-      const dia = diaEfectivo(p);
-      if (!dia) continue;
-      const arr = porDia.get(dia);
-      if (arr) arr.push(p);
-      else porDia.set(dia, [p]);
-    }
     const mapa = new Map<string, number>();
-    for (const grupo of porDia.values()) {
-      // Orden por creación: los pedidos que venían de días anteriores (creados
-      // antes) quedan primeros; los nuevos del día siguen en orden de llegada.
-      grupo.sort(
-        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-      );
-      grupo.forEach((p, i) => mapa.set(p.id, i + 1));
+    for (const p of pedidosVisibles) {
+      if (typeof p.numeroDia === "number") mapa.set(p.id, p.numeroDia);
     }
     return mapa;
   }, [pedidosVisibles]);

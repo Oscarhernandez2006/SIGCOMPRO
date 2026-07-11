@@ -24,6 +24,20 @@ export interface RegistroPersonal {
 const PREFIJO_DESPACHO = 'despacho_personal:';
 /** Clave del registro global centrado en la persona. */
 const CLAVE_REGISTRO = 'personal_despacho:registro';
+/** Clave de la lista de tipos de corte (porcionado). */
+const CLAVE_CORTES = 'tipos_corte:lista';
+/** Lista de cortes por defecto (semilla la primera vez). */
+const CORTES_DEFAULT = [
+  'Mariposa',
+  'Relajado / Filete',
+  'Bife Chorizo',
+  'Churrasco',
+  'Pinta de Lanza',
+  'Goulash',
+  'Sabana',
+  'Posta / Medallones',
+  'Tira / Fajitas',
+];
 
 @Injectable()
 export class ConfiguracionService implements OnModuleInit {
@@ -123,9 +137,67 @@ export class ConfiguracionService implements OnModuleInit {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Vistas por punto (las consume el módulo de despacho, sin cambios)  */
+  /* Tipos de corte (porcionado)                                        */
   /* ------------------------------------------------------------------ */
 
+  /** Lista de tipos de corte. Si no existe, siembra la lista por defecto. */
+  async obtenerCortes(): Promise<string[]> {
+    const res = await this.pool.query<{ valor: unknown }>(
+      `SELECT valor FROM configuracion WHERE clave = $1 LIMIT 1`,
+      [CLAVE_CORTES],
+    );
+    const valor = res.rows[0]?.valor as
+      | { lista?: unknown }
+      | unknown[]
+      | undefined;
+    const cruda = Array.isArray(valor)
+      ? valor
+      : valor && Array.isArray((valor as { lista?: unknown }).lista)
+        ? (valor as { lista: unknown[] }).lista
+        : null;
+    if (cruda) return this.limpiarCortes(cruda);
+    // Primera vez: siembra la lista por defecto.
+    await this.persistirCortes(CORTES_DEFAULT);
+    return this.limpiarCortes(CORTES_DEFAULT);
+  }
+
+  /** Guarda (reemplaza) la lista de tipos de corte. Solo administradores. */
+  async guardarCortes(lista: unknown): Promise<string[]> {
+    const limpia = this.limpiarCortes(lista);
+    await this.persistirCortes(limpia);
+    return limpia;
+  }
+
+  private async persistirCortes(lista: string[]): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO configuracion (clave, valor)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (clave) DO UPDATE SET
+         valor = EXCLUDED.valor,
+         actualizado_en = now()`,
+      [CLAVE_CORTES, JSON.stringify({ lista })],
+    );
+  }
+
+  /** Normaliza la lista de cortes: recorta, quita vacíos/duplicados y ordena. */
+  private limpiarCortes(lista: unknown): string[] {
+    if (!Array.isArray(lista)) return [];
+    const vistos = new Set<string>();
+    const salida: string[] = [];
+    for (const item of lista) {
+      const s = String(item ?? '').trim();
+      if (!s) continue;
+      const k = s.toLowerCase();
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      salida.push(s);
+    }
+    return salida.sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Vistas por punto (las consume el módulo de despacho, sin cambios)  */
+  /* ------------------------------------------------------------------ */
   /** Personal de despacho de todos los puntos, indexado por id de punto. */
   async personalDespachoTodos(): Promise<Record<string, PersonalDespacho>> {
     const registro = await this.obtenerRegistro();

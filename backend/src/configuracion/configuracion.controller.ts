@@ -44,4 +44,22 @@ export class ConfiguracionController {
   personalDespachoDePunto(@Param('puntoId') puntoId: string) {
     return this.configuracion.personalDespachoDePunto(puntoId);
   }
+
+  /**
+   * Lista de tipos de corte (porcionado). Lectura autenticada: la usa el
+   * wizard de pedidos para llenar el selector de corte.
+   */
+  @Get('cortes')
+  cortes() {
+    return this.configuracion.obtenerCortes();
+  }
+
+  /** Guarda la lista de tipos de corte. Solo administrador/desarrollador. */
+  @Put('cortes')
+  @UseGuards(RolesGuard)
+  @Roles('administrador', 'desarrollador')
+  guardarCortes(@Body() body: { lista?: string[] } | string[]) {
+    const lista = Array.isArray(body) ? body : (body?.lista ?? []);
+    return this.configuracion.guardarCortes(lista);
+  }
 }

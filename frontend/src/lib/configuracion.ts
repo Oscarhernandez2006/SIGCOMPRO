@@ -39,3 +39,34 @@ export function guardarRegistroPersonal(
     body: JSON.stringify(datos),
   });
 }
+
+/** Lista de tipos de corte (porcionado). */
+export function obtenerTiposCorte(): Promise<string[]> {
+  return apiFetch<string[]>("/configuracion/cortes");
+}
+
+/** Guarda (reemplaza) la lista de tipos de corte. Solo administradores. */
+export function guardarTiposCorte(lista: string[]): Promise<string[]> {
+  return apiFetch<string[]>("/configuracion/cortes", {
+    method: "PUT",
+    body: JSON.stringify({ lista }),
+  });
+}
+
+/**
+ * Caché en memoria de los tipos de corte para no pedirlos en cada apertura del
+ * modal de producto. Se invalida al guardar cambios en configuración.
+ */
+let cacheCortes: string[] | null = null;
+
+/** Devuelve los tipos de corte usando caché en memoria. */
+export async function obtenerTiposCorteCache(): Promise<string[]> {
+  if (cacheCortes) return cacheCortes;
+  cacheCortes = await obtenerTiposCorte();
+  return cacheCortes;
+}
+
+/** Invalida la caché de tipos de corte (llamar tras guardar cambios). */
+export function invalidarCacheCortes(): void {
+  cacheCortes = null;
+}

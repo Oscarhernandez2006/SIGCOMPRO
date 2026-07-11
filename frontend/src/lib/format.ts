@@ -35,3 +35,56 @@ export function onChangeNombrePropio(
     }
   };
 }
+
+/** Deja únicamente dígitos (0-9). */
+export function soloDigitos(texto: string): string {
+  return texto.replace(/\D+/g, "");
+}
+
+/** Deja únicamente letras (con acentos, ñ/ü), espacios, guion y apóstrofo. */
+export function soloTexto(texto: string): string {
+  return texto.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s'-]+/g, "");
+}
+
+/** Deja solo texto y aplica formato de nombre propio. */
+export function aTextoLimpio(texto: string): string {
+  return aNombrePropio(soloTexto(texto));
+}
+
+/** Handler onChange genérico que sanitiza el valor conservando la posición del caret. */
+function onChangeSanitizado(
+  setter: (valor: string) => void,
+  limpiar: (v: string) => string,
+): React.ChangeEventHandler<HTMLInputElement> {
+  return (e) => {
+    const el = e.currentTarget;
+    const pos = el.selectionStart;
+    const limpio = limpiar(el.value);
+    const delta = el.value.length - limpio.length;
+    setter(limpio);
+    if (pos !== null) {
+      const nuevaPos = Math.max(0, pos - delta);
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(nuevaPos, nuevaPos);
+        } catch {
+          /* input ya no está en el DOM */
+        }
+      });
+    }
+  };
+}
+
+/** onChange que restringe la entrada a solo dígitos. */
+export function onChangeSoloDigitos(
+  setter: (valor: string) => void,
+): React.ChangeEventHandler<HTMLInputElement> {
+  return onChangeSanitizado(setter, soloDigitos);
+}
+
+/** onChange que deja solo texto y aplica formato de nombre propio. */
+export function onChangeSoloTexto(
+  setter: (valor: string) => void,
+): React.ChangeEventHandler<HTMLInputElement> {
+  return onChangeSanitizado(setter, aTextoLimpio);
+}

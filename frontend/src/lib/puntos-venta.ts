@@ -88,6 +88,22 @@ export function asignarUsuariosPunto(
   });
 }
 
+/** IDs de puntos de venta asignados a un usuario (asistente de administración). */
+export function puntosDeUsuarioIds(usuarioId: string): Promise<string[]> {
+  return apiFetch<string[]>(`/puntos-venta/de-usuario/${usuarioId}`);
+}
+
+/** Reemplaza la lista de puntos de venta asignados a un usuario. */
+export function asignarPuntosAUsuario(
+  usuarioId: string,
+  puntoIds: string[],
+): Promise<string[]> {
+  return apiFetch<string[]>(`/puntos-venta/de-usuario/${usuarioId}`, {
+    method: "PUT",
+    body: JSON.stringify({ puntoIds }),
+  });
+}
+
 /** Puntos de venta asignados al usuario autenticado (panel operativo). */
 export function misPuntosVenta(): Promise<PuntoVenta[]> {
   return apiFetch<PuntoVenta[]>("/puntos-venta/mios");

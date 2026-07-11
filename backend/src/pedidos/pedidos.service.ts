@@ -113,7 +113,77 @@ export class PedidosService implements OnModuleInit {
       if (row.impreso) impresos.push(row.id);
     }
     await this.refrescarClientes(pedidos);
+    this.asignarNumerosDia(pedidos);
     return { pedidos, meta, impresos };
+  }
+
+  /** Fecha (YYYY-MM-DD) en zona horaria de Bogotá. Por defecto, hoy. */
+  private diaBogota(fecha?: string | Date | null): string {
+    const d = fecha ? new Date(fecha) : new Date();
+    const base = isNaN(d.getTime()) ? new Date() : d;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(base);
+  }
+
+  /**
+   * Asigna el "número del día" (turno) a cada pedido, POR PUNTO DE VENTA y con
+   * reinicio diario RODANTE (fuente única de la numeración):
+   *  - Los pedidos ACTIVOS (pendientes) pertenecen SIEMPRE al día de HOY: un
+   *    pedido que quedó pendiente de días anteriores se arrastra a hoy y, al
+   *    haberse creado antes, toma los primeros números (1, 2, 3…). Ej.: si
+   *    quedaron por el #50 y ese quedó pendiente, al cambiar el día ese pedido
+   *    pasa a ser el #1 y los nuevos siguen desde ahí.
+   *  - Los pedidos FINALIZADOS (despachados/anulados) quedan anclados al día en
+   *    que se finalizaron, para que los números del día NO se corran cuando uno
+   *    se despacha.
+   *  - La numeración es independiente por punto: puede existir el #1 en dos
+   *    puntos distintos, pero NUNCA dos #1 el mismo día en el mismo punto.
+   */
+  private asignarNumerosDia(pedidos: PedidoData[]): void {
+    const hoy = this.diaBogota();
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const estaActivo = (p: PedidoData) => {
+      const e = norm(p.estado);
+      return p.anulado !== true && e !== 'despachado' && e !== 'anulado';
+    };
+    const diaEntrega = (p: PedidoData) =>
+      p.entregaProgramada && p.fechaProgramada
+        ? String(p.fechaProgramada)
+        : this.diaBogota(p.fecha ? String(p.fecha) : null);
+    const diaFinalizacion = (p: PedidoData) => {
+      const tz = Array.isArray(p.trazabilidad) ? p.trazabilidad : [];
+      const ultimo = tz.length ? tz[tz.length - 1] : null;
+      return ultimo?.fecha ? this.diaBogota(ultimo.fecha) : diaEntrega(p);
+    };
+    const diaEfectivo = (p: PedidoData) => {
+      if (estaActivo(p)) {
+        const dia = diaEntrega(p);
+        return dia < hoy ? hoy : dia;
+      }
+      return diaFinalizacion(p);
+    };
+    const grupos = new Map<string, PedidoData[]>();
+    for (const p of pedidos) {
+      const clave = `${p.punto?.id ?? '?'}|${diaEfectivo(p)}`;
+      const arr = grupos.get(clave);
+      if (arr) arr.push(p);
+      else grupos.set(clave, [p]);
+    }
+    for (const grupo of grupos.values()) {
+      grupo.sort((a, b) => {
+        const ta = a.fecha ? new Date(String(a.fecha)).getTime() : 0;
+        const tb = b.fecha ? new Date(String(b.fecha)).getTime() : 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.id ?? '') < String(b.id ?? '') ? -1 : 1;
+      });
+      grupo.forEach((p, i) => {
+        p.numeroDia = i + 1;
+      });
+    }
   }
 
   /**
@@ -246,18 +316,20 @@ export class PedidosService implements OnModuleInit {
         finalPedido.consecutivo = consecutivo;
         finalPedido.comanda = `${numeroPunto}CS${String(consecutivo).padStart(8, '0')}`;
 
-        // Número del día (turno) por punto: secuencial y ATÓMICO por día de
-        // creación (zona America/Bogota). Bajo el mismo lock del punto, así
-        // dos pedidos del mismo punto NUNCA reciben el mismo número el mismo
-        // día (aunque se creen desde dispositivos distintos a la vez).
-        const nd = await client.query<{ n: string }>(
-          `SELECT COUNT(*) + 1 AS n FROM pedidos
-             WHERE punto_id = $1
-               AND (fecha AT TIME ZONE 'America/Bogota')::date
-                   = (now() AT TIME ZONE 'America/Bogota')::date`,
+        // Número del día (turno) por punto, con reinicio diario RODANTE: se
+        // calcula con la MISMA lógica que la lectura (asignarNumerosDia), que
+        // arrastra los pendientes de días anteriores al día de hoy y reinicia
+        // la numeración por punto. Bajo el mismo lock del punto -> dos pedidos
+        // simultáneos del mismo punto nunca reciben el mismo número.
+        const existentes = await client.query<{ data: PedidoData }>(
+          `SELECT data FROM pedidos WHERE punto_id = $1`,
           [puntoId],
         );
-        finalPedido.numeroDia = Number(nd.rows[0].n) || 1;
+        const listaPunto = existentes.rows.map((r) => r.data ?? {});
+        listaPunto.push(finalPedido);
+        this.asignarNumerosDia(listaPunto);
+        finalPedido.numeroDia =
+          listaPunto.find((p) => String(p.id ?? '') === id)?.numeroDia ?? 1;
       }
 
       const consecutivo =

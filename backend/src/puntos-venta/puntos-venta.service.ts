@@ -300,4 +300,43 @@ export class PuntosVentaService implements OnModuleInit {
     );
     return res.rows;
   }
+
+  /** IDs de puntos de venta asignados a un usuario (para el asistente admin). */
+  async idsPuntosDeUsuario(usuarioId: string): Promise<string[]> {
+    const res = await this.pool.query<{ punto_venta_id: string }>(
+      `SELECT punto_venta_id FROM usuario_punto_venta WHERE usuario_id = $1`,
+      [usuarioId],
+    );
+    return res.rows.map((r) => String(r.punto_venta_id));
+  }
+
+  /** Reemplaza por completo la lista de puntos asignados a un usuario. */
+  async asignarPuntosAUsuario(
+    usuarioId: string,
+    puntoIds: string[],
+  ): Promise<string[]> {
+    const ids = Array.from(new Set(puntoIds.map((p) => String(p))));
+    const cliente = await this.pool.connect();
+    try {
+      await cliente.query('BEGIN');
+      await cliente.query(
+        `DELETE FROM usuario_punto_venta WHERE usuario_id = $1`,
+        [usuarioId],
+      );
+      for (const puntoId of ids) {
+        await cliente.query(
+          `INSERT INTO usuario_punto_venta (usuario_id, punto_venta_id)
+           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [usuarioId, puntoId],
+        );
+      }
+      await cliente.query('COMMIT');
+    } catch (e) {
+      await cliente.query('ROLLBACK');
+      throw e;
+    } finally {
+      cliente.release();
+    }
+    return ids;
+  }
 }
