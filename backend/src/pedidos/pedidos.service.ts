@@ -681,7 +681,7 @@ export class PedidosService implements OnModuleInit {
           county: d.ciudad,
           state: d.region,
           country: 'Colombia',
-          name: d.tipo,
+          name: d.nombre,
           client_name: d.nombre,
           client_code: d.nit,
           address_type: d.tipo,
