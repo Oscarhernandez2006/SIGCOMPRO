@@ -12,6 +12,7 @@ import {
   marcarImpresoApi,
   guardarPedidoApi,
   descargarExcelDespacho,
+  enviarADrivinApi,
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
@@ -1548,6 +1549,9 @@ export default function DespachoPage() {
           onDescargar={() =>
             descargarReplica(modalReplica.pedido, modalReplica.numero)
           }
+          onDrivin={() =>
+            enviarADrivinApi(modalReplica.pedido.id, modalReplica.numero)
+          }
           onQuitar={() => {
             quitarUltimaReplica(modalReplica.pedido.id);
             setModalReplica(null);
@@ -1572,6 +1576,7 @@ function ModalReplica({
   esUltima,
   onCrear,
   onDescargar,
+  onDrivin,
   onQuitar,
   onCerrar,
 }: {
@@ -1583,12 +1588,30 @@ function ModalReplica({
   esUltima: boolean;
   onCrear: (domiciliario: string) => void;
   onDescargar: () => void;
+  onDrivin: () => Promise<{ comanda: string; status: number }>;
   onQuitar: () => void;
   onCerrar: () => void;
 }) {
   const [domi, setDomi] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
+  const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
+  // Solo La 93 sube directo a Drivin (piloto); los demás siguen por Excel.
+  const esLa93 = /\b93\b/.test(String(pedido.punto?.nombre ?? ""));
+
+  async function enviarDrivin() {
+    if (drivinEstado === "enviando") return;
+    setDrivinEstado("enviando");
+    setDrivinMsg("");
+    try {
+      await onDrivin();
+      setDrivinEstado("ok");
+    } catch (e) {
+      setDrivinEstado("error");
+      setDrivinMsg(e instanceof Error ? e.message : "");
+    }
+  }
 
   function confirmar() {
     if (!domi.trim()) {
@@ -1678,6 +1701,24 @@ function ModalReplica({
               <p className="font-bold text-brand-black">{domiciliarioAsignado || "—"}</p>
             </div>
           )}
+
+          {modo === "ver" && drivinEstado === "ok" && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              Envío exitoso del pedido {codigoReplica} a Drivin.
+            </div>
+          )}
+          {modo === "ver" && drivinEstado === "error" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p className="font-semibold">Error al subir el pedido a Drivin.</p>
+              <p className="mt-0.5">Por favor genera el Excel (ícono) e inténtalo manual.</p>
+              {drivinMsg && (
+                <p className="mt-1 break-words text-xs text-red-500/80">{drivinMsg}</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-brand-brown/10 px-5 py-4">
@@ -1708,6 +1749,34 @@ function ModalReplica({
               >
                 Confirmar
               </button>
+            ) : esLa93 ? (
+              <>
+                <button
+                  onClick={onDescargar}
+                  title={`Descargar el Excel de la réplica -${numero} (respaldo)`}
+                  aria-label="Descargar Excel de respaldo"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-brand-brown/20 text-brand-brown transition hover:bg-brand-cream-soft"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                </button>
+                <button
+                  onClick={enviarDrivin}
+                  disabled={drivinEstado === "enviando"}
+                  title={`Enviar la réplica -${numero} directamente a Drivin`}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-60"
+                >
+                  {drivinEstado === "enviando" ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                    </svg>
+                  )}
+                  Enviar a Drivin
+                </button>
+              </>
             ) : (
               <button
                 onClick={onDescargar}

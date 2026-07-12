@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -1002,6 +1002,9 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   // Observación general del pedido (indicaciones para despacho/cocina).
   const [observacion, setObservacion] = useState<string>(borrador ? borrador.observacion : base?.observacion ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
+  // Estado del envío directo a Drivin (solo La 93) tras crear el pedido.
+  const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
+  const [drivinMsg, setDrivinMsg] = useState<string>("");
   const [editandoItem, setEditandoItem] = useState<ItemCarrito | null>(null);
 
   // Punto de venta del pedido
@@ -1170,11 +1173,31 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     }
     onCrear(finalPedido);
     setPedidoCreado(finalPedido);
-    // Generamos el Excel de despacho automáticamente (no bloquea).
+    // Si el pedido es de un punto integrado con Drivin (La 93), se ENVÍA
+    // automáticamente al crearlo. El Excel ya NO se descarga solo: queda como
+    // respaldo manual por si el envío directo falla.
+    if (esPuntoDrivin(finalPedido.punto)) {
+      enviarDrivinCreacion(finalPedido);
+    } else {
+      setDrivinEstado("idle");
+    }
+  }
+
+  // Solo La 93 se integra con Drivin por ahora (se detecta por el nombre).
+  function esPuntoDrivin(p?: { nombre?: string } | null): boolean {
+    return /\b93\b/.test(String(p?.nombre ?? ""));
+  }
+
+  // Envía el pedido recién creado a Drivin y refleja el resultado en el modal.
+  async function enviarDrivinCreacion(p: Pedido) {
+    setDrivinEstado("enviando");
+    setDrivinMsg("");
     try {
-      await descargarExcelDespacho(finalPedido.id);
-    } catch {
-      /* el pedido ya quedó guardado; el Excel se puede bajar luego */
+      await enviarADrivinApi(p.id);
+      setDrivinEstado("ok");
+    } catch (e) {
+      setDrivinEstado("error");
+      setDrivinMsg(e instanceof Error ? e.message : "");
     }
   }
 
@@ -1234,6 +1257,42 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
               <p className="mt-1 text-sm text-brand-brown/60">
                 Comanda <b>{pedidoCreado.comanda}</b> · Total {formatoCOP(pedidoCreado.total)}
               </p>
+
+              {/* Estado del envío directo a Drivin (solo La 93) */}
+              {esPuntoDrivin(pedidoCreado.punto) && drivinEstado !== "idle" && (
+                <div className="mt-4 w-full max-w-md">
+                  {drivinEstado === "enviando" && (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                      Enviando el pedido a Drivin…
+                    </div>
+                  )}
+                  {drivinEstado === "ok" && (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                      Envío exitoso del pedido {pedidoCreado.comanda} a Drivin.
+                    </div>
+                  )}
+                  {drivinEstado === "error" && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm text-red-700">
+                      <p className="font-semibold">Error al subir el pedido a Drivin.</p>
+                      <p className="mt-0.5">Por favor genera el Excel e inténtalo manual.</p>
+                      {drivinMsg && (
+                        <p className="mt-1 break-words text-xs text-red-500/80">{drivinMsg}</p>
+                      )}
+                      <button
+                        onClick={() => enviarDrivinCreacion(pedidoCreado)}
+                        className="mt-2 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                      >
+                        Reintentar envío
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <p className="mt-4 max-w-sm text-sm text-brand-brown/60">
                 El pedido quedó guardado. Imprime la comanda ahora o vuelve a imprimirla cuando quieras desde la lista.
               </p>
@@ -1248,16 +1307,31 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                   </svg>
                   Imprimir comanda
                 </button>
-                <button
-                  onClick={() => descargarExcelDespacho(pedidoCreado.id)}
-                  title="Descargar el Excel de despacho"
-                  className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 px-6 py-3 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Descargar Excel
-                </button>
+                {esPuntoDrivin(pedidoCreado.punto) ? (
+                  // Excel como ÍCONO de respaldo (ya no botón grande): úsalo si el
+                  // envío directo a Drivin falla.
+                  <button
+                    onClick={() => descargarExcelDespacho(pedidoCreado.id)}
+                    title="Descargar el Excel de despacho (respaldo)"
+                    aria-label="Descargar Excel de respaldo"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-brand-brown/15 text-brand-brown transition hover:bg-brand-cream-soft"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => descargarExcelDespacho(pedidoCreado.id)}
+                    title="Descargar el Excel de despacho"
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 px-6 py-3 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Descargar Excel
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">

@@ -115,3 +115,19 @@ export async function descargarExcelDespacho(
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Envía el pedido directamente a Drivin (reemplazo del Excel de cargue).
+ * Usa el mismo mapeo de campos. Si se indica `replica` (1-5), el consecutivo
+ * lleva el sufijo "-N". Devuelve la respuesta del API de Drivin.
+ */
+export function enviarADrivinApi(
+  id: string,
+  replica?: number,
+): Promise<{ status: number; comanda: string; respuesta: unknown }> {
+  const qs = replica ? `?replica=${replica}` : "";
+  return apiFetch<{ status: number; comanda: string; respuesta: unknown }>(
+    `/pedidos/${id}/drivin${qs}`,
+    { method: "POST" },
+  );
+}

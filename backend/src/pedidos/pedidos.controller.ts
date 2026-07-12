@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Req,
@@ -52,6 +53,19 @@ export class PedidosController {
       'Content-Length': String(buffer.length),
     });
     res.end(buffer);
+  }
+
+  /** Envía el pedido directamente a Drivin (reemplazo del Excel de cargue). */
+  @Post(':id/drivin')
+  async drivin(
+    @Param('id') id: string,
+    @Query('replica') replica: string | undefined,
+  ) {
+    const n = replica ? Number(replica) : undefined;
+    return this.pedidos.enviarADrivin(
+      id,
+      Number.isFinite(n) ? n : undefined,
+    );
   }
 
   /** Crea o actualiza un pedido completo. */

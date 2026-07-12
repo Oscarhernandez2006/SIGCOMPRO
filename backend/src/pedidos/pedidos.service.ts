@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { Pool } from 'pg';
+import { ConfigService } from '@nestjs/config';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
@@ -69,6 +70,7 @@ export class PedidosService implements OnModuleInit {
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     private readonly ubicaciones: UbicacionesService,
+    private readonly config: ConfigService,
   ) {}
 
   async onModuleInit() {
@@ -458,13 +460,10 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
-   * Genera el archivo Excel de despacho para un pedido, con el formato exacto
-   * que exige el software de ruteo (100 columnas). Devuelve el nombre y buffer.
+   * Calcula los campos de despacho de un pedido (el MISMO mapeo que usa el
+   * Excel de ruteo). Lo comparten el Excel y el envío directo a Drivin.
    */
-  async generarExcelDespacho(
-    id: string,
-    replica?: number,
-  ): Promise<{ filename: string; buffer: Buffer }> {
+  private async construirDespacho(id: string, replica?: number) {
     const res = await this.pool.query<{ data: PedidoData }>(
       `SELECT data FROM pedidos WHERE id = $1 LIMIT 1`,
       [id],
@@ -529,6 +528,7 @@ export class PedidosService implements OnModuleInit {
       prioridad = '1.00';
     } else {
       // Pedido para hoy: ventana = hora de creación a +2h, prioridad 2.0.
+      // La ventana (promesa) se deja TAL CUAL la configura la app.
       fechaEntrega = fechaISO(creado);
       inicioVentana = horaHM(creado);
       finVentana = horaHM(new Date(creado.getTime() + 2 * 60 * 60 * 1000));
@@ -538,9 +538,7 @@ export class PedidosService implements OnModuleInit {
     // Departamento (Región) a partir de la ciudad del cliente.
     let region = '';
     try {
-      const depto = await this.ubicaciones.departamentoDeCiudad(
-        cliente.ciudad,
-      );
+      const depto = await this.ubicaciones.departamentoDeCiudad(cliente.ciudad);
       region = depto
         ? depto.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         : '';
@@ -558,34 +556,65 @@ export class PedidosService implements OnModuleInit {
     const codDigitos = String(punto.codigo ?? '').match(/\d+/)?.[0];
     const codigoProveedor = codDigitos ? Number(codDigitos) : '';
 
+    return {
+      comanda,
+      kilos,
+      fechaEntrega,
+      inicioVentana,
+      finVentana,
+      prioridad,
+      region,
+      nit,
+      nombre,
+      telefono,
+      referencia,
+      tipo,
+      proveedor,
+      codigoProveedor,
+      direccion: String(cliente.direccion ?? ''),
+      barrio: String(cliente.barrio ?? ''),
+      ciudad: String(cliente.ciudad ?? ''),
+    };
+  }
+
+  /**
+   * Genera el archivo Excel de despacho para un pedido, con el formato exacto
+   * que exige el software de ruteo (100 columnas). Devuelve el nombre y buffer.
+   */
+  async generarExcelDespacho(
+    id: string,
+    replica?: number,
+  ): Promise<{ filename: string; buffer: Buffer }> {
+    const d = await this.construirDespacho(id, replica);
+
     // Fila completa: 100 columnas en el orden de CABECERA_DESPACHO.
     const fila: (string | number)[] = new Array(
       CABECERA_DESPACHO.length,
     ).fill('');
-    fila[0] = fechaEntrega; // Fecha Maxima de Entrega
-    fila[3] = comanda; // Código de despacho*
-    fila[4] = kilos.toFixed(2); // Unidades_1* (siempre con 2 decimales, ej. 1.00)
-    fila[7] = prioridad; // Prioridad
-    fila[8] = nit; // Código de dirección*
-    fila[9] = nombre; // Nombre dirección
-    fila[10] = nombre; // Nombre cliente
-    fila[11] = tipo; // Tipo (PDV {localidad})
-    fila[12] = String(cliente.direccion ?? ''); // Dirección 1*
-    fila[13] = referencia; // Referencias
-    fila[15] = String(cliente.barrio ?? ''); // Comuna*
-    fila[16] = String(cliente.ciudad ?? ''); // Provincia
-    fila[17] = region; // Región
+    fila[0] = d.fechaEntrega; // Fecha Maxima de Entrega
+    fila[3] = d.comanda; // Código de despacho*
+    fila[4] = d.kilos.toFixed(2); // Unidades_1* (siempre con 2 decimales, ej. 1.00)
+    fila[7] = d.prioridad; // Prioridad
+    fila[8] = d.nit; // Código de dirección*
+    fila[9] = d.nombre; // Nombre dirección
+    fila[10] = d.nombre; // Nombre cliente
+    fila[11] = d.tipo; // Tipo (PDV {localidad})
+    fila[12] = d.direccion; // Dirección 1*
+    fila[13] = d.referencia; // Referencias
+    fila[15] = d.barrio; // Comuna*
+    fila[16] = d.ciudad; // Provincia
+    fila[17] = d.region; // Región
     fila[18] = 'Colombia'; // País*
     fila[22] = 10; // Tiempo de servicio
-    fila[23] = inicioVentana; // Inicio Ventana 1
-    fila[24] = finVentana; // Fin Ventana 1
-    fila[27] = telefono; // Telefono de Contacto
-    fila[34] = proveedor; // Proveedor
-    fila[37] = nit; // Código cliente
-    fila[38] = nombre; // Nombre de contacto
-    fila[70] = telefono; // Telefono contacto cerca del lugar
-    fila[71] = telefono; // Telefono contacto entrega
-    fila[88] = codigoProveedor; // Código proveedor
+    fila[23] = d.inicioVentana; // Inicio Ventana 1
+    fila[24] = d.finVentana; // Fin Ventana 1
+    fila[27] = d.telefono; // Telefono de Contacto
+    fila[34] = d.proveedor; // Proveedor
+    fila[37] = d.nit; // Código cliente
+    fila[38] = d.nombre; // Nombre de contacto
+    fila[70] = d.telefono; // Telefono contacto cerca del lugar
+    fila[71] = d.telefono; // Telefono contacto entrega
+    fila[88] = d.codigoProveedor; // Código proveedor
 
     const ws = XLSX.utils.aoa_to_sheet([CABECERA_DESPACHO, fila]);
     const wb = XLSX.utils.book_new();
@@ -614,9 +643,96 @@ export class PedidosService implements OnModuleInit {
       .format(ahora)
       .replace(/:/g, '-'); // HH-MM-SS
 
-    const consecutivo = comanda || String(id);
+    const consecutivo = d.comanda || String(id);
     const filename = `${consecutivo}_${fechaGen}_${horaGen}.xlsx`;
     return { filename, buffer };
+  }
+
+  /**
+   * Envía un pedido directamente a Drivin (endpoint external/v2/orders), con el
+   * MISMO mapeo de campos que el Excel de cargue. Reemplaza el flujo de Excel.
+   */
+  async enviarADrivin(
+    id: string,
+    replica?: number,
+  ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
+    const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+    if (!apiKey) {
+      throw new Error(
+        'Falta DRIVIN_API_KEY en el backend (.env) para enviar a Drivin.',
+      );
+    }
+    const baseUrl = this.config.get<string>(
+      'DRIVIN_ORDERS_URL',
+      'https://external.driv.in/api/external/v2/orders',
+    );
+    const schema = this.config.get<string>('DRIVIN_SCHEMA_CODE', '01');
+    const url = `${baseUrl}?schema_code=${encodeURIComponent(schema)}`;
+
+    const d = await this.construirDespacho(id, replica);
+
+    const body = {
+      clients: [
+        {
+          code: d.nit,
+          address: d.direccion,
+          reference: d.referencia,
+          city: d.barrio,
+          county: d.ciudad,
+          state: d.region,
+          country: 'Colombia',
+          name: d.tipo,
+          client_name: d.nombre,
+          client_code: d.nit,
+          address_type: d.tipo,
+          contact_phone: d.telefono,
+          service_time: 10,
+          time_windows: [{ start: d.inicioVentana, end: d.finVentana }],
+          orders: [
+            {
+              code: d.comanda,
+              alt_code: null,
+              description: null,
+              category: 'Delivery',
+              units_1: Number(d.kilos.toFixed(2)),
+              units_2: null,
+              units_3: null,
+              position: 1,
+              delivery_date: d.fechaEntrega,
+              custom_1: null,
+              custom_2: null,
+              custom_3: null,
+              supplier_code: d.codigoProveedor || null,
+              supplier_name: d.proveedor || null,
+              items: [],
+              billing_information: { folio: null },
+            },
+          ],
+        },
+      ],
+    };
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+    const texto = await resp.text();
+    let data: unknown;
+    try {
+      data = texto ? JSON.parse(texto) : null;
+    } catch {
+      data = texto;
+    }
+    if (!resp.ok) {
+      const detalle =
+        typeof data === 'string' ? data : JSON.stringify(data ?? {});
+      throw new Error(`Drivin respondió ${resp.status}: ${detalle}`);
+    }
+    return { status: resp.status, comanda: d.comanda, respuesta: data };
   }
 }
 
