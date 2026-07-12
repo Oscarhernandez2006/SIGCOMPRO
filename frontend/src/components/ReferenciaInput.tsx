@@ -49,9 +49,9 @@ function componer(p: Partes): string {
   if (conjunto) segmentos.push(conjunto);
   const unidad = norm(p.unidad);
   if (unidad) segmentos.push(`Apto ${unidad}`);
-  if (p.piso.trim()) segmentos.push(`Piso ${p.piso.trim()}`);
-  if (p.bloque.trim()) segmentos.push(`Bloque ${p.bloque.trim()}`);
+  if (p.bloque.trim()) segmentos.push(`B${p.bloque.trim()}`);
   if (p.torre.trim()) segmentos.push(`T${p.torre.trim()}`);
+  if (p.piso.trim()) segmentos.push(`P${p.piso.trim()}`);
   return segmentos.join(" - ");
 }
 
@@ -69,11 +69,11 @@ function parsear(valor: string): Partes | null {
       r.torre = m[1];
       continue;
     }
-    if (!r.bloque && (m = p.match(/^Bloque\s+(.+)$/i))) {
-      r.bloque = m[1].trim();
+    if (!r.bloque && (m = p.match(/^B(\d+[A-Za-z]?|[A-Za-z]\d*)$/))) {
+      r.bloque = m[1];
       continue;
     }
-    if (!r.piso && (m = p.match(/^Piso\s+(.+)$/i))) {
+    if (!r.piso && (m = p.match(/^P(\d+[A-Za-z]?)$/))) {
       r.piso = m[1].trim();
       continue;
     }
@@ -234,33 +234,26 @@ export default function ReferenciaInput({
             />
           </div>
         </div>
-        <div className="w-20">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
-            Piso
-          </span>
-          <input
-            value={partes.piso}
-            onChange={(e) => cambiarParte("piso", e.target.value.replace(/\D+/g, ""))}
-            placeholder="3"
-            inputMode="numeric"
-            className="campo text-center"
-          />
-        </div>
         <div className="w-24">
           <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
             Bloque
           </span>
-          <input
-            value={partes.bloque}
-            onChange={(e) =>
-              cambiarParte(
-                "bloque",
-                e.target.value.replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
-              )
-            }
-            placeholder="A"
-            className="campo text-center"
-          />
+          <div className="flex items-center">
+            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+              B
+            </span>
+            <input
+              value={partes.bloque}
+              onChange={(e) =>
+                cambiarParte(
+                  "bloque",
+                  e.target.value.replace(/[^0-9A-Za-z]/g, "").toUpperCase(),
+                )
+              }
+              placeholder="6"
+              className="campo text-center"
+            />
+          </div>
         </div>
         <div className="w-24">
           <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
@@ -278,6 +271,23 @@ export default function ReferenciaInput({
             />
           </div>
         </div>
+        <div className="w-20">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+            Piso
+          </span>
+          <div className="flex items-center">
+            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+              P
+            </span>
+            <input
+              value={partes.piso}
+              onChange={(e) => cambiarParte("piso", e.target.value.replace(/\D+/g, ""))}
+              placeholder="3"
+              inputMode="numeric"
+              className="campo text-center"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -290,7 +300,7 @@ export default function ReferenciaInput({
               </span>
             </>
           ) : (
-            "Ej. Conjunto Torino - Apto 355 - Piso 3 - Bloque A - T9"
+            "Ej. Conjunto Torino - Apto 355 - B6 - T9 - P3"
           )}
         </span>
         <button

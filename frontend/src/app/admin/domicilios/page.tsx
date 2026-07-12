@@ -167,7 +167,7 @@ export default function AdminDomiciliosPage() {
     <div>
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">
-          Domicilios
+          Valor domicilio
         </h1>
         <p className="mt-1 text-sm text-brand-brown/70">
           Ubica cada punto de venta en el mapa y configura su tarifa de

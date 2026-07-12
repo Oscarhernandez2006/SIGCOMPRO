@@ -285,6 +285,9 @@ export default function DespachoPage() {
   >({});
   // Texto del buscador (consecutivo, nombre o NIT del cliente).
   const [busqueda, setBusqueda] = useState("");
+  // Id del pedido cuya ficha completa del cliente está desplegada (al hacer
+  // click en el nombre): muestra referencia, correo, ciudad, NIT, etc.
+  const [clienteAbierto, setClienteAbierto] = useState<string | null>(null);
   // Vista activa de la tabla: "activos" oculta despachados y cancelados;
   // "despachados"/"cancelados" muestran solo esos al pulsar su card.
   const [vista, setVista] = useState<string | null>(null);
@@ -299,42 +302,8 @@ export default function DespachoPage() {
     modo: "crear" | "ver";
   } | null>(null);
   const firmaAlertaRef = useRef("");
-  // Arrastre con click sostenido para desplazar la tabla horizontal/verticalmente.
+  // Contenedor scrolleable de la tabla (scroll normal con la rueda/barra).
   const scrollRef = useRef<HTMLDivElement>(null);
-  const drag = useRef({ activo: false, startX: 0, startY: 0, left: 0, top: 0 });
-
-  const onArrastreInicio = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    // No arrastrar al interactuar con controles (inputs, selects, botones...).
-    if ((e.target as HTMLElement).closest("input, select, button, a, textarea, label")) return;
-    drag.current = {
-      activo: true,
-      startX: e.pageX,
-      startY: e.pageY,
-      left: el.scrollLeft,
-      top: el.scrollTop,
-    };
-    el.style.cursor = "grabbing";
-    el.style.userSelect = "none";
-  };
-
-  const onArrastreMover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!drag.current.activo) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollLeft = drag.current.left - (e.pageX - drag.current.startX);
-    el.scrollTop = drag.current.top - (e.pageY - drag.current.startY);
-  };
-
-  const onArrastreFin = () => {
-    drag.current.activo = false;
-    const el = scrollRef.current;
-    if (el) {
-      el.style.cursor = "";
-      el.style.userSelect = "";
-    }
-  };
 
   // Permisos granulares de despacho y modal de acción no permitida.
   const sinPermiso = useSinPermiso();
@@ -530,10 +499,12 @@ export default function DespachoPage() {
     () => pedidosVisibles.filter(esDeHoy),
     [pedidosVisibles],
   );
-  // Posteriores: programados para un día futuro (se ven en su card aparte).
+  // Posteriores: programados para un día futuro Y con la comanda YA IMPRESA.
+  // Un posterior SIN imprimir se queda en la vista de hoy (para poder imprimir
+  // su comanda); al imprimirse pasa a esta card/vista de Posteriores.
   const posterioresFuturos = useMemo(
-    () => pedidosVisibles.filter(esPosteriorFuturo),
-    [pedidosVisibles],
+    () => pedidosVisibles.filter((p) => esPosteriorFuturo(p) && impresos.has(p.id)),
+    [pedidosVisibles, impresos],
   );
 
   // Número del día (turno) por punto: lo asigna el BACKEND de forma rodante
@@ -565,9 +536,10 @@ export default function DespachoPage() {
   const pedidosOrdenados = useMemo(
     () =>
       pedidosVisibles.slice().sort((a, b) => {
-        // Los posteriores (programados a futuro) van al final.
-        const fa = esPosteriorFuturo(a) ? 1 : 0;
-        const fb = esPosteriorFuturo(b) ? 1 : 0;
+        // Los posteriores YA IMPRESOS (programados a futuro) van al final; los
+        // posteriores sin imprimir se ordenan como los de hoy (posición normal).
+        const fa = esPosteriorFuturo(a) && impresos.has(a.id) ? 1 : 0;
+        const fb = esPosteriorFuturo(b) && impresos.has(b.id) ? 1 : 0;
         if (fa !== fb) return fa - fb;
         // Orden por número del día (turno) DESCENDENTE: el último que entra
         // aparece ARRIBA y los anteriores van bajando (10, 9, 8, … 1).
@@ -576,7 +548,7 @@ export default function DespachoPage() {
         if (na !== nb) return nb - na;
         return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
       }),
-    [pedidosVisibles, numeroDelDiaPorId],
+    [pedidosVisibles, numeroDelDiaPorId, impresos],
   );
 
   // Filtra por consecutivo, nombre del cliente o NIT/cédula del cliente.
@@ -587,7 +559,7 @@ export default function DespachoPage() {
     const estadoSel = vista ? ESTADOS.find((e) => e.key === vista) : null;
     const base = pedidosOrdenados.filter((p) => {
       if (vista === "atrasados") return atrasadosIds.has(p.id);
-      if (vista === "posteriores") return esPosteriorFuturo(p);
+      if (vista === "posteriores") return esPosteriorFuturo(p) && impresos.has(p.id);
       if (estadoSel) return esDeHoy(p) && estadoSel.match(p);
       // Vista por defecto: activos de HOY + posteriores aún no impresos (para
       // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
@@ -791,11 +763,7 @@ export default function DespachoPage() {
         ) : (
           <div
             ref={scrollRef}
-            onMouseDown={onArrastreInicio}
-            onMouseMove={onArrastreMover}
-            onMouseUp={onArrastreFin}
-            onMouseLeave={onArrastreFin}
-            className="max-h-[calc(100vh-340px)] cursor-grab overflow-auto"
+            className="max-h-[calc(100vh-340px)] overflow-auto"
           >
           <table className="w-full min-w-[1000px] table-fixed text-sm">
             <colgroup>
@@ -837,15 +805,30 @@ export default function DespachoPage() {
                 // Transferencia: el cobro se confirma aparte para congelar el cronómetro.
                 const transferencia = norm(p.pago) === "transferencia";
                 const pagoConfirmado = Boolean(m.pagoConfirmado);
+                // Sin imprimir la comanda NO se habilita ningún cambio de estado
+                // (alistar, producción, facturar, despachar). Al gatear la entrada
+                // a producción y la confirmación de pago, el resto queda bloqueado
+                // en cascada (facturar exige alistado, despachar exige facturado).
+                const impreso = impresos.has(p.id);
                 return (
                   <tr key={p.id} className={anulado ? "opacity-60" : ""}>
                     {/* Cliente: agrupa televentas, comanda y medio de pago */}
                     <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
                       <div className="flex w-full items-stretch gap-3 pb-12">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-brand-black">
-                            {p.cliente.nombre || p.cliente.nit_cedula}
-                          </p>
+                        <div className="relative min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => setClienteAbierto((prev) => (prev === p.id ? null : p.id))}
+                            title="Ver toda la información del cliente"
+                            className="group flex items-center gap-1 text-left font-bold text-brand-black transition hover:text-brand-wine"
+                          >
+                            <span className="underline decoration-brand-brown/20 decoration-dotted underline-offset-2 group-hover:decoration-brand-wine">
+                              {p.cliente.nombre || p.cliente.nit_cedula}
+                            </span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-brown/50 transition ${clienteAbierto === p.id ? "rotate-180" : ""}`}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          </button>
                           {p.cliente.direccion && (
                             <p className="text-xs text-brand-brown/60">{p.cliente.direccion}</p>
                           )}
@@ -854,6 +837,48 @@ export default function DespachoPage() {
                           )}
                           {p.cliente.telefono && (
                             <p className="text-xs text-brand-brown/60">Tel: {p.cliente.telefono}</p>
+                          )}
+                          {clienteAbierto === p.id && (
+                            <div className="absolute left-0 top-6 z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
+                              <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-brand-brown/10 pb-1.5">
+                                <p className="truncate font-bold text-brand-black">
+                                  {p.cliente.nombre || p.cliente.nit_cedula}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setClienteAbierto(null)}
+                                  title="Cerrar"
+                                  className="shrink-0 rounded p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                              <div className="space-y-0.5">
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">NIT/Cédula:</span> {p.cliente.nit_cedula || "—"}
+                                </p>
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Dirección:</span> {p.cliente.direccion || "—"}
+                                </p>
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Referencia:</span> {p.cliente.referencia || "—"}
+                                </p>
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Barrio:</span> {p.cliente.barrio || "—"}
+                                </p>
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Ciudad:</span> {p.cliente.ciudad || "—"}
+                                </p>
+                                <p className="text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Teléfono:</span> {p.cliente.telefono || "—"}
+                                </p>
+                                <p className="break-all text-brand-brown/80">
+                                  <span className="font-semibold text-brand-black">Correo:</span> {p.cliente.correo || "—"}
+                                </p>
+                              </div>
+                            </div>
                           )}
                           <p className="text-xs text-brand-brown/50">
                             <span className="font-semibold text-brand-black">Despacho:</span> {fmtFecha(fechaEntregaISO(p))}
@@ -894,6 +919,11 @@ export default function DespachoPage() {
                           <p className="text-xs font-semibold text-brand-wine">
                             #{p.comanda}
                           </p>
+                          {p.clonadoDe && (
+                            <p className="mt-0.5 text-[11px] font-medium text-brand-amber">
+                              Clonado de #{p.clonadoDe}
+                            </p>
+                          )}
                           {p.vendedorNombre && (
                             <div className="mt-1.5">
                               <p className="text-xs font-semibold text-brand-black">Televentas</p>
@@ -960,6 +990,11 @@ export default function DespachoPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                               </svg>
                               Impresa
+                            </span>
+                          )}
+                          {!impreso && (
+                            <span className="self-center text-[10px] font-semibold text-amber-600">
+                              Imprime para habilitar el despacho
                             </span>
                           )}
                         </div>
@@ -1054,7 +1089,7 @@ export default function DespachoPage() {
                           onChange={(ev) =>
                             setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
                           }
-                          disabled={anulado || Boolean(m.fin)}
+                          disabled={anulado || Boolean(m.fin) || !impreso}
                           className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         >
                           <option value="">Selecciona</option>
@@ -1088,8 +1123,8 @@ export default function DespachoPage() {
                                 cambiarEstado(p.id, "Alistado");
                               }
                             }}
-                            disabled={anulado}
-                            title={m.inicio ? "Marcar el alistamiento como preparado" : "Iniciar el alistamiento del pedido"}
+                            disabled={anulado || !impreso}
+                            title={!impreso ? "Imprime la comanda primero para habilitar el despacho" : m.inicio ? "Marcar el alistamiento como preparado" : "Iniciar el alistamiento del pedido"}
                             className={`w-full whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
                               permite.estado ? "" : "opacity-50"
                             } ${
@@ -1140,8 +1175,8 @@ export default function DespachoPage() {
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
                             }
-                            disabled={anulado}
-                            title="Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"
+                            disabled={anulado || !impreso}
+                            title={!impreso ? "Imprime la comanda primero" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
                             className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
                           >
                             Confirmar transferencia

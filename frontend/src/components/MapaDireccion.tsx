@@ -58,10 +58,11 @@ function construirConsultas(
   const ci = ciudad.trim();
   const arma = (partes: string[]) => partes.filter(Boolean).join(", ");
   const consultas = [
-    arma([dir, b, ci, "Colombia"]), // dirección completa
-    arma([via, b, ci, "Colombia"]), // vía sin placa + barrio + ciudad
-    arma([via, ci, "Colombia"]), // vía + ciudad
-    arma([b, ci, "Colombia"]), // barrio + ciudad
+    arma([dir, ci, "Colombia"]), // dirección + ciudad (SIN barrio -> ubica la calle REAL)
+    arma([via, ci, "Colombia"]), // vía sin placa + ciudad (SIN barrio)
+    arma([dir, b, ci, "Colombia"]), // dirección + barrio + ciudad
+    arma([via, b, ci, "Colombia"]), // vía + barrio + ciudad
+    arma([b, ci, "Colombia"]), // barrio + ciudad (último recurso: solo el sector)
     arma([ci, "Colombia"]), // solo ciudad
   ];
   return [...new Set(consultas)].filter((q) => q && q !== "Colombia");
@@ -131,21 +132,53 @@ export default function MapaDireccion({
     setCargando(true);
     setEstado(null);
     try {
-      let encontrado: SugerenciaGeo | null = null;
+      // Se prioriza un resultado a nivel de CALLE (con `road`); solo si ninguna
+      // consulta ubica la vía se cae al sector/barrio como respaldo.
+      let conCalle: SugerenciaGeo | null = null;
+      let respaldo: SugerenciaGeo | null = null;
       for (const q of consultas) {
-        const data = await consultarNominatim(q, 1);
-        if (data.length > 0) {
-          encontrado = data[0];
+        const data = await consultarNominatim(q, 5);
+        const calle = data.find((s) => s.address?.road);
+        if (calle) {
+          conCalle = calle;
           break;
         }
+        if (!respaldo && data.length > 0) respaldo = data[0];
       }
+      const encontrado = conCalle ?? respaldo;
       if (encontrado) {
         const la = parseFloat(encontrado.lat);
         const lo = parseFloat(encontrado.lon);
         onUbicacion(la, lo);
         setSugerencia(encontrado.display_name ?? "");
         setAbierto(true);
-        setEstado({ tipo: "ok", msg: "Dirección aproximada encontrada en el mapa." });
+        const a = encontrado.address ?? {};
+        const barrioReal =
+          a.neighbourhood ||
+          a.suburb ||
+          a.quarter ||
+          a.residential ||
+          a.city_district ||
+          "";
+        if (!conCalle) {
+          // Solo se pudo ubicar el sector/barrio, no la vía exacta.
+          setEstado({
+            tipo: "info",
+            msg: "Solo se ubicó el sector (la vía exacta no está en el mapa). Verifícala en el mapa o usa 'Ver sugerencias'.",
+          });
+        } else if (
+          barrio.trim() &&
+          barrioReal &&
+          normaliza(barrioReal) !== normaliza(barrio)
+        ) {
+          // La vía existe, pero en un barrio distinto al que se escribió.
+          setEstado({
+            tipo: "info",
+            msg: `Ojo: esa vía figura en el barrio "${barrioReal}", no en "${barrio}". Revisa "Ver sugerencias".`,
+          });
+        } else {
+          setEstado({ tipo: "ok", msg: "Dirección encontrada en el mapa." });
+        }
       } else {
         setAbierto(true);
         setEstado({
@@ -180,14 +213,27 @@ export default function MapaDireccion({
     setCargandoSug(true);
     setEstado(null);
     try {
-      let lista: SugerenciaGeo[] = [];
+      // Se combinan varias consultas (empezando por la vía SIN barrio) para
+      // descubrir en qué barrio existe realmente la dirección. Se prioriza
+      // mostrar las que ubican una VÍA (road) sobre las de solo sector.
+      const vistos = new Set<string>();
+      const acumulado: SugerenciaGeo[] = [];
       for (const q of consultas) {
         const data = await consultarNominatim(q, 8);
-        if (data.length > 0) {
-          lista = data;
-          break;
+        for (const s of data) {
+          const clave = `${s.lat},${s.lon}`;
+          if (vistos.has(clave)) continue;
+          vistos.add(clave);
+          acumulado.push(s);
         }
+        // Con suficientes resultados a nivel de calle, no seguimos consultando.
+        if (acumulado.filter((s) => s.address?.road).length >= 6) break;
       }
+      // Primero las que ubican una VÍA real; luego las de solo sector/barrio.
+      acumulado.sort(
+        (a, b) => (a.address?.road ? 0 : 1) - (b.address?.road ? 0 : 1),
+      );
+      const lista = acumulado.slice(0, 8);
       setSugerencias(lista);
       setModalSug(true);
       if (lista.length === 0) {

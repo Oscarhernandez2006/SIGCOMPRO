@@ -5,9 +5,6 @@ import { ApiError } from "@/lib/api";
 import {
   guardarRegistroPersonal,
   obtenerRegistroPersonal,
-  obtenerTiposCorte,
-  guardarTiposCorte,
-  invalidarCacheCortes,
   type PersonaAsignada,
   type RegistroPersonal,
 } from "@/lib/configuracion";
@@ -52,29 +49,16 @@ export default function AdminConfiguracionPage() {
   const [asignando, setAsignando] = useState<PersonaConRol | null>(null);
   const [editando, setEditando] = useState<PersonaConRol | null>(null);
 
-  // Tipos de corte (porcionado).
-  const [cortes, setCortes] = useState<string[]>([]);
-  const [nuevoCorte, setNuevoCorte] = useState("");
-  const [editCorteIdx, setEditCorteIdx] = useState<number | null>(null);
-  const [editCorteValor, setEditCorteValor] = useState("");
-  const [guardandoCortes, setGuardandoCortes] = useState(false);
-  const [errorCortes, setErrorCortes] = useState<string | null>(null);
-
   useEffect(() => {
     setCargando(true);
     setErrorCarga(null);
-    Promise.all([
-      listarPuntosVenta(),
-      obtenerRegistroPersonal(),
-      obtenerTiposCorte(),
-    ])
-      .then(([ps, reg, cs]) => {
+    Promise.all([listarPuntosVenta(), obtenerRegistroPersonal()])
+      .then(([ps, reg]) => {
         setPuntos(ps);
         setRegistro({
           porcionadores: reg.porcionadores ?? [],
           domiciliarios: reg.domiciliarios ?? [],
         });
-        setCortes(cs ?? []);
       })
       .catch((e) =>
         setErrorCarga(
@@ -203,67 +187,12 @@ export default function AdminConfiguracionPage() {
     });
   }
 
-  // Persiste la lista de cortes (guardado optimista) e invalida la caché.
-  async function persistirCortes(nueva: string[]) {
-    const ordenada = [...nueva].sort((a, b) => a.localeCompare(b, "es"));
-    setCortes(ordenada);
-    setGuardandoCortes(true);
-    setErrorCortes(null);
-    try {
-      const g = await guardarTiposCorte(ordenada);
-      setCortes(g ?? []);
-      invalidarCacheCortes();
-    } catch (e) {
-      setErrorCortes(
-        e instanceof ApiError ? e.message : "No se pudo guardar el cambio",
-      );
-    } finally {
-      setGuardandoCortes(false);
-    }
-  }
-
-  function agregarCorte() {
-    const limpio = nuevoCorte.trim();
-    if (!limpio) return;
-    if (cortes.some((c) => c.toLowerCase() === limpio.toLowerCase())) {
-      setErrorCortes("Ese tipo de corte ya existe.");
-      return;
-    }
-    persistirCortes([...cortes, limpio]);
-    setNuevoCorte("");
-  }
-
-  function guardarEdicionCorte() {
-    if (editCorteIdx === null) return;
-    const limpio = editCorteValor.trim();
-    if (!limpio) return;
-    const duplicado = cortes.some(
-      (c, i) => i !== editCorteIdx && c.toLowerCase() === limpio.toLowerCase(),
-    );
-    if (duplicado) {
-      setErrorCortes("Ese tipo de corte ya existe.");
-      return;
-    }
-    persistirCortes(cortes.map((c, i) => (i === editCorteIdx ? limpio : c)));
-    setEditCorteIdx(null);
-    setEditCorteValor("");
-  }
-
-  function eliminarCorte(idx: number) {
-    if (!confirm(`¿Eliminar el tipo de corte “${cortes[idx]}”?`)) return;
-    persistirCortes(cortes.filter((_, i) => i !== idx));
-    if (editCorteIdx === idx) {
-      setEditCorteIdx(null);
-      setEditCorteValor("");
-    }
-  }
-
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
-            Configuración
+            Gestión de recursos
           </h1>
           <p className="mt-1 text-sm text-brand-brown/70">
             Personal de despacho: porcionadores y domiciliarios, con sus puntos
@@ -409,142 +338,6 @@ export default function AdminConfiguracionPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tipos de corte (porcionado) */}
-      {!cargando && (
-        <div className="mt-8">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="font-serif text-xl font-bold text-brand-wine">
-                Tipos de corte
-              </h2>
-              <p className="mt-0.5 text-sm text-brand-brown/70">
-                Opciones que aparecen en el selector de corte al porcionar un
-                producto en el pedido.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {guardandoCortes && (
-                <span className="text-xs font-medium text-brand-brown/60">
-                  Guardando…
-                </span>
-              )}
-              {errorCortes && (
-                <span className="text-xs font-semibold text-red-600">
-                  {errorCortes}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-            {/* Agregar nuevo corte */}
-            <div className="flex items-center gap-2 border-b border-brand-brown/10 bg-brand-cream-soft/40 px-4 py-3">
-              <input
-                type="text"
-                value={nuevoCorte}
-                onChange={(e) => {
-                  setNuevoCorte(e.target.value);
-                  setErrorCortes(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") agregarCorte();
-                }}
-                placeholder="Nuevo tipo de corte (ej. Mariposa)"
-                className="min-w-[200px] flex-1 rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
-              />
-              <button
-                onClick={agregarCorte}
-                title="Agregar el tipo de corte"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-                </svg>
-                Agregar
-              </button>
-            </div>
-
-            {cortes.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-brand-brown/50">
-                Aún no hay tipos de corte. Agrega el primero arriba.
-              </p>
-            ) : (
-              <ul className="divide-y divide-brand-brown/5">
-                {cortes.map((c, idx) => (
-                  <li
-                    key={`${c}-${idx}`}
-                    className="flex items-center gap-2 px-4 py-2.5 hover:bg-brand-cream-soft/40"
-                  >
-                    {editCorteIdx === idx ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editCorteValor}
-                          onChange={(e) => {
-                            setEditCorteValor(e.target.value);
-                            setErrorCortes(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") guardarEdicionCorte();
-                            if (e.key === "Escape") {
-                              setEditCorteIdx(null);
-                              setEditCorteValor("");
-                            }
-                          }}
-                          autoFocus
-                          className="min-w-[180px] flex-1 rounded-lg border border-brand-brown/15 bg-white px-3 py-1.5 text-sm outline-none focus:border-brand-amber"
-                        />
-                        <button
-                          onClick={guardarEdicionCorte}
-                          title="Guardar"
-                          className="rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90"
-                        >
-                          Guardar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditCorteIdx(null);
-                            setEditCorteValor("");
-                          }}
-                          title="Cancelar"
-                          className="rounded-lg border border-brand-brown/20 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="flex-1 text-sm font-medium text-brand-black">
-                          {c}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setEditCorteIdx(idx);
-                            setEditCorteValor(c);
-                            setErrorCortes(null);
-                          }}
-                          title={`Editar “${c}”`}
-                          className="rounded-lg border border-brand-brown/20 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => eliminarCorte(idx)}
-                          title={`Eliminar “${c}”`}
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                        >
-                          Eliminar
-                        </button>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         </div>
       )}

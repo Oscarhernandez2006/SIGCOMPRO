@@ -20,6 +20,8 @@ interface NavItem {
   icon: ReactNode;
   /** Si es true, solo lo ven administrador app / desarrollador. */
   soloDashboard?: boolean;
+  /** Sub-opciones desplegables (menú anidado). Si existen, el ítem es un grupo. */
+  children?: NavItem[];
 }
 
 const navItems: NavItem[] = [
@@ -70,43 +72,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Puntos de venta",
-    href: "/admin/puntos-venta",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75h18M4.5 9.75 5.7 5.25A1.5 1.5 0 0 1 7.14 4.2h9.72a1.5 1.5 0 0 1 1.44 1.05l1.2 4.5M5.25 9.75v9.75A1.5 1.5 0 0 0 6.75 21h10.5a1.5 1.5 0 0 0 1.5-1.5V9.75M9.75 21v-5.25a1.5 1.5 0 0 1 1.5-1.5h1.5a1.5 1.5 0 0 1 1.5 1.5V21" />
-      </svg>
-    ),
-  },
-  {
-    label: "Domicilios",
-    href: "/admin/domicilios",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Motivos",
-    href: "/admin/motivos",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 17.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM7.5 6.75h12M7.5 12h12m-12 5.25h12" />
-      </svg>
-    ),
-  },
-  {
-    label: "Administración de usuarios",
-    href: "/admin/usuarios",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-      </svg>
-    ),
-  },
-  {
     label: "Configuración",
     href: "/admin/configuracion",
     icon: (
@@ -115,6 +80,63 @@ const navItems: NavItem[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
       </svg>
     ),
+    children: [
+      {
+        label: "Administración de usuarios",
+        href: "/admin/usuarios",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+          </svg>
+        ),
+      },
+      {
+        label: "Gestión de recursos",
+        href: "/admin/configuracion",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+          </svg>
+        ),
+      },
+      {
+        label: "Tipos de corte",
+        href: "/admin/cortes",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42" />
+          </svg>
+        ),
+      },
+      {
+        label: "Motivos",
+        href: "/admin/motivos",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 17.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM7.5 6.75h12M7.5 12h12m-12 5.25h12" />
+          </svg>
+        ),
+      },
+      {
+        label: "Valor domicilio",
+        href: "/admin/domicilios",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+          </svg>
+        ),
+      },
+      {
+        label: "Puntos de venta",
+        href: "/admin/puntos-venta",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75h18M4.5 9.75 5.7 5.25A1.5 1.5 0 0 1 7.14 4.2h9.72a1.5 1.5 0 0 1 1.44 1.05l1.2 4.5M5.25 9.75v9.75A1.5 1.5 0 0 0 6.75 21h10.5a1.5 1.5 0 0 0 1.5-1.5V9.75M9.75 21v-5.25a1.5 1.5 0 0 1 1.5-1.5h1.5a1.5 1.5 0 0 1 1.5 1.5V21" />
+          </svg>
+        ),
+      },
+    ],
   },
 ];
 
@@ -124,6 +146,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [ready, setReady] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Grupos del menú expandidos (por label). "Configuración" es un grupo.
+  const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const token = getToken();
@@ -165,11 +189,70 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const puedeCambiarPanel = panelesAccesibles(usuario).length > 1;
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
+    const items = navItems.filter(
+      (item) => !item.soloDashboard || puedeVerDashboard(usuario?.rol),
+    );
+    const esActivo = (href: string) => pathname.startsWith(href);
     return (
-      <nav className="flex flex-1 flex-col gap-1 px-3">
-        {navItems
-          .filter((item) => !item.soloDashboard || puedeVerDashboard(usuario?.rol))
-          .map((item) => {
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
+        {items.map((item) => {
+          // Grupo con sub-opciones (ej. Configuración).
+          if (item.children && item.children.length > 0) {
+            const algunHijoActivo = item.children.some((h) => esActivo(h.href));
+            const abierto = gruposAbiertos[item.label] ?? algunHijoActivo;
+            return (
+              <div key={item.label}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setGruposAbiertos((prev) => ({
+                      ...prev,
+                      [item.label]: !(prev[item.label] ?? algunHijoActivo),
+                    }))
+                  }
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                    algunHijoActivo
+                      ? "text-brand-cream"
+                      : "text-brand-cream/80 hover:bg-brand-cream/10 hover:text-brand-cream"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="flex-1 text-left">{item.label}</span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={`h-4 w-4 transition-transform ${abierto ? "rotate-180" : ""}`}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {abierto && (
+                  <div className="mt-1 space-y-1 border-l border-brand-cream/10 pl-3">
+                    {item.children.map((hijo) => {
+                      const active = esActivo(hijo.href);
+                      return (
+                        <Link
+                          key={hijo.label}
+                          href={hijo.href}
+                          onClick={onNavigate}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                            active
+                              ? "bg-brand-amber text-white shadow-sm"
+                              : "text-brand-cream/70 hover:bg-brand-cream/10 hover:text-brand-cream"
+                          }`}
+                        >
+                          {hijo.icon}
+                          <span>{hijo.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
           const active =
             item.href === "/admin"
               ? pathname === "/admin"

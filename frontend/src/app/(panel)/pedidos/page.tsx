@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listarClientes, type Cliente } from "@/lib/clientes";
 import {
   misPuntosVenta,
@@ -178,6 +178,19 @@ export default function PedidosPage() {
   // Número del día (turno) por pedido, para que la comanda impresa desde aquí
   // muestre el mismo número que en Despacho.
   const numerosDia = useMemo(() => numerosDelDia(pedidos), [pedidos]);
+
+  // Clones por comanda de origen: comanda del pedido -> comandas de sus clones.
+  // Sirve para avisar en el pedido (p. ej. anulado) que ya tiene una clonación.
+  const clonesPorComanda = useMemo(() => {
+    const mapa = new Map<string, string[]>();
+    for (const p of pedidos) {
+      if (!p.clonadoDe) continue;
+      const arr = mapa.get(p.clonadoDe);
+      if (arr) arr.push(p.comanda);
+      else mapa.set(p.clonadoDe, [p.comanda]);
+    }
+    return mapa;
+  }, [pedidos]);
 
   // Desplaza el día del filtro (delta en días). Si no hay día, parte de hoy.
   const moverDia = (delta: number) => {
@@ -491,6 +504,16 @@ export default function PedidosPage() {
                     {p.motivo && (
                       <p className="mt-0.5 text-[11px] text-brand-brown/50">{p.motivo}</p>
                     )}
+                    {p.clonadoDe && (
+                      <p className="mt-0.5 text-[11px] font-medium text-brand-amber">
+                        Clonado de #{p.clonadoDe}
+                      </p>
+                    )}
+                    {clonesPorComanda.get(p.comanda) && (
+                      <p className="mt-0.5 text-[11px] font-medium text-brand-wine">
+                        Ya clonado en #{clonesPorComanda.get(p.comanda)!.join(", #")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                   <td className="px-4 py-3">
@@ -508,6 +531,9 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
                             </svg>
                           </button>
+                          {/* Un pedido DESPACHADO solo permite Ver y Reimprimir. */}
+                          {p.estado !== "Despachado" && (
+                          <>
                           <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} aria-label="Descargar Excel" title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
@@ -528,6 +554,8 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                             </svg>
                           </button>
+                          </>
+                          )}
                         </>
                       )}
                       {p.anulado && (
@@ -566,7 +594,7 @@ export default function PedidosPage() {
           onCerrar={() => setModalCongelados(false)}
         />
       )}
-      {detalle && <DetallePedido pedido={detalle} numeroDia={numerosDia.get(detalle.id)} meta={meta[detalle.id]} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} numeroDia={numerosDia.get(detalle.id)} meta={meta[detalle.id]} clones={clonesPorComanda.get(detalle.comanda)} onCerrar={() => setDetalle(null)} />}
       {motivoModal && (
         <ModalMotivo
           pedido={motivoModal.pedido}
@@ -1002,6 +1030,8 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   // Observación general del pedido (indicaciones para despacho/cocina).
   const [observacion, setObservacion] = useState<string>(borrador ? borrador.observacion : base?.observacion ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
+  // Guarda contra doble envío (evita crear el pedido/clon dos veces).
+  const finalizandoRef = useRef(false);
   // Estado del envío directo a Drivin (solo La 93) tras crear el pedido.
   const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
   const [drivinMsg, setDrivinMsg] = useState<string>("");
@@ -1126,11 +1156,13 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
 
   // Crea o actualiza el pedido y muestra la pantalla de confirmación.
   async function finalizarPedido() {
+    if (finalizandoRef.current) return; // evita doble clic (clon/pedido duplicado)
     if (!punto || !cliente) return;
     if (programado && !fechaProgramada) {
       alert("Selecciona la fecha de entrega programada.");
       return;
     }
+    finalizandoRef.current = true;
     const ahora = new Date();
     const dom = entrega === "domicilio" ? valorDomicilio : 0;
     const total = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0) + dom;
@@ -1160,6 +1192,9 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
       vendedorNombre: inicial?.vendedorNombre ?? getUsuario()?.nombre ?? "",
       vendedorCedula: inicial?.vendedorCedula ?? getUsuario()?.cedula ?? "",
       estado: inicial?.estado ?? "En proceso",
+      // Si es una clonación, referencia la comanda del pedido de origen
+      // (normalmente el anulado). En edición conserva la referencia previa.
+      clonadoDe: clon ? clon.comanda : inicial?.clonadoDe,
     };
     // Persistimos primero: el servidor devuelve el pedido con su
     // consecutivo/comanda definitivos. Solo entonces lo mostramos e
@@ -1168,6 +1203,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     try {
       finalPedido = await guardarPedidoApi(pedido);
     } catch {
+      finalizandoRef.current = false;
       alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
       return;
     }
@@ -2138,6 +2174,9 @@ function ResumenPedido({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Punto de venta</p>
             <p className="font-medium text-brand-black">{punto?.nombre ?? "Sin asignar"}</p>
+            <p className="mt-1 text-xs font-medium text-brand-wine">
+              Ítems seleccionados: <span className="font-bold">{carrito.length}</span>
+            </p>
           </div>
           {/* Cliente */}
           <div>
@@ -2252,6 +2291,10 @@ function ConfigProducto({
   const cortesG = g * u;
   const exceso = cortesG - pesoG;
   const fueraRango = porcionado && cortesG > 0 && exceso > 100;
+  // Porciones recomendadas = total de gramos (peso) / gramos por pieza.
+  const recomendadas = g > 0 && pesoG > 0 ? Math.round(pesoG / g) : 0;
+  // Las porciones suman EXACTAMENTE el peso -> barra completa en verde.
+  const exacto = porcionado && cortesG > 0 && cortesG === pesoG;
   const subtotal = producto.precio * cant;
   const pct = pesoG > 0 ? Math.min(100, (cortesG / pesoG) * 100) : 0;
 
@@ -2369,7 +2412,15 @@ function ConfigProducto({
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number" min="0" value={gramos}
-                  onChange={(e) => setGramos(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGramos(val);
+                    // Auto-sugiere las porciones si aún no se han ingresado.
+                    const gn = parseFloat(val) || 0;
+                    if (gn > 0 && pesoG > 0 && !unidades.trim()) {
+                      setUnidades(String(Math.round(pesoG / gn)));
+                    }
+                  }}
                   placeholder="Gramos c/u"
                   className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
                 />
@@ -2380,16 +2431,40 @@ function ConfigProducto({
                   className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
                 />
               </div>
+              {/* Porciones recomendadas según el peso y los gramos por pieza */}
+              {g > 0 && recomendadas > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-brand-wine/10 px-2.5 py-1 font-medium text-brand-wine">
+                    Recomendado: {recomendadas} porción{recomendadas === 1 ? "" : "es"} de {g} g
+                  </span>
+                  {u !== recomendadas && (
+                    <button
+                      type="button"
+                      onClick={() => setUnidades(String(recomendadas))}
+                      className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                    >
+                      Aplicar
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Barra de ajuste */}
               <div className="mt-3">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-brand-brown/10">
                   <div
-                    className={`h-full transition-all ${fueraRango ? "bg-red-500" : "bg-brand-amber"}`}
+                    className={`h-full transition-all ${
+                      exacto ? "bg-green-500" : fueraRango ? "bg-red-500" : "bg-brand-amber"
+                    }`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <p className={`mt-1.5 text-xs ${fueraRango ? "text-red-600" : "text-brand-brown/60"}`}>
+                <p
+                  className={`mt-1.5 text-xs ${
+                    exacto ? "text-green-600" : fueraRango ? "text-red-600" : "text-brand-brown/60"
+                  }`}
+                >
                   {(cortesG / 1000).toFixed(2)} kg de {cantidad} kg
+                  {exacto && " · completo ✓"}
                   {fueraRango && " · supera por más de 100 g"}
                 </p>
               </div>
@@ -2865,6 +2940,8 @@ export interface Pedido extends DatosComanda {
   anulado?: boolean;
   /** Motivo de anulación o cancelación (se guarda al anular/cancelar). */
   motivo?: string;
+  /** Comanda del pedido del que se clonó este (para referenciar la clonación). */
+  clonadoDe?: string;
   /** ¿Retenido por cartera? Si es falso/indefinido, el pago está liberado. */
   retenido?: boolean;
   /** ¿Pedido programado para otra fecha? Si es falso/indefinido, es para hoy. */
@@ -2934,7 +3011,7 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   return mapa;
 }
 
-export function DetallePedido({ pedido, onCerrar, numeroDia, meta }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta }) {
+export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta; clones?: string[] }) {
   const dest = pedido.entrega === "domicilio" ? "Domicilio" : pedido.entrega === "recoge" ? "Recoge en punto" : "—";
   const c = pedido.cliente;
   const fH = (iso?: string) => (iso ? new Date(iso).toLocaleString("es-CO") : "—");
@@ -2957,6 +3034,16 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta }: { pedido: P
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">Pedido {pedido.comanda}</h3>
             <p className="text-xs text-brand-brown/50">{new Date(pedido.fecha).toLocaleString("es-CO")} · {pedido.punto.nombre}{pedido.anulado ? " · ANULADO" : ""}</p>
+            {pedido.clonadoDe && (
+              <p className="mt-0.5 text-xs font-medium text-brand-amber">
+                Clonado del pedido #{pedido.clonadoDe}
+              </p>
+            )}
+            {clones && clones.length > 0 && (
+              <p className="mt-0.5 text-xs font-medium text-brand-wine">
+                Ya clonado en #{clones.join(", #")}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
