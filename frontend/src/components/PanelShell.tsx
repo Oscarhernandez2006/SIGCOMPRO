@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { tieneAccesoAdministrativo, getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
+import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
+import ClaveDinamica from "./ClaveDinamica";
 
 interface NavItem {
   label: string;
@@ -296,6 +297,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           </button>
 
           <div className="ml-auto flex items-center gap-3">
+            {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}

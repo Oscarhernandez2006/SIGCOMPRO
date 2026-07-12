@@ -44,6 +44,14 @@ export function puedeSeleccionarPuntoVenta(rol?: string | null): boolean {
 }
 
 /**
+ * ¿El usuario puede ver la clave dinámica de autorización (tipo Nequi)? Solo
+ * los roles "administrador app" y "desarrollador".
+ */
+export function puedeVerClaveDinamica(rol?: string | null): boolean {
+  return puedeSeleccionarPuntoVenta(rol);
+}
+
+/**
  * ¿El usuario puede ver el Dashboard? Solo los roles "administrador app" y
  * "desarrollador" (NO el "administrador" a secas).
  */

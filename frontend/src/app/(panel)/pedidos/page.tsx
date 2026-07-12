@@ -19,6 +19,7 @@ import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarAD
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
+import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import CrearClienteModal from "@/components/CrearClienteModal";
 import QRCode from "qrcode";
 
@@ -1032,6 +1033,12 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
   // Guarda contra doble envío (evita crear el pedido/clon dos veces).
   const finalizandoRef = useRef(false);
+  // Autorización con clave dinámica: al CLONAR cambiando el punto de venta se
+  // exige el código dinámico de un administrador antes de crear/subir a Drivin.
+  const [autorizacionAbierta, setAutorizacionAbierta] = useState(false);
+  const [codigoAuth, setCodigoAuth] = useState("");
+  const [verificandoAuth, setVerificandoAuth] = useState(false);
+  const [errorAuth, setErrorAuth] = useState<string | null>(null);
   // Estado del envío directo a Drivin (solo La 93) tras crear el pedido.
   const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
   const [drivinMsg, setDrivinMsg] = useState<string>("");
@@ -1042,6 +1049,9 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
   const [punto, setPunto] = useState<PuntoVenta | null>(borrador ? borrador.punto : base?.punto ?? null);
   const [cargandoPuntos, setCargandoPuntos] = useState(true);
   const [errorPuntos, setErrorPuntos] = useState<string | null>(null);
+  // El usuario pidió CAMBIAR el punto (desde el chip de la cabecera): muestra el
+  // selector en cualquier paso, sin perder el punto actual hasta que elija otro.
+  const [cambiandoPunto, setCambiandoPunto] = useState(false);
 
   useEffect(() => {
     misPuntosVenta()
@@ -1059,8 +1069,9 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
 
   // Mientras no haya punto elegido (y haya varios), se muestra el selector.
   // El paso 0 (cliente) puede verse sin punto. A partir del paso 1, si el
-  // usuario tiene varios puntos asignados, debe elegirlo MANUALMENTE.
-  const eligiendoPunto = !punto && paso >= 1;
+  // usuario tiene varios puntos asignados, debe elegirlo MANUALMENTE. También
+  // se muestra si el usuario pulsó "cambiar punto" desde la cabecera.
+  const eligiendoPunto = cambiandoPunto || (!punto && paso >= 1);
 
   // Selecciona el cliente y avanza. La selección del punto de venta es MANUAL
   // cuando hay varios puntos (no se auto-asigna). Si solo hay 1 punto, ya está
@@ -1162,6 +1173,55 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
       alert("Selecciona la fecha de entrega programada.");
       return;
     }
+    // Clonar cambiando el punto de venta es un movimiento sensible (el pedido
+    // pasa a otro punto y puede subir a Drivin): requiere autorización con la
+    // clave dinámica de un administrador antes de ejecutarse.
+    if (requiereAutorizacion) {
+      setCodigoAuth("");
+      setErrorAuth(null);
+      setAutorizacionAbierta(true);
+      return;
+    }
+    ejecutarCreacion();
+  }
+
+  // ¿La operación necesita autorización de administrador? Solo al CLONAR hacia
+  // un punto de venta distinto al del pedido original.
+  const requiereAutorizacion =
+    !!clon &&
+    !!clon.punto &&
+    !!punto &&
+    String(punto.id) !== String(clon.punto.id);
+
+  // Verifica el código dinámico dictado por el administrador y, si es válido,
+  // ejecuta la creación del clon. Si no, bloquea la operación.
+  async function autorizarYCrear() {
+    if (verificandoAuth) return;
+    const codigo = codigoAuth.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      setErrorAuth("Ingresa el código de 6 dígitos.");
+      return;
+    }
+    setVerificandoAuth(true);
+    setErrorAuth(null);
+    try {
+      const { valido } = await verificarClaveDinamica(codigo);
+      if (!valido) {
+        setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
+        return;
+      }
+      setAutorizacionAbierta(false);
+      ejecutarCreacion();
+    } catch {
+      setErrorAuth("No se pudo verificar el código. Inténtalo de nuevo.");
+    } finally {
+      setVerificandoAuth(false);
+    }
+  }
+
+  async function ejecutarCreacion() {
+    if (finalizandoRef.current) return; // evita doble clic (clon/pedido duplicado)
+    if (!punto || !cliente) return;
     finalizandoRef.current = true;
     const ahora = new Date();
     const dom = entrega === "domicilio" ? valorDomicilio : 0;
@@ -1239,6 +1299,66 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/50 p-4">
+      {/* Modal de autorización con clave dinámica (clonar cambiando de punto) */}
+      {autorizacionAbierta && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-wine/10">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 text-brand-wine">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+            </div>
+            <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
+              Autorización requerida
+            </h3>
+            <p className="mt-1 text-center text-sm text-brand-brown/70">
+              Estás clonando este pedido a{" "}
+              <b>{punto?.nombre}</b> (distinto al punto original
+              {clon?.punto ? ` "${clon.punto.nombre}"` : ""}). Pídele a un
+              administrador su <b>clave dinámica</b> e ingrésala para autorizar
+              el cambio.
+            </p>
+            <input
+              inputMode="numeric"
+              autoFocus
+              value={codigoAuth}
+              onChange={(e) => {
+                setCodigoAuth(e.target.value.replace(/\D/g, "").slice(0, 6));
+                setErrorAuth(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") autorizarYCrear();
+              }}
+              placeholder="••••••"
+              className="mt-4 w-full rounded-xl border border-brand-brown/20 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine"
+            />
+            {errorAuth && (
+              <p className="mt-2 text-center text-sm font-medium text-red-600">{errorAuth}</p>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAutorizacionAbierta(false);
+                  setCodigoAuth("");
+                  setErrorAuth(null);
+                }}
+                className="flex-1 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={autorizarYCrear}
+                disabled={verificandoAuth || codigoAuth.length !== 6}
+                className="flex-1 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+              >
+                {verificandoAuth ? "Verificando…" : "Autorizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Cabecera */}
         <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-6 py-4">
@@ -1247,26 +1367,40 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
           </h2>
           <div className="flex items-center gap-3">
             {punto && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!modoEdicion && puntos.length > 1) setPunto(null);
-                }}
-                title={!modoEdicion && puntos.length > 1 ? "Cambiar el punto de venta" : punto.nombre}
-                className={`inline-flex items-center gap-1.5 rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine transition ${
-                  !modoEdicion && puntos.length > 1 ? "hover:bg-brand-wine/20" : "cursor-default"
-                }`}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
-                </svg>
-                {punto.nombre}
-                {puntos.length > 1 && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 opacity-70">
+              !modoEdicion && puntos.length > 1 ? (
+                <div className="relative" title="Cambiar el punto de venta">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                  </svg>
+                  <select
+                    value={String(punto.id)}
+                    onChange={(e) => {
+                      const sel = puntos.find((p) => String(p.id) === e.target.value);
+                      if (sel) setPunto(sel);
+                    }}
+                    className="cursor-pointer appearance-none rounded-full bg-brand-wine/10 py-1 pl-8 pr-7 text-xs font-semibold text-brand-wine outline-none transition hover:bg-brand-wine/20 focus:ring-1 focus:ring-brand-wine/40"
+                  >
+                    {puntos.map((p) => (
+                      <option key={p.id} value={String(p.id)} className="text-brand-black">
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-brand-wine/70">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                   </svg>
-                )}
-              </button>
+                </div>
+              ) : (
+                <span
+                  title={punto.nombre}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                  </svg>
+                  {punto.nombre}
+                </span>
+              )
             )}
             <button
               onClick={onCerrar}
@@ -1387,13 +1521,21 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                 puntos={puntos}
                 cargando={cargandoPuntos}
                 error={errorPuntos}
-                onSeleccionar={setPunto}
+                onSeleccionar={(p) => {
+                  setPunto(p);
+                  setCambiandoPunto(false);
+                }}
                 sugeridoId={puntoSugerido ? String(puntoSugerido.id) : undefined}
               />
             </div>
             <div className="flex items-center justify-end border-t border-brand-brown/10 px-6 py-4">
               <button
-                onClick={onCerrar}
+                onClick={() => {
+                  // Si solo estaba cambiando el punto, vuelve al paso actual sin
+                  // cerrar el wizard (conserva el punto que ya tenía).
+                  if (cambiandoPunto && punto) setCambiandoPunto(false);
+                  else onCerrar();
+                }}
                 title="Cancelar y cerrar"
                 className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
               >

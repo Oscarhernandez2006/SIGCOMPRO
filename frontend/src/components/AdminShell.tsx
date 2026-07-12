@@ -10,9 +10,11 @@ import {
   limpiarSesion,
   tieneAccesoAdministrativo,
   puedeVerDashboard,
+  puedeVerClaveDinamica,
   type Usuario,
 } from "@/lib/auth";
 import { panelesAccesibles } from "@/lib/permisos";
+import ClaveDinamica from "./ClaveDinamica";
 
 interface NavItem {
   label: string;
@@ -402,6 +404,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </span>
 
           <div className="ml-auto flex items-center gap-3">
+            {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}
