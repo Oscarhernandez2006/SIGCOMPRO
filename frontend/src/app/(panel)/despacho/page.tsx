@@ -560,7 +560,9 @@ export default function DespachoPage() {
     const base = pedidosOrdenados.filter((p) => {
       if (vista === "atrasados") return atrasadosIds.has(p.id);
       if (vista === "posteriores") return esPosteriorFuturo(p) && impresos.has(p.id);
-      if (estadoSel) return esDeHoy(p) && estadoSel.match(p);
+      // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
+      // solo aparece bajo "Atrasados", así el conteo coincide con la tabla.
+      if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
       // Vista por defecto: activos de HOY + posteriores aún no impresos (para
       // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
       // la card de Posteriores).
@@ -667,7 +669,10 @@ export default function DespachoPage() {
                 ? atrasados.length
                 : def.key === "posteriores"
                   ? posterioresFuturos.length
-                  : pedidosDeHoy.filter(def.match).length;
+                  : // Un pedido atrasado se contabiliza SOLO en la card "Atrasados"
+                    // (aunque su estado real sea alistado/producción/etc.), para no
+                    // duplicarlo ni inflar el Total.
+                    pedidosDeHoy.filter((p) => def.match(p) && !atrasadosIds.has(p.id)).length;
             // El Total es la suma de todas las demás cards.
             const valor =
               e.key === "total"
