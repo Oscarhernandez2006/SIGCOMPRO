@@ -181,15 +181,27 @@ export default function ClientesPage() {
       setErrorForm("El NIT/cédula es obligatorio.");
       return;
     }
-    const nombreCompleto = `${nombres} ${apellidos}`.trim().replace(/\s+/g, " ");
-    if (!nombreCompleto) {
-      setErrorForm("El nombre es obligatorio.");
+    if (!nombres.trim()) {
+      setErrorForm("Los nombres son obligatorios.");
       return;
     }
+    if (!apellidos.trim()) {
+      setErrorForm("Los apellidos son obligatorios.");
+      return;
+    }
+    const nombreCompleto = `${nombres} ${apellidos}`.trim().replace(/\s+/g, " ");
     if (!form.direccion?.trim()) {
       setErrorForm(
         "La dirección es obligatoria: completa tipo de vía, vía, cruce y placa.",
       );
+      return;
+    }
+    if (!form.barrio?.trim()) {
+      setErrorForm("El barrio es obligatorio.");
+      return;
+    }
+    if (!form.ciudad?.trim()) {
+      setErrorForm("La ciudad es obligatoria.");
       return;
     }
     if (!tipoCliente) {
@@ -687,7 +699,7 @@ export default function ClientesPage() {
                 {/* Bloque 4: barrio y ciudad */}
                 <Bloque titulo="Barrio y ciudad">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Campo label="Barrio">
+                    <Campo label="Barrio *">
                       <AutocompleteInput
                         value={form.barrio ?? ""}
                         onChange={(v) => cambiar("barrio", aTextoLimpio(v))}
@@ -699,7 +711,7 @@ export default function ClientesPage() {
                         placeholder="Barrio"
                       />
                     </Campo>
-                    <Campo label="Ciudad">
+                    <Campo label="Ciudad *">
                       <AutocompleteInput
                         value={form.ciudad ?? ""}
                         onChange={(v) => cambiar("ciudad", aTextoLimpio(v))}

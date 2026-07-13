@@ -571,6 +571,7 @@ export class PedidosService implements OnModuleInit {
       tipo,
       proveedor,
       codigoProveedor,
+      puntoNombre: String(punto.nombre ?? ''),
       direccion: String(cliente.direccion ?? ''),
       barrio: String(cliente.barrio ?? ''),
       ciudad: String(cliente.ciudad ?? ''),
@@ -649,6 +650,23 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
+   * Determina el schema_code de Drivin según el punto de venta:
+   *  - Alameda 2 -> 05
+   *  - Alameda 1 (o Alameda sin número) -> 04
+   *  - La 93 -> 01
+   *  - Cualquier otro punto -> DRIVIN_SCHEMA_CODE del .env (por defecto 01).
+   */
+  private schemaDrivinPara(nombrePunto: string): string {
+    const nombre = (nombrePunto ?? '').toLowerCase();
+    if (nombre.includes('alameda')) {
+      const num = nombre.match(/alameda\D*(\d+)/)?.[1];
+      return num === '2' ? '05' : '04';
+    }
+    if (/\b93\b/.test(nombre)) return '01';
+    return this.config.get<string>('DRIVIN_SCHEMA_CODE', '01');
+  }
+
+  /**
    * Envía un pedido directamente a Drivin (endpoint external/v2/orders), con el
    * MISMO mapeo de campos que el Excel de cargue. Reemplaza el flujo de Excel.
    */
@@ -666,10 +684,15 @@ export class PedidosService implements OnModuleInit {
       'DRIVIN_ORDERS_URL',
       'https://external.driv.in/api/external/v2/orders',
     );
-    const schema = this.config.get<string>('DRIVIN_SCHEMA_CODE', '01');
-    const url = `${baseUrl}?schema_code=${encodeURIComponent(schema)}`;
 
     const d = await this.construirDespacho(id, replica);
+
+    // El schema de Drivin depende del punto de venta:
+    //  - Alameda -> 04
+    //  - La 93   -> 01
+    //  - Otros   -> DRIVIN_SCHEMA_CODE del .env (por defecto 01)
+    const schema = this.schemaDrivinPara(d.puntoNombre);
+    const url = `${baseUrl}?schema_code=${encodeURIComponent(schema)}`;
 
     const body = {
       clients: [

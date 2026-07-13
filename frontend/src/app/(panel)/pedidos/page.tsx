@@ -1269,9 +1269,9 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     }
     onCrear(finalPedido);
     setPedidoCreado(finalPedido);
-    // Si el pedido es de un punto integrado con Drivin (La 93), se ENVÍA
-    // automáticamente al crearlo. El Excel ya NO se descarga solo: queda como
-    // respaldo manual por si el envío directo falla.
+    // Si el pedido es de un punto integrado con Drivin (La 93 o Alameda), se
+    // ENVÍA automáticamente al crearlo. El Excel ya NO se descarga solo: queda
+    // como respaldo manual por si el envío directo falla.
     if (esPuntoDrivin(finalPedido.punto)) {
       enviarDrivinCreacion(finalPedido);
     } else {
@@ -1279,9 +1279,11 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     }
   }
 
-  // Solo La 93 se integra con Drivin por ahora (se detecta por el nombre).
+  // Puntos integrados con Drivin (envío automático): La 93 y Alameda. Cada uno
+  // usa su propio schema en el backend (La 93 -> 01, Alameda -> 04).
   function esPuntoDrivin(p?: { nombre?: string } | null): boolean {
-    return /\b93\b/.test(String(p?.nombre ?? ""));
+    const nombre = String(p?.nombre ?? "").toLowerCase();
+    return /\b93\b/.test(nombre) || nombre.includes("alameda");
   }
 
   // Envía el pedido recién creado a Drivin y refleja el resultado en el modal.

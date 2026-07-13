@@ -1637,8 +1637,11 @@ function ModalReplica({
   const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
-  // Solo La 93 sube directo a Drivin (piloto); los demás siguen por Excel.
-  const esLa93 = /\b93\b/.test(String(pedido.punto?.nombre ?? ""));
+  // Puntos integrados con Drivin (suben directo): La 93 y Alameda. Cada uno usa
+  // su schema en el backend (La 93 -> 01, Alameda -> 04). El resto va por Excel.
+  const esDrivin =
+    /\b93\b/.test(String(pedido.punto?.nombre ?? "")) ||
+    String(pedido.punto?.nombre ?? "").toLowerCase().includes("alameda");
 
   async function enviarDrivin() {
     if (drivinEstado === "enviando") return;
@@ -1789,7 +1792,7 @@ function ModalReplica({
               >
                 Confirmar
               </button>
-            ) : esLa93 ? (
+            ) : esDrivin ? (
               <>
                 <button
                   onClick={onDescargar}
