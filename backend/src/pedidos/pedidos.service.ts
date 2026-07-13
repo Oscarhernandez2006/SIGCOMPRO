@@ -572,6 +572,7 @@ export class PedidosService implements OnModuleInit {
       proveedor,
       codigoProveedor,
       puntoNombre: String(punto.nombre ?? ''),
+      puntoCodigo: String(punto.codigo ?? ''),
       direccion: String(cliente.direccion ?? ''),
       barrio: String(cliente.barrio ?? ''),
       ciudad: String(cliente.ciudad ?? ''),
@@ -650,18 +651,26 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
-   * Determina el schema_code de Drivin según el punto de venta:
-   *  - Alameda 2 -> 05
-   *  - Alameda 1 (o Alameda sin número) -> 04
-   *  - La 93 -> 01
-   *  - Cualquier otro punto -> DRIVIN_SCHEMA_CODE del .env (por defecto 01).
+   * Determina el schema_code de Drivin según el punto de venta. Se decide por el
+   * NÚMERO del punto (prefijo del código, ej. "5CSXXXXX" -> 5), que es fiable
+   * aunque el nombre use números romanos ("Alameda I" / "Alameda II"):
+   *  - Punto 1  (La 93)      -> 01
+   *  - Punto 4  (Alameda I)  -> 04
+   *  - Punto 5  (Alameda II) -> 05
+   *  - Cualquier otro punto  -> DRIVIN_SCHEMA_CODE del .env (por defecto 01).
    */
-  private schemaDrivinPara(nombrePunto: string): string {
+  private schemaDrivinPara(puntoCodigo: string, nombrePunto: string): string {
+    const num = String(puntoCodigo ?? '').match(/^\d+/)?.[0] ?? '';
+    const porNumero: Record<string, string> = {
+      '1': '01', // La 93
+      '4': '04', // Alameda I
+      '5': '05', // Alameda II
+    };
+    if (porNumero[num]) return porNumero[num];
+    // Respaldo por nombre (por si el código no viniera): admite romanos.
     const nombre = (nombrePunto ?? '').toLowerCase();
-    if (nombre.includes('alameda')) {
-      const num = nombre.match(/alameda\D*(\d+)/)?.[1];
-      return num === '2' ? '05' : '04';
-    }
+    if (/alameda\s+ii\b/.test(nombre)) return '05';
+    if (/alameda\s+i\b/.test(nombre) || nombre.includes('alameda')) return '04';
     if (/\b93\b/.test(nombre)) return '01';
     return this.config.get<string>('DRIVIN_SCHEMA_CODE', '01');
   }
@@ -688,10 +697,9 @@ export class PedidosService implements OnModuleInit {
     const d = await this.construirDespacho(id, replica);
 
     // El schema de Drivin depende del punto de venta:
-    //  - Alameda -> 04
-    //  - La 93   -> 01
-    //  - Otros   -> DRIVIN_SCHEMA_CODE del .env (por defecto 01)
-    const schema = this.schemaDrivinPara(d.puntoNombre);
+    //  - La 93 -> 01 | Alameda I -> 04 | Alameda II -> 05
+    //  - Otros -> DRIVIN_SCHEMA_CODE del .env (por defecto 01)
+    const schema = this.schemaDrivinPara(d.puntoCodigo, d.puntoNombre);
     const url = `${baseUrl}?schema_code=${encodeURIComponent(schema)}`;
 
     const body = {

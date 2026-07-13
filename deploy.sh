@@ -12,4 +12,4 @@ docker service update \
   --label-add 'traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.scheme=https' \
   --label-add 'traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.permanent=true' \
   --label-add 'traefik.docker.network=dokploy-network' \
-  sigcompro-sigcompro-jej3v
+  sigcompro-sigcompro-jej3vi
