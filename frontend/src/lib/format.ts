@@ -82,6 +82,18 @@ export function onChangeSoloDigitos(
   return onChangeSanitizado(setter, soloDigitos);
 }
 
+/** Deja dígitos (0-9) y guion medio, para NIT con dígito de verificación. */
+export function soloNit(texto: string): string {
+  return texto.replace(/[^\d-]+/g, "");
+}
+
+/** onChange que restringe la entrada a dígitos y guion (NIT/cédula). */
+export function onChangeNit(
+  setter: (valor: string) => void,
+): React.ChangeEventHandler<HTMLInputElement> {
+  return onChangeSanitizado(setter, soloNit);
+}
+
 /** onChange que deja solo texto y aplica formato de nombre propio. */
 export function onChangeSoloTexto(
   setter: (valor: string) => void,

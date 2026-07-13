@@ -549,9 +549,10 @@ export class PedidosService implements OnModuleInit {
     const nit = String(cliente.nit_cedula ?? '');
     const nombre = String(cliente.nombre ?? '');
     const telefono = String(cliente.telefono ?? '');
-    const referencia = [nombre, cliente.referencia]
-      .filter((x) => x && String(x).trim())
-      .join(' / ');
+    // Referencia (Drivin/Excel): SIEMPRE "nombre / referencia". Si el cliente
+    // no tiene referencia, se conserva el separador -> "nombre / ".
+    const refCliente = String(cliente.referencia ?? '').trim();
+    const referencia = `${nombre} / ${refCliente}`;
     // Código proveedor: solo el número del punto (ej. 2 de "2" o "2CSXXXXX").
     const codDigitos = String(punto.codigo ?? '').match(/\d+/)?.[0];
     const codigoProveedor = codDigitos ? Number(codDigitos) : '';

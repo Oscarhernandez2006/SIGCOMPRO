@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, puedeVerDashboard, type Usuario } from "@/lib/auth";
+import { puedeVerModulo } from "@/lib/permisos";
 import {
   listarPuntosVenta,
   misPuntosVenta,
@@ -35,6 +37,7 @@ function tsPedido(p: Pedido): number {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -48,8 +51,14 @@ export default function DashboardPage() {
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
   useEffect(() => {
-    setUsuario(getUsuario());
-  }, []);
+    const u = getUsuario();
+    // Solo entran quienes tengan el permiso "dashboard" (o acceso total).
+    if (!puedeVerModulo(u, "dashboard")) {
+      router.replace("/");
+      return;
+    }
+    setUsuario(u);
+  }, [router]);
 
   useEffect(() => {
     if (usuario === null) return;

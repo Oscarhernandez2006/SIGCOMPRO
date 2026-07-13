@@ -8,7 +8,7 @@ import {
   type Cliente,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { aNombrePropio, onChangeSoloTexto, onChangeSoloDigitos, aTextoLimpio } from "@/lib/format";
+import { aNombrePropio, onChangeSoloTexto, onChangeSoloDigitos, onChangeNit, aTextoLimpio } from "@/lib/format";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -137,7 +137,7 @@ export default function CrearClienteModal({
               <Campo label="NIT / Cédula *">
                 <input
                   value={form.nit_cedula}
-                  onChange={onChangeSoloDigitos((v) => cambiar("nit_cedula", v))}
+                  onChange={onChangeNit((v) => cambiar("nit_cedula", v))}
                   inputMode="numeric"
                   autoFocus={!form.nit_cedula}
                   className="campo"

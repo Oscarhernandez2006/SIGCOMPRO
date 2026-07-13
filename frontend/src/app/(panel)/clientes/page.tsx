@@ -16,7 +16,7 @@ import {
   type EstadisticasClientes,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { onChangeSoloTexto, onChangeSoloDigitos, aTextoLimpio } from "@/lib/format";
+import { onChangeSoloTexto, onChangeSoloDigitos, onChangeNit, aTextoLimpio } from "@/lib/format";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
@@ -619,7 +619,7 @@ export default function ClientesPage() {
                     <Campo label="NIT / Cédula *">
                       <input
                         value={form.nit_cedula}
-                        onChange={onChangeSoloDigitos((v) => cambiar("nit_cedula", v))}
+                        onChange={onChangeNit((v) => cambiar("nit_cedula", v))}
                         inputMode="numeric"
                         className="campo"
                       />

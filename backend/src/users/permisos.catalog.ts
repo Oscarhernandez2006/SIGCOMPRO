@@ -66,6 +66,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: 'clientes.importar', label: 'Importar clientes (Excel)' },
         ],
       },
+      {
+        key: 'dashboard',
+        label: 'Dashboard',
+      },
     ],
   },
 ];
