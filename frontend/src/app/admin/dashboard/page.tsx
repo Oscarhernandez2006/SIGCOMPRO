@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getUsuario, tieneAccesoAdministrativo, puedeVerDashboard, type Usuario } from "@/lib/auth";
+import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
 import {
   listarPuntosVenta,
@@ -152,7 +152,7 @@ export default function DashboardPage() {
         : "Todos mis puntos"
       : puntos.find((p) => String(p.id) === puntoSel)?.nombre ?? "Punto";
 
-  const sinAcceso = usuario && !puedeVerDashboard(usuario.rol);
+  const sinAcceso = usuario && !puedeVerModulo(usuario, "dashboard");
 
   if (sinAcceso) {
     return (
