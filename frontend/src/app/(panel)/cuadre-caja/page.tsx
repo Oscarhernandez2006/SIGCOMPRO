@@ -102,12 +102,14 @@ export default function CuadreCajaPage() {
       setPedidos(estado.pedidos ?? []);
       setMeta(estado.meta ?? {});
       if (ps.length === 1) setPuntoSel(String(ps[0].id));
-      // Inicializa las liquidaciones locales desde la metadata guardada.
+      // Inicializa las liquidaciones locales desde la metadata guardada. Un
+      // valor 0 se muestra como VACÍO (no como "0"), para que la celda quede
+      // limpia y no confunda al escribir.
       const inicial: Record<string, Liq> = {};
       for (const [id, m] of Object.entries(estado.meta ?? {})) {
         inicial[id] = {
-          efectivo: m.cuadreEfectivo != null ? String(m.cuadreEfectivo) : "",
-          omp: m.cuadreOmp != null ? String(m.cuadreOmp) : "",
+          efectivo: m.cuadreEfectivo ? String(m.cuadreEfectivo) : "",
+          omp: m.cuadreOmp ? String(m.cuadreOmp) : "",
         };
       }
       setLiq(inicial);
@@ -573,7 +575,7 @@ export default function CuadreCajaPage() {
                           inputMode="numeric"
                           value={l.efectivo}
                           disabled={bloqueado}
-                          onChange={(e) => cambiarLiq(p.id, "efectivo", e.target.value.replace(/[^\d]/g, ""))}
+                          onChange={(e) => cambiarLiq(p.id, "efectivo", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
                           placeholder="0"
                           className="w-28 rounded-lg border border-brand-brown/20 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/50"
                         />
@@ -583,7 +585,7 @@ export default function CuadreCajaPage() {
                           inputMode="numeric"
                           value={l.omp}
                           disabled={bloqueado}
-                          onChange={(e) => cambiarLiq(p.id, "omp", e.target.value.replace(/[^\d]/g, ""))}
+                          onChange={(e) => cambiarLiq(p.id, "omp", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
                           placeholder="0"
                           className="w-28 rounded-lg border border-brand-brown/20 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/50"
                         />
