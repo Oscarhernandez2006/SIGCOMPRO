@@ -206,7 +206,23 @@ export default function ReferenciaInput({
         </select>
         <input
           value={partes.nombre}
-          onChange={(e) => cambiarParte("nombre", e.target.value)}
+          onChange={(e) => {
+            // Solo la primera letra en mayúscula; el resto en minúscula.
+            const el = e.currentTarget;
+            const pos = el.selectionStart;
+            const v = el.value;
+            const nuevo = v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+            cambiarParte("nombre", nuevo);
+            if (pos !== null) {
+              requestAnimationFrame(() => {
+                try {
+                  el.setSelectionRange(pos, pos);
+                } catch {
+                  /* input ya no está en el DOM */
+                }
+              });
+            }
+          }}
           placeholder="Nombre (ej. Torino)"
           className="campo"
         />

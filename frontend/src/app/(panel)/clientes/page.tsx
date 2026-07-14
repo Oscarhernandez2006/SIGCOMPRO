@@ -732,6 +732,7 @@ export default function ClientesPage() {
                     direccion={form.direccion ?? ""}
                     barrio={form.barrio ?? ""}
                     ciudad={form.ciudad ?? ""}
+                    referencia={form.referencia ?? ""}
                     lat={form.lat ?? null}
                     lng={form.lng ?? null}
                     onUbicacion={(la, lo) =>

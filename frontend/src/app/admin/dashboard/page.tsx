@@ -10,7 +10,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
-import { objetivoDespacho, deadlinePreparacion } from "@/lib/despacho";
+import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -28,6 +28,93 @@ const COLOR_ESTADO: Record<string, string> = {
   Anulado: "#c0392b",
   Cancelado: "#e67e22",
 };
+
+/** Cards de "movimientos": mismo set y orden que la vista de Despacho. */
+const MOV_DEFS: { key: string; label: string; sub: string; color: string }[] = [
+  { key: "pendientes", label: "Pendientes", sub: "Sin finalizar", color: "#d98c2b" },
+  { key: "atrasados", label: "Atrasados", sub: "No finalizados", color: "#c0392b" },
+  { key: "retenidos", label: "Retenidos", sub: "Cartera", color: "#caa54a" },
+  { key: "posteriores", label: "Posteriores", sub: "Programados", color: "#6366f1" },
+  { key: "produccion", label: "En producción", sub: "En preparación", color: "#2b6cb0" },
+  { key: "alistados", label: "Alistados", sub: "Listos para facturar", color: "#8e44ad" },
+  { key: "facturados", label: "Facturados", sub: "Con factura", color: "#16a085" },
+  { key: "despachados", label: "Despachados", sub: "En ruta o entregados", color: "#2e7d63" },
+  { key: "cancelados", label: "Cancelados", sub: "Anulados", color: "#c0392b" },
+];
+
+/* --- Helpers de clasificación de movimientos (idénticos a la vista Despacho) --- */
+function normEstado(s?: string | null): string {
+  return (s ?? "").trim().toLowerCase();
+}
+function hoyISOd(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** Día de entrega efectivo (YYYY-MM-DD): el programado o el de creación. */
+function diaEntregaISOd(p: Pedido): string {
+  if (p.entregaProgramada && p.fechaProgramada) return p.fechaProgramada;
+  const d = new Date(p.fecha);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** ¿El pedido es para HOY? Incluye arrastrados activos de días anteriores. */
+function esDeHoyd(p: Pedido): boolean {
+  const dia = diaEntregaISOd(p);
+  const hoy = hoyISOd();
+  if (dia === hoy) return true;
+  if (dia < hoy) {
+    const e = normEstado(p.estado);
+    return !p.anulado && e !== "despachado" && e !== "anulado";
+  }
+  return false;
+}
+/** ¿Es un "posterior" (programado para un día futuro)? */
+function esPosteriorFuturod(p: Pedido): boolean {
+  return Boolean(p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoyISOd());
+}
+
+/**
+ * Cuenta los movimientos por estado replicando EXACTAMENTE la vista de Despacho:
+ *  - "Hoy": pedidos de hoy (entrega de hoy + arrastrados activos) + posteriores.
+ *  - Otros periodos: pedidos cuyo día de entrega cae en la ventana, por estado.
+ * Un pedido atrasado se cuenta solo en "Atrasados" (no en su card de proceso).
+ */
+function calcularMovimientos(
+  pedidos: Pedido[],
+  metaMap: Record<string, DespachoMeta>,
+  periodo: Periodo,
+  desde: number | null,
+): Record<string, number> {
+  const enHoy = periodo === 1;
+  const base = pedidos.filter((p) => {
+    if (enHoy) return esDeHoyd(p);
+    if (desde == null) return true; // "Todo"
+    const t = new Date(`${diaEntregaISOd(p)}T00:00:00`).getTime();
+    return Number.isFinite(t) && t >= desde;
+  });
+  const ahora = Date.now();
+  const esAtrasado = (p: Pedido) => {
+    if (p.anulado) return false;
+    const e = normEstado(p.estado);
+    if (e === "despachado" || e === "anulado") return false;
+    return msRestantesDespacho(p, ahora, metaMap[p.id]?.pagoConfirmado) <= 0;
+  };
+  const atrasadosSet = new Set(base.filter(esAtrasado).map((p) => p.id));
+  const cuenta = (pred: (p: Pedido) => boolean) =>
+    base.filter((p) => pred(p) && !atrasadosSet.has(p.id)).length;
+  const cards: Record<string, number> = {
+    pendientes: cuenta((p) => !p.anulado && normEstado(p.estado) === "en proceso"),
+    atrasados: atrasadosSet.size,
+    retenidos: cuenta((p) => normEstado(p.estado) === "liberación"),
+    posteriores: pedidos.filter(esPosteriorFuturod).length,
+    produccion: cuenta((p) => normEstado(p.estado) === "en producción"),
+    alistados: cuenta((p) => normEstado(p.estado) === "alistado"),
+    facturados: cuenta((p) => normEstado(p.estado) === "facturado"),
+    despachados: cuenta((p) => normEstado(p.estado) === "despachado"),
+    cancelados: cuenta((p) => p.anulado || normEstado(p.estado) === "anulado"),
+  };
+  cards.total = MOV_DEFS.reduce((s, d) => s + (cards[d.key] ?? 0), 0);
+  return cards;
+}
 
 type Periodo = 1 | 7 | 30 | 0; // 0 = todo
 
@@ -47,6 +134,8 @@ export default function DashboardPage() {
 
   const [puntoSel, setPuntoSel] = useState<string>("todos");
   const [periodo, setPeriodo] = useState<Periodo>(30);
+  // Muestra las cards de "movimientos" (conteo por estado del periodo elegido).
+  const [verMovimientos, setVerMovimientos] = useState(false);
 
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
@@ -140,6 +229,12 @@ export default function DashboardPage() {
   // Métricas principales.
   const m = useMemo(() => métricas(enPeriodo, meta, rangoDias), [enPeriodo, meta, rangoDias]);
   const mPrev = useMemo(() => métricas(enPrevio, meta), [enPrevio, meta]);
+
+  // Movimientos por estado (misma clasificación que Despacho), según periodo.
+  const mov = useMemo(
+    () => calcularMovimientos(pedidosBase, meta, periodo, desde),
+    [pedidosBase, meta, periodo, desde],
+  );
 
   // Serie de la gráfica de tendencia: SIEMPRE del primer día con actividad a
   // hoy (independiente del periodo, para que "Hoy" no muestre un solo punto).
@@ -243,6 +338,50 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {/* Botón para ver los movimientos (conteo por estado) del periodo */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setVerMovimientos((v) => !v)}
+              aria-pressed={verMovimientos}
+              title="Ver el conteo de pedidos por estado según el periodo y punto elegidos"
+              className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                verMovimientos
+                  ? "border-brand-wine bg-brand-wine text-white shadow-sm"
+                  : "border-brand-wine/25 bg-white text-brand-wine hover:bg-brand-wine/5"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+              </svg>
+              {verMovimientos ? "Ocultar movimientos" : "Ver movimientos"}
+            </button>
+          </div>
+
+          {/* Movimientos: conteo de pedidos por estado en el periodo elegido */}
+          {verMovimientos && (
+            <section>
+              <Eyebrow>Movimientos del periodo</Eyebrow>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <MovCard
+                  label="Total"
+                  sub={periodo === 1 ? "Activos de hoy" : "Movimientos del periodo"}
+                  value={mov.total ?? 0}
+                  color="#7b1e3b"
+                />
+                {MOV_DEFS.map((d) => (
+                  <MovCard
+                    key={d.key}
+                    label={d.label}
+                    sub={d.sub}
+                    value={mov[d.key] ?? 0}
+                    color={d.color}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Rendimiento del periodo */}
           <section>
             <Eyebrow>Rendimiento del periodo</Eyebrow>
@@ -892,6 +1031,22 @@ function Kpi({
           <span className="text-brand-brown/40">vs periodo anterior</span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Card compacta de "movimientos": estado + subtítulo + conteo del periodo. */
+function MovCard({ label, sub, value, color }: { label: string; sub: string; value: number; color: string }) {
+  return (
+    <div className="rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-brand-black">{label}</p>
+          <p className="text-[11px] text-brand-brown/50">{sub}</p>
+        </div>
+        <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      </div>
+      <p className="mt-2 font-display text-3xl font-extrabold tabular-nums text-brand-black">{num(value)}</p>
     </div>
   );
 }

@@ -420,6 +420,17 @@ export class ClientesService implements OnModuleInit {
 
     const nuevos: Array<ReturnType<typeof porNit.get>> = [];
     const cambiados: Array<NonNullable<ReturnType<typeof porNit.get>>> = [];
+    // Normaliza para COMPARAR: ignora mayúsculas/minúsculas, tildes y espacios
+    // repetidos. Así un cliente cuya única "diferencia" es de formato (p. ej. el
+    // Excel viene en MAYÚSCULAS o sin tildes) NO se marca como cambiado y
+    // conserva su ubicación verificada.
+    const comparable = (v: string | null | undefined): string =>
+      (v ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
     for (const reg of porNit.values()) {
       const actual = existentes.get(reg.nit);
       if (!actual) {
@@ -427,12 +438,12 @@ export class ClientesService implements OnModuleInit {
         continue;
       }
       const difiere =
-        (actual.nombre ?? null) !== reg.nombre ||
-        (actual.direccion ?? null) !== reg.direccion ||
-        (actual.referencia ?? null) !== reg.referencia ||
-        (actual.barrio ?? null) !== reg.barrio ||
-        (actual.ciudad ?? null) !== reg.ciudad ||
-        (actual.telefono ?? null) !== reg.telefono;
+        comparable(actual.nombre) !== comparable(reg.nombre) ||
+        comparable(actual.direccion) !== comparable(reg.direccion) ||
+        comparable(actual.referencia) !== comparable(reg.referencia) ||
+        comparable(actual.barrio) !== comparable(reg.barrio) ||
+        comparable(actual.ciudad) !== comparable(reg.ciudad) ||
+        comparable(actual.telefono) !== comparable(reg.telefono);
       if (difiere) cambiados.push(reg);
     }
 

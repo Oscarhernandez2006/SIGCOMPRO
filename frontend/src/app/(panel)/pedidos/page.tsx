@@ -1279,11 +1279,17 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     }
   }
 
-  // Puntos integrados con Drivin (envío automático): La 93 y Alameda. Cada uno
-  // usa su propio schema en el backend (La 93 -> 01, Alameda -> 04).
+  // Puntos integrados con Drivin (envío automático): La 93, Alameda, Olaya y
+  // San Felipe. Cada uno usa su propio schema en el backend (93->01, Alameda I->04,
+  // Alameda II->05, Olaya->06, San Felipe->07).
   function esPuntoDrivin(p?: { nombre?: string } | null): boolean {
     const nombre = String(p?.nombre ?? "").toLowerCase();
-    return /\b93\b/.test(nombre) || nombre.includes("alameda");
+    return (
+      /\b93\b/.test(nombre) ||
+      nombre.includes("alameda") ||
+      nombre.includes("olaya") ||
+      nombre.includes("felipe")
+    );
   }
 
   // Envía el pedido recién creado a Drivin y refleja el resultado en el modal.

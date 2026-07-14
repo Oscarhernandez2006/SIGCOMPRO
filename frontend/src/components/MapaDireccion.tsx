@@ -33,6 +33,22 @@ function soloVia(direccion: string): string {
   return direccion.split("#")[0].replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Extrae el nombre del conjunto/edificio de la referencia para buscarlo como
+ * punto de interés en el mapa (ej. "Edificio Torino - Apto 5B" -> "Edificio
+ * Torino"). Si la referencia empieza por Apto/Bloque/Torre/Piso (sin conjunto),
+ * devuelve "".
+ */
+function extraerConjunto(referencia?: string): string {
+  const ref = (referencia ?? "").trim();
+  if (!ref) return "";
+  const primero = ref.split(" - ")[0].trim();
+  if (/^(apto|apartamento|b\d|bloque|t\d|torre|p\d|piso)\b/i.test(primero)) {
+    return "";
+  }
+  return primero;
+}
+
 /** Normaliza para comparar (minúsculas, sin tildes ni espacios extra). */
 function normaliza(s: string): string {
   return (s ?? "")
@@ -45,19 +61,28 @@ function normaliza(s: string): string {
 
 /**
  * Arma varias consultas, de la más específica a la más general, para mejorar
- * los aciertos en Colombia (OSM rara vez tiene la placa exacta).
+ * los aciertos en Colombia (OSM rara vez tiene la placa exacta). Si hay nombre
+ * de conjunto/edificio, se busca primero como punto de interés.
  */
 function construirConsultas(
   direccion: string,
   barrio: string,
   ciudad: string,
+  conjunto = "",
 ): string[] {
   const dir = direccion.trim();
   const via = soloVia(dir);
   const b = barrio.trim();
   const ci = ciudad.trim();
+  const co = conjunto.trim();
   const arma = (partes: string[]) => partes.filter(Boolean).join(", ");
   const consultas = [
+    ...(co
+      ? [
+          arma([co, b, ci, "Colombia"]), // conjunto + barrio + ciudad (punto de interés)
+          arma([co, ci, "Colombia"]), // conjunto + ciudad
+        ]
+      : []),
     arma([dir, ci, "Colombia"]), // dirección + ciudad (SIN barrio -> ubica la calle REAL)
     arma([via, ci, "Colombia"]), // vía sin placa + ciudad (SIN barrio)
     arma([dir, b, ci, "Colombia"]), // dirección + barrio + ciudad
@@ -87,6 +112,7 @@ export default function MapaDireccion({
   direccion,
   barrio,
   ciudad,
+  referencia,
   lat,
   lng,
   onUbicacion,
@@ -96,6 +122,8 @@ export default function MapaDireccion({
   direccion: string;
   barrio: string;
   ciudad: string;
+  /** Referencia del cliente (para buscar el conjunto/edificio en el mapa). */
+  referencia?: string;
   lat: number | null;
   lng: number | null;
   onUbicacion: (lat: number | null, lng: number | null) => void;
@@ -128,11 +156,39 @@ export default function MapaDireccion({
       setEstado({ tipo: "error", msg: "Escribe la dirección primero." });
       return;
     }
-    const consultas = construirConsultas(direccion, barrio, ciudad);
+    const consultas = construirConsultas(direccion, barrio, ciudad, extraerConjunto(referencia));
     setCargando(true);
     setEstado(null);
     try {
-      // Se prioriza un resultado a nivel de CALLE (con `road`); solo si ninguna
+      const conjunto = extraerConjunto(referencia);
+      // 1) Si hay nombre de conjunto/edificio, se busca primero como punto de
+      // interés: suele ubicar con más precisión que la calle + placa.
+      if (conjunto) {
+        const qsCo = [
+          [conjunto, barrio, ciudad, "Colombia"],
+          [conjunto, ciudad, "Colombia"],
+        ].map((a) => a.filter(Boolean).join(", "));
+        for (const q of qsCo) {
+          const data = await consultarNominatim(q, 5);
+          if (data.length > 0) {
+            const s = data[0];
+            const la = parseFloat(s.lat);
+            const lo = parseFloat(s.lon);
+            if (!Number.isNaN(la) && !Number.isNaN(lo)) {
+              onUbicacion(la, lo);
+              setSugerencia(s.display_name ?? "");
+              setAbierto(true);
+              setEstado({
+                tipo: "ok",
+                msg: "Ubicado por el nombre del conjunto/edificio. Ajusta el pin si hace falta.",
+              });
+              setCargando(false);
+              return;
+            }
+          }
+        }
+      }
+      // 2) Se prioriza un resultado a nivel de CALLE (con `road`); solo si ninguna
       // consulta ubica la vía se cae al sector/barrio como respaldo.
       let conCalle: SugerenciaGeo | null = null;
       let respaldo: SugerenciaGeo | null = null;
@@ -209,7 +265,7 @@ export default function MapaDireccion({
       });
       return;
     }
-    const consultas = construirConsultas(direccion, barrio, ciudad);
+    const consultas = construirConsultas(direccion, barrio, ciudad, extraerConjunto(referencia));
     setCargandoSug(true);
     setEstado(null);
     try {
@@ -345,7 +401,17 @@ export default function MapaDireccion({
 
       {abierto && (
         <div className="mt-2 overflow-hidden rounded-xl">
-          <MapaLeaflet lat={centroLat} lng={centroLng} />
+          <MapaLeaflet
+            lat={centroLat}
+            lng={centroLng}
+            onMover={(la, lo) => {
+              onUbicacion(la, lo);
+              setEstado({ tipo: "ok", msg: "Ubicación ajustada manualmente. Presiona Guardar." });
+            }}
+          />
+          <p className="mt-1 text-[0.7rem] text-brand-brown/50">
+            Arrastra el pin o haz clic en el mapa para ajustar la ubicación exacta.
+          </p>
           {sugerencia && (
             <p className="mt-1 line-clamp-1 text-[0.7rem] text-brand-brown/60">
               <span className="font-medium">Mapa:</span> {sugerencia}

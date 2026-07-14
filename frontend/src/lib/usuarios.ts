@@ -105,6 +105,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: "dashboard",
         label: "Dashboard",
       },
+      {
+        key: "cuadre_caja",
+        label: "Cuadre de caja",
+      },
     ],
   },
 ];

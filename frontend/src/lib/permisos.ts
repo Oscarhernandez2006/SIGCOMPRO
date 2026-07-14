@@ -24,6 +24,7 @@ export const RUTA_MODULO: Record<string, string> = {
   despacho: "/despacho",
   clientes: "/clientes",
   dashboard: "/dashboard",
+  cuadre_caja: "/cuadre-caja",
 };
 
 /** Apartado del catálogo que agrupa los módulos de negocio. */

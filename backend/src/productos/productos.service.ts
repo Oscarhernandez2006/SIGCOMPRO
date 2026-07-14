@@ -43,12 +43,14 @@ const TOKEN =
 
 // Compañía 4: se cargan todas sus listas TPV/PDV (puntos existentes).
 // Compañía 6: solo estas listas adicionales (por su DESC_LISTA, normalizado).
-const CIAS = [4, 6] as const;
+// Compañía 7: solo San Felipe y Olaya (la 014 "NO USAR" queda excluida).
+const CIAS = [4, 6, 7] as const;
 const LISTAS_CIA6_PERMITIDAS = new Set([
   'TPV CONCORD',
   'TPV ALAMEDA',
   'TPV ALAMEDA 2',
 ]);
+const LISTAS_CIA7_PERMITIDAS = new Set(['TPV SFELIPE', 'TPV OLAYA']);
 
 /** Normaliza el nombre de una lista para compararlo con la lista blanca. */
 function nombreLista(desc?: string | null): string {
@@ -59,6 +61,7 @@ function nombreLista(desc?: string | null): string {
 function listaPermitida(ciaFuente: number, desc?: string | null): boolean {
   const nombre = nombreLista(desc);
   if (ciaFuente === 6) return LISTAS_CIA6_PERMITIDAS.has(nombre);
+  if (ciaFuente === 7) return LISTAS_CIA7_PERMITIDAS.has(nombre);
   // Compañía 4 (o cualquier otra): todas las listas TPV/PDV.
   return nombre.includes('TPV') || nombre.includes('PDV');
 }
@@ -148,9 +151,9 @@ export class ProductosService implements OnModuleInit {
   }
 
   /**
-   * Descarga las listas de precios de las compañías 4 y 6 y actualiza la tabla.
-   * De cia 4 se conservan todas las listas TPV/PDV; de cia 6 solo Concord,
-   * Alameda y Alameda 2 (adicionales a las que ya existían).
+   * Descarga las listas de precios de las compañías 4, 6 y 7 y actualiza la
+   * tabla. De cia 4 se conservan todas las listas TPV/PDV; de cia 6 solo
+   * Concord, Alameda y Alameda 2; de cia 7 solo San Felipe y Olaya.
    */
   async sincronizar(): Promise<{ total: number; listas: number }> {
     // Descarga cada compañía y etiqueta cada fila con su compañía de origen.

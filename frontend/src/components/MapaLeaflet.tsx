@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect } from "react";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 
 /** Pin personalizado (SVG en línea) para no depender de las imágenes de Leaflet. */
 const pinIcon = L.divIcon({
@@ -22,12 +22,25 @@ function Recentrar({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
+/** Permite ubicar la dirección haciendo clic en cualquier punto del mapa. */
+function ClicParaUbicar({ onMover }: { onMover?: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      if (onMover) onMover(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 export default function MapaLeaflet({
   lat,
   lng,
+  onMover,
 }: {
   lat: number;
   lng: number;
+  /** Si se define, el marcador es arrastrable y se puede ubicar con clic. */
+  onMover?: (lat: number, lng: number) => void;
 }) {
   return (
     <MapContainer
@@ -44,11 +57,23 @@ export default function MapaLeaflet({
       <Marker
         position={[lat, lng]}
         icon={pinIcon}
-        draggable={false}
-        interactive={false}
+        draggable={Boolean(onMover)}
+        interactive={Boolean(onMover)}
         keyboard={false}
+        eventHandlers={
+          onMover
+            ? {
+                dragend: (e) => {
+                  const p = (e.target as L.Marker).getLatLng();
+                  onMover(p.lat, p.lng);
+                },
+              }
+            : undefined
+        }
       />
+      {onMover && <ClicParaUbicar onMover={onMover} />}
       <Recentrar lat={lat} lng={lng} />
     </MapContainer>
   );
 }
+

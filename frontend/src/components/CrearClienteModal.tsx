@@ -209,6 +209,7 @@ export default function CrearClienteModal({
               direccion={form.direccion ?? ""}
               barrio={form.barrio ?? ""}
               ciudad={form.ciudad ?? ""}
+              referencia={form.referencia ?? ""}
               lat={form.lat ?? null}
               lng={form.lng ?? null}
               onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}

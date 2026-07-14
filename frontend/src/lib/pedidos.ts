@@ -29,6 +29,12 @@ export interface DespachoMeta {
    * propio domiciliario. Deben ser secuenciales (1, 2, 3, 4, 5).
    */
   replicas?: { numero: number; domiciliario?: string }[];
+  /** Cuadre de caja: valor liquidado en efectivo por la cajera. */
+  cuadreEfectivo?: number;
+  /** Cuadre de caja: valor liquidado en otros medios de pago (O.M.P.). */
+  cuadreOmp?: number;
+  /** Cuadre de caja: el cuadre de ese día quedó cerrado (guardado). */
+  cuadreCerrado?: boolean;
 }
 
 export interface EstadoPedidos {
