@@ -29,17 +29,35 @@ const COLOR_ESTADO: Record<string, string> = {
   Cancelado: "#e67e22",
 };
 
-/** Cards de "movimientos": mismo set y orden que la vista de Despacho. */
-const MOV_DEFS: { key: string; label: string; sub: string; color: string }[] = [
-  { key: "pendientes", label: "Pendientes", sub: "Sin finalizar", color: "#d98c2b" },
-  { key: "atrasados", label: "Atrasados", sub: "No finalizados", color: "#c0392b" },
-  { key: "retenidos", label: "Retenidos", sub: "Cartera", color: "#caa54a" },
-  { key: "posteriores", label: "Posteriores", sub: "Programados", color: "#6366f1" },
-  { key: "produccion", label: "En producción", sub: "En preparación", color: "#2b6cb0" },
-  { key: "alistados", label: "Alistados", sub: "Listos para facturar", color: "#8e44ad" },
-  { key: "facturados", label: "Facturados", sub: "Con factura", color: "#16a085" },
-  { key: "despachados", label: "Despachados", sub: "En ruta o entregados", color: "#2e7d63" },
-  { key: "cancelados", label: "Cancelados", sub: "Anulados", color: "#c0392b" },
+/** Iconos (heroicons outline) para las cards de movimientos, igual que Despacho. */
+const IC_MOV = {
+  caja: <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />,
+  reloj: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
+  alerta: <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />,
+  tarjeta: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />,
+  calendario: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />,
+  engranaje: (
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.397-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </>
+  ),
+  recibo: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 3.75h3M3.375 19.5V6.108c0-.668.46-1.247 1.11-1.394a48.6 48.6 0 0 1 1.123-.238m13.917 0a48.6 48.6 0 0 1 1.123.238c.65.147 1.11.726 1.11 1.394V19.5l-3-1.5-3 1.5-3-1.5-3 1.5-3-1.5-3 1.5Zm9.75-12.75h.008v.008H12V6.75Z" />,
+  camion: <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.834 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />,
+  xcirculo: <path strokeLinecap="round" strokeLinejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
+} as const;
+
+/** Cards de "movimientos": mismo set, orden e iconos que la vista de Despacho. */
+const MOV_DEFS: { key: string; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
+  { key: "pendientes", label: "Pendientes", sub: "Sin finalizar", color: "#d98c2b", icon: IC_MOV.reloj },
+  { key: "atrasados", label: "Atrasados", sub: "No finalizados", color: "#c0392b", icon: IC_MOV.alerta },
+  { key: "retenidos", label: "Retenidos", sub: "Cartera", color: "#caa54a", icon: IC_MOV.tarjeta },
+  { key: "posteriores", label: "Posteriores", sub: "Programados", color: "#6366f1", icon: IC_MOV.calendario },
+  { key: "produccion", label: "En producción", sub: "En preparación", color: "#2b6cb0", icon: IC_MOV.engranaje },
+  { key: "alistados", label: "Alistados", sub: "Listos para facturar", color: "#8e44ad", icon: IC_MOV.caja },
+  { key: "facturados", label: "Facturados", sub: "Con factura", color: "#16a085", icon: IC_MOV.recibo },
+  { key: "despachados", label: "Despachados", sub: "En ruta o entregados", color: "#2e7d63", icon: IC_MOV.camion },
+  { key: "cancelados", label: "Cancelados", sub: "Anulados", color: "#c0392b", icon: IC_MOV.xcirculo },
 ];
 
 /* --- Helpers de clasificación de movimientos (idénticos a la vista Despacho) --- */
@@ -368,6 +386,7 @@ export default function DashboardPage() {
                   sub={periodo === 1 ? "Activos de hoy" : "Movimientos del periodo"}
                   value={mov.total ?? 0}
                   color="#7b1e3b"
+                  icon={IC_MOV.caja}
                 />
                 {MOV_DEFS.map((d) => (
                   <MovCard
@@ -376,6 +395,7 @@ export default function DashboardPage() {
                     sub={d.sub}
                     value={mov[d.key] ?? 0}
                     color={d.color}
+                    icon={d.icon}
                   />
                 ))}
               </div>
@@ -1035,18 +1055,23 @@ function Kpi({
   );
 }
 
-/** Card compacta de "movimientos": estado + subtítulo + conteo del periodo. */
-function MovCard({ label, sub, value, color }: { label: string; sub: string; value: number; color: string }) {
+/** Card compacta de "movimientos": icono + nombre + número en una sola línea. */
+function MovCard({ label, sub, value, color, icon }: { label: string; sub: string; value: number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-brand-black">{label}</p>
-          <p className="text-[11px] text-brand-brown/50">{sub}</p>
-        </div>
-        <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+    <div className="flex items-center gap-2.5 rounded-2xl border border-brand-brown/10 bg-white p-3 shadow-sm">
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+        style={{ backgroundColor: `${color}1f`, color }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+          {icon}
+        </svg>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-tight text-brand-black">{label}</p>
+        <p className="truncate text-[11px] text-brand-brown/50">{sub}</p>
       </div>
-      <p className="mt-2 font-display text-3xl font-extrabold tabular-nums text-brand-black">{num(value)}</p>
+      <p className="shrink-0 font-display text-xl font-extrabold tabular-nums text-brand-black">{num(value)}</p>
     </div>
   );
 }
