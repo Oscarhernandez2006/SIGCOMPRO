@@ -26,6 +26,8 @@ const PREFIJO_DESPACHO = 'despacho_personal:';
 const CLAVE_REGISTRO = 'personal_despacho:registro';
 /** Clave de la lista de tipos de corte (porcionado). */
 const CLAVE_CORTES = 'tipos_corte:lista';
+/** Clave del registro de cuadres de caja cerrados (por punto + día). */
+const CLAVE_CUADRE_CERRADOS = 'cuadre_caja:cerrados';
 /** Lista de cortes por defecto (semilla la primera vez). */
 const CORTES_DEFAULT = [
   'Mariposa',
@@ -193,6 +195,48 @@ export class ConfiguracionService implements OnModuleInit {
       salida.push(s);
     }
     return salida.sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Cuadre de caja: cierre por punto de venta + día                    */
+  /* ------------------------------------------------------------------ */
+
+  /** Devuelve las claves "puntoId|fecha" de los cuadres cerrados. */
+  private async obtenerCierresCuadre(): Promise<string[]> {
+    const res = await this.pool.query<{ valor: unknown }>(
+      `SELECT valor FROM configuracion WHERE clave = $1 LIMIT 1`,
+      [CLAVE_CUADRE_CERRADOS],
+    );
+    const valor = res.rows[0]?.valor as { claves?: unknown } | undefined;
+    return valor && Array.isArray(valor.claves) ? valor.claves.map(String) : [];
+  }
+
+  /** ¿El cuadre de un punto en una fecha (YYYY-MM-DD) ya está cerrado? */
+  async cuadreEstaCerrado(puntoId: string, fecha: string): Promise<boolean> {
+    const clave = `${String(puntoId).trim()}|${String(fecha).trim()}`;
+    const claves = await this.obtenerCierresCuadre();
+    return claves.includes(clave);
+  }
+
+  /** Marca como cerrado el cuadre de un punto en una fecha concreta. */
+  async cerrarCuadre(
+    puntoId: string,
+    fecha: string,
+  ): Promise<{ cerrado: boolean }> {
+    const p = String(puntoId ?? '').trim();
+    const f = String(fecha ?? '').trim();
+    if (!p || !f) return { cerrado: false };
+    const claves = new Set(await this.obtenerCierresCuadre());
+    claves.add(`${p}|${f}`);
+    await this.pool.query(
+      `INSERT INTO configuracion (clave, valor)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (clave) DO UPDATE SET
+         valor = EXCLUDED.valor,
+         actualizado_en = now()`,
+      [CLAVE_CUADRE_CERRADOS, JSON.stringify({ claves: [...claves] })],
+    );
+    return { cerrado: true };
   }
 
   /* ------------------------------------------------------------------ */

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import {
   ConfiguracionService,
   RegistroPersonal,
@@ -61,5 +61,24 @@ export class ConfiguracionController {
   guardarCortes(@Body() body: { lista?: string[] } | string[]) {
     const lista = Array.isArray(body) ? body : (body?.lista ?? []);
     return this.configuracion.guardarCortes(lista);
+  }
+
+  /**
+   * ¿El cuadre de caja de un punto en una fecha ya está cerrado? Lectura
+   * autenticada: la cajera consulta al abrir el módulo.
+   */
+  @Get('cuadre/cerrado')
+  async cuadreCerrado(
+    @Query('puntoId') puntoId: string,
+    @Query('fecha') fecha: string,
+  ) {
+    const cerrado = await this.configuracion.cuadreEstaCerrado(puntoId, fecha);
+    return { cerrado };
+  }
+
+  /** Cierra el cuadre de caja de un punto en una fecha. Autenticado. */
+  @Post('cuadre/cerrar')
+  cerrarCuadre(@Body() body: { puntoId?: string; fecha?: string }) {
+    return this.configuracion.cerrarCuadre(body?.puntoId ?? '', body?.fecha ?? '');
   }
 }

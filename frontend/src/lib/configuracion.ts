@@ -70,3 +70,27 @@ export async function obtenerTiposCorteCache(): Promise<string[]> {
 export function invalidarCacheCortes(): void {
   cacheCortes = null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Cuadre de caja: cierre por punto de venta + día                            */
+/* -------------------------------------------------------------------------- */
+
+/** Consulta si el cuadre de un punto en una fecha (YYYY-MM-DD) está cerrado. */
+export function cuadreCerrado(
+  puntoId: string,
+  fecha: string,
+): Promise<{ cerrado: boolean }> {
+  const qs = `puntoId=${encodeURIComponent(puntoId)}&fecha=${encodeURIComponent(fecha)}`;
+  return apiFetch<{ cerrado: boolean }>(`/configuracion/cuadre/cerrado?${qs}`);
+}
+
+/** Cierra el cuadre de un punto en una fecha concreta. */
+export function cerrarCuadre(
+  puntoId: string,
+  fecha: string,
+): Promise<{ cerrado: boolean }> {
+  return apiFetch<{ cerrado: boolean }>("/configuracion/cuadre/cerrar", {
+    method: "POST",
+    body: JSON.stringify({ puntoId, fecha }),
+  });
+}

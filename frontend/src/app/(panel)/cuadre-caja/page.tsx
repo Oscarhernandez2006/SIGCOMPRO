@@ -11,6 +11,7 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre } from "@/lib/configuracion";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) =>
@@ -162,17 +163,31 @@ export default function CuadreCajaPage() {
     return { facturado, efectivo, omp, diferencia: efectivo + omp - facturado };
   }, [filas, liq, valorFacturado]);
 
-  // El cuadre del día/punto está CERRADO si algún pedido quedó marcado al guardar.
-  const cerrado = useMemo(
-    () => filas.some((p) => meta[p.id]?.cuadreCerrado === true),
-    [filas, meta],
-  );
+  // El cuadre se cierra POR PUNTO y POR DÍA (no global). `cerrado` se consulta
+  // al backend para el punto y la fecha elegidos.
+  const [cerrado, setCerrado] = useState(false);
   // Bloqueado = cerrado y sin autorización de administrador para editar.
   const bloqueado = cerrado && !autorizado;
 
-  // Al cambiar de día o de punto, se re-bloquea (hay que re-autorizar).
+  // Al cambiar de día o de punto: re-bloquea y consulta si ese punto+día ya
+  // tiene el cuadre cerrado. Con "todos" no aplica cierre (elige un punto).
   useEffect(() => {
     setAutorizado(false);
+    if (puntoSel === "todos" || !fecha) {
+      setCerrado(false);
+      return;
+    }
+    let cancelado = false;
+    consultarCuadreCerrado(puntoSel, fecha)
+      .then((r) => {
+        if (!cancelado) setCerrado(Boolean(r.cerrado));
+      })
+      .catch(() => {
+        if (!cancelado) setCerrado(false);
+      });
+    return () => {
+      cancelado = true;
+    };
   }, [fecha, puntoSel]);
 
   function cambiarLiq(id: string, campo: keyof Liq, valor: string) {
@@ -314,6 +329,10 @@ export default function CuadreCajaPage() {
 
   async function guardar() {
     if (guardando) return;
+    if (puntoSel === "todos") {
+      setError("Selecciona un punto de venta específico para guardar y cerrar su cuadre.");
+      return;
+    }
     setGuardando(true);
     setError(null);
     setGuardadoOk(false);
@@ -325,7 +344,6 @@ export default function CuadreCajaPage() {
           return actualizarMetaApi(p.id, {
             cuadreEfectivo: numero(l.efectivo),
             cuadreOmp: numero(l.omp),
-            cuadreCerrado: true,
           });
         }),
       );
@@ -338,14 +356,15 @@ export default function CuadreCajaPage() {
             ...copia[p.id],
             cuadreEfectivo: numero(l.efectivo),
             cuadreOmp: numero(l.omp),
-            cuadreCerrado: true,
           };
         }
         return copia;
       });
-      setGuardadoOk(true);
-      // Cierra el cuadre: para editar de nuevo hará falta autorización.
+      // Cierra el cuadre de ESTE punto y ESTE día (no afecta otros puntos/días).
+      await cerrarCuadre(puntoSel, fecha);
+      setCerrado(true);
       setAutorizado(false);
+      setGuardadoOk(true);
       // Genera el PDF del cuadre con toda la información digitada.
       generarPdf();
     } catch (e) {

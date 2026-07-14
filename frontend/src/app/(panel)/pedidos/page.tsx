@@ -21,7 +21,6 @@ import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import CrearClienteModal from "@/components/CrearClienteModal";
-import QRCode from "qrcode";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
 
@@ -936,7 +935,7 @@ function DetalleCongelado({
             <Dato label="Congelado">{new Date(c.creadoEn).toLocaleString("es-CO")}</Dato>
             <Dato label="Entrega">{dest}</Dato>
             <Dato label="Método de pago">{c.pago || "—"}</Dato>
-            {c.entrega === "domicilio" && dom > 0 && (
+            {c.entrega === "domicilio" && (
               <Dato label="Valor domicilio">{formatoCOP(dom)}</Dato>
             )}
             {c.programado && (
@@ -958,7 +957,7 @@ function DetalleCongelado({
                         <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span>
                       </p>
                       <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                      <p className="text-xs text-brand-brown/60">Empaque al vacío: {i.alVacio ? "Sí" : "No"}</p>
+                      {i.alVacio && <p className="text-xs text-brand-brown/60">Empaque al vacío: Sí</p>}
                       {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
                       {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
                     </div>
@@ -972,7 +971,7 @@ function DetalleCongelado({
             {/* Totales */}
             <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
               <span className="text-sm text-brand-brown/70">Subtotal: {formatoCOP(subtotal)}</span>
-              {dom > 0 && (
+              {c.entrega === "domicilio" && (
                 <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(dom)}</span>
               )}
               <span className="text-base font-bold text-brand-wine">Total parcial: {formatoCOP(total)}</span>
@@ -3239,7 +3238,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             <Dato label="Entrega">{dest}</Dato>
             <Dato label="Punto de venta">{pedido.punto.nombre}</Dato>
             <Dato label="Método de pago">{pedido.pago || "—"}</Dato>
-            {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
+            {pedido.entrega === "domicilio" && (
               <Dato label="Valor domicilio">{formatoCOP(pedido.valorDomicilio ?? 0)}</Dato>
             )}
             {pedido.entregaProgramada && pedido.fechaProgramada && (
@@ -3258,7 +3257,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   <div className="min-w-0">
                     <p className="font-medium text-brand-black break-words">{i.producto.producto} <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span></p>
                     <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                    <p className="text-xs text-brand-brown/60">Empaque al vacío: {i.alVacio ? "Sí" : "No"}</p>
+                    {i.alVacio && <p className="text-xs text-brand-brown/60">Empaque al vacío: Sí</p>}
                     {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
                     {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
                   </div>
@@ -3267,7 +3266,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
               ))}
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
-              {pedido.entrega === "domicilio" && (pedido.valorDomicilio ?? 0) > 0 && (
+              {pedido.entrega === "domicilio" && (
                 <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(pedido.valorDomicilio ?? 0)}</span>
               )}
               <span className="text-base font-bold text-brand-wine">Total: {formatoCOP(pedido.total)}</span>
@@ -3446,7 +3445,9 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
   }
   // Renderiza un producto de la comanda.
   const renderItem = (i: ItemCarrito) => {
-    const notas: string[] = [`Empaque al vacío: ${i.alVacio ? "SÍ" : "NO"}`];
+    // El empaque al vacío solo se anota cuando es SÍ (si es NO, no se muestra).
+    const notas: string[] = [];
+    if (i.alVacio) notas.push("Empaque al vacío: SÍ");
     if (i.porcionado) notas.push(`relajado ${i.unidades} und a ${i.gramos} grm`);
     if (i.corte) notas.push(i.corte);
     if (i.notas) notas.push(i.notas);
@@ -3456,10 +3457,9 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     return `<div class="prod">
         <div class="pi">Ítem: ${i.producto.referencia}</div>
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
-        <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}</b></div>
-        ${esKilo ? `<div class="pl">Equivale a: <b>${librasLabel(i.cantidad)}</b></div>` : ""}
+        <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
-        <div class="pn-nota">Nota: ${notas.join(" | ")}</div>
+        ${notas.length ? `<div class="pn-nota">Nota: ${notas.join(" | ")}</div>` : ""}
       </div>`;
   };
   // Agrupa los productos por categoría (conservando el orden de aparición):
@@ -3484,42 +3484,36 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
   const dest = entrega === "domicilio" ? "Domicilio" : entrega === "recoge" ? "Recoge en punto" : "—";
   const ciudad = [cliente.barrio, cliente.ciudad].filter(Boolean).join(", ");
   const logo = `${window.location.origin}/LOGOCARNESSANTACRUZ.png`;
-  // QR para trazabilidad/despacho: codifica el id y la comanda del pedido
-  let qr = "";
-  try {
-    qr = await QRCode.toDataURL(`PED:${id}|${comanda}`, { margin: 1, width: 200 });
-  } catch { /* sin qr si falla */ }
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Comanda ${comanda}</title>
   <style>
     *{font-family:Arial,sans-serif;color:#000;font-weight:bold;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     @page{size:80mm auto;margin:0}
     html,body{background:#fff}
-    body{width:80mm;margin:0;padding:4px 5px;font-size:15px;line-height:1.4}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;font-size:14px;font-weight:bold}
-    .logo{text-align:center;margin:6px 0}
-    .logo img{max-width:60mm;max-height:30mm;object-fit:contain}
-    .logo .b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:6px 14px;font-weight:bold;letter-spacing:1px}
-    h1{font-size:23px;text-align:center;margin:8px 0 2px}
-    .ndia{display:block;text-align:center;font-size:15px;margin:2px 0 6px}
-    .ndia b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:2px 12px;font-size:20px}
-    .nit{text-align:left;margin:6px 0 2px}
-    .nitlabel{font-size:14px;font-weight:bold;display:block}
-    .nitnum{font-size:26px;font-weight:bold;display:block;line-height:1.1;word-break:break-all}
-    .emp{text-align:center;font-size:15px;color:#000;margin-bottom:8px}
-    .row{margin:3px 0}
+    body{width:80mm;margin:0;padding:4px 5px;font-size:13px;line-height:1.2}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;font-size:12px;font-weight:bold}
+    .logo{text-align:center;margin:3px 0}
+    .logo img{max-width:52mm;max-height:20mm;object-fit:contain}
+    .logo .b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:4px 12px;font-weight:bold;letter-spacing:1px}
+    h1{font-size:18px;text-align:center;margin:4px 0 2px}
+    .ndia{display:block;text-align:center;font-size:13px;margin:2px 0 4px}
+    .ndia b{display:inline-block;background:#000;color:#fff;border-radius:6px;padding:2px 12px;font-size:18px}
+    .nit{text-align:left;margin:4px 0 2px}
+    .nitlabel{font-size:12px;font-weight:bold;display:block}
+    .nitnum{font-size:21px;font-weight:bold;display:block;line-height:1.1;word-break:break-all}
+    .emp{text-align:center;font-size:13px;color:#000;margin-bottom:4px}
+    .row{margin:2px 0}
     .label{font-weight:bold}
-    .com{font-size:19px;font-weight:bold;margin:8px 0}
-    hr{border:none;border-top:2px solid #000;margin:8px 0}
-    .sec{font-weight:bold;font-size:17px;margin:6px 0 4px}
-    .catsec{font-weight:bold;font-size:15px;margin:8px 0 4px;background:#000;color:#fff;padding:3px 8px;border-radius:4px;text-align:center;letter-spacing:.5px}
-    .prod{margin-bottom:8px;font-size:14px;border-bottom:2px solid #000;padding-bottom:8px}
+    .com{font-size:16px;font-weight:bold;margin:4px 0}
+    hr{border:none;border-top:2px solid #000;margin:5px 0}
+    .sec{font-weight:bold;font-size:14px;margin:4px 0 3px}
+    .catsec{font-weight:bold;font-size:13px;margin:5px 0 3px;background:#000;color:#fff;padding:2px 6px;border-radius:4px;text-align:center;letter-spacing:.5px}
+    .prod{margin-bottom:4px;font-size:12.5px;border-bottom:1px dashed #000;padding-bottom:4px;line-height:1.2}
     .prod:last-child{border-bottom:none}
-    .pn{font-weight:bold}
-    .pn-nota{color:#000}
-    .tot{font-size:20px;font-weight:bold;margin:8px 0}
-    .qr{text-align:left;margin-top:10px}
-    .qr img{width:35mm;height:35mm;image-rendering:pixelated}
-    .qr small{display:block;font-size:12px;color:#000;margin-top:2px}
+    .pi{font-size:11px}
+    .pn{font-weight:bold;font-size:13px}
+    .pl{margin:1px 0}
+    .pn-nota{color:#000;margin-top:1px}
+    .tot{font-size:17px;font-weight:bold;margin:5px 0}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
   </style></head><body>
     <div class="top"><span>${fecha}</span><span>${hora}</span></div>
@@ -3544,10 +3538,9 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <div class="sec">PRODUCTOS</div>
     ${filas}
     <hr>
-    ${dom > 0 ? `<div class="row"><span class="label">Subtotal:</span> ${formatoCOP(subtotal)}</div><div class="row"><span class="label">Domicilio:</span> ${formatoCOP(dom)}</div>` : ""}
+    ${entrega === "domicilio" ? `<div class="row"><span class="label">Subtotal:</span> ${formatoCOP(subtotal)}</div><div class="row"><span class="label">Domicilio:</span> ${formatoCOP(dom)}</div>` : ""}
     <div class="tot">Total: ${formatoCOP(total)}</div>
     ${observacion ? `<hr><div class="sec">OBSERVACIÓN</div><div class="row">${observacion}</div>` : ""}
-    ${qr ? `<div class="qr"><img src="${qr}" alt="QR pedido"></div>` : ""}
   </body></html>`;
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
