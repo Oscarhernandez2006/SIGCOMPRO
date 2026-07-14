@@ -81,4 +81,10 @@ export class ConfiguracionController {
   cerrarCuadre(@Body() body: { puntoId?: string; fecha?: string }) {
     return this.configuracion.cerrarCuadre(body?.puntoId ?? '', body?.fecha ?? '');
   }
+
+  /** Reabre (quita el cierre de) el cuadre de un punto en una fecha. Autenticado. */
+  @Post('cuadre/reabrir')
+  reabrirCuadre(@Body() body: { puntoId?: string; fecha?: string }) {
+    return this.configuracion.reabrirCuadre(body?.puntoId ?? '', body?.fecha ?? '');
+  }
 }

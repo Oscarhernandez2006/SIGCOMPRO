@@ -94,3 +94,14 @@ export function cerrarCuadre(
     body: JSON.stringify({ puntoId, fecha }),
   });
 }
+
+/** Reabre (quita el cierre de) el cuadre de un punto en una fecha. */
+export function reabrirCuadre(
+  puntoId: string,
+  fecha: string,
+): Promise<{ cerrado: boolean }> {
+  return apiFetch<{ cerrado: boolean }>("/configuracion/cuadre/reabrir", {
+    method: "POST",
+    body: JSON.stringify({ puntoId, fecha }),
+  });
+}

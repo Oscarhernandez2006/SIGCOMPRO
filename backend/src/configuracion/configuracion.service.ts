@@ -239,6 +239,30 @@ export class ConfiguracionService implements OnModuleInit {
     return { cerrado: true };
   }
 
+  /**
+   * Reabre (quita el cierre de) el cuadre de un punto en una fecha. Se usa tras
+   * autorizar la edición con la clave dinámica: así el cuadre queda editable y
+   * lo sigue estando aunque se recargue la página, hasta que se vuelva a cerrar.
+   */
+  async reabrirCuadre(
+    puntoId: string,
+    fecha: string,
+  ): Promise<{ cerrado: boolean }> {
+    const clave = `${String(puntoId ?? '').trim()}|${String(fecha ?? '').trim()}`;
+    const claves = (await this.obtenerCierresCuadre()).filter(
+      (c) => c !== clave,
+    );
+    await this.pool.query(
+      `INSERT INTO configuracion (clave, valor)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (clave) DO UPDATE SET
+         valor = EXCLUDED.valor,
+         actualizado_en = now()`,
+      [CLAVE_CUADRE_CERRADOS, JSON.stringify({ claves })],
+    );
+    return { cerrado: false };
+  }
+
   /* ------------------------------------------------------------------ */
   /* Vistas por punto (las consume el módulo de despacho, sin cambios)  */
   /* ------------------------------------------------------------------ */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
@@ -11,7 +11,7 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
-import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre } from "@/lib/configuracion";
+import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) =>
@@ -57,6 +57,21 @@ export default function CuadreCajaPage() {
 
   // Ediciones locales de liquidación por pedido (texto de los inputs).
   const [liq, setLiq] = useState<Record<string, Liq>>({});
+  // Espejo de `liq` para leer el valor más reciente dentro del autoguardado.
+  const liqRef = useRef<Record<string, Liq>>({});
+  useEffect(() => {
+    liqRef.current = liq;
+  }, [liq]);
+  // Temporizadores de autoguardado por pedido (debounce al escribir).
+  const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [autoguardando, setAutoguardando] = useState(false);
+  // Limpia los temporizadores pendientes al desmontar.
+  useEffect(() => {
+    const timers = autosaveTimers.current;
+    return () => {
+      Object.values(timers).forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   // Autorización para EDITAR un cuadre ya cerrado (con clave dinámica de admin).
   const [autorizado, setAutorizado] = useState(false);
@@ -197,9 +212,27 @@ export default function CuadreCajaPage() {
       const actual: Liq = prev[id] ?? { efectivo: "", omp: "" };
       return { ...prev, [id]: { ...actual, [campo]: valor } };
     });
+    // Autoguardado (debounce): persiste la celda enseguida para no perder los
+    // datos si se recarga la página. Usa liqRef para el valor más reciente.
+    const timers = autosaveTimers.current;
+    if (timers[id]) clearTimeout(timers[id]);
+    timers[id] = setTimeout(async () => {
+      const l = liqRef.current[id] ?? { efectivo: "", omp: "" };
+      const cambios = { cuadreEfectivo: numero(l.efectivo), cuadreOmp: numero(l.omp) };
+      setAutoguardando(true);
+      try {
+        await actualizarMetaApi(id, cambios);
+        setMeta((m) => ({ ...m, [id]: { ...m[id], ...cambios } }));
+      } catch {
+        /* si falla, el valor sigue en pantalla; se reintenta al reguardar */
+      } finally {
+        setAutoguardando(false);
+      }
+    }, 600);
   }
 
-  // Verifica la clave dinámica del administrador para desbloquear la edición.
+  // Verifica la clave dinámica del administrador y, si es válida, REABRE el
+  // cuadre (queda editable y lo sigue estando aunque se recargue la página).
   async function autorizarEdicion() {
     if (verificandoAuth) return;
     const codigo = codigoAuth.replace(/\D/g, "");
@@ -215,6 +248,13 @@ export default function CuadreCajaPage() {
         setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
         return;
       }
+      // Reabre el cuadre en el backend: así la edición persiste tras refrescar.
+      try {
+        if (puntoSel !== "todos") await reabrirCuadre(puntoSel, fecha);
+      } catch {
+        /* si falla la reapertura, igual se permite editar en esta sesión */
+      }
+      setCerrado(false);
       setAutorizado(true);
       setAuthAbierta(false);
       setCodigoAuth("");
@@ -611,6 +651,11 @@ export default function CuadreCajaPage() {
               )}
               {guardadoOk && (
                 <span className="text-sm font-medium text-emerald-600">Cuadre guardado ✓</span>
+              )}
+              {!guardadoOk && (
+                <span className="text-xs font-medium text-brand-brown/50">
+                  {autoguardando ? "Guardando…" : "Guardado automático"}
+                </span>
               )}
               <button
                 onClick={generarPdf}
