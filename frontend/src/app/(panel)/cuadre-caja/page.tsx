@@ -36,6 +36,27 @@ function esEfectivo(pago?: string | null): boolean {
   return (pago ?? "").trim().toLowerCase() === "efectivo";
 }
 
+/** Color (fondo + texto) de cada método de pago para diferenciarlos en la tabla. */
+function colorMetodo(pago?: string | null): string {
+  switch ((pago ?? "").trim().toLowerCase()) {
+    case "efectivo":
+      return "bg-emerald-50 text-emerald-700";
+    case "transferencia":
+      return "bg-blue-50 text-blue-700";
+    case "tarjeta":
+      return "bg-violet-50 text-violet-700";
+    case "crédito":
+    case "credito":
+      return "bg-amber-50 text-amber-700";
+    case "qr":
+      return "bg-teal-50 text-teal-700";
+    case "mixto":
+      return "bg-fuchsia-50 text-fuchsia-700";
+    default:
+      return "bg-brand-cream-soft text-brand-brown/70";
+  }
+}
+
 /**
  * Nombre de quien despachó el pedido: se toma del último evento de trazabilidad
  * que dejó el pedido en "Despachado" (lo registra el backend con el usuario que
@@ -167,6 +188,11 @@ export default function CuadreCajaPage() {
         // Filtro por método de pago.
         if (filtroPago === "efectivo" && !esEfectivo(p.pago)) return false;
         if (filtroPago === "omp" && esEfectivo(p.pago)) return false;
+        if (
+          filtroPago === "transferencia" &&
+          (p.pago ?? "").trim().toLowerCase() !== "transferencia"
+        )
+          return false;
         // Filtro por domiciliario (para liquidar por domiciliario).
         if (
           filtroDomiciliario !== "todos" &&
@@ -553,6 +579,7 @@ export default function CuadreCajaPage() {
                 [
                   ["todos", "Todos"],
                   ["efectivo", "Efectivo"],
+                  ["transferencia", "Transferencia"],
                   ["omp", "Otros (O.M.P.)"],
                 ] as [string, string][]
               ).map(([v, lbl]) => (
@@ -683,9 +710,6 @@ export default function CuadreCajaPage() {
                               <p className="text-brand-brown/80">
                                 <span className="font-semibold text-brand-black">Domiciliario:</span> {meta[p.id]?.domiciliario || "—"}
                               </p>
-                              <p className="text-brand-brown/80">
-                                <span className="font-semibold text-brand-black">Despachado por:</span> {despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "—"}
-                              </p>
                             </div>
                           </div>
                         )}
@@ -702,11 +726,7 @@ export default function CuadreCajaPage() {
                           disabled={bloqueado}
                           onChange={(e) => cambiarPago(p.id, e.target.value)}
                           title="Cambiar el método de pago (afecta este pedido en Pedidos y Despacho)"
-                          className={`w-full cursor-pointer rounded-md border-0 px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-brand-wine disabled:cursor-not-allowed disabled:opacity-70 ${
-                            efectivoRow
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-blue-50 text-blue-700"
-                          }`}
+                          className={`w-full cursor-pointer rounded-md border-0 px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-brand-wine disabled:cursor-not-allowed disabled:opacity-70 ${colorMetodo(p.pago)}`}
                         >
                           <option value="" disabled>
                             Sin definir

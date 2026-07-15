@@ -2671,8 +2671,8 @@ function cantidadLabel(cant: number, um: string | null): string {
 }
 
 /**
- * Convierte kilos a libras colombianas (1 kilo = 2 libras de 500 g) para que
- * los alistadores puedan trabajar el peso en la unidad que usan. Devuelve una
+ * Convierte kilos a libras (1 kilo = 2 libras de 500 g) para que los
+ * alistadores puedan trabajar el peso en la unidad que usan. Devuelve una
  * etiqueta lista para imprimir, p. ej. "3 libras" o "2.5 libras".
  */
 function librasLabel(kilos: number): string {
