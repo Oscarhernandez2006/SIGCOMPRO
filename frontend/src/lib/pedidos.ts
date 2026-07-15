@@ -35,6 +35,8 @@ export interface DespachoMeta {
   cuadreOmp?: number;
   /** Cuadre de caja: el cuadre de ese día quedó cerrado (guardado). */
   cuadreCerrado?: boolean;
+  /** Nombre de quien realizó el despacho (cajera/despachadora). */
+  despachadoPor?: string;
 }
 
 export interface EstadoPedidos {

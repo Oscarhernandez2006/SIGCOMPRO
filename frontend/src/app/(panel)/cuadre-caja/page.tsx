@@ -8,11 +8,12 @@ import { listarPuntosVenta, misPuntosVenta, type PuntoVenta } from "@/lib/puntos
 import {
   cargarEstadoPedidos,
   actualizarMetaApi,
+  guardarPedidoApi,
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
-import type { Pedido } from "@/app/(panel)/pedidos/page";
+import { METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) =>
   "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -35,6 +36,22 @@ function esEfectivo(pago?: string | null): boolean {
   return (pago ?? "").trim().toLowerCase() === "efectivo";
 }
 
+/**
+ * Nombre de quien despachó el pedido: se toma del último evento de trazabilidad
+ * que dejó el pedido en "Despachado" (lo registra el backend con el usuario que
+ * hizo el cambio). Así funciona también para pedidos ya despachados antes.
+ */
+function despachadoPorNombre(p: Pedido): string {
+  const eventos = p.trazabilidad ?? [];
+  for (let i = eventos.length - 1; i >= 0; i--) {
+    const ev = eventos[i];
+    if ((ev.estadoNuevo ?? "").trim().toLowerCase() === "despachado" && ev.usuarioNombre) {
+      return ev.usuarioNombre;
+    }
+  }
+  return "";
+}
+
 interface Liq {
   efectivo: string;
   omp: string;
@@ -54,6 +71,13 @@ export default function CuadreCajaPage() {
   const [puntoSel, setPuntoSel] = useState<string>("todos");
   const [fecha, setFecha] = useState<string>(hoyISO());
   const [filtroPago, setFiltroPago] = useState<string>("todos");
+  const [filtroDomiciliario, setFiltroDomiciliario] = useState<string>("todos");
+  // Id del pedido cuya ventanita de detalle (creó/alistó/domiciliario) está abierta.
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  // Orden de "completados" (autoguardados con valor): van al final para facilitar
+  // el llenado (el que se acaba de liquidar baja y sube el siguiente).
+  const [completados, setCompletados] = useState<Record<string, number>>({});
+  const completadoSeq = useRef(0);
 
   // Ediciones locales de liquidación por pedido (texto de los inputs).
   const [liq, setLiq] = useState<Record<string, Liq>>({});
@@ -143,10 +167,40 @@ export default function CuadreCajaPage() {
         // Filtro por método de pago.
         if (filtroPago === "efectivo" && !esEfectivo(p.pago)) return false;
         if (filtroPago === "omp" && esEfectivo(p.pago)) return false;
+        // Filtro por domiciliario (para liquidar por domiciliario).
+        if (
+          filtroDomiciliario !== "todos" &&
+          (meta[p.id]?.domiciliario ?? "") !== filtroDomiciliario
+        )
+          return false;
         return true;
       })
-      .sort((a, b) => (a.consecutivo ?? 0) - (b.consecutivo ?? 0));
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago]);
+      .sort((a, b) => {
+        // Los ya liquidados (autoguardados) bajan al final, en orden de
+        // finalización, para que el siguiente por llenar quede arriba.
+        const ca = completados[a.id];
+        const cb = completados[b.id];
+        if (ca != null && cb == null) return 1;
+        if (ca == null && cb != null) return -1;
+        if (ca != null && cb != null) return ca - cb;
+        return (a.consecutivo ?? 0) - (b.consecutivo ?? 0);
+      });
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados]);
+
+  // Domiciliarios presentes en los despachados del punto/día (para el filtro).
+  const domiciliarios = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of pedidos) {
+      if (p.estado !== "Despachado") continue;
+      if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
+      if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
+      const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
+      if (fecha && dia !== fecha) continue;
+      const d = (meta[p.id]?.domiciliario ?? "").trim();
+      if (d) set.add(d);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha]);
 
   const valorFacturado = useCallback(
     (p: Pedido) => Number(meta[p.id]?.facturaValor ?? p.total ?? 0) || 0,
@@ -161,7 +215,10 @@ export default function CuadreCajaPage() {
   const diferenciaFila = useCallback(
     (p: Pedido) => {
       const l = liq[p.id] ?? { efectivo: "", omp: "" };
-      return numero(l.efectivo) + numero(l.omp) - valorFacturado(p);
+      // Cada pedido se liquida por su medio: efectivo -> columna Efectivo; el
+      // resto (transferencia, tarjeta, crédito…) -> columna O.M.P.
+      const liquidado = esEfectivo(p.pago) ? numero(l.efectivo) : numero(l.omp);
+      return liquidado - valorFacturado(p);
     },
     [liq, valorFacturado],
   );
@@ -174,8 +231,8 @@ export default function CuadreCajaPage() {
     for (const p of filas) {
       const l = liq[p.id] ?? { efectivo: "", omp: "" };
       facturado += valorFacturado(p);
-      efectivo += numero(l.efectivo);
-      omp += numero(l.omp);
+      if (esEfectivo(p.pago)) efectivo += numero(l.efectivo);
+      else omp += numero(l.omp);
     }
     return { facturado, efectivo, omp, diferencia: efectivo + omp - facturado };
   }, [filas, liq, valorFacturado]);
@@ -207,6 +264,22 @@ export default function CuadreCajaPage() {
     };
   }, [fecha, puntoSel]);
 
+  // Cambia el método de pago de un pedido y lo persiste (se refleja en Pedidos
+  // y Despacho, ya que edita el pedido real con ese consecutivo).
+  function cambiarPago(id: string, pago: string) {
+    if (bloqueado) return;
+    setPedidos((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, pago } : p));
+      const actualizado = next.find((p) => p.id === id);
+      if (actualizado) {
+        guardarPedidoApi(actualizado).catch(() => {
+          setError("No se pudo cambiar el método de pago. Inténtalo de nuevo.");
+        });
+      }
+      return next;
+    });
+  }
+
   function cambiarLiq(id: string, campo: keyof Liq, valor: string) {
     if (bloqueado) return; // cuadre cerrado: requiere autorización para editar
     setGuardadoOk(false);
@@ -214,8 +287,8 @@ export default function CuadreCajaPage() {
       const actual: Liq = prev[id] ?? { efectivo: "", omp: "" };
       return { ...prev, [id]: { ...actual, [campo]: valor } };
     });
-    // Autoguardado (debounce): persiste la celda enseguida para no perder los
-    // datos si se recarga la página. Usa liqRef para el valor más reciente.
+    // Autoguardado (debounce 10 s): persiste la celda tras 10 s sin escribir y
+    // baja la fila al final (si tiene valor) para facilitar el llenado.
     const timers = autosaveTimers.current;
     if (timers[id]) clearTimeout(timers[id]);
     timers[id] = setTimeout(async () => {
@@ -225,12 +298,19 @@ export default function CuadreCajaPage() {
       try {
         await actualizarMetaApi(id, cambios);
         setMeta((m) => ({ ...m, [id]: { ...m[id], ...cambios } }));
+        // Solo baja al final si realmente se liquidó (algún valor > 0).
+        const tieneValor = cambios.cuadreEfectivo > 0 || cambios.cuadreOmp > 0;
+        if (tieneValor) {
+          setCompletados((prev) =>
+            prev[id] != null ? prev : { ...prev, [id]: ++completadoSeq.current },
+          );
+        }
       } catch {
         /* si falla, el valor sigue en pantalla; se reintenta al reguardar */
       } finally {
         setAutoguardando(false);
       }
-    }, 600);
+    }, 10000);
   }
 
   // Verifica la clave dinámica del administrador y, si es válida, REABRE el
@@ -490,6 +570,22 @@ export default function CuadreCajaPage() {
               ))}
             </div>
           </div>
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+            Domiciliario
+            <select
+              value={filtroDomiciliario}
+              onChange={(e) => setFiltroDomiciliario(e.target.value)}
+              title="Filtrar por domiciliario (para liquidar por domiciliario)"
+              className="mt-1 min-w-[11rem] rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-wine"
+            >
+              <option value="todos">Todos</option>
+              {domiciliarios.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             onClick={cargar}
             title="Recargar la información"
@@ -516,19 +612,20 @@ export default function CuadreCajaPage() {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-            <table className="w-full min-w-[1000px] text-sm">
+          <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+            <table className="w-full table-fixed text-xs">
               <thead>
-                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[11px] font-bold uppercase tracking-wide text-brand-brown/60">
-                  <th className="px-3 py-3">No. Factura</th>
-                  <th className="px-3 py-3">Consecutivo</th>
-                  <th className="px-3 py-3">Cliente</th>
-                  <th className="px-3 py-3">NIT / Cédula</th>
-                  <th className="px-3 py-3">Método de pago</th>
-                  <th className="px-3 py-3 text-right">$ Valor facturado</th>
-                  <th className="px-3 py-3 text-right">Liquidar efectivo</th>
-                  <th className="px-3 py-3 text-right">Liquidar O.M.P.</th>
-                  <th className="px-3 py-3 text-right">Diferencia</th>
+                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/60">
+                  <th className="w-[9%] px-2 py-2.5">No. Factura</th>
+                  <th className="w-[10%] px-2 py-2.5">Consecutivo</th>
+                  <th className="w-[15%] px-2 py-2.5">Cliente</th>
+                  <th className="w-[9%] px-2 py-2.5">NIT / Cédula</th>
+                  <th className="w-[10%] px-2 py-2.5">Método de pago</th>
+                  <th className="w-[11%] px-2 py-2.5">Despachado por</th>
+                  <th className="w-[9%] px-2 py-2.5 text-right">Facturado</th>
+                  <th className="w-[9%] px-2 py-2.5 text-right">Liq. efectivo</th>
+                  <th className="w-[9%] px-2 py-2.5 text-right">Liq. O.M.P.</th>
+                  <th className="w-[9%] px-2 py-2.5 text-right">Diferencia</th>
                 </tr>
               </thead>
               <tbody>
@@ -544,53 +641,112 @@ export default function CuadreCajaPage() {
                   const efectivoRow = esEfectivo(p.pago);
                   return (
                     <tr key={p.id} className="border-b border-brand-brown/5 last:border-0">
-                      <td className="px-3 py-2.5 font-semibold text-brand-wine">
+                      <td className="truncate px-2 py-2 font-semibold text-brand-wine">
                         {meta[p.id]?.facturaNumero || "—"}
                       </td>
-                      <td className="px-3 py-2.5 tabular-nums text-brand-brown/80">
-                        {p.comanda || p.consecutivo}
+                      <td className="relative px-2 py-2 tabular-nums text-brand-brown/80">
+                        <button
+                          type="button"
+                          onClick={() => setDetalleId((prev) => (prev === p.id ? null : p.id))}
+                          title="Ver quién creó, alistó y el domiciliario del pedido"
+                          className="group inline-flex items-center gap-1 text-left font-semibold text-brand-wine transition hover:text-brand-wine/80"
+                        >
+                          <span className="underline decoration-brand-brown/20 decoration-dotted underline-offset-2 group-hover:decoration-brand-wine">
+                            {p.comanda || p.consecutivo}
+                          </span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-brown/40 transition ${detalleId === p.id ? "rotate-180" : ""}`}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </button>
+                        {detalleId === p.id && (
+                          <div className="absolute left-3 top-11 z-30 w-60 rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
+                            <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-brand-brown/10 pb-1.5">
+                              <p className="truncate font-bold text-brand-black">#{p.comanda || p.consecutivo}</p>
+                              <button
+                                type="button"
+                                onClick={() => setDetalleId(null)}
+                                title="Cerrar"
+                                className="shrink-0 rounded p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-brand-brown/80">
+                                <span className="font-semibold text-brand-black">Creó el pedido:</span> {p.vendedorNombre || "—"}
+                              </p>
+                              <p className="text-brand-brown/80">
+                                <span className="font-semibold text-brand-black">Alistador:</span> {meta[p.id]?.porcionador || "—"}
+                              </p>
+                              <p className="text-brand-brown/80">
+                                <span className="font-semibold text-brand-black">Domiciliario:</span> {meta[p.id]?.domiciliario || "—"}
+                              </p>
+                              <p className="text-brand-brown/80">
+                                <span className="font-semibold text-brand-black">Despachado por:</span> {despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "—"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </td>
-                      <td className="px-3 py-2.5 font-medium text-brand-black">
+                      <td className="truncate px-2 py-2 font-medium text-brand-black">
                         {p.cliente?.nombre || p.cliente?.nit_cedula || "—"}
                       </td>
-                      <td className="px-3 py-2.5 tabular-nums text-brand-brown/70">
+                      <td className="truncate px-2 py-2 tabular-nums text-brand-brown/70">
                         {p.cliente?.nit_cedula || "—"}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span
-                          className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                      <td className="px-2 py-2">
+                        <select
+                          value={p.pago ?? ""}
+                          disabled={bloqueado}
+                          onChange={(e) => cambiarPago(p.id, e.target.value)}
+                          title="Cambiar el método de pago (afecta este pedido en Pedidos y Despacho)"
+                          className={`w-full cursor-pointer rounded-md border-0 px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-brand-wine disabled:cursor-not-allowed disabled:opacity-70 ${
                             efectivoRow
                               ? "bg-emerald-50 text-emerald-700"
                               : "bg-blue-50 text-blue-700"
                           }`}
                         >
-                          {p.pago || "Sin definir"}
-                        </span>
+                          <option value="" disabled>
+                            Sin definir
+                          </option>
+                          {METODOS.map((m) => (
+                            <option key={m} value={m} className="bg-white text-brand-black">
+                              {m}
+                            </option>
+                          ))}
+                        </select>
                       </td>
-                      <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-brand-black">
+                      <td className="truncate px-2 py-2 text-brand-brown/70">
+                        {despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "—"}
+                      </td>
+                      <td className="px-2 py-2 text-right font-semibold tabular-nums text-brand-black">
                         {cop(valorFacturado(p))}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-2 py-2 text-right">
                         <input
                           inputMode="numeric"
-                          value={l.efectivo}
-                          disabled={bloqueado}
+                          value={efectivoRow ? l.efectivo : ""}
+                          disabled={bloqueado || !efectivoRow}
+                          title={efectivoRow ? "" : "Este pedido no es en efectivo; liquídalo en la columna O.M.P."}
                           onChange={(e) => cambiarLiq(p.id, "efectivo", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
-                          placeholder="0"
-                          className="w-28 rounded-lg border border-brand-brown/20 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/50"
+                          placeholder={efectivoRow ? "0" : "—"}
+                          className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
                         />
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-2 py-2 text-right">
                         <input
                           inputMode="numeric"
-                          value={l.omp}
-                          disabled={bloqueado}
+                          value={efectivoRow ? "" : l.omp}
+                          disabled={bloqueado || efectivoRow}
+                          title={efectivoRow ? "Este pedido es en efectivo; liquídalo en la columna Efectivo" : ""}
                           onChange={(e) => cambiarLiq(p.id, "omp", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
-                          placeholder="0"
-                          className="w-28 rounded-lg border border-brand-brown/20 px-2 py-1 text-right text-sm tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/50"
+                          placeholder={efectivoRow ? "—" : "0"}
+                          className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
                         />
                       </td>
-                      <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${difColor}`}>
+                      <td className={`px-2 py-2 text-right font-bold tabular-nums ${difColor}`}>
                         {dif === 0 ? "—" : cop(dif)}
                       </td>
                     </tr>
@@ -599,14 +755,14 @@ export default function CuadreCajaPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-brand-brown/15 bg-brand-cream-soft/40 font-bold text-brand-black">
-                  <td className="px-3 py-3" colSpan={5}>
+                  <td className="truncate px-2 py-2.5" colSpan={6}>
                     Total general · {filas.length} pedido{filas.length === 1 ? "" : "s"}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{cop(totales.facturado)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{cop(totales.efectivo)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{cop(totales.omp)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.facturado)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.efectivo)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.omp)}</td>
                   <td
-                    className={`px-3 py-3 text-right tabular-nums ${
+                    className={`px-2 py-2.5 text-right tabular-nums ${
                       totales.diferencia === 0
                         ? "text-emerald-600"
                         : totales.diferencia < 0

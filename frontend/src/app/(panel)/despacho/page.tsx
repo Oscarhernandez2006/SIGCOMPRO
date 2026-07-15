@@ -418,13 +418,15 @@ export default function DespachoPage() {
       sinPermiso.mostrar();
       return;
     }
-    // Al pasar a "Despachado" se registra la hora exacta del cambio (si aún no existe).
+    // Al pasar a "Despachado" se registra la hora exacta del cambio (si aún no
+    // existe) y el nombre de quien lo despachó (cajera/despachadora).
     if (norm(estado) === "despachado") {
       setMeta((prev) => {
         if (prev[id]?.despachoFin) return prev;
         const despachoFin = new Date().toISOString();
-        actualizarMetaApi(id, { despachoFin }).catch(() => { /* ignore */ });
-        return { ...prev, [id]: { ...prev[id], despachoFin } };
+        const despachadoPor = usuarioDesp?.nombre ?? "";
+        actualizarMetaApi(id, { despachoFin, despachadoPor }).catch(() => { /* ignore */ });
+        return { ...prev, [id]: { ...prev[id], despachoFin, despachadoPor } };
       });
     }
     setPedidos((prev) => {
