@@ -1665,7 +1665,7 @@ function ModalReplica({
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
   // Puntos integrados con Drivin (suben directo): La 93, Alameda, Olaya y San
-  // Felipe. Cada uno usa su schema en el backend (93->01, La 43->03, Alameda I->04,
+  // Felipe. Cada uno usa su schema en el backend (93->01, La 43->02, Alameda I->04,
   // Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
   const esDrivin = (() => {
     const nombre = String(pedido.punto?.nombre ?? "").toLowerCase();
