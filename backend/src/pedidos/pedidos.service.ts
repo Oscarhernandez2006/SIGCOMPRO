@@ -656,6 +656,7 @@ export class PedidosService implements OnModuleInit {
    * NÚMERO del punto (prefijo del código, ej. "5CSXXXXX" -> 5), que es fiable
    * aunque el nombre use números romanos ("Alameda I" / "Alameda II"):
    *  - Punto 1  (La 93)       -> 01
+   *  - Punto 3  (La 43)       -> 03
    *  - Punto 4  (Alameda I)   -> 04
    *  - Punto 5  (Alameda II)  -> 05
    *  - Punto 6  (Olaya)       -> 06
@@ -666,6 +667,7 @@ export class PedidosService implements OnModuleInit {
     const num = String(puntoCodigo ?? '').match(/^\d+/)?.[0] ?? '';
     const porNumero: Record<string, string> = {
       '1': '01', // La 93
+      '3': '03', // La 43
       '4': '04', // Alameda I
       '5': '05', // Alameda II
       '6': '06', // Olaya
@@ -679,6 +681,7 @@ export class PedidosService implements OnModuleInit {
     if (nombre.includes('olaya')) return '06';
     if (nombre.includes('felipe')) return '07';
     if (/\b93\b/.test(nombre)) return '01';
+    if (/\b43\b/.test(nombre)) return '03';
     return this.config.get<string>('DRIVIN_SCHEMA_CODE', '01');
   }
 

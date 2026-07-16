@@ -1285,6 +1285,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     const nombre = String(p?.nombre ?? "").toLowerCase();
     return (
       /\b93\b/.test(nombre) ||
+      /\b43\b/.test(nombre) ||
       nombre.includes("alameda") ||
       nombre.includes("olaya") ||
       nombre.includes("felipe")
