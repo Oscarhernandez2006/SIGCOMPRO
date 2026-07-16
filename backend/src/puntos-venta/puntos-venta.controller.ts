@@ -33,6 +33,12 @@ export class PuntosVentaController {
     return this.puntos.puntosDeUsuario(req.user!.sub);
   }
 
+  /** Ubicaciones de todos los puntos activos (recomendar el más cercano). */
+  @Get('ubicaciones')
+  ubicaciones() {
+    return this.puntos.ubicaciones();
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles('administrador', 'desarrollador')

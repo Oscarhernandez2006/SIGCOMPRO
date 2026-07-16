@@ -210,11 +210,14 @@ export default function CrearClienteModal({
               barrio={form.barrio ?? ""}
               ciudad={form.ciudad ?? ""}
               referencia={form.referencia ?? ""}
+              puntoVenta={form.punto_venta ?? ""}
+              horeca={tipoCliente === "horeca"}
               lat={form.lat ?? null}
               lng={form.lng ?? null}
               onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
               onBarrio={(b) => cambiar("barrio", b)}
               onCiudad={(ci) => cambiar("ciudad", ci)}
+              onPuntoVenta={(n) => cambiar("punto_venta", n)}
             />
           </Bloque>
 

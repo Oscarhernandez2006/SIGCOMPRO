@@ -13,6 +13,7 @@ export interface Cliente {
   ciudad: string | null;
   telefono: string | null;
   correo: string | null;
+  punto_venta: string | null;
   lat: number | null;
   lng: number | null;
   activo: boolean;
@@ -36,6 +37,7 @@ export interface ClienteInput {
   ciudad?: string;
   telefono?: string;
   correo?: string;
+  punto_venta?: string;
   lat?: number | null;
   lng?: number | null;
   activo?: boolean;
@@ -125,30 +127,52 @@ export interface ImportacionResumen {
  */
 export async function importarClientesDB(
   archivo: File,
+  onProgress?: (fase: "subiendo" | "procesando", pct: number) => void,
 ): Promise<ImportacionResumen> {
   const token = getToken();
   const form = new FormData();
   form.append("archivo", archivo);
 
-  const res = await fetch(`${API_URL}/clientes/importar`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: form,
+  // Se usa XMLHttpRequest para poder reportar el progreso de SUBIDA del archivo
+  // (fetch no expone el progreso de upload). Al terminar la subida, el servidor
+  // procesa (fase indeterminada).
+  return new Promise<ImportacionResumen>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/clientes/importar`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress("subiendo", Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.upload.onload = () => onProgress?.("procesando", 100);
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        limpiarSesion();
+        if (typeof window !== "undefined") window.location.href = "/";
+        reject(new Error("Sesión expirada"));
+        return;
+      }
+      let data: unknown = null;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        /* respuesta no JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as ImportacionResumen);
+      } else {
+        const msg =
+          (data as { message?: string | string[] } | null)?.message ??
+          "No se pudo importar";
+        reject(new Error(Array.isArray(msg) ? msg.join(", ") : msg));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Error de red al importar el archivo"));
+    xhr.send(form);
   });
-
-  if (res.status === 401) {
-    limpiarSesion();
-    if (typeof window !== "undefined") window.location.href = "/";
-    throw new Error("Sesión expirada");
-  }
-
-  const texto = await res.text();
-  const data = texto ? JSON.parse(texto) : null;
-  if (!res.ok) {
-    const mensaje = (data && (data.message as string | string[])) ?? "No se pudo importar";
-    throw new Error(Array.isArray(mensaje) ? mensaje.join(", ") : mensaje);
-  }
-  return data as ImportacionResumen;
 }
 
 /** Barrios ya registrados (autocompletar), opcionalmente filtrados por ciudad. */

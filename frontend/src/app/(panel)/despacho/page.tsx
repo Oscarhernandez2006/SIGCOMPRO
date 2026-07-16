@@ -404,8 +404,41 @@ export default function DespachoPage() {
       sinPermiso.mostrar();
       return;
     }
+    const m = meta[id];
+    const esTransfer = norm(pago) === "transferencia";
+    // Mantiene consistente el flujo de transferencia para EVITAR facturas sin
+    // confirmar el pago: al marcar transferencia (sin confirmar aún) se descarta
+    // cualquier factura previa, obligando a confirmar la transferencia ANTES de
+    // volver a facturar. Si el pedido ya estaba "Facturado", regresa a
+    // "Alistado". Al cambiar a otro método, se descarta una confirmación de
+    // transferencia que hubiera quedado obsoleta.
+    const reset: Record<string, unknown> = {};
+    let revertirAAlistado = false;
+    if (esTransfer) {
+      if (!m?.pagoConfirmado) {
+        if (m?.facturaNumero) reset.facturaNumero = "";
+        if (m?.facturaValor != null) reset.facturaValor = null;
+        const est = norm(pedidos.find((p) => p.id === id)?.estado);
+        if (est === "facturado") revertirAAlistado = true;
+      }
+    } else if (m?.pagoConfirmado) {
+      reset.pagoConfirmado = null;
+    }
+    if (Object.keys(reset).length) {
+      actualizarMeta(id, reset as Partial<DespachoMeta>);
+    }
     setPedidos((prev) => {
-      const next = prev.map((p) => (p.id === id ? { ...p, pago } : p));
+      const next = prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              pago,
+              ...(revertirAAlistado
+                ? { estado: "Alistado" as Pedido["estado"] }
+                : {}),
+            }
+          : p,
+      );
       const actualizado = next.find((p) => p.id === id);
       if (actualizado) guardarPedidoApi(actualizado).catch(() => { /* ignore */ });
       return next;
@@ -438,31 +471,15 @@ export default function DespachoPage() {
   };
 
   /**
-   * Reversa/cambia el estado de un pedido (solo administradores). Limpia la
-   * metadata que corresponda para que el flujo quede consistente y se pueda
-   * volver a hacer (p. ej. al regresar a "En proceso" borra inicio/fin).
+   * Reversa/cambia el estado de un pedido (solo administradores). NO reinicia
+   * los tiempos (inicio/fin de alistamiento, hora de despacho ni la confirmación
+   * de transferencia): al cambiar el estado se conservan tal cual para no perder
+   * el registro de tiempos ya tomado.
    */
   const reversarEstado = (id: string, nuevoEstado: Pedido["estado"]) => {
     if (!permite.estado) {
       sinPermiso.mostrar();
       return;
-    }
-    const n = norm(nuevoEstado);
-    const reset: Record<string, string | null> = {};
-    if (n === "en proceso") {
-      reset.inicio = null;
-      reset.fin = null;
-      reset.despachoFin = null;
-      reset.pagoConfirmado = null;
-    } else if (n === "en producción") {
-      reset.fin = null;
-      reset.despachoFin = null;
-      reset.pagoConfirmado = null;
-    } else if (n === "alistado" || n === "facturado") {
-      reset.despachoFin = null;
-    }
-    if (Object.keys(reset).length) {
-      actualizarMeta(id, reset as Partial<DespachoMeta>);
     }
     cambiarEstado(id, nuevoEstado);
   };
@@ -1130,8 +1147,16 @@ export default function DespachoPage() {
                                 cambiarEstado(p.id, "Alistado");
                               }
                             }}
-                            disabled={anulado || !impreso}
-                            title={!impreso ? "Imprime la comanda primero para habilitar el despacho" : m.inicio ? "Marcar el alistamiento como preparado" : "Iniciar el alistamiento del pedido"}
+                            disabled={anulado || !impreso || (!m.inicio && !porcSel.trim())}
+                            title={
+                              !impreso
+                                ? "Imprime la comanda primero para habilitar el despacho"
+                                : !m.inicio && !porcSel.trim()
+                                  ? "Selecciona el porcionador antes de iniciar el alistamiento"
+                                  : m.inicio
+                                    ? "Marcar el alistamiento como preparado"
+                                    : "Iniciar el alistamiento del pedido"
+                            }
                             className={`w-full whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
                               permite.estado ? "" : "opacity-50"
                             } ${

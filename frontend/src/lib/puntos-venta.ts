@@ -49,6 +49,20 @@ export function listarPuntosVenta(): Promise<PuntoVenta[]> {
   return apiFetch<PuntoVenta[]>("/puntos-venta");
 }
 
+/** Ubicación mínima de un punto de venta (para recomendar el más cercano). */
+export interface PuntoUbicacion {
+  id: string;
+  nombre: string;
+  codigo: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+/** Ubicaciones de todos los puntos activos (cualquier usuario autenticado). */
+export function puntosUbicaciones(): Promise<PuntoUbicacion[]> {
+  return apiFetch<PuntoUbicacion[]>("/puntos-venta/ubicaciones");
+}
+
 export function crearPuntoVenta(input: PuntoVentaInput): Promise<PuntoVenta> {
   return apiFetch<PuntoVenta>("/puntos-venta", {
     method: "POST",
@@ -184,13 +198,11 @@ export function domicilioGratisAplica(
  * junto con la distancia. Ignora puntos sin coordenadas o con coordenadas
  * inválidas (NaN, fuera de rango o 0,0).
  */
-export function puntoMasCercano(
-  puntos: PuntoVenta[],
-  lat: number,
-  lng: number,
-): { punto: PuntoVenta; km: number } | null {
+export function puntoMasCercano<
+  T extends { lat: number | null; lng: number | null },
+>(puntos: T[], lat: number, lng: number): { punto: T; km: number } | null {
   if (!coordenadasValidas(lat, lng)) return null;
-  let mejor: { punto: PuntoVenta; km: number } | null = null;
+  let mejor: { punto: T; km: number } | null = null;
   for (const p of puntos) {
     if (!coordenadasValidas(p.lat, p.lng)) continue;
     const km = distanciaKm(lat, lng, Number(p.lat), Number(p.lng));

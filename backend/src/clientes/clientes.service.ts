@@ -23,6 +23,7 @@ export interface ClienteRow {
   ciudad: string | null;
   telefono: string | null;
   correo: string | null;
+  punto_venta: string | null;
   lat: number | null;
   lng: number | null;
   activo: boolean;
@@ -50,7 +51,7 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca, direccion_incorrecta, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, creado_en';
 
 @Injectable()
 export class ClientesService implements OnModuleInit {
@@ -68,6 +69,10 @@ export class ClientesService implements OnModuleInit {
     );
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS direccion_incorrecta boolean NOT NULL DEFAULT false`,
+    );
+    // Punto de venta al que está asignado el cliente (viene del Excel de importación).
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS punto_venta text`,
     );
   }
 
@@ -209,8 +214,8 @@ export class ClientesService implements OnModuleInit {
 
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, lat, lng, activo, horeca, direccion_incorrecta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING ${COLUMNS}`,
       [
         nit,
@@ -222,6 +227,7 @@ export class ClientesService implements OnModuleInit {
         dto.ciudad?.trim() ?? null,
         dto.telefono?.trim() ?? null,
         dto.correo?.trim() ?? null,
+        dto.punto_venta?.trim() ?? null,
         dto.lat ?? null,
         dto.lng ?? null,
         dto.activo ?? true,
@@ -256,6 +262,7 @@ export class ClientesService implements OnModuleInit {
       ['ciudad', 'ciudad'],
       ['telefono', 'telefono'],
       ['correo', 'correo'],
+      ['punto_venta', 'punto_venta'],
       ['lat', 'lat'],
       ['lng', 'lng'],
     ];
@@ -315,7 +322,20 @@ export class ClientesService implements OnModuleInit {
   async importarDesdeExcel(buffer: Buffer): Promise<ImportacionResumen> {
     let libro: XLSX.WorkBook;
     try {
-      libro = XLSX.read(buffer, { type: 'buffer' });
+      // Opciones de rendimiento: para .xlsm se omiten las macros (bookVBA),
+      // fórmulas, estilos y formatos numéricos, que son lo que más ralentiza la
+      // lectura. `dense` acelera el acceso a las celdas.
+      libro = XLSX.read(buffer, {
+        type: 'buffer',
+        dense: true,
+        bookVBA: false,
+        cellFormula: false,
+        cellHTML: false,
+        cellNF: false,
+        cellText: false,
+        cellStyles: false,
+        cellDates: false,
+      });
     } catch {
       throw new BadRequestException('No se pudo leer el archivo Excel.');
     }
@@ -354,6 +374,7 @@ export class ClientesService implements OnModuleInit {
       barrio: idxDe('barrio'),
       ciudad: idxDe('ciudad'),
       telefono: idxDe('telefono', 'celular'),
+      puntoVenta: idxDe('punto_venta', 'punto de venta', 'puntoventa', 'punto'),
     };
     if (col.nit < 0) {
       throw new BadRequestException(
@@ -380,6 +401,7 @@ export class ClientesService implements OnModuleInit {
         barrio: string | null;
         ciudad: string | null;
         telefono: string | null;
+        puntoVenta: string | null;
       }
     >();
     let descartadas = 0;
@@ -398,6 +420,7 @@ export class ClientesService implements OnModuleInit {
         barrio: valorCol(fila, col.barrio),
         ciudad: valorCol(fila, col.ciudad),
         telefono: valorCol(fila, col.telefono),
+        puntoVenta: valorCol(fila, col.puntoVenta),
       });
     }
 
@@ -410,8 +433,9 @@ export class ClientesService implements OnModuleInit {
       barrio: string | null;
       ciudad: string | null;
       telefono: string | null;
+      punto_venta: string | null;
     }>(
-      `SELECT nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono
+      `SELECT nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta
        FROM clientes`,
     );
     const existentes = new Map(
@@ -420,6 +444,9 @@ export class ClientesService implements OnModuleInit {
 
     const nuevos: Array<ReturnType<typeof porNit.get>> = [];
     const cambiados: Array<NonNullable<ReturnType<typeof porNit.get>>> = [];
+    // Cambió SOLO el punto de venta (no la dirección): se actualiza sin tocar
+    // las coordenadas verificadas del cliente.
+    const soloPunto: Array<NonNullable<ReturnType<typeof porNit.get>>> = [];
     // Normaliza para COMPARAR: ignora mayúsculas/minúsculas, tildes y espacios
     // repetidos. Así un cliente cuya única "diferencia" es de formato (p. ej. el
     // Excel viene en MAYÚSCULAS o sin tildes) NO se marca como cambiado y
@@ -444,7 +471,10 @@ export class ClientesService implements OnModuleInit {
         comparable(actual.barrio) !== comparable(reg.barrio) ||
         comparable(actual.ciudad) !== comparable(reg.ciudad) ||
         comparable(actual.telefono) !== comparable(reg.telefono);
+      const difierePunto =
+        comparable(actual.punto_venta) !== comparable(reg.puntoVenta);
       if (difiere) cambiados.push(reg);
+      else if (difierePunto) soloPunto.push(reg);
     }
 
     let creados = 0;
@@ -462,7 +492,7 @@ export class ClientesService implements OnModuleInit {
         if (grupo.length === 0) continue;
         const valores: unknown[] = [];
         const tuplas = grupo.map((r, j) => {
-          const base = j * 7;
+          const base = j * 8;
           valores.push(
             r.nit,
             r.nombre,
@@ -471,30 +501,30 @@ export class ClientesService implements OnModuleInit {
             r.barrio,
             r.ciudad,
             r.telefono,
+            r.puntoVenta,
           );
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
         });
         const res = await cliente.query(
           `INSERT INTO clientes
-             (nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono)
+             (nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta)
            VALUES ${tuplas.join(', ')}`,
           valores,
         );
         creados += res.rowCount ?? 0;
       }
 
-      // Actualiza solo los campos provenientes del Excel. Al cambiar los datos
-      // se limpian las coordenadas (lat/lng = NULL) para que el cliente quede
-      // "sin verificar" y deba revisarse en el mapa nuevamente. Los clientes
-      // sin cambios no se tocan, así conservan su ubicación validada.
-      for (const r of cambiados) {
-        const res = await cliente.query(
-          `UPDATE clientes
-             SET nombre = $2, direccion = $3, referencia = $4,
-                 barrio = $5, ciudad = $6, telefono = $7,
-                 lat = NULL, lng = NULL
-           WHERE nit_cedula = $1`,
-          [
+      // Actualiza en LOTES los clientes cuya dirección cambió. Al cambiar los
+      // datos se limpian las coordenadas (lat/lng = NULL) para que el cliente
+      // quede "sin verificar". Se usa UPDATE ... FROM (VALUES ...) para hacer
+      // muchas filas en una sola consulta (mucho más rápido que una por una).
+      for (let i = 0; i < cambiados.length; i += LOTE) {
+        const grupo = cambiados.slice(i, i + LOTE);
+        if (grupo.length === 0) continue;
+        const valores: unknown[] = [];
+        const tuplas = grupo.map((r, j) => {
+          const b = j * 8;
+          valores.push(
             r.nit,
             r.nombre,
             r.direccion,
@@ -502,7 +532,44 @@ export class ClientesService implements OnModuleInit {
             r.barrio,
             r.ciudad,
             r.telefono,
-          ],
+            r.puntoVenta,
+          );
+          // La primera fila lleva casts ::text para fijar el tipo de cada
+          // columna del VALUES (si toda una columna viniera NULL, sin cast
+          // Postgres no podría inferir el tipo).
+          const c = j === 0 ? '::text' : '';
+          return `($${b + 1}${c}, $${b + 2}${c}, $${b + 3}${c}, $${b + 4}${c}, $${b + 5}${c}, $${b + 6}${c}, $${b + 7}${c}, $${b + 8}${c})`;
+        });
+        const res = await cliente.query(
+          `UPDATE clientes c SET
+             nombre = v.nombre, direccion = v.direccion, referencia = v.referencia,
+             barrio = v.barrio, ciudad = v.ciudad, telefono = v.telefono,
+             punto_venta = v.punto_venta, lat = NULL, lng = NULL
+           FROM (VALUES ${tuplas.join(', ')})
+             AS v(nit, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta)
+           WHERE c.nit_cedula = v.nit`,
+          valores,
+        );
+        actualizados += res.rowCount ?? 0;
+      }
+
+      // Cambió solo el punto de venta: se actualiza en LOTES SIN tocar la
+      // ubicación (conserva las coordenadas verificadas).
+      for (let i = 0; i < soloPunto.length; i += LOTE) {
+        const grupo = soloPunto.slice(i, i + LOTE);
+        if (grupo.length === 0) continue;
+        const valores: unknown[] = [];
+        const tuplas = grupo.map((r, j) => {
+          const b = j * 2;
+          valores.push(r.nit, r.puntoVenta);
+          const c = j === 0 ? '::text' : '';
+          return `($${b + 1}${c}, $${b + 2}${c})`;
+        });
+        const res = await cliente.query(
+          `UPDATE clientes c SET punto_venta = v.punto_venta
+           FROM (VALUES ${tuplas.join(', ')}) AS v(nit, punto_venta)
+           WHERE c.nit_cedula = v.nit`,
+          valores,
         );
         actualizados += res.rowCount ?? 0;
       }

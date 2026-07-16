@@ -2,11 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import {
+  puntosUbicaciones,
+  puntoMasCercano,
+  type PuntoUbicacion,
+} from "@/lib/puntos-venta";
 
 const MapaLeaflet = dynamic(() => import("./MapaLeaflet"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[197px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
+    <div className="flex h-[150px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
       Cargando mapa…
     </div>
   ),
@@ -113,22 +118,31 @@ export default function MapaDireccion({
   barrio,
   ciudad,
   referencia,
+  puntoVenta,
+  horeca,
   lat,
   lng,
   onUbicacion,
   onBarrio,
   onCiudad,
+  onPuntoVenta,
 }: {
   direccion: string;
   barrio: string;
   ciudad: string;
   /** Referencia del cliente (para buscar el conjunto/edificio en el mapa). */
   referencia?: string;
+  /** Punto de venta asignado al cliente (viene del Excel de importación). */
+  puntoVenta?: string;
+  /** ¿El cliente es HORECA? En ese caso se mantiene siempre el asignado. */
+  horeca?: boolean;
   lat: number | null;
   lng: number | null;
   onUbicacion: (lat: number | null, lng: number | null) => void;
   onBarrio?: (barrio: string) => void;
   onCiudad?: (ciudad: string) => void;
+  /** Fija el punto de venta del cliente (al elegir asignado/recomendado). */
+  onPuntoVenta?: (nombre: string) => void;
 }) {
   const [abierto, setAbierto] = useState(lat != null && lng != null);
   const [cargando, setCargando] = useState(false);
@@ -138,6 +152,23 @@ export default function MapaDireccion({
   const [sugerencias, setSugerencias] = useState<SugerenciaGeo[]>([]);
   const [modalSug, setModalSug] = useState(false);
   const [cargandoSug, setCargandoSug] = useState(false);
+
+  // Ubicaciones de todos los puntos (para recomendar el más cercano al cliente).
+  const [puntos, setPuntos] = useState<PuntoUbicacion[]>([]);
+  useEffect(() => {
+    puntosUbicaciones()
+      .then(setPuntos)
+      .catch(() => setPuntos([]));
+  }, []);
+
+  // Punto recomendado: el más cercano a la ubicación del cliente.
+  const recomendado =
+    lat != null && lng != null ? puntoMasCercano(puntos, lat, lng) : null;
+  const norm = (s?: string | null) =>
+    (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  // ¿El asignado ES el más cercano?
+  const asignadoEsCercano =
+    !!recomendado && !!puntoVenta && norm(recomendado.punto.nombre) === norm(puntoVenta);
 
   // Hay información previa suficiente para pedir sugerencias.
   const hayInfo = Boolean(
@@ -422,6 +453,76 @@ export default function MapaDireccion({
               Lat {lat!.toFixed(6)}, Lng {lng!.toFixed(6)}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Punto de venta: asignado (del Excel) y recomendado (más cercano). */}
+      {(puntoVenta?.trim() || recomendado) && (
+        <div className="mt-2 space-y-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 p-2.5 text-xs">
+          {/* Fila: asignado + recomendado, lado a lado */}
+          <div className="flex flex-wrap items-stretch gap-2">
+            {puntoVenta?.trim() && (
+              <div className="flex-1 rounded-md border border-brand-brown/15 bg-white px-2.5 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                  Punto asignado
+                </p>
+                <p className="font-semibold text-brand-wine">{puntoVenta}</p>
+              </div>
+            )}
+            {recomendado && (
+              <div
+                className={`flex-1 rounded-md border px-2.5 py-1.5 ${
+                  asignadoEsCercano
+                    ? "border-emerald-300 bg-emerald-50"
+                    : "border-brand-amber/40 bg-brand-amber/10"
+                }`}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                  Recomendado (más cercano)
+                </p>
+                <p className="font-semibold text-brand-black">
+                  {recomendado.punto.nombre}
+                  <span className="ml-1 font-normal text-brand-brown/50">
+                    · {recomendado.km.toFixed(1)} km
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Mensaje/acciones según el caso */}
+          {recomendado && horeca ? (
+            <p className="text-[11px] text-brand-brown/60">
+              Cliente <b>HORECA</b>: se mantiene el punto <b>asignado</b>.
+            </p>
+          ) : recomendado && asignadoEsCercano ? (
+            <p className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              El punto asignado también es el más cercano.
+            </p>
+          ) : recomendado && onPuntoVenta ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-brand-brown/60">Usar:</span>
+              {puntoVenta?.trim() && (
+                <button
+                  type="button"
+                  onClick={() => onPuntoVenta(puntoVenta)}
+                  className="rounded-md border border-brand-wine/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-wine transition hover:bg-brand-wine/5"
+                >
+                  Asignado ({puntoVenta})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onPuntoVenta(recomendado.punto.nombre)}
+                className="rounded-md border border-brand-amber/50 bg-brand-amber/10 px-2.5 py-1 text-[11px] font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+              >
+                Recomendado ({recomendado.punto.nombre})
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

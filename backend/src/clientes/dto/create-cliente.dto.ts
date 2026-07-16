@@ -56,6 +56,11 @@ export class CreateClienteDto {
   correo?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  punto_venta?: string;
+
+  @IsOptional()
   @IsBoolean()
   activo?: boolean;
 

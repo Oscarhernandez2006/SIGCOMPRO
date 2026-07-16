@@ -36,6 +36,27 @@ function esEfectivo(pago?: string | null): boolean {
   return (pago ?? "").trim().toLowerCase() === "efectivo";
 }
 
+/** ¿El método de pago es "mixto"? Se liquida en efectivo Y en otros medios. */
+function esMixto(pago?: string | null): boolean {
+  return (pago ?? "").trim().toLowerCase() === "mixto";
+}
+
+/** Convierte el texto de una celda a número (ignora símbolos y separadores). */
+function numero(s: string): number {
+  const n = Number(String(s).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Normaliza un nombre para comparar (sin acentos, minúsculas, sin espacios extra). */
+function normNombre(s?: string | null): string {
+  return (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 /** Color (fondo + texto) de cada método de pago para diferenciarlos en la tabla. */
 function colorMetodo(pago?: string | null): string {
   switch ((pago ?? "").trim().toLowerCase()) {
@@ -124,6 +145,15 @@ export default function CuadreCajaPage() {
   const [codigoAuth, setCodigoAuth] = useState("");
   const [verificandoAuth, setVerificandoAuth] = useState(false);
   const [errorAuth, setErrorAuth] = useState<string | null>(null);
+  // Desbloqueo POR CELDA: una liquidación con chulito queda bloqueada; para
+  // modificarla se pide la clave dinámica y solo se libera ESA celda.
+  // `authCeldaId` = id del pedido cuya celda se quiere desbloquear (modal).
+  const [authCeldaId, setAuthCeldaId] = useState<string | null>(null);
+  // `desbloqueadoId` = id del pedido cuya celda está liberada para editar.
+  const [desbloqueadoId, setDesbloqueadoId] = useState<string | null>(null);
+  // `editandoId` = id del pedido cuya celda tiene el foco (evita bloquearla a
+  // mitad de escritura cuando corre el autoguardado a los 10 s).
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
@@ -182,6 +212,13 @@ export default function CuadreCajaPage() {
         // Punto: acotado a los visibles del usuario y al punto seleccionado.
         if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) return false;
         if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) return false;
+        // Cada cajera controla SOLO sus propios pedidos: los usuarios normales
+        // solo ven los pedidos que ellos despacharon (o que quedaron despachados
+        // a su nombre). Administradores y desarrolladores ven todos.
+        if (!esAdmin) {
+          const quien = despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "";
+          if (normNombre(quien) !== normNombre(usuario?.nombre)) return false;
+        }
         // Día de despacho: usa el instante de despacho; si no, la fecha del pedido.
         const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
         if (fecha && dia !== fecha) return false;
@@ -199,6 +236,23 @@ export default function CuadreCajaPage() {
           (meta[p.id]?.domiciliario ?? "") !== filtroDomiciliario
         )
           return false;
+        // Con algún filtro activo (método de pago o domiciliario) se ocultan los
+        // pedidos ya liquidados (según lo GUARDADO) para dejar solo los
+        // pendientes. Con "todos" en ambos se muestran todos, liquidados o no.
+        const filtrando =
+          filtroPago !== "todos" || filtroDomiciliario !== "todos";
+        if (filtrando) {
+          const m = meta[p.id];
+          const ef = Number(m?.cuadreEfectivo ?? 0);
+          const om = Number(m?.cuadreOmp ?? 0);
+          const fact = Number(m?.facturaValor ?? p.total ?? 0) || 0;
+          const yaLiquidado = esMixto(p.pago)
+            ? ef + om > 0 && ef + om - fact === 0
+            : esEfectivo(p.pago)
+              ? ef > 0
+              : om > 0;
+          if (yaLiquidado) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -211,7 +265,7 @@ export default function CuadreCajaPage() {
         if (ca != null && cb != null) return ca - cb;
         return (a.consecutivo ?? 0) - (b.consecutivo ?? 0);
       });
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados, usuario]);
 
   // Domiciliarios presentes en los despachados del punto/día (para el filtro).
   const domiciliarios = useMemo(() => {
@@ -220,33 +274,61 @@ export default function CuadreCajaPage() {
       if (p.estado !== "Despachado") continue;
       if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
       if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
+      if (!esAdmin) {
+        const quien = despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "";
+        if (normNombre(quien) !== normNombre(usuario?.nombre)) continue;
+      }
       const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
       if (fecha && dia !== fecha) continue;
       const d = (meta[p.id]?.domiciliario ?? "").trim();
       if (d) set.add(d);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, usuario]);
 
   const valorFacturado = useCallback(
     (p: Pedido) => Number(meta[p.id]?.facturaValor ?? p.total ?? 0) || 0,
     [meta],
   );
 
-  const numero = (s: string): number => {
-    const n = Number(String(s).replace(/[^\d.-]/g, ""));
-    return Number.isFinite(n) ? n : 0;
-  };
-
   const diferenciaFila = useCallback(
     (p: Pedido) => {
       const l = liq[p.id] ?? { efectivo: "", omp: "" };
       // Cada pedido se liquida por su medio: efectivo -> columna Efectivo; el
-      // resto (transferencia, tarjeta, crédito…) -> columna O.M.P.
-      const liquidado = esEfectivo(p.pago) ? numero(l.efectivo) : numero(l.omp);
+      // resto (transferencia, tarjeta, crédito…) -> columna O.M.P. El pago
+      // "mixto" se liquida en AMBAS columnas (efectivo + otros medios).
+      const mixto = esMixto(p.pago);
+      const liquidado =
+        (esEfectivo(p.pago) || mixto ? numero(l.efectivo) : 0) +
+        (!esEfectivo(p.pago) || mixto ? numero(l.omp) : 0);
       return liquidado - valorFacturado(p);
     },
     [liq, valorFacturado],
+  );
+
+  // ¿El pedido ya está liquidado (según lo GUARDADO)? Con el autoguardado (10 s
+  // o al salir de la celda) se marca el chulito y la celda queda bloqueada.
+  // En "mixto" se bloquea solo cuando queda cuadrado (efectivo + otros = valor
+  // facturado), para poder llenar AMBAS casillas antes de bloquear.
+  const liquidada = useCallback(
+    (p: Pedido) => {
+      const m = meta[p.id];
+      const ef = Number(m?.cuadreEfectivo ?? 0);
+      const om = Number(m?.cuadreOmp ?? 0);
+      if (esMixto(p.pago)) {
+        return ef + om > 0 && ef + om - valorFacturado(p) === 0;
+      }
+      return esEfectivo(p.pago) ? ef > 0 : om > 0;
+    },
+    [meta, valorFacturado],
+  );
+
+  // ¿La celda de liquidación está bloqueada? Lo está si ya se liquidó (chulito),
+  // no se ha desbloqueado con la clave y no tiene el foco en ese momento.
+  const celdaBloqueada = useCallback(
+    (p: Pedido) =>
+      liquidada(p) && desbloqueadoId !== p.id && editandoId !== p.id,
+    [liquidada, desbloqueadoId, editandoId],
   );
 
   // Totales.
@@ -257,8 +339,10 @@ export default function CuadreCajaPage() {
     for (const p of filas) {
       const l = liq[p.id] ?? { efectivo: "", omp: "" };
       facturado += valorFacturado(p);
-      if (esEfectivo(p.pago)) efectivo += numero(l.efectivo);
-      else omp += numero(l.omp);
+      // "mixto" aporta a AMBAS columnas; efectivo a Efectivo y el resto a O.M.P.
+      const mixto = esMixto(p.pago);
+      if (esEfectivo(p.pago) || mixto) efectivo += numero(l.efectivo);
+      if (!esEfectivo(p.pago) || mixto) omp += numero(l.omp);
     }
     return { facturado, efectivo, omp, diferencia: efectivo + omp - facturado };
   }, [filas, liq, valorFacturado]);
@@ -313,30 +397,86 @@ export default function CuadreCajaPage() {
       const actual: Liq = prev[id] ?? { efectivo: "", omp: "" };
       return { ...prev, [id]: { ...actual, [campo]: valor } };
     });
-    // Autoguardado (debounce 10 s): persiste la celda tras 10 s sin escribir y
-    // baja la fila al final (si tiene valor) para facilitar el llenado.
+    // Autoguardado (debounce 10 s): persiste la celda tras 10 s sin escribir.
     const timers = autosaveTimers.current;
     if (timers[id]) clearTimeout(timers[id]);
-    timers[id] = setTimeout(async () => {
-      const l = liqRef.current[id] ?? { efectivo: "", omp: "" };
-      const cambios = { cuadreEfectivo: numero(l.efectivo), cuadreOmp: numero(l.omp) };
-      setAutoguardando(true);
-      try {
-        await actualizarMetaApi(id, cambios);
-        setMeta((m) => ({ ...m, [id]: { ...m[id], ...cambios } }));
-        // Solo baja al final si realmente se liquidó (algún valor > 0).
-        const tieneValor = cambios.cuadreEfectivo > 0 || cambios.cuadreOmp > 0;
+    timers[id] = setTimeout(() => persistirLiq(id), 10000);
+  }
+
+  // Persiste la liquidación de un pedido (autoguardado o al salir de la celda).
+  // Marca/desmarca "completado": si tiene valor baja al final y queda con chulito;
+  // si se dejó vacío, se quita el chulito y vuelve a subir en la lista.
+  const persistirLiq = useCallback(async (id: string) => {
+    const timers = autosaveTimers.current;
+    if (timers[id]) {
+      clearTimeout(timers[id]);
+      delete timers[id];
+    }
+    const l = liqRef.current[id] ?? { efectivo: "", omp: "" };
+    const cambios = { cuadreEfectivo: numero(l.efectivo), cuadreOmp: numero(l.omp) };
+    setAutoguardando(true);
+    try {
+      await actualizarMetaApi(id, cambios);
+      setMeta((m) => ({ ...m, [id]: { ...m[id], ...cambios } }));
+      const tieneValor = cambios.cuadreEfectivo > 0 || cambios.cuadreOmp > 0;
+      setCompletados((prev) => {
         if (tieneValor) {
-          setCompletados((prev) =>
-            prev[id] != null ? prev : { ...prev, [id]: ++completadoSeq.current },
-          );
+          return prev[id] != null ? prev : { ...prev, [id]: ++completadoSeq.current };
         }
-      } catch {
-        /* si falla, el valor sigue en pantalla; se reintenta al reguardar */
-      } finally {
-        setAutoguardando(false);
+        // Sin valor: se quita el chulito y vuelve a subir en la lista.
+        if (prev[id] == null) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } catch {
+      /* si falla, el valor sigue en pantalla; se reintenta al reguardar */
+    } finally {
+      setAutoguardando(false);
+    }
+  }, []);
+
+  // Abre el modal de clave dinámica para desbloquear la liquidación de UN pedido.
+  function pedirClaveCelda(id: string) {
+    setAuthCeldaId(id);
+    setCodigoAuth("");
+    setErrorAuth(null);
+    setAuthAbierta(true);
+  }
+
+  // Botón "Autorizar" del modal: según el contexto desbloquea una celda o reabre
+  // el cuadre cerrado.
+  async function confirmarClaveModal() {
+    if (authCeldaId) await desbloquearCelda();
+    else await autorizarEdicion();
+  }
+
+  // Verifica la clave dinámica y libera SOLO la celda pedida (para editar una
+  // liquidación ya bloqueada). Otra celda requiere ingresar la clave de nuevo.
+  async function desbloquearCelda() {
+    if (verificandoAuth || !authCeldaId) return;
+    const codigo = codigoAuth.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      setErrorAuth("Ingresa el código de 6 dígitos.");
+      return;
+    }
+    setVerificandoAuth(true);
+    setErrorAuth(null);
+    try {
+      const { valido } = await verificarClaveDinamica(codigo);
+      if (!valido) {
+        setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
+        return;
       }
-    }, 10000);
+      setDesbloqueadoId(authCeldaId);
+      setAuthAbierta(false);
+      setAuthCeldaId(null);
+      setCodigoAuth("");
+    } catch {
+      setErrorAuth("No se pudo verificar el código. Inténtalo de nuevo.");
+    } finally {
+      setVerificandoAuth(false);
+    }
   }
 
   // Verifica la clave dinámica del administrador y, si es válida, REABRE el
@@ -613,13 +753,6 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
-          <button
-            onClick={cargar}
-            title="Recargar la información"
-            className="rounded-xl border border-brand-brown/20 bg-white px-4 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-          >
-            Recargar
-          </button>
         </div>
       </div>
 
@@ -639,10 +772,10 @@ export default function CuadreCajaPage() {
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+          <div className="max-h-[calc(100vh-22rem)] overflow-y-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
             <table className="w-full table-fixed text-xs">
-              <thead>
-                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/60">
+              <thead className="sticky top-0 z-20">
+                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/60 shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                   <th className="w-[9%] px-2 py-2.5">No. Factura</th>
                   <th className="w-[10%] px-2 py-2.5">Consecutivo</th>
                   <th className="w-[15%] px-2 py-2.5">Cliente</th>
@@ -666,10 +799,28 @@ export default function CuadreCajaPage() {
                         ? "text-red-600"
                         : "text-emerald-600";
                   const efectivoRow = esEfectivo(p.pago);
+                  const mixto = esMixto(p.pago);
+                  // "mixto" habilita AMBAS casillas; si no, cada pago usa la suya.
+                  const efectivoActivo = efectivoRow || mixto;
+                  const ompActivo = !efectivoRow || mixto;
+                  const yaLiquidada = liquidada(p);
+                  const bloqueadaCelda = !bloqueado && celdaBloqueada(p);
                   return (
-                    <tr key={p.id} className="border-b border-brand-brown/5 last:border-0">
+                    <tr key={p.id} className={`border-b border-brand-brown/5 last:border-0 ${yaLiquidada ? "bg-emerald-50/40" : ""}`}>
                       <td className="truncate px-2 py-2 font-semibold text-brand-wine">
-                        {meta[p.id]?.facturaNumero || "—"}
+                        <span className="inline-flex items-center gap-1.5">
+                          {yaLiquidada && (
+                            <span
+                              title="Pedido liquidado"
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-2.5 w-2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                              </svg>
+                            </span>
+                          )}
+                          <span className="truncate">{meta[p.id]?.facturaNumero || "—"}</span>
+                        </span>
                       </td>
                       <td className="relative px-2 py-2 tabular-nums text-brand-brown/80">
                         <button
@@ -745,26 +896,66 @@ export default function CuadreCajaPage() {
                         {cop(valorFacturado(p))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <input
-                          inputMode="numeric"
-                          value={efectivoRow ? l.efectivo : ""}
-                          disabled={bloqueado || !efectivoRow}
-                          title={efectivoRow ? "" : "Este pedido no es en efectivo; liquídalo en la columna O.M.P."}
-                          onChange={(e) => cambiarLiq(p.id, "efectivo", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
-                          placeholder={efectivoRow ? "0" : "—"}
-                          className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
-                        />
+                        {efectivoActivo && bloqueadaCelda ? (
+                          <button
+                            type="button"
+                            onClick={() => pedirClaveCelda(p.id)}
+                            title="Liquidación bloqueada. Haz clic en Modificar e ingresa la clave dinámica para editar esta celda."
+                            className="inline-flex w-full items-center justify-end gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            {cop(numero(l.efectivo))}
+                          </button>
+                        ) : (
+                          <input
+                            inputMode="numeric"
+                            value={efectivoActivo ? l.efectivo : ""}
+                            disabled={bloqueado || !efectivoActivo}
+                            title={efectivoActivo ? "" : "Este pedido no es en efectivo; liquídalo en la columna O.M.P."}
+                            onChange={(e) => cambiarLiq(p.id, "efectivo", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
+                            onFocus={() => setEditandoId(p.id)}
+                            onBlur={() => {
+                              setEditandoId((c) => (c === p.id ? null : c));
+                              persistirLiq(p.id);
+                              setDesbloqueadoId((c) => (c === p.id ? null : c));
+                            }}
+                            placeholder={efectivoActivo ? "0" : "—"}
+                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <input
-                          inputMode="numeric"
-                          value={efectivoRow ? "" : l.omp}
-                          disabled={bloqueado || efectivoRow}
-                          title={efectivoRow ? "Este pedido es en efectivo; liquídalo en la columna Efectivo" : ""}
-                          onChange={(e) => cambiarLiq(p.id, "omp", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
-                          placeholder={efectivoRow ? "—" : "0"}
-                          className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
-                        />
+                        {ompActivo && bloqueadaCelda ? (
+                          <button
+                            type="button"
+                            onClick={() => pedirClaveCelda(p.id)}
+                            title="Liquidación bloqueada. Haz clic en Modificar e ingresa la clave dinámica para editar esta celda."
+                            className="inline-flex w-full items-center justify-end gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            {cop(numero(l.omp))}
+                          </button>
+                        ) : (
+                          <input
+                            inputMode="numeric"
+                            value={ompActivo ? l.omp : ""}
+                            disabled={bloqueado || !ompActivo}
+                            title={ompActivo ? "" : "Este pedido es en efectivo; liquídalo en la columna Efectivo"}
+                            onChange={(e) => cambiarLiq(p.id, "omp", e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, ""))}
+                            onFocus={() => setEditandoId(p.id)}
+                            onBlur={() => {
+                              setEditandoId((c) => (c === p.id ? null : c));
+                              persistirLiq(p.id);
+                              setDesbloqueadoId((c) => (c === p.id ? null : c));
+                            }}
+                            placeholder={ompActivo ? "0" : "—"}
+                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
+                          />
+                        )}
                       </td>
                       <td className={`px-2 py-2 text-right font-bold tabular-nums ${difColor}`}>
                         {dif === 0 ? "—" : cop(dif)}
@@ -773,8 +964,8 @@ export default function CuadreCajaPage() {
                   );
                 })}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-brand-brown/15 bg-brand-cream-soft/40 font-bold text-brand-black">
+              <tfoot className="sticky bottom-0 z-20">
+                <tr className="border-t-2 border-brand-brown/15 bg-brand-cream-soft font-bold text-brand-black shadow-[0_-1px_0_0_rgba(0,0,0,0.06)]">
                   <td className="truncate px-2 py-2.5" colSpan={6}>
                     Total general · {filas.length} pedido{filas.length === 1 ? "" : "s"}
                   </td>
@@ -848,6 +1039,7 @@ export default function CuadreCajaPage() {
               {bloqueado ? (
                 <button
                   onClick={() => {
+                    setAuthCeldaId(null);
                     setCodigoAuth("");
                     setErrorAuth(null);
                     setAuthAbierta(true);
@@ -883,11 +1075,21 @@ export default function CuadreCajaPage() {
               </svg>
             </div>
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
-              Autorización requerida
+              {authCeldaId ? "Modificar liquidación" : "Autorización requerida"}
             </h3>
             <p className="mt-1 text-center text-sm text-brand-brown/70">
-              Este cuadre ya fue cerrado. Para editarlo, pídele a un administrador
-              su <b>clave dinámica</b> e ingrésala.
+              {authCeldaId ? (
+                <>
+                  Esta liquidación ya fue guardada y está <b>bloqueada</b>. Para
+                  editar <b>solo esta celda</b>, pídele a un administrador su{" "}
+                  <b>clave dinámica</b> e ingrésala.
+                </>
+              ) : (
+                <>
+                  Este cuadre ya fue cerrado. Para editarlo, pídele a un
+                  administrador su <b>clave dinámica</b> e ingrésala.
+                </>
+              )}
             </p>
             <input
               inputMode="numeric"
@@ -898,7 +1100,7 @@ export default function CuadreCajaPage() {
                 setErrorAuth(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") autorizarEdicion();
+                if (e.key === "Enter") confirmarClaveModal();
               }}
               placeholder="••••••"
               className="mt-4 w-full rounded-xl border border-brand-brown/20 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine"
@@ -911,6 +1113,7 @@ export default function CuadreCajaPage() {
                 type="button"
                 onClick={() => {
                   setAuthAbierta(false);
+                  setAuthCeldaId(null);
                   setCodigoAuth("");
                   setErrorAuth(null);
                 }}
@@ -920,11 +1123,11 @@ export default function CuadreCajaPage() {
               </button>
               <button
                 type="button"
-                onClick={autorizarEdicion}
+                onClick={confirmarClaveModal}
                 disabled={verificandoAuth || codigoAuth.length !== 6}
                 className="flex-1 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
               >
-                {verificandoAuth ? "Verificando…" : "Autorizar"}
+                {verificandoAuth ? "Verificando…" : authCeldaId ? "Modificar" : "Autorizar"}
               </button>
             </div>
           </div>

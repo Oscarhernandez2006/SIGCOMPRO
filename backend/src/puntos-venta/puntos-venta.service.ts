@@ -99,6 +99,34 @@ export class PuntosVentaService implements OnModuleInit {
     return res.rows;
   }
 
+  /**
+   * Ubicaciones (id, nombre, código, lat/lng) de los puntos ACTIVOS. Se usa
+   * para recomendar el punto más cercano al cliente. Lectura autenticada.
+   */
+  async ubicaciones(): Promise<
+    {
+      id: string;
+      nombre: string;
+      codigo: string | null;
+      lat: number | null;
+      lng: number | null;
+    }[]
+  > {
+    const res = await this.pool.query(
+      `SELECT id, nombre, codigo, lat, lng
+       FROM puntos_venta
+       WHERE activo = true
+       ORDER BY nombre ASC`,
+    );
+    return res.rows as {
+      id: string;
+      nombre: string;
+      codigo: string | null;
+      lat: number | null;
+      lng: number | null;
+    }[];
+  }
+
   async obtener(id: string): Promise<PuntoVentaRow> {
     const res = await this.pool.query<PuntoVentaRow>(
       `SELECT ${COLUMNS} FROM puntos_venta WHERE id = $1 LIMIT 1`,

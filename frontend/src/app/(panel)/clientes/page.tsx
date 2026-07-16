@@ -87,10 +87,22 @@ export default function ClientesPage() {
   const puedeImportar = permite.importar;
   const inputArchivoRef = useRef<HTMLInputElement>(null);
   const [importando, setImportando] = useState(false);
+  // Progreso de la importación (para el modal).
+  const [faseImport, setFaseImport] = useState<"subiendo" | "procesando" | null>(null);
+  const [pctSubida, setPctSubida] = useState(0);
+  const [segImport, setSegImport] = useState(0);
   const [resumenImport, setResumenImport] = useState<ImportacionResumen | null>(
     null,
   );
   const [errorImport, setErrorImport] = useState<string | null>(null);
+
+  // Cronómetro de la importación mientras está en curso.
+  useEffect(() => {
+    if (!importando) return;
+    setSegImport(0);
+    const id = setInterval(() => setSegImport((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [importando]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -145,6 +157,7 @@ export default function ClientesPage() {
       ciudad: c.ciudad ?? "",
       telefono: c.telefono ?? "",
       correo: c.correo ?? "",
+      punto_venta: c.punto_venta ?? "",
       lat: c.lat,
       lng: c.lng,
       activo: c.activo,
@@ -264,10 +277,15 @@ export default function ClientesPage() {
     e.target.value = ""; // permite volver a subir el mismo archivo
     if (!archivo) return;
     setImportando(true);
+    setFaseImport("subiendo");
+    setPctSubida(0);
     setErrorImport(null);
     setResumenImport(null);
     try {
-      const resumen = await importarClientesDB(archivo);
+      const resumen = await importarClientesDB(archivo, (fase, pct) => {
+        setFaseImport(fase);
+        if (fase === "subiendo") setPctSubida(pct);
+      });
       setResumenImport(resumen);
       setPagina(0);
       await cargar();
@@ -277,11 +295,57 @@ export default function ClientesPage() {
       );
     } finally {
       setImportando(false);
+      setFaseImport(null);
     }
   }
 
   return (
     <div>
+      {/* Modal de progreso de la importación */}
+      {importando && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-amber/15">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 animate-pulse text-brand-amber">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4 4 4M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+              </svg>
+            </div>
+            <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
+              Importando clientes
+            </h3>
+            <p className="mt-1 text-center text-sm text-brand-brown/70">
+              {faseImport === "subiendo"
+                ? `Subiendo el archivo… ${pctSubida}%`
+                : "Procesando en el servidor: leyendo el Excel, comparando y guardando…"}
+            </p>
+
+            {/* Barra de progreso: determinada al subir, indeterminada al procesar */}
+            <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-brand-cream-soft">
+              {faseImport === "subiendo" ? (
+                <div
+                  className="h-full rounded-full bg-brand-amber transition-all"
+                  style={{ width: `${pctSubida}%` }}
+                />
+              ) : (
+                <div className="h-full w-full animate-pulse rounded-full bg-brand-amber" />
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-xs text-brand-brown/60">
+              <span>
+                {faseImport === "subiendo" ? "Subiendo archivo" : "Procesando"}
+              </span>
+              <span className="tabular-nums">
+                {Math.floor(segImport / 60)}:{String(segImport % 60).padStart(2, "0")}
+              </span>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-brand-brown/45">
+              No cierres esta página mientras se importa.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Encabezado */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -733,6 +797,8 @@ export default function ClientesPage() {
                     barrio={form.barrio ?? ""}
                     ciudad={form.ciudad ?? ""}
                     referencia={form.referencia ?? ""}
+                    puntoVenta={form.punto_venta ?? ""}
+                    horeca={tipoCliente === "horeca"}
                     lat={form.lat ?? null}
                     lng={form.lng ?? null}
                     onUbicacion={(la, lo) =>
@@ -740,6 +806,7 @@ export default function ClientesPage() {
                     }
                     onBarrio={(b) => cambiar("barrio", b)}
                     onCiudad={(ci) => cambiar("ciudad", ci)}
+                    onPuntoVenta={(n) => cambiar("punto_venta", n)}
                   />
                 </Bloque>
 

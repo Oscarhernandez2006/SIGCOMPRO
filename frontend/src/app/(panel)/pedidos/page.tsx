@@ -2560,6 +2560,20 @@ function ConfigProducto({
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <input
+                  type="number" min="0" value={unidades}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setUnidades(val);
+                    // Auto-sugiere los gramos por porción si aún no se ingresan.
+                    const un = parseFloat(val) || 0;
+                    if (un > 0 && pesoG > 0 && !gramos.trim()) {
+                      setGramos(String(Math.round(pesoG / un)));
+                    }
+                  }}
+                  placeholder="N° de porciones (unidades)"
+                  className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
+                />
+                <input
                   type="number" min="0" value={gramos}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -2570,13 +2584,7 @@ function ConfigProducto({
                       setUnidades(String(Math.round(pesoG / gn)));
                     }
                   }}
-                  placeholder="Gramos c/u"
-                  className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-                />
-                <input
-                  type="number" min="0" value={unidades}
-                  onChange={(e) => setUnidades(e.target.value)}
-                  placeholder="N° porciones"
+                  placeholder="Gramos por porción"
                   className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
                 />
               </div>
@@ -3448,7 +3456,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     // El empaque al vacío solo se anota cuando es SÍ (si es NO, no se muestra).
     const notas: string[] = [];
     if (i.alVacio) notas.push("Empaque al vacío: SÍ");
-    if (i.porcionado) notas.push(`relajado ${i.unidades} und a ${i.gramos} grm`);
+    if (i.porcionado) notas.push(`relajado ${i.unidades} unidades de ${i.gramos} gramos`);
     if (i.corte) notas.push(i.corte);
     if (i.notas) notas.push(i.notas);
     // Si el producto se vende por kilos, mostramos también el peso en libras
@@ -3507,7 +3515,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     hr{border:none;border-top:2px solid #000;margin:5px 0}
     .sec{font-weight:bold;font-size:14px;margin:4px 0 3px}
     .catsec{font-weight:bold;font-size:13px;margin:5px 0 3px;background:#000;color:#fff;padding:2px 6px;border-radius:4px;text-align:center;letter-spacing:.5px}
-    .prod{margin-bottom:4px;font-size:12.5px;border-bottom:1px dashed #000;padding-bottom:4px;line-height:1.2}
+    .prod{margin-bottom:4px;font-size:12.5px;border-bottom:1px solid #000;padding-bottom:4px;line-height:1.2}
     .prod:last-child{border-bottom:none}
     .pi{font-size:11px}
     .pn{font-weight:bold;font-size:13px}
