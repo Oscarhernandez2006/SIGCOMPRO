@@ -2100,7 +2100,7 @@ function PasoCliente({
 /* Paso 2: ver productos según la lista de precios del punto         */
 /* ---------------------------------------------------------------- */
 
-interface ItemCarrito {
+export interface ItemCarrito {
   id: string;
   producto: ProductoPrecio;
   cantidad: number;
@@ -2453,8 +2453,17 @@ function ConfigProducto({
   const cortesG = g * u;
   const exceso = cortesG - pesoG;
   const fueraRango = porcionado && cortesG > 0 && exceso > 100;
-  // Porciones recomendadas = total de gramos (peso) / gramos por pieza.
-  const recomendadas = g > 0 && pesoG > 0 ? Math.round(pesoG / g) : 0;
+  // Flujo INVERSO: a partir de los gramos por porción se sugieren las piezas.
+  // Se usan las piezas que CABEN en el peso (floor), y lo que sobra.
+  const piezasG = g > 0 && pesoG > 0 ? Math.floor(pesoG / g) : 0;
+  const restoG = g > 0 && pesoG > 0 ? Math.round(pesoG - piezasG * g) : 0;
+  // Para llegar al 100%: subir los kilos para una pieza más del mismo peso.
+  const kgParaExacto = g > 0 ? Number((((piezasG + 1) * g) / 1000).toFixed(2)) : 0;
+  // O repartir el MISMO peso en una pieza más (gramos por pieza redistribuidos).
+  const gRedistribuido = pesoG > 0 ? Math.round(pesoG / (piezasG + 1)) : 0;
+  // Referencia estándar de 500 g.
+  const cortes500 = pesoG > 0 ? Math.floor(pesoG / 500) : 0;
+  const resto500 = pesoG > 0 ? Math.round(pesoG - cortes500 * 500) : 0;
   // Las porciones suman EXACTAMENTE el peso -> barra completa en verde.
   const exacto = porcionado && cortesG > 0 && cortesG === pesoG;
   const subtotal = producto.precio * cant;
@@ -2573,11 +2582,27 @@ function ConfigProducto({
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <input
+                  type="number" min="0" value={gramos}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGramos(val);
+                    // INVERSO: al ingresar los gramos por porción, se sugieren
+                    // automáticamente las porciones que caben en el peso.
+                    const gn = parseFloat(val) || 0;
+                    if (gn > 0 && pesoG > 0) {
+                      setUnidades(String(Math.floor(pesoG / gn)));
+                    }
+                  }}
+                  placeholder="Gramos por porción"
+                  className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
+                />
+                <input
                   type="number" min="0" value={unidades}
                   onChange={(e) => {
                     const val = e.target.value;
                     setUnidades(val);
-                    // Auto-sugiere los gramos por porción si aún no se ingresan.
+                    // Si escriben las porciones y aún no hay gramos, se sugieren
+                    // los gramos por porción.
                     const un = parseFloat(val) || 0;
                     if (un > 0 && pesoG > 0 && !gramos.trim()) {
                       setGramos(String(Math.round(pesoG / un)));
@@ -2586,35 +2611,81 @@ function ConfigProducto({
                   placeholder="N° de porciones (unidades)"
                   className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
                 />
-                <input
-                  type="number" min="0" value={gramos}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setGramos(val);
-                    // Auto-sugiere las porciones si aún no se han ingresado.
-                    const gn = parseFloat(val) || 0;
-                    if (gn > 0 && pesoG > 0 && !unidades.trim()) {
-                      setUnidades(String(Math.round(pesoG / gn)));
-                    }
-                  }}
-                  placeholder="Gramos por porción"
-                  className="rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-                />
               </div>
-              {/* Porciones recomendadas según el peso y los gramos por pieza */}
-              {g > 0 && recomendadas > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-full bg-brand-wine/10 px-2.5 py-1 font-medium text-brand-wine">
-                    Recomendado: {recomendadas} porción{recomendadas === 1 ? "" : "es"} de {g} g
-                  </span>
-                  {u !== recomendadas && (
-                    <button
-                      type="button"
-                      onClick={() => setUnidades(String(recomendadas))}
-                      className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
-                    >
-                      Aplicar
-                    </button>
+              {/* Sugerencias (todas opcionales): a partir de los gramos por
+                  porción se sugieren las piezas, buscando siempre el 100%. */}
+              {g > 0 && pesoG > 0 && (
+                <div className="mt-2 space-y-1.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-brand-wine/10 px-2.5 py-1 font-medium text-brand-wine">
+                      A {g} g salen <b>{piezasG}</b> porcion{piezasG === 1 ? "" : "es"}
+                      {restoG > 0 ? ` · sobran ${restoG} g` : " · exacto ✓"}
+                    </span>
+                    {u !== piezasG && piezasG > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setUnidades(String(piezasG))}
+                        className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                      >
+                        Aplicar {piezasG}
+                      </button>
+                    )}
+                  </div>
+
+                  {restoG > 0 && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                        <span>
+                          Para <b>{piezasG + 1}</b> porciones de {g} g (100%), sube
+                          a <b>{kgParaExacto} kg</b>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCantidad(String(kgParaExacto));
+                            setUnidades(String(piezasG + 1));
+                          }}
+                          className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                        >
+                          Subir kilos
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                        <span>
+                          O reparte los {cant} kg en <b>{piezasG + 1}</b> porciones
+                          de ~<b>{gRedistribuido} g</b>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGramos(String(gRedistribuido));
+                            setUnidades(String(piezasG + 1));
+                          }}
+                          className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                        >
+                          Repartir
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {cortes500 > 0 && g !== 500 && (
+                    <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                      <span>
+                        A 500 g salen <b>{cortes500}</b> cortes
+                        {resto500 > 0 ? ` · sobran ${resto500} g` : " · exacto ✓"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGramos("500");
+                          setUnidades(String(cortes500));
+                        }}
+                        className="rounded-full border border-brand-amber/50 px-2.5 py-1 font-semibold text-brand-amber transition hover:bg-brand-amber/10"
+                      >
+                        Usar 500 g
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

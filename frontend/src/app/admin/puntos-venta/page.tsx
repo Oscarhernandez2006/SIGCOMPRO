@@ -13,6 +13,7 @@ import {
   usuariosDePunto,
   type PuntoVenta,
 } from "@/lib/puntos-venta";
+import MapaDireccion from "@/components/MapaDireccion";
 
 interface FormState {
   nombre: string;
@@ -20,6 +21,10 @@ interface FormState {
   direccion: string;
   telefono: string;
   lista_precio: string;
+  barrio: string;
+  ciudad: string;
+  lat: number | null;
+  lng: number | null;
   activo: boolean;
 }
 
@@ -29,6 +34,10 @@ const FORM_VACIO: FormState = {
   direccion: "",
   telefono: "",
   lista_precio: "",
+  barrio: "",
+  ciudad: "",
+  lat: null,
+  lng: null,
   activo: true,
 };
 
@@ -99,6 +108,10 @@ export default function AdminPuntosVentaPage() {
       direccion: p.direccion ?? "",
       telefono: p.telefono ?? "",
       lista_precio: p.lista_precio ?? "",
+      barrio: p.barrio ?? "",
+      ciudad: p.ciudad ?? "",
+      lat: p.lat ?? null,
+      lng: p.lng ?? null,
       activo: p.activo,
     });
     setErrorForm(null);
@@ -125,6 +138,10 @@ export default function AdminPuntosVentaPage() {
         direccion: form.direccion.trim(),
         telefono: form.telefono.trim(),
         lista_precio: form.lista_precio.trim(),
+        barrio: form.barrio.trim(),
+        ciudad: form.ciudad.trim(),
+        lat: form.lat,
+        lng: form.lng,
         activo: form.activo,
       };
       if (editando) {
@@ -378,6 +395,46 @@ export default function AdminPuntosVentaPage() {
                   value={form.telefono}
                   onChange={(e) => setForm({ ...form, telefono: e.target.value })}
                   className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-brand-brown">Barrio</label>
+                  <input
+                    type="text"
+                    value={form.barrio}
+                    onChange={(e) => setForm({ ...form, barrio: e.target.value })}
+                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-brand-brown">Ciudad</label>
+                  <input
+                    type="text"
+                    value={form.ciudad}
+                    onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
+                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-brand-brown">
+                  Ubicación en el mapa
+                </label>
+                <p className="mb-2 text-xs text-brand-brown/60">
+                  Ubica el punto con precisión (latitud/longitud) para recomendar
+                  correctamente el punto más cercano a cada cliente.
+                </p>
+                <MapaDireccion
+                  direccion={form.direccion}
+                  barrio={form.barrio}
+                  ciudad={form.ciudad}
+                  lat={form.lat}
+                  lng={form.lng}
+                  ocultarPuntos
+                  onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
+                  onBarrio={(b) => setForm((p) => ({ ...p, barrio: b }))}
+                  onCiudad={(ci) => setForm((p) => ({ ...p, ciudad: ci }))}
                 />
               </div>
               <div>

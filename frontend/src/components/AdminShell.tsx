@@ -56,6 +56,15 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Cotizaciones",
+    href: "/admin/cotizaciones",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 3.75h3M9 8.25h6m3.75-3.75H5.25A1.5 1.5 0 0 0 3.75 6v13.5A1.5 1.5 0 0 0 5.25 21h13.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5Z" />
+      </svg>
+    ),
+  },
+  {
     label: "Clientes",
     href: "/admin/clientes",
     icon: (

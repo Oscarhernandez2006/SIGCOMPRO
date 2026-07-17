@@ -126,6 +126,7 @@ export default function MapaDireccion({
   onBarrio,
   onCiudad,
   onPuntoVenta,
+  ocultarPuntos,
 }: {
   direccion: string;
   barrio: string;
@@ -143,6 +144,8 @@ export default function MapaDireccion({
   onCiudad?: (ciudad: string) => void;
   /** Fija el punto de venta del cliente (al elegir asignado/recomendado). */
   onPuntoVenta?: (nombre: string) => void;
+  /** Oculta la recomendación de puntos (p. ej. al ubicar un punto de venta). */
+  ocultarPuntos?: boolean;
 }) {
   const [abierto, setAbierto] = useState(lat != null && lng != null);
   const [cargando, setCargando] = useState(false);
@@ -156,10 +159,11 @@ export default function MapaDireccion({
   // Ubicaciones de todos los puntos (para recomendar el más cercano al cliente).
   const [puntos, setPuntos] = useState<PuntoUbicacion[]>([]);
   useEffect(() => {
+    if (ocultarPuntos) return;
     puntosUbicaciones()
       .then(setPuntos)
       .catch(() => setPuntos([]));
-  }, []);
+  }, [ocultarPuntos]);
 
   // Punto recomendado: el más cercano a la ubicación del cliente.
   const recomendado =

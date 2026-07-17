@@ -9,6 +9,7 @@ import { UbicacionesModule } from './ubicaciones/ubicaciones.module';
 import { PuntosVentaModule } from './puntos-venta/puntos-venta.module';
 import { ProductosModule } from './productos/productos.module';
 import { PedidosModule } from './pedidos/pedidos.module';
+import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 import { CongeladosModule } from './congelados/congelados.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
 import { MotivosModule } from './motivos/motivos.module';
@@ -26,6 +27,7 @@ import { MotivosModule } from './motivos/motivos.module';
     PuntosVentaModule,
     ProductosModule,
     PedidosModule,
+    CotizacionesModule,
     CongeladosModule,
     ConfiguracionModule,
     MotivosModule,

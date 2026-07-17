@@ -74,6 +74,19 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: 'cuadre_caja',
         label: 'Cuadre de caja',
       },
+      {
+        key: 'cotizaciones',
+        label: 'Cotizaciones',
+        acciones: [
+          { key: 'cotizaciones.crear', label: 'Crear cotización' },
+          { key: 'cotizaciones.editar', label: 'Editar cotización' },
+          { key: 'cotizaciones.eliminar', label: 'Eliminar cotización' },
+          {
+            key: 'cotizaciones.convertir',
+            label: 'Convertir cotización en pedido',
+          },
+        ],
+      },
     ],
   },
 ];
