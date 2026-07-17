@@ -28,7 +28,12 @@ export interface DespachoMeta {
    * tiene un número (sufijo -N en el consecutivo del Excel) y puede llevar su
    * propio domiciliario. Deben ser secuenciales (1, 2, 3, 4, 5).
    */
-  replicas?: { numero: number; domiciliario?: string }[];
+  replicas?: {
+    numero: number;
+    domiciliario?: string;
+    /** La réplica ya se subió a Drivin correctamente. */
+    drivinEnviado?: boolean;
+  }[];
   /** Cuadre de caja: valor liquidado en efectivo por la cajera. */
   cuadreEfectivo?: number;
   /** Cuadre de caja: valor liquidado en otros medios de pago (O.M.P.). */

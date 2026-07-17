@@ -540,10 +540,11 @@ export default function DashboardPage() {
                   render={(f) => (
                     <>
                       <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="py-2 pr-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="py-2 text-right font-display font-bold tabular-nums text-emerald-700">{cop(f.facturado ?? 0)}</td>
                     </>
                   )}
-                  cabeceras={["Pedidos", "Vendido"]}
+                  cabeceras={["Pedidos", "Vendido", "Facturado"]}
                   max={m.topVendedoras[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
@@ -612,6 +613,8 @@ interface FilaTop {
   nombre: string;
   unidades: number;
   total: number;
+  /** Valor facturado (suma de facturaValor de despacho). Solo televendedoras. */
+  facturado?: number;
 }
 
 function diaLocalDate(d: Date): string {
@@ -745,9 +748,10 @@ function métricas(
     // Televendedora que creó el pedido.
     const vendNombre = p.vendedorNombre || p.vendedorCedula || "Sin vendedora";
     const vendKey = p.vendedorCedula || p.vendedorNombre || "\u2014";
-    const ve = vendMap.get(vendKey) ?? { nombre: vendNombre, unidades: 0, total: 0 };
+    const ve = vendMap.get(vendKey) ?? { nombre: vendNombre, unidades: 0, total: 0, facturado: 0 };
     ve.unidades += 1; // número de pedidos
     ve.total += Number(p.total) || 0;
+    ve.facturado = (ve.facturado ?? 0) + (Number(metaMap[p.id]?.facturaValor) || 0);
     vendMap.set(vendKey, ve);
 
     // Personal de despacho (porcionador / domiciliario) desde la metadata.

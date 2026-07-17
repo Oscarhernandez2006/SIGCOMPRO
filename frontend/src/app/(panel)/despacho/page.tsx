@@ -582,6 +582,18 @@ export default function DespachoPage() {
       alert("No se pudo generar el Excel de la réplica."),
     );
   };
+  // Marca una réplica como ya subida a Drivin (setMeta funcional para leer el
+  // estado más reciente, incluso si la réplica se acaba de crear).
+  const marcarReplicaDrivin = (id: string, numero: number) => {
+    setMeta((prev) => {
+      const actuales = prev[id]?.replicas ?? [];
+      const replicas = actuales.map((r) =>
+        r.numero === numero ? { ...r, drivinEnviado: true } : r,
+      );
+      actualizarMetaApi(id, { replicas }).catch(() => { /* ignore */ });
+      return { ...prev, [id]: { ...prev[id], replicas } };
+    });
+  };
 
   const pedidosVisibles = useMemo(() => {
     if (!filtroListo) return [];
@@ -1688,15 +1700,22 @@ export default function DespachoPage() {
               0,
             )
           }
+          yaEnviado={
+            (meta[modalReplica.pedido.id]?.replicas ?? []).find(
+              (r) => r.numero === modalReplica.numero,
+            )?.drivinEnviado ?? false
+          }
           onCrear={(domi) => {
             crearReplica(modalReplica.pedido.id, domi);
-            setModalReplica(null);
           }}
           onDescargar={() =>
             descargarReplica(modalReplica.pedido, modalReplica.numero)
           }
           onDrivin={() =>
             enviarADrivinApi(modalReplica.pedido.id, modalReplica.numero)
+          }
+          onMarcarEnviado={() =>
+            marcarReplicaDrivin(modalReplica.pedido.id, modalReplica.numero)
           }
           onQuitar={() => {
             quitarUltimaReplica(modalReplica.pedido.id);
@@ -1720,9 +1739,11 @@ function ModalReplica({
   domiciliarios,
   domiciliarioAsignado,
   esUltima,
+  yaEnviado,
   onCrear,
   onDescargar,
   onDrivin,
+  onMarcarEnviado,
   onQuitar,
   onCerrar,
 }: {
@@ -1732,15 +1753,19 @@ function ModalReplica({
   domiciliarios: string[];
   domiciliarioAsignado: string;
   esUltima: boolean;
+  yaEnviado: boolean;
   onCrear: (domiciliario: string) => void;
   onDescargar: () => void;
   onDrivin: () => Promise<{ comanda: string; status: number }>;
+  onMarcarEnviado: () => void;
   onQuitar: () => void;
   onCerrar: () => void;
 }) {
   const [domi, setDomi] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
+  const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">(
+    yaEnviado ? "ok" : "idle",
+  );
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
   // Puntos integrados con Drivin (suben directo): La 93, Alameda, Olaya y San
@@ -1757,6 +1782,7 @@ function ModalReplica({
     );
   })();
 
+  // Sube la réplica a Drivin (se usa al confirmar y como reintento).
   async function enviarDrivin() {
     if (drivinEstado === "enviando") return;
     setDrivinEstado("enviando");
@@ -1764,18 +1790,26 @@ function ModalReplica({
     try {
       await onDrivin();
       setDrivinEstado("ok");
+      onMarcarEnviado();
     } catch (e) {
       setDrivinEstado("error");
       setDrivinMsg(e instanceof Error ? e.message : "");
     }
   }
 
+  // Confirmar (modo crear): crea la réplica y, si el punto es Drivin, sube
+  // enseguida a Drivin mostrando el resultado sin tener que reabrir el modal.
   function confirmar() {
     if (!domi.trim()) {
       setError("Selecciona el domiciliario para esta réplica.");
       return;
     }
     onCrear(domi);
+    if (esDrivin) {
+      enviarDrivin();
+    } else {
+      onCerrar();
+    }
   }
 
   return (
@@ -1859,7 +1893,13 @@ function ModalReplica({
             </div>
           )}
 
-          {modo === "ver" && drivinEstado === "ok" && (
+          {drivinEstado === "enviando" && (
+            <div className="flex items-center gap-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 px-3 py-2 text-sm font-semibold text-brand-brown">
+              <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
+              Subiendo la réplica {codigoReplica} a Drivin…
+            </div>
+          )}
+          {drivinEstado === "ok" && (
             <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -1867,10 +1907,10 @@ function ModalReplica({
               Envío exitoso del pedido {codigoReplica} a Drivin.
             </div>
           )}
-          {modo === "ver" && drivinEstado === "error" && (
+          {drivinEstado === "error" && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               <p className="font-semibold">Error al subir el pedido a Drivin.</p>
-              <p className="mt-0.5">Por favor genera el Excel (ícono) e inténtalo manual.</p>
+              <p className="mt-0.5">Reintenta o genera el Excel (ícono) e inténtalo manual.</p>
               {drivinMsg && (
                 <p className="mt-1 break-words text-xs text-red-500/80">{drivinMsg}</p>
               )}
@@ -1893,19 +1933,45 @@ function ModalReplica({
           <div className="flex gap-2">
             <button
               onClick={onCerrar}
-              title={modo === "crear" ? "Cancelar" : "Cerrar"}
+              title={modo === "crear" && drivinEstado === "idle" ? "Cancelar" : "Cerrar"}
               className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft"
             >
-              {modo === "crear" ? "Cancelar" : "Cerrar"}
+              {modo === "crear" && drivinEstado === "idle" ? "Cancelar" : "Cerrar"}
             </button>
             {modo === "crear" ? (
-              <button
-                onClick={confirmar}
-                title="Confirmar y crear la réplica"
-                className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90"
-              >
-                Confirmar
-              </button>
+              drivinEstado === "ok" ? (
+                <button
+                  onClick={onCerrar}
+                  title="Listo"
+                  className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90"
+                >
+                  Listo
+                </button>
+              ) : drivinEstado === "error" ? (
+                <button
+                  onClick={enviarDrivin}
+                  title="Reintentar el envío a Drivin"
+                  className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90"
+                >
+                  Reintentar envío
+                </button>
+              ) : (
+                <button
+                  onClick={confirmar}
+                  disabled={drivinEstado === "enviando"}
+                  title={esDrivin ? "Confirmar la réplica y subirla a Drivin" : "Confirmar y crear la réplica"}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-60"
+                >
+                  {drivinEstado === "enviando" && (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  )}
+                  {drivinEstado === "enviando"
+                    ? "Enviando…"
+                    : esDrivin
+                      ? "Confirmar y subir"
+                      : "Confirmar"}
+                </button>
+              )
             ) : esDrivin ? (
               <>
                 <button
@@ -1918,21 +1984,30 @@ function ModalReplica({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                   </svg>
                 </button>
-                <button
-                  onClick={enviarDrivin}
-                  disabled={drivinEstado === "enviando"}
-                  title={`Enviar la réplica -${numero} directamente a Drivin`}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-60"
-                >
-                  {drivinEstado === "enviando" ? (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                {yaEnviado ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
-                  )}
-                  Enviar a Drivin
-                </button>
+                    Ya enviado a Drivin
+                  </span>
+                ) : (
+                  <button
+                    onClick={enviarDrivin}
+                    disabled={drivinEstado === "enviando"}
+                    title={`Enviar la réplica -${numero} directamente a Drivin`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-60"
+                  >
+                    {drivinEstado === "enviando" ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                      </svg>
+                    )}
+                    Enviar a Drivin
+                  </button>
+                )}
               </>
             ) : (
               <button

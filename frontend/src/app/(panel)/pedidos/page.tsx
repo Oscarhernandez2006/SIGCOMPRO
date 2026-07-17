@@ -2529,6 +2529,9 @@ function ConfigProducto({
   function confirmar() {
     if (cant <= 0) return;
     if (!esKilo && !Number.isInteger(cant)) return;
+    // Si el porcionado está activo, es obligatorio: tipo de corte, gramos y
+    // unidades válidas (y dentro de rango).
+    if (porcionado && !corte.trim()) return;
     if (porcionado && (g <= 0 || u <= 0 || fueraRango)) return;
     onAgregar({
       id: inicial?.id ?? crypto.randomUUID(),
@@ -2637,6 +2640,11 @@ function ConfigProducto({
                     </option>
                   ))}
               </select>
+              {!corte.trim() && (
+                <p className="mb-2 text-[11px] font-medium text-red-600">
+                  Selecciona el tipo de corte para continuar.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number" min="0" value={gramos}
@@ -2784,8 +2792,14 @@ function ConfigProducto({
           </button>
           <button
             onClick={confirmar}
-            disabled={cant <= 0 || (porcionado && (g <= 0 || u <= 0 || fueraRango))}
-            title={inicial ? "Guardar los cambios del producto" : "Agregar el producto al pedido"}
+            disabled={cant <= 0 || (porcionado && (!corte.trim() || g <= 0 || u <= 0 || fueraRango))}
+            title={
+              porcionado && !corte.trim()
+                ? "Selecciona el tipo de corte para el porcionado"
+                : inicial
+                  ? "Guardar los cambios del producto"
+                  : "Agregar el producto al pedido"
+            }
             className="flex-1 rounded-xl bg-brand-amber py-2.5 text-sm font-semibold text-white hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {inicial ? "Guardar cambios" : "Agregar"}
@@ -3594,21 +3608,29 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
   }
   // Renderiza un producto de la comanda.
   const renderItem = (i: ItemCarrito) => {
-    // El empaque al vacío solo se anota cuando es SÍ (si es NO, no se muestra).
-    const notas: string[] = [];
-    if (i.alVacio) notas.push("Empaque al vacío: SÍ");
-    if (i.porcionado) notas.push(`relajado ${i.unidades} unidades de ${i.gramos} gramos`);
-    if (i.porcionado && i.corte) notas.push(i.corte);
-    if (i.notas) notas.push(i.notas);
     // Si el producto se vende por kilos, mostramos también el peso en libras
     // (1 kilo = 2 libras) para que los alistadores trabajen en su unidad.
     const esKilo = (i.producto.um || "").trim().toUpperCase() === "KG";
+    // Se separan las anotaciones para que el porcionador distinga la nota de la
+    // vendedora del dato de porcionado que generamos nosotros:
+    //  - Empaque al vacío (si aplica)
+    //  - Porcionado: N und x G g · corte
+    //  - Nota (lo que escribió la vendedora)
+    const lineaVacio = i.alVacio
+      ? `<div class="pn-nota">Empaque al vacío: SÍ</div>`
+      : "";
+    const lineaPorc = i.porcionado
+      ? `<div class="pn-nota">Porcionado: ${i.unidades} und x ${i.gramos} g${i.corte ? ` · ${i.corte}` : ""}</div>`
+      : "";
+    const lineaNota = i.notas && i.notas.trim()
+      ? `<div class="pn-nota" style="font-weight:bold">Nota: ${i.notas}</div>`
+      : "";
     return `<div class="prod">
         <div class="pi">Ítem: ${i.producto.referencia}</div>
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
         <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
-        ${notas.length ? `<div class="pn-nota">Nota: ${notas.join(" | ")}</div>` : ""}
+        ${lineaVacio}${lineaPorc}${lineaNota}
       </div>`;
   };
   // Agrupa los productos por categoría (conservando el orden de aparición):

@@ -477,10 +477,9 @@ export class PedidosService implements OnModuleInit {
     const punto = pedido.punto ?? {};
     // Réplica: el mismo pedido se manda por partes. El ERP lo entiende como el
     // mismo pedido; el sufijo "-N" indica que es una réplica del consecutivo.
-    const sufijoReplica =
-      typeof replica === 'number' && replica >= 1 && replica <= 5
-        ? `-${replica}`
-        : '';
+    const esReplica =
+      typeof replica === 'number' && replica >= 1 && replica <= 5;
+    const sufijoReplica = esReplica ? `-${replica}` : '';
     const comanda = `${String(pedido.comanda ?? '')}${sufijoReplica}`;
 
     // Localidad del punto: "PDV Carnes Santacruz La 70" -> "La 70".
@@ -499,8 +498,11 @@ export class PedidosService implements OnModuleInit {
     }, 0);
 
     // Fechas y ventanas (zona horaria America/Bogota).
-    const creado = pedido.fecha ? new Date(String(pedido.fecha)) : new Date();
-    const programado = pedido.entregaProgramada === true;
+    // Para una RÉPLICA se usa la fecha/hora del DÍA ACTUAL (no la del pedido
+    // original), porque la réplica se despacha el día en que se sube a Drivin.
+    const creado =
+      esReplica || !pedido.fecha ? new Date() : new Date(String(pedido.fecha));
+    const programado = !esReplica && pedido.entregaProgramada === true;
     const fechaISO = (d: Date) =>
       new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
     const horaHM = (d: Date) =>
@@ -511,27 +513,58 @@ export class PedidosService implements OnModuleInit {
         hour12: false,
       }).format(d);
 
+    // Hora de despacho elegida en el pedido (HH:MM). Si viene, es la HORA FIN de
+    // la ventana (compromiso máximo). El inicio se calcula restando 2 horas, así
+    // "8" -> ventana 06:00–08:00. Para réplicas se ignora (usan la hora actual).
+    const horaDespacho = String(
+      (pedido as { horaDespacho?: string }).horaDespacho ?? '',
+    ).trim();
+    const tieneHora = !esReplica && /^\d{1,2}:\d{2}$/.test(horaDespacho);
+    const normalizarHora = (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10) || 0);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+    const restarDosHoras = (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10) || 0);
+      let total = h * 60 + m - 120;
+      if (total < 0) total = 0;
+      return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(
+        total % 60,
+      ).padStart(2, '0')}`;
+    };
+
     let fechaEntrega: string;
     let inicioVentana: string;
     let finVentana: string;
     let prioridad: string;
     if (programado) {
-      // Pedido programado: usa la fecha elegida; ventana fija 8:00–9:00 y prioridad 1.0.
+      // Pedido programado: usa la fecha elegida. Ventana = hora elegida - 2h a
+      // hora elegida (si hay); si no, ventana fija 8:00–9:00. Prioridad 1.0.
       const elegida = (pedido.fechaProgramada ?? '').trim();
       // Se usa la fecha elegida tal cual (YYYY-MM-DD); si no hay, se cae a mañana.
       const manana = new Date(creado.getTime() + 24 * 60 * 60 * 1000);
       fechaEntrega = /^\d{4}-\d{2}-\d{2}$/.test(elegida)
         ? elegida
         : fechaISO(manana);
-      inicioVentana = '08:00';
-      finVentana = '09:00';
+      if (tieneHora) {
+        inicioVentana = restarDosHoras(horaDespacho);
+        finVentana = normalizarHora(horaDespacho);
+      } else {
+        inicioVentana = '08:00';
+        finVentana = '09:00';
+      }
       prioridad = '1.00';
     } else {
-      // Pedido para hoy: ventana = hora de creación a +2h, prioridad 2.0.
-      // La ventana (promesa) se deja TAL CUAL la configura la app.
+      // Pedido para hoy: si hay hora de despacho, la ventana es (hora - 2h) a
+      // hora (ej. "8" -> 06:00–08:00). Si no, ventana = creación a +2h.
       fechaEntrega = fechaISO(creado);
-      inicioVentana = horaHM(creado);
-      finVentana = horaHM(new Date(creado.getTime() + 2 * 60 * 60 * 1000));
+      if (tieneHora) {
+        inicioVentana = restarDosHoras(horaDespacho);
+        finVentana = normalizarHora(horaDespacho);
+      } else {
+        inicioVentana = horaHM(creado);
+        finVentana = horaHM(new Date(creado.getTime() + 2 * 60 * 60 * 1000));
+      }
       prioridad = '2.00';
     }
 
@@ -740,6 +773,10 @@ export class PedidosService implements OnModuleInit {
               units_3: null,
               position: 1,
               delivery_date: d.fechaEntrega,
+              // Fecha de despacho: debe cambiar junto con la fecha de entrega.
+              // Sin este campo Drivin solo actualiza los compromisos (mín/máx)
+              // de las time_windows, pero deja la fecha de despacho anterior.
+              dispatch_date: d.fechaEntrega,
               custom_1: null,
               custom_2: null,
               custom_3: null,
