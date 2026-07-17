@@ -2536,7 +2536,7 @@ function ConfigProducto({
       cantidad: cant,
       alVacio,
       porcionado,
-      corte: corte.trim(),
+      corte: porcionado ? corte.trim() : "",
       gramos: g,
       unidades: u,
       notas: notas.trim(),
@@ -3147,7 +3147,7 @@ function PasoConfirmar({
                 {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)}
                 {i.alVacio && " · Al vacío"}
                 {i.porcionado && ` · Porciones ${i.unidades} | Gramos ${i.gramos} grs.`}
-                {i.corte && ` · ${i.corte}`}
+                {i.porcionado && i.corte && ` · ${i.corte}`}
               </p>
               {i.notas && <p className="text-xs italic text-brand-brown/50">“{i.notas}”</p>}
             </div>
@@ -3598,7 +3598,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     const notas: string[] = [];
     if (i.alVacio) notas.push("Empaque al vacío: SÍ");
     if (i.porcionado) notas.push(`relajado ${i.unidades} unidades de ${i.gramos} gramos`);
-    if (i.corte) notas.push(i.corte);
+    if (i.porcionado && i.corte) notas.push(i.corte);
     if (i.notas) notas.push(i.notas);
     // Si el producto se vende por kilos, mostramos también el peso en libras
     // (1 kilo = 2 libras) para que los alistadores trabajen en su unidad.
