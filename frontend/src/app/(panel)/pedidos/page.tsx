@@ -1905,7 +1905,9 @@ function PasoCliente({
   }, [pedidos]);
 
   useEffect(() => {
-    const t = setTimeout(() => setBusqueda(input), 350);
+    // Espera 1.5 s tras dejar de escribir antes de buscar, para no "destellar"
+    // ni recargar en cada número que se digita (mejora visual al teclear cédula).
+    const t = setTimeout(() => setBusqueda(input), 1500);
     return () => clearTimeout(t);
   }, [input]);
 
@@ -1926,6 +1928,10 @@ function PasoCliente({
     cargar();
   }, [cargar]);
 
+  // ¿Hay una búsqueda pendiente (esperando el debounce) o en curso? Sirve para
+  // mostrar "Buscando cliente…" y que no se confunda con lentitud de la app.
+  const buscando = input.trim() !== "" && (input !== busqueda || cargando);
+
   return (
     <div>
       <p className="mb-3 text-sm font-medium text-brand-black">
@@ -1942,8 +1948,14 @@ function PasoCliente({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Buscar por nombre, NIT/cédula, teléfono o barrio"
-          className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-amber"
+          className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-32 text-sm outline-none focus:border-brand-amber"
         />
+        {buscando && (
+          <span className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium text-brand-brown/50">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
+            Buscando cliente…
+          </span>
+        )}
       </div>
 
       {error && (
@@ -1954,7 +1966,7 @@ function PasoCliente({
 
       {/* Resultados */}
       <div className="space-y-2">
-        {cargando ? (
+        {cargando && items.length === 0 ? (
           <p className="py-10 text-center text-sm text-brand-brown/50">
             Cargando clientes…
           </p>

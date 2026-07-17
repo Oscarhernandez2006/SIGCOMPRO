@@ -756,6 +756,33 @@ export default function ClientesPage() {
                     />
                   </div>
                 </Bloque>
+
+                {/* Bloque: clasificación (debajo de contacto y referencia) */}
+                <Bloque titulo="Clasificación">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                      <input
+                        type="radio"
+                        name="tipo-cliente"
+                        checked={tipoCliente === "hogar"}
+                        onChange={() => setTipoCliente("hogar")}
+                        className="h-4 w-4 accent-brand-amber"
+                      />
+                      Cliente hogar
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                      <input
+                        type="radio"
+                        name="tipo-cliente"
+                        checked={tipoCliente === "horeca"}
+                        onChange={() => setTipoCliente("horeca")}
+                        className="h-4 w-4 accent-brand-amber"
+                      />
+                      Cliente HORECA (hotel, restaurante o café)
+                    </label>
+                  </div>
+                </Bloque>
               </div>
 
               {/* Columna derecha: ubicación + barrio y ciudad */}
@@ -808,32 +835,6 @@ export default function ClientesPage() {
                     onCiudad={(ci) => cambiar("ciudad", ci)}
                     onPuntoVenta={(n) => cambiar("punto_venta", n)}
                   />
-                </Bloque>
-
-                <Bloque titulo="Clasificación">
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
-                      <input
-                        type="radio"
-                        name="tipo-cliente"
-                        checked={tipoCliente === "hogar"}
-                        onChange={() => setTipoCliente("hogar")}
-                        className="h-4 w-4 accent-brand-amber"
-                      />
-                      Cliente hogar
-                    </label>
-
-                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
-                      <input
-                        type="radio"
-                        name="tipo-cliente"
-                        checked={tipoCliente === "horeca"}
-                        onChange={() => setTipoCliente("horeca")}
-                        className="h-4 w-4 accent-brand-amber"
-                      />
-                      Cliente HORECA (hotel, restaurante o café)
-                    </label>
-                  </div>
                 </Bloque>
               </div>
             </div>

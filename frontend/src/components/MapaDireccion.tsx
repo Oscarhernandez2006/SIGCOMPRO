@@ -11,7 +11,7 @@ import {
 const MapaLeaflet = dynamic(() => import("./MapaLeaflet"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[150px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
+    <div className="flex h-[260px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
       Cargando mapa…
     </div>
   ),

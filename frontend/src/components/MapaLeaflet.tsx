@@ -47,7 +47,7 @@ export default function MapaLeaflet({
       center={[lat, lng]}
       zoom={16}
       scrollWheelZoom
-      style={{ height: 150, width: "100%" }}
+      style={{ height: 260, width: "100%" }}
       className="rounded-xl"
     >
       <TileLayer
