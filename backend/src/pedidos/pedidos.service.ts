@@ -773,10 +773,10 @@ export class PedidosService implements OnModuleInit {
               units_3: null,
               position: 1,
               delivery_date: d.fechaEntrega,
-              // Fecha de despacho: debe cambiar junto con la fecha de entrega.
-              // Sin este campo Drivin solo actualiza los compromisos (mín/máx)
-              // de las time_windows, pero deja la fecha de despacho anterior.
-              dispatch_date: d.fechaEntrega,
+              // Fecha de despacho en Drivin: el campo es "deploy_date". Debe
+              // cambiar junto con la fecha de entrega; sin él Drivin solo
+              // actualiza los compromisos (mín/máx) y deja la fecha anterior.
+              deploy_date: d.fechaEntrega,
               custom_1: null,
               custom_2: null,
               custom_3: null,
