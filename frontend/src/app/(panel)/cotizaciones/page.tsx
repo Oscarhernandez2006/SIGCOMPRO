@@ -90,7 +90,7 @@ function generarPdfCotizacion(cot: Cotizacion) {
       return `<tr>
         <td class="c">${idx + 1}</td>
         <td>${esc(i.producto.referencia)}</td>
-        <td>${esc((i.producto.producto || "").toUpperCase())}</td>
+        <td>${esc((i.producto.producto || "").toUpperCase())}${i.notas?.trim() ? `<div style="font-size:10px;color:#777;font-weight:normal;margin-top:2px">Nota: ${esc(i.notas)}</div>` : ""}</td>
         <td class="c">${esc(cant)}${kilo ? "" : ""}</td>
         <td class="r">${cop(Number(i.producto.precio) || 0)}${kilo ? " /kg" : ""}</td>
         <td class="r">${cop(subtotalItem(i))}</td>
@@ -266,8 +266,10 @@ export default function CotizacionesPage() {
     if (!aBorrar) return;
     try {
       await eliminarCotizacion(aBorrar.id);
+      const etiqueta = `COT-${String(aBorrar.numero ?? 0).padStart(5, "0")}`;
       setCotizaciones((prev) => prev.filter((c) => c.id !== aBorrar.id));
       setABorrar(null);
+      setAviso(`Cotización ${etiqueta} eliminada correctamente.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo borrar la cotización");
     }
@@ -450,6 +452,7 @@ export default function CotizacionesPage() {
           usuario={usuario}
           onCerrar={() => setEditor(null)}
           onGuardado={(cot) => {
+            const esNueva = !cotizaciones.some((c) => c.id === cot.id);
             setCotizaciones((prev) => {
               const existe = prev.some((c) => c.id === cot.id);
               return existe
@@ -457,6 +460,14 @@ export default function CotizacionesPage() {
                 : [cot, ...prev];
             });
             setEditor(null);
+            const etiqueta = `COT-${String(cot.numero ?? 0).padStart(5, "0")}`;
+            setAviso(
+              esNueva
+                ? `Cotización ${etiqueta} creada correctamente. Se abrió el PDF para imprimir.`
+                : `Cotización ${etiqueta} actualizada correctamente.`,
+            );
+            // Al crear una cotización nueva se genera el PDF automáticamente.
+            if (esNueva) generarPdfCotizacion(cot);
           }}
         />
       )}
@@ -518,6 +529,8 @@ function EditorCotizacion({
   const [observacion, setObservacion] = useState(inicial?.observacion ?? "");
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  // Texto en edición de las cantidades (permite escribir decimales como "1.").
+  const [cantTxt, setCantTxt] = useState<Record<string, string>>({});
 
   // Buscador de clientes.
   const [busCli, setBusCli] = useState("");
@@ -533,6 +546,14 @@ function EditorCotizacion({
   const [cargandoProd, setCargandoProd] = useState(false);
 
   const total = useMemo(() => totalCotizacion(items), [items]);
+  // Total de kilos (suma de cantidades de los productos que se venden por kilo).
+  const totalKilos = useMemo(
+    () =>
+      items
+        .filter((i) => esKilo(i.producto.um))
+        .reduce((s, i) => s + (Number(i.cantidad) || 0), 0),
+    [items],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setBusCliDeb(busCli), 1200);
@@ -601,12 +622,43 @@ function EditorCotizacion({
   }
 
   function cambiarCantidad(id: string, valor: string) {
-    const n = Number(valor.replace(",", "."));
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === id ? { ...i, cantidad: Number.isFinite(n) && n > 0 ? n : 0 } : i,
-      ),
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const kilo = esKilo(i.producto.um);
+        // Limpia: por kilo admite decimales; por unidad solo dígitos.
+        let v = valor.replace(",", ".");
+        v = kilo ? v.replace(/[^\d.]/g, "") : v.replace(/[^\d]/g, "");
+        if (kilo) {
+          const parts = v.split(".");
+          if (parts.length > 2) v = parts[0] + "." + parts.slice(1).join("");
+        }
+        setCantTxt((t) => ({ ...t, [id]: v }));
+        const n = parseFloat(v);
+        const cantidad = Number.isFinite(n) && n > 0 ? (kilo ? n : Math.floor(n)) : 0;
+        return { ...i, cantidad };
+      }),
     );
+  }
+
+  // Botones − / +: paso 0.5 por kilo, 1 por unidad. No baja del paso mínimo.
+  function ajustarCantidad(id: string, delta: number) {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const kilo = esKilo(i.producto.um);
+        const step = kilo ? 0.5 : 1;
+        let n = (Number(i.cantidad) || 0) + delta * step;
+        if (n < step) n = step;
+        n = kilo ? Math.round(n * 100) / 100 : Math.round(n);
+        return { ...i, cantidad: n };
+      }),
+    );
+    setCantTxt((t) => {
+      const next = { ...t };
+      delete next[id];
+      return next;
+    });
   }
 
   function cambiarPrecio(id: string, valor: string) {
@@ -622,6 +674,12 @@ function EditorCotizacion({
 
   function quitar(id: string) {
     setItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  function cambiarNota(id: string, valor: string) {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, notas: valor } : i)),
+    );
   }
 
   async function guardar() {
@@ -835,6 +893,13 @@ function EditorCotizacion({
             <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-brand-brown/10 bg-white p-3">
               <h3 className="mb-2 shrink-0 text-[11px] font-bold uppercase tracking-wide text-brand-wine">
                 Productos de la cotización
+                {items.length > 0 && (
+                  <span className="ml-2 rounded-full bg-brand-wine/10 px-2 py-0.5 text-[10px] font-bold text-brand-wine">
+                    {items.length} {items.length === 1 ? "ítem" : "ítems"}
+                    {totalKilos > 0 &&
+                      ` · ${Number(totalKilos.toFixed(2))} kg`}
+                  </span>
+                )}
               </h3>
               {items.length === 0 ? (
                 <p className="py-8 text-center text-sm text-brand-brown/50">
@@ -871,16 +936,46 @@ function EditorCotizacion({
                               <span className="text-[10px] text-brand-brown/50">
                                 {esKilo(i.producto.um) ? "por kilo" : "por unidad"}
                               </span>
-                            </td>
-                            <td className="py-2 pr-2 text-center">
                               <input
-                                inputMode="decimal"
-                                value={i.cantidad}
-                                onChange={(e) =>
-                                  cambiarCantidad(i.id, e.target.value)
-                                }
-                                className="w-16 rounded-md border border-brand-brown/20 px-1.5 py-1 text-center tabular-nums outline-none focus:border-brand-wine"
+                                value={i.notas}
+                                onChange={(e) => cambiarNota(i.id, e.target.value)}
+                                placeholder="Nota del producto (opcional)"
+                                className="mt-1 w-full max-w-[16rem] rounded-md border border-brand-brown/15 bg-white px-1.5 py-0.5 text-[11px] text-brand-brown/80 outline-none focus:border-brand-amber"
                               />
+                            </td>
+                            <td className="py-2 pr-2">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => ajustarCantidad(i.id, -1)}
+                                  title="Disminuir"
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown transition hover:bg-brand-cream-soft"
+                                >
+                                  −
+                                </button>
+                                <input
+                                  inputMode="decimal"
+                                  value={cantTxt[i.id] ?? String(i.cantidad)}
+                                  onChange={(e) => cambiarCantidad(i.id, e.target.value)}
+                                  onBlur={() =>
+                                    setCantTxt((t) => {
+                                      const next = { ...t };
+                                      delete next[i.id];
+                                      return next;
+                                    })
+                                  }
+                                  title={esKilo(i.producto.um) ? "Kilos (admite decimales: 1.5, 1.2)" : "Unidades (enteras)"}
+                                  className="w-14 rounded-md border border-brand-brown/20 px-1.5 py-1 text-center tabular-nums outline-none focus:border-brand-wine"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => ajustarCantidad(i.id, 1)}
+                                  title="Aumentar"
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown transition hover:bg-brand-cream-soft"
+                                >
+                                  +
+                                </button>
+                              </div>
                             </td>
                             <td className="py-2 pr-2 text-right">
                               <input

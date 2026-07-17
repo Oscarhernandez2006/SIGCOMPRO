@@ -481,10 +481,10 @@ export default function PedidosPage() {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
                 <tr>
-                  <th className="px-4 py-3">Comanda</th>
+                  <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Punto</th>
-                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Total / Facturado</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -493,10 +493,25 @@ export default function PedidosPage() {
               <tbody>
                 {pedidosFiltrados.map((p) => (
                 <tr key={p.id} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
-                  <td className="px-4 py-3 font-semibold text-brand-wine">{p.comanda}</td>
+                  <td className="px-4 py-3 font-semibold text-brand-wine">
+                    <div>{p.comanda}</div>
+                    {meta[p.id]?.facturaNumero?.trim() && (
+                      <div className="text-[11px] font-semibold text-emerald-700">
+                        Fact. {meta[p.id]!.facturaNumero}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                   <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
-                  <td className="px-4 py-3 font-medium">{formatoCOP(p.total)}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <div>{formatoCOP(p.total)}</div>
+                    {typeof meta[p.id]?.facturaValor === "number" &&
+                      (meta[p.id]!.facturaValor as number) > 0 && (
+                        <div className="text-[11px] font-semibold text-emerald-700">
+                          {formatoCOP(meta[p.id]!.facturaValor as number)}
+                        </div>
+                      )}
+                  </td>
                   <td className="px-4 py-3">
                     <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
                       {p.anulado ? (p.estado || "Anulado") : p.estado || "En proceso"}
