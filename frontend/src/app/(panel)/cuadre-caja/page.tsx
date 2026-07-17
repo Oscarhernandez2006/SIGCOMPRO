@@ -47,16 +47,6 @@ function numero(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Normaliza un nombre para comparar (sin acentos, minúsculas, sin espacios extra). */
-function normNombre(s?: string | null): string {
-  return (s ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
 /** Color (fondo + texto) de cada método de pago para diferenciarlos en la tabla. */
 function colorMetodo(pago?: string | null): string {
   switch ((pago ?? "").trim().toLowerCase()) {
@@ -212,13 +202,6 @@ export default function CuadreCajaPage() {
         // Punto: acotado a los visibles del usuario y al punto seleccionado.
         if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) return false;
         if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) return false;
-        // Cada cajera controla SOLO sus propios pedidos: los usuarios normales
-        // solo ven los pedidos que ellos despacharon (o que quedaron despachados
-        // a su nombre). Administradores y desarrolladores ven todos.
-        if (!esAdmin) {
-          const quien = despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "";
-          if (normNombre(quien) !== normNombre(usuario?.nombre)) return false;
-        }
         // Día de despacho: usa el instante de despacho; si no, la fecha del pedido.
         const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
         if (fecha && dia !== fecha) return false;
@@ -265,7 +248,7 @@ export default function CuadreCajaPage() {
         if (ca != null && cb != null) return ca - cb;
         return (a.consecutivo ?? 0) - (b.consecutivo ?? 0);
       });
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados, usuario]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados]);
 
   // Domiciliarios presentes en los despachados del punto/día (para el filtro).
   const domiciliarios = useMemo(() => {
@@ -274,17 +257,13 @@ export default function CuadreCajaPage() {
       if (p.estado !== "Despachado") continue;
       if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
       if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
-      if (!esAdmin) {
-        const quien = despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "";
-        if (normNombre(quien) !== normNombre(usuario?.nombre)) continue;
-      }
       const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
       if (fecha && dia !== fecha) continue;
       const d = (meta[p.id]?.domiciliario ?? "").trim();
       if (d) set.add(d);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, usuario]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha]);
 
   const valorFacturado = useCallback(
     (p: Pedido) => Number(meta[p.id]?.facturaValor ?? p.total ?? 0) || 0,
