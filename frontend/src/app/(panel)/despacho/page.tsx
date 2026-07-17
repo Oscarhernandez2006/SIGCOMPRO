@@ -471,15 +471,43 @@ export default function DespachoPage() {
   };
 
   /**
-   * Reversa/cambia el estado de un pedido (solo administradores). NO reinicia
-   * los tiempos (inicio/fin de alistamiento, hora de despacho ni la confirmación
-   * de transferencia): al cambiar el estado se conservan tal cual para no perder
-   * el registro de tiempos ya tomado.
+   * Reversa/cambia el estado de un pedido (solo administradores). Al REVERSAR
+   * (ir a un estado anterior del flujo) libera los tiempos de los pasos que se
+   * deshacen, para poder rehacer el alistamiento/despacho. Al avanzar o mantener
+   * el estado se conservan los tiempos ya tomados.
    */
   const reversarEstado = (id: string, nuevoEstado: Pedido["estado"]) => {
     if (!permite.estado) {
       sinPermiso.mostrar();
       return;
+    }
+    const actual = pedidos.find((p) => p.id === id);
+    const idxActual = ESTADOS_FLUJO.findIndex(
+      (s) => norm(s) === norm(actual?.estado),
+    );
+    const idxNuevo = ESTADOS_FLUJO.findIndex(
+      (s) => norm(s) === norm(nuevoEstado),
+    );
+    // Solo si es una REVERSA (estado destino anterior al actual) se limpian los
+    // tiempos correspondientes a los pasos que se deshacen.
+    if (idxNuevo >= 0 && idxActual >= 0 && idxNuevo < idxActual) {
+      const n = norm(nuevoEstado);
+      const reset: Record<string, string | null> = {};
+      if (n === "en proceso") {
+        reset.inicio = null;
+        reset.fin = null;
+        reset.despachoFin = null;
+        reset.pagoConfirmado = null;
+      } else if (n === "en producción") {
+        reset.fin = null;
+        reset.despachoFin = null;
+        reset.pagoConfirmado = null;
+      } else if (n === "alistado" || n === "facturado") {
+        reset.despachoFin = null;
+      }
+      if (Object.keys(reset).length) {
+        actualizarMeta(id, reset as Partial<DespachoMeta>);
+      }
     }
     cambiarEstado(id, nuevoEstado);
   };
@@ -572,11 +600,28 @@ export default function DespachoPage() {
 
   // Filtra por consecutivo, nombre del cliente o NIT/cédula del cliente.
   const pedidosFiltrados = useMemo(() => {
+    const q = norm(busqueda);
+    const coincide = (p: Pedido) => {
+      const consec = String(p.consecutivo ?? "");
+      const comanda = norm(p.comanda);
+      const nombre = norm(p.cliente?.nombre);
+      const nit = norm(p.cliente?.nit_cedula);
+      return (
+        consec.includes(q) ||
+        comanda.includes(q) ||
+        nombre.includes(q) ||
+        nit.includes(q)
+      );
+    };
+    // Con BÚSQUEDA activa: busca en TODOS los pedidos del punto (cualquier
+    // estado o día), sin importar la card seleccionada, para no revisar 1 a 1.
+    if (q) return pedidosOrdenados.filter(coincide);
+
     const esAnulado = (p: Pedido) => p.anulado || norm(p.estado) === "anulado";
     // Si hay una card de estado seleccionada, filtra por ese estado; si no,
     // muestra la vista activa (oculta despachados y cancelados).
     const estadoSel = vista ? ESTADOS.find((e) => e.key === vista) : null;
-    const base = pedidosOrdenados.filter((p) => {
+    return pedidosOrdenados.filter((p) => {
       if (vista === "atrasados") return atrasadosIds.has(p.id);
       if (vista === "posteriores") return esPosteriorFuturo(p) && impresos.has(p.id);
       // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
@@ -590,20 +635,6 @@ export default function DespachoPage() {
       if (esDeHoy(p)) return true;
       if (esPosteriorFuturo(p) && !impresos.has(p.id)) return true;
       return false;
-    });
-    const q = norm(busqueda);
-    if (!q) return base;
-    return base.filter((p) => {
-      const consec = String(p.consecutivo ?? "");
-      const comanda = norm(p.comanda);
-      const nombre = norm(p.cliente?.nombre);
-      const nit = norm(p.cliente?.nit_cedula);
-      return (
-        consec.includes(q) ||
-        comanda.includes(q) ||
-        nombre.includes(q) ||
-        nit.includes(q)
-      );
     });
   }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos]);
 
@@ -760,7 +791,7 @@ export default function DespachoPage() {
               type="text"
               value={busqueda}
               onChange={(ev) => setBusqueda(ev.target.value)}
-              placeholder="Buscar por consecutivo, cliente o NIT..."
+              placeholder="Buscar por consecutivo, cliente o NIT (en cualquier estado)..."
               className="w-full rounded-lg border border-brand-brown/15 bg-white py-2 pl-9 pr-9 text-sm text-brand-black outline-none focus:ring-1 focus:ring-brand-amber"
             />
             {busqueda && (

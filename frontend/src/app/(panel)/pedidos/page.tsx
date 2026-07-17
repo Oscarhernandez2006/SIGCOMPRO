@@ -558,7 +558,11 @@ export default function PedidosPage() {
                           )}
                         </>
                       )}
-                      {p.anulado && (
+                      {/* Clonar: los CANCELADOS no se pueden clonar; los ANULADOS
+                          solo una vez (si ya tienen un clon, se oculta). */}
+                      {p.anulado &&
+                        p.estado !== "Cancelado" &&
+                        !clonesPorComanda.get(p.comanda) && (
                         <button onClick={permite.clonar ? () => abrirClon(p) : sinPermiso.mostrar} aria-label="Clonar pedido" title="Clonar el pedido" className={`rounded-lg border border-brand-amber/40 p-1.5 text-brand-amber transition hover:bg-brand-amber/10 ${permite.clonar ? "" : "opacity-50"}`}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m11.25 4.125v3.375" />
@@ -723,7 +727,7 @@ function ModalCongelados({
   const [verCong, setVerCong] = useState<PedidoCongelado | null>(null);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
           <div>
             <h2 className="font-serif text-xl font-bold text-brand-wine">
