@@ -355,16 +355,64 @@ export default function DespachoPage() {
     return new Set(puntosAsignados.map((p) => String(p.id)));
   }, [esSelector, puntoActivoId, puntosAsignados]);
 
+  // Carga inicial + auto-actualización (polling). Cada 7 s (y al volver a la
+  // pestaña) agrega los pedidos NUEVOS y su metadata, sin reemplazar los
+  // existentes, para no pisar lo que se está editando (factura, estado, etc.).
   useEffect(() => {
-    cargarEstadoPedidos()
-      .then((e) => {
-        setPedidos(e.pedidos);
-        setMeta(e.meta);
-        setImpresos(new Set(e.impresos));
-      })
-      .catch(() => {
-        /* ignore */
-      });
+    let activo = true;
+    let primera = true;
+    const refrescar = () => {
+      cargarEstadoPedidos()
+        .then((e) => {
+          if (!activo) return;
+          if (primera) {
+            setPedidos(e.pedidos);
+            setMeta(e.meta);
+            setImpresos(new Set(e.impresos));
+            primera = false;
+            return;
+          }
+          setPedidos((prev) => {
+            const ids = new Set(prev.map((p) => p.id));
+            const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
+            return nuevos.length ? [...nuevos, ...prev] : prev;
+          });
+          setMeta((prev) => {
+            let cambio = false;
+            const merged = { ...prev };
+            for (const [k, v] of Object.entries(e.meta ?? {})) {
+              if (!(k in merged)) {
+                merged[k] = v;
+                cambio = true;
+              }
+            }
+            return cambio ? merged : prev;
+          });
+          setImpresos((prev) => {
+            let cambio = false;
+            const next = new Set(prev);
+            for (const id of e.impresos) {
+              if (!next.has(id)) {
+                next.add(id);
+                cambio = true;
+              }
+            }
+            return cambio ? next : prev;
+          });
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    refrescar();
+    const id = setInterval(refrescar, 7000);
+    const onFocus = () => refrescar();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      activo = false;
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   // Carga los selectores de porcionadores y domiciliarios por punto de venta.

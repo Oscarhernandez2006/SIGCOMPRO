@@ -104,14 +104,52 @@ export default function PedidosPage() {
     [usuario],
   );
 
-  // Cargar pedidos desde la base de datos.
+  // Cargar pedidos desde la base de datos + auto-actualización (polling).
+  // Cada 7 s (y al volver a la pestaña) se traen los pedidos NUEVOS y se
+  // agregan, sin reemplazar los existentes, para no perder lo que se edita.
   useEffect(() => {
-    cargarEstadoPedidos()
-      .then((e) => {
-        setPedidos(e.pedidos);
-        setMeta(e.meta ?? {});
-      })
-      .catch(() => { /* ignore */ });
+    let activo = true;
+    const primera = { current: true };
+    const refrescar = () => {
+      cargarEstadoPedidos()
+        .then((e) => {
+          if (!activo) return;
+          if (primera.current) {
+            // Primera carga: estado completo.
+            setPedidos(e.pedidos);
+            setMeta(e.meta ?? {});
+            primera.current = false;
+            return;
+          }
+          // Cargas siguientes: solo agrega pedidos que aún no tenemos.
+          setPedidos((prev) => {
+            const ids = new Set(prev.map((p) => p.id));
+            const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
+            return nuevos.length ? [...nuevos, ...prev] : prev;
+          });
+          setMeta((prev) => {
+            let cambio = false;
+            const merged = { ...prev };
+            for (const [k, v] of Object.entries(e.meta ?? {})) {
+              if (!(k in merged)) {
+                merged[k] = v;
+                cambio = true;
+              }
+            }
+            return cambio ? merged : prev;
+          });
+        })
+        .catch(() => { /* ignore */ });
+    };
+    refrescar();
+    const id = setInterval(refrescar, 7000);
+    const onFocus = () => refrescar();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      activo = false;
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   // Puntos de venta asignados al usuario. Alcance de lo que ve:

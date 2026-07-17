@@ -60,6 +60,27 @@ const NOTA_COTIZACION =
   "kilo (p. ej. se cotizan 20 kg pero se facturan 20.5 kg) y los impuestos que " +
   "apliquen a cada producto.";
 
+/** Cliente genérico "Consumidor final" (NIT estándar 222222222). */
+const CONSUMIDOR_FINAL: Cliente = {
+  id: "consumidor-final",
+  nit_cedula: "222222222",
+  nombre: "Consumidor Final",
+  apellidos: null,
+  direccion: null,
+  referencia: null,
+  barrio: null,
+  ciudad: null,
+  telefono: null,
+  correo: null,
+  punto_venta: null,
+  lat: null,
+  lng: null,
+  activo: true,
+  horeca: false,
+  direccion_incorrecta: false,
+  creado_en: new Date().toISOString(),
+};
+
 /* -------------------------------------------------------------- */
 /*  PDF profesional de la cotización                               */
 /* -------------------------------------------------------------- */
@@ -791,6 +812,18 @@ function EditorCotizacion({
                 </div>
               ) : (
                 <div>
+                  <button
+                    onClick={() => setCliente(CONSUMIDOR_FINAL)}
+                    className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-brand-wine/30 bg-brand-wine/5 px-3 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.25a7.5 7.5 0 0 1 15 0v.75H4.5v-.75Z" />
+                    </svg>
+                    Cotizar a Consumidor final
+                  </button>
+                  <div className="mb-1 text-center text-[10px] uppercase tracking-wide text-brand-brown/40">
+                    o busca un cliente
+                  </div>
                   <input
                     value={busCli}
                     onChange={(e) => setBusCli(e.target.value)}
