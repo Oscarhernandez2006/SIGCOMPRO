@@ -81,6 +81,14 @@ export class PuntosVentaService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_gratis_margen int NOT NULL DEFAULT 3000`,
     );
+    // Índices para acelerar los JOIN/filtros sobre la tabla puente
+    // usuario_punto_venta (usados en cada carga del panel operativo).
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_upv_usuario ON usuario_punto_venta (usuario_id)`,
+    );
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_upv_punto ON usuario_punto_venta (punto_venta_id)`,
+    );
   }
 
   /** Lista todos los puntos de venta con su número de usuarios asignados. */
@@ -297,11 +305,13 @@ export class PuntosVentaService implements OnModuleInit {
         `DELETE FROM usuario_punto_venta WHERE punto_venta_id = $1`,
         [id],
       );
-      for (const usuarioId of ids) {
+      if (ids.length > 0) {
+        // Un único INSERT por lotes en lugar de N consultas en serie.
+        const values = ids.map((_, i) => `($${i + 1}, $${ids.length + 1})`).join(', ');
         await cliente.query(
           `INSERT INTO usuario_punto_venta (usuario_id, punto_venta_id)
-           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-          [usuarioId, id],
+           VALUES ${values} ON CONFLICT DO NOTHING`,
+          [...ids, id],
         );
       }
       await cliente.query('COMMIT');
@@ -351,11 +361,13 @@ export class PuntosVentaService implements OnModuleInit {
         `DELETE FROM usuario_punto_venta WHERE usuario_id = $1`,
         [usuarioId],
       );
-      for (const puntoId of ids) {
+      if (ids.length > 0) {
+        // Un único INSERT por lotes en lugar de N consultas en serie.
+        const values = ids.map((_, i) => `($${ids.length + 1}, $${i + 1})`).join(', ');
         await cliente.query(
           `INSERT INTO usuario_punto_venta (usuario_id, punto_venta_id)
-           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-          [usuarioId, puntoId],
+           VALUES ${values} ON CONFLICT DO NOTHING`,
+          [...ids, usuarioId],
         );
       }
       await cliente.query('COMMIT');

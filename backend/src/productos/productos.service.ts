@@ -96,6 +96,25 @@ export class ProductosService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE productos_precios ADD COLUMN IF NOT EXISTS categoria text`,
     );
+    // Índice para el patrón habitual: filtrar por lista y ordenar por producto.
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_productos_lista_producto
+       ON productos_precios (lista_precio, producto)`,
+    );
+    // Índice trigram para acelerar las búsquedas ILIKE '%term%' del selector.
+    try {
+      await this.pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+      await this.pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_productos_producto_trgm
+         ON productos_precios USING gin (producto gin_trgm_ops)`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `No se pudo crear el índice trigram de productos: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
   }
 
   private apiUrl(cia: number): string {
@@ -291,6 +310,8 @@ export class ProductosService implements OnModuleInit {
   async listar(
     listaPrecio?: string,
     buscar?: string,
+    limit = 1000,
+    offset = 0,
   ): Promise<ProductoPrecioRow[]> {
     const cond: string[] = [];
     const params: unknown[] = [];
@@ -307,13 +328,16 @@ export class ProductosService implements OnModuleInit {
       i++;
     }
     const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
+    const lim = Math.min(Math.max(Number(limit) || 1000, 1), 5000);
+    const off = Math.max(Number(offset) || 0, 0);
+    params.push(lim, off);
     const res = await this.pool.query<ProductoPrecioRow>(
       `SELECT id, lista_precio, desc_lista, referencia, producto, categoria, cia, um,
               precio, fecha_activacion, fecha_inactivacion, sincronizado_en
        FROM productos_precios
        ${where}
        ORDER BY producto NULLS LAST
-       LIMIT 1000`,
+       LIMIT $${i++} OFFSET $${i++}`,
       params,
     );
     return res.rows;

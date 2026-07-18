@@ -162,7 +162,7 @@ export default function CuadreCajaPage() {
     setError(null);
     try {
       const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
-      const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos()]);
+      const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos(15)]);
       setPuntos(ps);
       setPedidos(estado.pedidos ?? []);
       setMeta(estado.meta ?? {});

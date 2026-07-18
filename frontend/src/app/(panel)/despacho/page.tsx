@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
@@ -362,7 +363,7 @@ export default function DespachoPage() {
     let activo = true;
     let primera = true;
     const refrescar = () => {
-      cargarEstadoPedidos()
+      cargarEstadoPedidos(15)
         .then((e) => {
           if (!activo) return;
           if (primera) {
@@ -698,6 +699,15 @@ export default function DespachoPage() {
     });
   }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos]);
 
+  // Virtualización de la tabla: solo se renderizan las filas visibles (+ overscan).
+  // Las filas de despacho son altas y variables, por eso se mide su altura real.
+  const filaVirtualizer = useVirtualizer({
+    count: pedidosFiltrados.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 220,
+    overscan: 6,
+  });
+
   // Pedidos pendientes (ni despachados ni anulados) clasificados por su cronómetro.
   const { porVencer, vencidos } = useMemo(() => {
     const pendientes = pedidosDeHoy.filter(
@@ -900,7 +910,21 @@ export default function DespachoPage() {
               </tr>
             </thead>
             <tbody className="divide-y-4 divide-double divide-brand-brown/20">
-              {pedidosFiltrados.map((p) => {
+              {(() => {
+                const virtuales = filaVirtualizer.getVirtualItems();
+                const paddingTop = virtuales.length ? virtuales[0].start : 0;
+                const paddingBottom = virtuales.length
+                  ? filaVirtualizer.getTotalSize() - virtuales[virtuales.length - 1].end
+                  : 0;
+                return (
+                  <>
+                    {paddingTop > 0 && (
+                      <tr aria-hidden>
+                        <td colSpan={6} style={{ height: paddingTop, padding: 0, border: 0 }} />
+                      </tr>
+                    )}
+                    {virtuales.map((virtual) => {
+                const p = pedidosFiltrados[virtual.index];
                 const anulado = p.anulado;
                 const estado = anulado ? "Anulado" : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
@@ -926,7 +950,7 @@ export default function DespachoPage() {
                 // en cascada (facturar exige alistado, despachar exige facturado).
                 const impreso = impresos.has(p.id);
                 return (
-                  <tr key={p.id} className={anulado ? "opacity-60" : ""}>
+                  <tr key={p.id} data-index={virtual.index} ref={filaVirtualizer.measureElement} className={anulado ? "opacity-60" : ""}>
                     {/* Cliente: agrupa televentas, comanda y medio de pago */}
                     <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
                       <div className="flex w-full items-stretch gap-3 pb-12">
@@ -1560,7 +1584,15 @@ export default function DespachoPage() {
                     </td>
                   </tr>
                 );
-              })}
+                    })}
+                    {paddingBottom > 0 && (
+                      <tr aria-hidden>
+                        <td colSpan={6} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+                      </tr>
+                    )}
+                  </>
+                );
+              })()}
             </tbody>
           </table>
           </div>

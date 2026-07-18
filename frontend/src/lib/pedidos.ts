@@ -50,9 +50,15 @@ export interface EstadoPedidos {
   impresos: string[];
 }
 
-/** Carga todos los pedidos con su metadata de despacho e impresos. */
-export function cargarEstadoPedidos(): Promise<EstadoPedidos> {
-  return apiFetch<EstadoPedidos>("/pedidos");
+/**
+ * Carga los pedidos con su metadata de despacho e impresos.
+ * @param dias Ventana opcional (días): las vistas operativas (Pedidos/Despacho)
+ *   la usan para traer solo activos + finalizados recientes y mantener el
+ *   payload acotado. Sin `dias` trae todo (Históricos/Dashboard).
+ */
+export function cargarEstadoPedidos(dias?: number): Promise<EstadoPedidos> {
+  const q = typeof dias === "number" && dias > 0 ? `?dias=${dias}` : "";
+  return apiFetch<EstadoPedidos>(`/pedidos${q}`);
 }
 
 /**

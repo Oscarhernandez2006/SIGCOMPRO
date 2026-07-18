@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
@@ -55,6 +56,7 @@ const COLUMNS =
 
 @Injectable()
 export class ClientesService implements OnModuleInit {
+  private readonly logger = new Logger(ClientesService.name);
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   async onModuleInit() {
@@ -74,6 +76,31 @@ export class ClientesService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS punto_venta text`,
     );
+    // La búsqueda usa ILIKE '%term%' (comodín inicial), que no aprovecha
+    // índices btree. pg_trgm + índices GIN aceleran esas búsquedas. Se hace en
+    // try/catch porque crear la extensión puede requerir permisos elevados; si
+    // falla, la app sigue funcionando (solo sin la aceleración).
+    try {
+      await this.pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+      await this.pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_clientes_nombre_trgm ON clientes USING gin (nombre gin_trgm_ops)`,
+      );
+      await this.pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_clientes_nit_trgm ON clientes USING gin (nit_cedula gin_trgm_ops)`,
+      );
+      await this.pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_clientes_telefono_trgm ON clientes USING gin (telefono gin_trgm_ops)`,
+      );
+      await this.pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_clientes_barrio_trgm ON clientes USING gin (barrio gin_trgm_ops)`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `No se pudieron crear los índices trigram de clientes: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
   }
 
   async listar(
