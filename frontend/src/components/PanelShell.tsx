@@ -7,7 +7,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import ClaveDinamica from "./ClaveDinamica";
-import LogoSigcompro from "./LogoSigcompro";
 
 interface NavItem {
   label: string;
@@ -326,11 +325,6 @@ export default function PanelShell({ children }: { children: ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-
-          {/* Logo SIGCOMPRO centrado en la barra */}
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <LogoSigcompro />
-          </div>
 
           <div className="ml-auto flex items-center gap-3">
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
