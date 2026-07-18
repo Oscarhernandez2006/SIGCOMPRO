@@ -93,6 +93,13 @@ export class PedidosService implements OnModuleInit {
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
   async estado(): Promise<EstadoPedidos> {
+    // Para no traer TODO el histórico (miles de pedidos = varios MB por
+    // llamada, agravado por el polling), se cargan solo los pedidos ACTIVOS
+    // (pendientes, cualquier fecha) más los FINALIZADOS de los últimos N días
+    // (para la numeración del día y la vista reciente). El histórico completo
+    // se consulta desde su vista propia. N es configurable por entorno.
+    const dias =
+      Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
     const res = await this.pool.query<{
       id: string;
       impreso: boolean;
@@ -101,7 +108,11 @@ export class PedidosService implements OnModuleInit {
     }>(
       `SELECT id, impreso, data, meta
        FROM pedidos
+       WHERE (anulado = false
+              AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado'))
+          OR fecha >= (now() - make_interval(days => $1))
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
+      [dias],
     );
 
     const pedidos: PedidoData[] = [];
