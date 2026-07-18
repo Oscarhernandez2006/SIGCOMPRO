@@ -30,9 +30,8 @@ export class PedidosController {
 
   /** Estado completo: pedidos + metadata de despacho + impresos. */
   @Get()
-  estado(@Query('dias') dias?: string) {
-    const n = dias ? parseInt(dias, 10) : NaN;
-    return this.pedidos.estado(Number.isFinite(n) && n > 0 ? n : undefined);
+  estado() {
+    return this.pedidos.estado();
   }
 
   /** Descarga el Excel de despacho del pedido (formato del software de ruteo). */

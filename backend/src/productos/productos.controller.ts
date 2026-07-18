@@ -28,18 +28,8 @@ export class ProductosController {
   }
 
   @Get()
-  listar(
-    @Query('lista') lista?: string,
-    @Query('buscar') buscar?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    return this.productos.listar(
-      lista,
-      buscar,
-      limit ? Number(limit) : undefined,
-      offset ? Number(offset) : undefined,
-    );
+  listar(@Query('lista') lista?: string, @Query('buscar') buscar?: string) {
+    return this.productos.listar(lista, buscar);
   }
 
   /**

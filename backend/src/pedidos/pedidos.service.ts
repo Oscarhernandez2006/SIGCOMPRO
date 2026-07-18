@@ -89,25 +89,10 @@ export class PedidosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
-    // Índice por fecha: acelera el filtrado por ventana de días (rutas activas
-    // como Pedidos/Despacho que se refrescan cada pocos segundos).
-    await this.pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_pedidos_fecha ON pedidos (fecha DESC)`,
-    );
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
-  async estado(dias?: number): Promise<EstadoPedidos> {
-    // Ventana opcional (días): las vistas operativas (Pedidos/Despacho) que se
-    // refrescan cada pocos segundos solo necesitan los pedidos ACTIVOS + los
-    // finalizados recientes; así el payload queda ACOTADO aunque el histórico
-    // crezca. Sin `dias` se devuelven todos (Históricos/Dashboard).
-    const filtrar = typeof dias === 'number' && dias > 0;
-    const where = filtrar
-      ? `WHERE (anulado IS NOT TRUE
-               AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado'))
-            OR fecha >= now() - make_interval(days => $1)`
-      : '';
+  async estado(): Promise<EstadoPedidos> {
     const res = await this.pool.query<{
       id: string;
       impreso: boolean;
@@ -116,9 +101,7 @@ export class PedidosService implements OnModuleInit {
     }>(
       `SELECT id, impreso, data, meta
        FROM pedidos
-       ${where}
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
-      filtrar ? [dias] : [],
     );
 
     const pedidos: PedidoData[] = [];

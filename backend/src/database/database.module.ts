@@ -22,8 +22,7 @@ export const PG_POOL = 'PG_POOL';
             config.get<string>('DB_SSL') === 'true'
               ? { rejectUnauthorized: false }
               : false,
-          max: Number(config.get<string>('DB_POOL_MAX', '30')),
-          min: Number(config.get<string>('DB_POOL_MIN', '2')),
+          max: 10,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 15000,
           keepAlive: true,

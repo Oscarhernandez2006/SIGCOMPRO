@@ -1,7 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listarClientes, type Cliente } from "@/lib/clientes";
 import {
   misPuntosVenta,
@@ -108,16 +107,11 @@ export default function PedidosPage() {
   // Cargar pedidos desde la base de datos + auto-actualización (polling).
   // Cada 7 s (y al volver a la pestaña) se traen los pedidos NUEVOS y se
   // agregan, sin reemplazar los existentes, para no perder lo que se edita.
-  // El polling se pausa cuando la pestaña está oculta para no generar tráfico
-  // ni carga en el servidor con pestañas en segundo plano.
   useEffect(() => {
     let activo = true;
     const primera = { current: true };
     const refrescar = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        return;
-      }
-      cargarEstadoPedidos(15)
+      cargarEstadoPedidos()
         .then((e) => {
           if (!activo) return;
           if (primera.current) {
@@ -150,16 +144,11 @@ export default function PedidosPage() {
     refrescar();
     const id = setInterval(refrescar, 7000);
     const onFocus = () => refrescar();
-    const onVisibilidad = () => {
-      if (document.visibilityState === "visible") refrescar();
-    };
     window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibilidad);
     return () => {
       activo = false;
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisibilidad);
     };
   }, []);
 
@@ -227,16 +216,6 @@ export default function PedidosPage() {
   // Número del día (turno) por pedido, para que la comanda impresa desde aquí
   // muestre el mismo número que en Despacho.
   const numerosDia = useMemo(() => numerosDelDia(pedidos), [pedidos]);
-
-  // Virtualización de la tabla de pedidos: solo se renderizan las filas visibles
-  // (+ overscan), midiendo su altura real (las filas varían según factura/motivo).
-  const scrollPedidosRef = useRef<HTMLDivElement>(null);
-  const filaVirtualizer = useVirtualizer({
-    count: pedidosFiltrados.length,
-    getScrollElement: () => scrollPedidosRef.current,
-    estimateSize: () => 64,
-    overscan: 10,
-  });
 
   // Clones por comanda de origen: comanda del pedido -> comandas de sus clones.
   // Sirve para avisar en el pedido (p. ej. anulado) que ya tiene una clonación.
@@ -536,17 +515,8 @@ export default function PedidosPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-          <div ref={scrollPedidosRef} className="max-h-[calc(100vh-300px)] overflow-auto">
-            <table className="w-full min-w-[1080px] table-fixed text-sm">
-              <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[18%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
-                <col className="w-[14%]" />
-                <col className="w-[10%]" />
-                <col className="w-[22%]" />
-              </colgroup>
+          <div className="max-h-[calc(100vh-300px)] overflow-auto">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
                 <tr>
                   <th className="px-4 py-3">Comanda / Factura</th>
@@ -559,23 +529,8 @@ export default function PedidosPage() {
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  const virtuales = filaVirtualizer.getVirtualItems();
-                  const paddingTop = virtuales.length ? virtuales[0].start : 0;
-                  const paddingBottom = virtuales.length
-                    ? filaVirtualizer.getTotalSize() - virtuales[virtuales.length - 1].end
-                    : 0;
-                  return (
-                    <>
-                      {paddingTop > 0 && (
-                        <tr aria-hidden>
-                          <td colSpan={7} style={{ height: paddingTop, padding: 0, border: 0 }} />
-                        </tr>
-                      )}
-                      {virtuales.map((virtual) => {
-                        const p = pedidosFiltrados[virtual.index];
-                        return (
-                <tr key={p.id} data-index={virtual.index} ref={filaVirtualizer.measureElement} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
+                {pedidosFiltrados.map((p) => (
+                <tr key={p.id} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
                   <td className="px-4 py-3 font-semibold text-brand-wine">
                     <div>{p.comanda}</div>
                     {meta[p.id]?.facturaNumero?.trim() && (
@@ -615,7 +570,7 @@ export default function PedidosPage() {
                   </td>
                   <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
@@ -670,16 +625,7 @@ export default function PedidosPage() {
                     </div>
                   </td>
                 </tr>
-                        );
-                      })}
-                      {paddingBottom > 0 && (
-                        <tr aria-hidden>
-                          <td colSpan={7} style={{ height: paddingBottom, padding: 0, border: 0 }} />
-                        </tr>
-                      )}
-                    </>
-                  );
-                })()}
+              ))}
               </tbody>
             </table>
           </div>
@@ -2223,45 +2169,6 @@ export interface ItemCarrito {
   notas: string;
 }
 
-/* ---------- Tarjeta de producto (memoizada) ---------- */
-
-const ProductoCard = memo(function ProductoCard({
-  producto,
-  enCarrito,
-  onSeleccionar,
-}: {
-  producto: ProductoPrecio;
-  enCarrito: boolean;
-  onSeleccionar: (p: ProductoPrecio) => void;
-}) {
-  return (
-    <button
-      onClick={() => onSeleccionar(producto)}
-      title={`Agregar ${producto.producto || "producto"} al pedido`}
-      className={`flex flex-col rounded-xl border p-3 text-left transition ${
-        enCarrito
-          ? "border-brand-amber bg-brand-amber/5"
-          : "border-brand-brown/10 bg-white hover:border-brand-amber/50 hover:shadow-sm"
-      }`}
-    >
-      <span className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-brand-black">
-        {producto.producto || "Sin nombre"}
-      </span>
-      <span className="mt-1 text-[11px] text-brand-brown/50">
-        {producto.referencia} · {producto.um || "U"}
-      </span>
-      {producto.categoria && (
-        <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-          {producto.categoria.replace(/^\s*\d+\s*-\s*/, "")}
-        </span>
-      )}
-      <span className="mt-2 text-sm font-bold text-brand-wine">
-        {formatoCOP(producto.precio)}
-      </span>
-    </button>
-  );
-});
-
 function PasoProductos({
   punto,
   carrito,
@@ -2331,35 +2238,7 @@ function PasoProductos({
     onCambiar(carrito.filter((i) => i.id !== id));
   }
 
-  // IDs de producto en el carrito para comprobar pertenencia en O(1) (evita
-  // recorrer el carrito por cada tarjeta renderizada -> O(n²)).
-  const idsEnCarrito = useMemo(
-    () => new Set(carrito.map((i) => i.producto.id)),
-    [carrito],
-  );
-  const enCarrito = (id: string) => idsEnCarrito.has(id);
-
-  // Virtualización del catálogo: se renderizan solo las filas de tarjetas
-  // visibles. El número de columnas se calcula según el ancho real del panel.
-  const scrollProductosRef = useRef<HTMLDivElement>(null);
-  const [columnas, setColumnas] = useState(2);
-  useEffect(() => {
-    const el = scrollProductosRef.current;
-    if (!el) return;
-    const calcular = () =>
-      setColumnas(Math.max(1, Math.min(4, Math.floor(el.clientWidth / 200))));
-    calcular();
-    const ro = new ResizeObserver(calcular);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const totalFilas = Math.ceil(items.length / columnas);
-  const productoVirtualizer = useVirtualizer({
-    count: totalFilas,
-    getScrollElement: () => scrollProductosRef.current,
-    estimateSize: () => 132,
-    overscan: 4,
-  });
+  const enCarrito = (id: string) => carrito.some((i) => i.producto.id === id);
 
   return (
     <div className="flex gap-3">
@@ -2428,51 +2307,43 @@ function PasoProductos({
           </div>
         )}
 
-        <div ref={scrollProductosRef} className="max-h-[56vh] overflow-y-auto pr-1">
+        <div className="grid max-h-[56vh] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
           {cargando ? (
-            <p className="py-10 text-center text-sm text-brand-brown/50">
+            <p className="col-span-full py-10 text-center text-sm text-brand-brown/50">
               Cargando productos…
             </p>
           ) : items.length === 0 ? (
-            <p className="py-10 text-center text-sm text-brand-brown/50">
+            <p className="col-span-full py-10 text-center text-sm text-brand-brown/50">
               No se encontraron productos.
             </p>
           ) : (
-            <div
-              style={{ height: productoVirtualizer.getTotalSize(), position: "relative", width: "100%" }}
-            >
-              {productoVirtualizer.getVirtualItems().map((fila) => {
-                const inicio = fila.index * columnas;
-                const tarjetas = items.slice(inicio, inicio + columnas);
-                return (
-                  <div
-                    key={fila.key}
-                    data-index={fila.index}
-                    ref={productoVirtualizer.measureElement}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${fila.start}px)`,
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))`,
-                      gap: "0.5rem",
-                      paddingBottom: "0.5rem",
-                    }}
-                  >
-                    {tarjetas.map((p) => (
-                      <ProductoCard
-                        key={p.id}
-                        producto={p}
-                        enCarrito={enCarrito(p.id)}
-                        onSeleccionar={setConfig}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
+            items.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setConfig(p)}
+                title={`Agregar ${p.producto || "producto"} al pedido`}
+                className={`flex flex-col rounded-xl border p-3 text-left transition ${
+                  enCarrito(p.id)
+                    ? "border-brand-amber bg-brand-amber/5"
+                    : "border-brand-brown/10 bg-white hover:border-brand-amber/50 hover:shadow-sm"
+                }`}
+              >
+                <span className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-brand-black">
+                  {p.producto || "Sin nombre"}
+                </span>
+                <span className="mt-1 text-[11px] text-brand-brown/50">
+                  {p.referencia} · {p.um || "U"}
+                </span>
+                {p.categoria && (
+                  <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    {p.categoria.replace(/^\s*\d+\s*-\s*/, "")}
+                  </span>
+                )}
+                <span className="mt-2 text-sm font-bold text-brand-wine">
+                  {formatoCOP(p.precio)}
+                </span>
+              </button>
+            ))
           )}
         </div>
       </div>

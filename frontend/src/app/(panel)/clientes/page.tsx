@@ -107,14 +107,13 @@ export default function ClientesPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
-    // Ambas peticiones se lanzan en paralelo para evitar el waterfall.
-    estadisticasClientes()
-      .then(setStats)
-      .catch(() => { /* ignore */ });
     try {
       const data = await listarClientes(busqueda, POR_PAGINA, pagina * POR_PAGINA);
       setItems(data.items);
       setTotal(data.total);
+      estadisticasClientes()
+        .then(setStats)
+        .catch(() => { /* ignore */ });
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudieron cargar los clientes");
     } finally {
