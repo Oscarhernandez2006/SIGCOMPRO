@@ -69,3 +69,105 @@ body {
 .campo:focus {
   border-color: var(--color-brand-amber);
 }
+
+/* ============================================================
+   Animación del logo SIGCOMPRO (ciclo de 30s)
+   - La moto arranca (humito), la G cae con 3 rebotes y queda
+     al tamaño de las letras (SIGCOMPRO).
+   - La moto se va y se estaciona junto a la primera S (~20s).
+   - Arranca de nuevo, choca con la G y la G queda encima de la
+     moto (logo ensamblado).
+   ============================================================ */
+.logo-anim .logo-moto {
+  animation: logo-moto-run 30s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+.logo-anim .logo-g {
+  animation: logo-g-drop 30s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+.logo-anim .logo-smoke {
+  animation: logo-smoke-puff 30s ease-in-out infinite;
+}
+.logo-anim .logo-si {
+  animation: logo-open-left 30s ease-in-out infinite;
+}
+.logo-anim .logo-ompro {
+  animation: logo-open-right 30s ease-in-out infinite;
+}
+
+/* Moto: SIEMPRE avanza hacia ADELANTE (derecha). Para llegar antes de la S
+   sale por la derecha y reaparece por la izquierda (wrap instantáneo). */
+@keyframes logo-moto-run {
+  0%     { transform: translateX(0) rotate(0deg); }
+  4%     { transform: translateX(0) rotate(0deg); }       /* espera: humito + G cae */
+  8%     { transform: translateX(8px) rotate(-2deg); }    /* arranca hacia adelante */
+  12%    { transform: translateX(95px) rotate(-1deg); }   /* sale por la DERECHA */
+  12.01% { transform: translateX(-100px) rotate(-1deg); } /* reaparece por DETRÁS (izq.) */
+  18%    { transform: translateX(-56px) rotate(0deg); }   /* avanza y se estaciona antes de la S */
+  20%    { transform: translateX(-56px) rotate(1deg); }   /* frenada leve */
+  22%    { transform: translateX(-56px) rotate(0deg); }
+  82%    { transform: translateX(-56px) rotate(0deg); }   /* ~20s estacionada */
+  85%    { transform: translateX(-54px) rotate(-4deg); }  /* arranca de nuevo (adelante) */
+  93%    { transform: translateX(4px) rotate(-3deg); }    /* choca la G por velocidad */
+  95%    { transform: translateX(-2px) rotate(1deg); }    /* asienta tras el choque */
+  100%   { transform: translateX(0) rotate(0deg); }       /* posicionada (G encima) */
+}
+
+/* G: base (0%) = pequeña y ENCIMA de la moto. Baja a tamaño letra y vuelve. */
+@keyframes logo-g-drop {
+  0%   { transform: translateX(-50%) translateY(0) scale(1); }
+  3%   { transform: translateX(-50%) translateY(-5px) scale(1); }    /* se despega */
+  4.5% { transform: translateX(-50%) translateY(21px) scale(1.42); } /* 1er golpe */
+  5.3% { transform: translateX(-50%) translateY(15px) scale(1.45); } /* rebote 1 */
+  6.1% { transform: translateX(-50%) translateY(21px) scale(1.47); } /* 2do golpe */
+  6.8% { transform: translateX(-50%) translateY(17px) scale(1.48); } /* rebote 2 */
+  7.5% { transform: translateX(-50%) translateY(21px) scale(1.5); }  /* 3er golpe */
+  8%   { transform: translateX(-50%) translateY(20px) scale(1.5); }  /* asienta */
+  9%   { transform: translateX(-50%) translateY(20px) scale(1.5); }  /* SIGCOMPRO */
+  92%  { transform: translateX(-50%) translateY(20px) scale(1.5); }
+  94%  { transform: translateX(-50%) translateY(15px) scale(1.42); } /* la empuja la moto */
+  97%  { transform: translateX(-50%) translateY(-6px) scale(1.05); } /* salta arriba */
+  100% { transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* "SI": se abre a la izquierda solo cuando la moto está en el centro. */
+@keyframes logo-open-left {
+  0%   { transform: translateX(-12px); }
+  8%   { transform: translateX(-12px); }
+  16%  { transform: translateX(0); }     /* junto, para SIGCOMPRO */
+  88%  { transform: translateX(0); }
+  92%  { transform: translateX(-12px); } /* abre para el choque/moto */
+  100% { transform: translateX(-12px); }
+}
+
+/* "OMPRO": se abre a la derecha solo cuando la moto está en el centro. */
+@keyframes logo-open-right {
+  0%   { transform: translateX(12px); }
+  8%   { transform: translateX(12px); }
+  16%  { transform: translateX(0); }     /* junto, para SIGCOMPRO */
+  88%  { transform: translateX(0); }
+  92%  { transform: translateX(12px); }  /* abre para el choque/moto */
+  100% { transform: translateX(12px); }
+}
+
+/* Humito: dos bocanadas, en cada arranque de la moto. */
+@keyframes logo-smoke-puff {
+  0%, 5%  { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  8%      { opacity: 0.5; transform: translate(-2px, -3px) scale(0.85); }
+  13%     { opacity: 0; transform: translate(-7px, -11px) scale(1.5); }
+  14%, 83% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  86%     { opacity: 0.5; transform: translate(-2px, -3px) scale(0.85); }
+  90%     { opacity: 0; transform: translate(-7px, -11px) scale(1.5); }
+  100%    { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-anim .logo-moto,
+  .logo-anim .logo-g,
+  .logo-anim .logo-smoke,
+  .logo-anim .logo-si,
+  .logo-anim .logo-ompro {
+    animation: none;
+  }
+}
