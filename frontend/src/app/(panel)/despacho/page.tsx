@@ -668,7 +668,7 @@ export default function DespachoPage() {
         return;
       }
       const id = resetTiemposId;
-      actualizarMeta(id, { inicio: null, fin: null } as Partial<DespachoMeta>);
+      actualizarMeta(id, { inicio: null, fin: null } as unknown as Partial<DespachoMeta>);
       setPedidos((prev) => {
         const next = prev.map((p) =>
           p.id === id ? { ...p, estado: "En proceso" as Pedido["estado"] } : p,
