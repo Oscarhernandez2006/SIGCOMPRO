@@ -286,6 +286,25 @@ export class PuntosVentaService implements OnModuleInit {
     return res.rows.map((r) => String(r.usuario_id));
   }
 
+  /**
+   * Nombres de los usuarios ACTIVOS con rol "facturador" agrupados por punto de
+   * venta asignado. Lo usa Despacho para el selector "Facturado por".
+   */
+  async facturadoresPorPunto(): Promise<Record<string, string[]>> {
+    const res = await this.pool.query<{ punto: string; nombre: string }>(
+      `SELECT upv.punto_venta_id::text AS punto, u.nombre
+       FROM usuarios u
+       JOIN usuario_punto_venta upv ON upv.usuario_id = u.id
+       WHERE u.activo = true AND lower(trim(u.rol)) = 'facturador'
+       ORDER BY u.nombre ASC`,
+    );
+    const mapa: Record<string, string[]> = {};
+    for (const r of res.rows) {
+      (mapa[r.punto] ??= []).push(r.nombre);
+    }
+    return mapa;
+  }
+
   /** Reemplaza por completo la lista de usuarios asignados al punto. */
   async asignarUsuarios(id: string, usuarioIds: string[]): Promise<string[]> {
     await this.obtener(id);

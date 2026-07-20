@@ -39,6 +39,16 @@ export class PuntosVentaController {
     return this.puntos.ubicaciones();
   }
 
+  /**
+   * Facturadores (usuarios con rol "facturador") por punto de venta. Lo usa
+   * Despacho para el selector "Facturado por". Accesible a cualquier usuario
+   * autenticado (solo devuelve nombres).
+   */
+  @Get('facturadores')
+  facturadores() {
+    return this.puntos.facturadoresPorPunto();
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles('administrador', 'desarrollador')

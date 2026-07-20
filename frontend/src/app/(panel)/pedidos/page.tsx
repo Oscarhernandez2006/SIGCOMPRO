@@ -552,8 +552,15 @@ export default function PedidosPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
-                      {p.anulado ? (p.estado || "Anulado") : p.estado || "En proceso"}
+                      {p.anulado
+                        ? (p.estado || "Anulado")
+                        : (p.entregaProgramada && p.fechaProgramada && (!p.estado || p.estado === "En proceso")
+                            ? "Pendiente"
+                            : (p.estado || "En proceso"))}
                     </span>
+                    {!p.anulado && p.entregaProgramada && p.fechaProgramada && (
+                      <p className="mt-0.5 text-[11px] font-semibold text-blue-600">Posterior</p>
+                    )}
                     {p.motivo && (
                       <p className="mt-0.5 text-[11px] text-brand-brown/50">{p.motivo}</p>
                     )}
@@ -568,7 +575,15 @@ export default function PedidosPage() {
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
+                  <td className="px-4 py-3 text-brand-brown/60">
+                    <div>{new Date(p.fecha).toLocaleString("es-CO")}</div>
+                    {p.entregaProgramada && p.fechaProgramada && (
+                      <div className="mt-0.5 text-[11px] font-semibold text-blue-600">
+                        Despacho: {new Date(`${p.fechaProgramada}T00:00:00`).toLocaleDateString("es-CO")}
+                        {p.horaDespacho ? ` ${p.horaDespacho}` : ""}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
@@ -1335,13 +1350,14 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     }
   }
 
-  // Puntos integrados con Drivin (envío automático): La 93, Alameda, Olaya y
-  // San Felipe. Cada uno usa su propio schema en el backend (93->01, Alameda I->04,
-  // Alameda II->05, Olaya->06, San Felipe->07).
+  // Puntos integrados con Drivin (envío automático): La 93, La 70, La 43,
+  // Alameda, Olaya y San Felipe. Cada uno usa su propio schema en el backend
+  // (93->01, 70->03, 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07).
   function esPuntoDrivin(p?: { nombre?: string } | null): boolean {
     const nombre = String(p?.nombre ?? "").toLowerCase();
     return (
       /\b93\b/.test(nombre) ||
+      /\b70\b/.test(nombre) ||
       /\b43\b/.test(nombre) ||
       nombre.includes("alameda") ||
       nombre.includes("olaya") ||

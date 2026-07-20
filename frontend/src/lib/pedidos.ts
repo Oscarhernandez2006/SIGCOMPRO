@@ -12,6 +12,8 @@ export interface DespachoMeta {
   facturaNumero?: string;
   /** Valor facturado (puede diferir del total del pedido). */
   facturaValor?: number;
+  /** Nombre del facturador (usuario con rol facturador) que hizo la factura. */
+  facturadoPor?: string;
   /** Domiciliario asignado para el despacho. */
   domiciliario?: string;
   /** Instante en que el pedido pasó a "Despachado". */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { aNombrePropio } from "@/lib/format";
 
 /**
  * Campo de referencia con el formato compositivo del negocio, p. ej.:
@@ -207,11 +208,11 @@ export default function ReferenciaInput({
         <input
           value={partes.nombre}
           onChange={(e) => {
-            // Solo la primera letra en mayúscula; el resto en minúscula.
+            // Primera letra de CADA palabra en mayúscula (título); resto minúscula.
             const el = e.currentTarget;
             const pos = el.selectionStart;
             const v = el.value;
-            const nuevo = v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+            const nuevo = aNombrePropio(v);
             cambiarParte("nombre", nuevo);
             if (pos !== null) {
               requestAnimationFrame(() => {

@@ -344,7 +344,7 @@ export default function AdminPuntosVentaPage() {
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={cerrarModal} />
-          <div className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
             <h2 className="font-serif text-xl font-bold text-brand-wine">
               {editando ? "Editar punto de venta" : "Nuevo punto de venta"}
             </h2>
@@ -358,114 +358,119 @@ export default function AdminPuntosVentaPage() {
               </div>
             )}
 
-            <form onSubmit={guardar} className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">Nombre *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.nombre}
-                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                  className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">Código (número del punto)</label>
-                <input
-                  type="text"
-                  value={form.codigo}
-                  onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                  placeholder="Ej. 1"
-                  className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 font-mono text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">Dirección</label>
-                <input
-                  type="text"
-                  value={form.direccion}
-                  onChange={(e) => setForm({ ...form, direccion: e.target.value })}
-                  className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">Teléfono</label>
-                <input
-                  type="text"
-                  value={form.telefono}
-                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                  className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-brand-brown">Barrio</label>
-                  <input
-                    type="text"
-                    value={form.barrio}
-                    onChange={(e) => setForm({ ...form, barrio: e.target.value })}
-                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                  />
+            <form onSubmit={guardar} className="mt-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Columna izquierda: datos del punto (campos cortos en pares) */}
+                <div className="grid grid-cols-2 gap-3 content-start">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Nombre *</label>
+                    <input
+                      type="text"
+                      required
+                      value={form.nombre}
+                      onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Código (n° del punto)</label>
+                    <input
+                      type="text"
+                      value={form.codigo}
+                      onChange={(e) => setForm({ ...form, codigo: e.target.value })}
+                      placeholder="Ej. 1"
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 font-mono text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Dirección</label>
+                    <input
+                      type="text"
+                      value={form.direccion}
+                      onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Teléfono</label>
+                    <input
+                      type="text"
+                      value={form.telefono}
+                      onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Barrio</label>
+                    <input
+                      type="text"
+                      value={form.barrio}
+                      onChange={(e) => setForm({ ...form, barrio: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Ciudad</label>
+                    <input
+                      type="text"
+                      value={form.ciudad}
+                      onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Lista de precios</label>
+                    <select
+                      value={form.lista_precio}
+                      onChange={(e) => setForm({ ...form, lista_precio: e.target.value })}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    >
+                      <option value="">Sin lista asignada</option>
+                      {listas.map((l) => (
+                        <option key={l.lista_precio} value={l.lista_precio}>
+                          {l.desc_lista ?? `Lista ${l.lista_precio}`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-brand-brown/50">
+                      Define los productos y precios que ve este punto en pedidos.
+                    </p>
+                  </div>
+                  <label className="col-span-2 flex items-center gap-2.5 text-sm font-medium text-brand-brown">
+                    <input
+                      type="checkbox"
+                      checked={form.activo}
+                      onChange={(e) => setForm({ ...form, activo: e.target.checked })}
+                      className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
+                    />
+                    Punto activo
+                  </label>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-brand-brown">Ciudad</label>
-                  <input
-                    type="text"
-                    value={form.ciudad}
-                    onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
-                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">
-                  Ubicación en el mapa
-                </label>
-                <p className="mb-2 text-xs text-brand-brown/60">
-                  Ubica el punto con precisión (latitud/longitud) para recomendar
-                  correctamente el punto más cercano a cada cliente.
-                </p>
-                <MapaDireccion
-                  direccion={form.direccion}
-                  barrio={form.barrio}
-                  ciudad={form.ciudad}
-                  lat={form.lat}
-                  lng={form.lng}
-                  ocultarPuntos
-                  onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
-                  onBarrio={(b) => setForm((p) => ({ ...p, barrio: b }))}
-                  onCiudad={(ci) => setForm((p) => ({ ...p, ciudad: ci }))}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-brand-brown">Lista de precios</label>
-                <select
-                  value={form.lista_precio}
-                  onChange={(e) => setForm({ ...form, lista_precio: e.target.value })}
-                  className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                >
-                  <option value="">Sin lista asignada</option>
-                  {listas.map((l) => (
-                    <option key={l.lista_precio} value={l.lista_precio}>
-                      {l.desc_lista ?? `Lista ${l.lista_precio}`}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-brand-brown/50">
-                  Define los productos y precios que ve este punto en pedidos.
-                </p>
-              </div>
-              <label className="flex items-center gap-2.5 text-sm font-medium text-brand-brown">
-                <input
-                  type="checkbox"
-                  checked={form.activo}
-                  onChange={(e) => setForm({ ...form, activo: e.target.checked })}
-                  className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
-                />
-                Punto activo
-              </label>
 
-              <div className="flex justify-end gap-2 pt-2">
+                {/* Columna derecha: ubicación en el mapa */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-brand-brown">
+                    Ubicación en el mapa
+                  </label>
+                  <p className="mb-2 text-xs text-brand-brown/60">
+                    Ubica el punto con precisión (latitud/longitud) para recomendar
+                    correctamente el punto más cercano a cada cliente.
+                  </p>
+                  <MapaDireccion
+                    direccion={form.direccion}
+                    barrio={form.barrio}
+                    ciudad={form.ciudad}
+                    lat={form.lat}
+                    lng={form.lng}
+                    ocultarPuntos
+                    onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
+                    onBarrio={(b) => setForm((p) => ({ ...p, barrio: b }))}
+                    onCiudad={(ci) => setForm((p) => ({ ...p, ciudad: ci }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
                 <button type="button" onClick={cerrarModal} disabled={guardando} title="Cancelar" className="rounded-xl px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-brown/5 disabled:opacity-50">
                   Cancelar
                 </button>

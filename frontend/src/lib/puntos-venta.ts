@@ -124,6 +124,14 @@ export function misPuntosVenta(): Promise<PuntoVenta[]> {
 }
 
 /**
+ * Facturadores (usuarios con rol "facturador") por id de punto de venta.
+ * Lo usa Despacho para el selector "Facturado por".
+ */
+export function facturadoresPorPunto(): Promise<Record<string, string[]>> {
+  return apiFetch<Record<string, string[]>>("/puntos-venta/facturadores");
+}
+
+/**
  * Indica si un par de coordenadas es válido para cálculos geográficos.
  * Rechaza null, NaN, fuera de rango y el punto nulo (0,0).
  */

@@ -47,7 +47,30 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: 'despacho',
         label: 'Despacho',
         acciones: [
-          { key: 'despacho.estado', label: 'Cambiar estado del pedido' },
+          {
+            key: 'despacho.estado',
+            label: 'Cambiar estado (cualquiera)',
+          },
+          {
+            key: 'despacho.estado.proceso',
+            label: "Devolver a 'En proceso'",
+          },
+          {
+            key: 'despacho.estado.produccion',
+            label: "Colocar en 'En producción'",
+          },
+          {
+            key: 'despacho.estado.alistado',
+            label: "Colocar en 'Alistado'",
+          },
+          {
+            key: 'despacho.estado.facturado',
+            label: "Facturar (colocar en 'Facturado')",
+          },
+          {
+            key: 'despacho.estado.despachado',
+            label: "Despachar (colocar en 'Despachado')",
+          },
           { key: 'despacho.pago', label: 'Cambiar método de pago / liberar cartera' },
         ],
       },

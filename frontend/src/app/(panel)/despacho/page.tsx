@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
-import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
-import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
+import { misPuntosVenta, facturadoresPorPunto, type PuntoVenta } from "@/lib/puntos-venta";
+import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import {
@@ -244,6 +244,19 @@ const ESTADOS_FLUJO = [
   "Despachado",
 ] as const;
 
+/**
+ * Permiso granular requerido para COLOCAR un pedido en cada estado. Cada estado
+ * tiene su propio permiso; además, el permiso "maestro" despacho.estado (o un
+ * rol con acceso total) habilita todos.
+ */
+const PERMISO_POR_ESTADO: Record<string, string> = {
+  "en proceso": "despacho.estado.proceso",
+  "en producción": "despacho.estado.produccion",
+  "alistado": "despacho.estado.alistado",
+  "facturado": "despacho.estado.facturado",
+  "despachado": "despacho.estado.despachado",
+};
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
@@ -283,6 +296,11 @@ export default function DespachoPage() {
   const [personalPorPunto, setPersonalPorPunto] = useState<
     Record<string, PersonalDespacho>
   >({});
+  // Facturadores (usuarios con rol facturador) por id de punto de venta, para el
+  // selector "Facturado por" de la celda de factura.
+  const [facturadoresPunto, setFacturadoresPunto] = useState<
+    Record<string, string[]>
+  >({});
   // Texto del buscador (consecutivo, nombre o NIT del cliente).
   const [busqueda, setBusqueda] = useState("");
   // Id del pedido cuya ficha completa del cliente está desplegada (al hacer
@@ -317,11 +335,18 @@ export default function DespachoPage() {
     [usuarioDesp],
   );
 
-  // ¿El usuario puede reversar estados? (administrador / administrador app / desarrollador).
-  const esAdmin = useMemo(
-    () => tieneAccesoAdministrativo(usuarioDesp?.rol),
-    [usuarioDesp],
-  );
+  // ¿El usuario puede COLOCAR un pedido en un estado concreto? Cada estado tiene
+  // su permiso (despacho.estado.<estado>); el maestro despacho.estado y los
+  // roles con acceso total habilitan todos.
+  const puedeEstado = (estado?: string | null): boolean => {
+    if (puedeAccion(usuarioDesp, "despacho.estado")) return true;
+    const clave = PERMISO_POR_ESTADO[norm(estado)];
+    return clave ? puedeAccion(usuarioDesp, clave) : false;
+  };
+
+  // ¿Puede el usuario cambiar el estado a AL MENOS uno? Habilita el selector de
+  // cambio de estado (antes exclusivo de administradores).
+  const puedeAlgunEstado = ESTADOS_FLUJO.some((s) => puedeEstado(s));
 
   // Alcance por punto: roles con selector (administrador app / desarrollador) o
   // usuarios con el permiso "pedidos.multipunto" eligen UN punto de sus
@@ -424,6 +449,15 @@ export default function DespachoPage() {
       });
   }, []);
 
+  // Carga los facturadores (rol facturador) por punto para el selector de factura.
+  useEffect(() => {
+    facturadoresPorPunto()
+      .then((mapa) => setFacturadoresPunto(mapa ?? {}))
+      .catch(() => {
+        /* ignore */
+      });
+  }, []);
+
   // Avanza el reloj cada segundo para refrescar los cronómetros.
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 1000);
@@ -495,9 +529,38 @@ export default function DespachoPage() {
 
   /** Cambia el estado de un pedido y lo persiste. */
   const cambiarEstado = (id: string, estado: Pedido["estado"]) => {
-    if (!permite.estado) {
+    if (!puedeEstado(estado)) {
       sinPermiso.mostrar();
       return;
+    }
+    // Validación de flujo (integridad): impide dejar un pedido en un estado
+    // final sin sus datos, aunque se use el selector de estado directamente (los
+    // botones ya lo validan). Evita pedidos "facturados/despachados" sin
+    // porcionador, factura o domiciliario. No aplica al REVERSAR a estados
+    // anteriores (solo se exige al colocar Facturado/Despachado).
+    const mm = meta[id] ?? {};
+    const n = norm(estado);
+    const tieneFactura =
+      Boolean(mm.facturaNumero?.trim()) &&
+      typeof mm.facturaValor === "number" &&
+      mm.facturaValor > 0;
+    if (n === "facturado" || n === "despachado") {
+      const verbo = n === "facturado" ? "facturar" : "despachar";
+      if (!mm.porcionador?.trim()) {
+        alert(`No se puede ${verbo} sin un porcionador asignado.`);
+        return;
+      }
+      if (!tieneFactura) {
+        alert(`No se puede ${verbo} sin número y valor de factura.`);
+        return;
+      }
+    }
+    if (n === "despachado" && !mm.domiciliario?.trim()) {
+      const esRecoge = pedidos.find((x) => x.id === id)?.entrega === "recoge";
+      if (!esRecoge) {
+        alert("No se puede despachar sin un domiciliario asignado.");
+        return;
+      }
     }
     // Al pasar a "Despachado" se registra la hora exacta del cambio (si aún no
     // existe) y el nombre de quien lo despachó (cajera/despachadora).
@@ -525,7 +588,7 @@ export default function DespachoPage() {
    * el estado se conservan los tiempos ya tomados.
    */
   const reversarEstado = (id: string, nuevoEstado: Pedido["estado"]) => {
-    if (!permite.estado) {
+    if (!puedeEstado(nuevoEstado)) {
       sinPermiso.mostrar();
       return;
     }
@@ -537,21 +600,45 @@ export default function DespachoPage() {
       (s) => norm(s) === norm(nuevoEstado),
     );
     // Solo si es una REVERSA (estado destino anterior al actual) se limpian los
-    // tiempos correspondientes a los pasos que se deshacen.
+    // DATOS y tiempos de los pasos que se deshacen: si se devuelve un pedido es
+    // para corregir, así que las etapas posteriores quedan en blanco para
+    // rehacerse (porcionador, factura, domiciliario, réplicas, etc.).
     if (idxNuevo >= 0 && idxActual >= 0 && idxNuevo < idxActual) {
       const n = norm(nuevoEstado);
-      const reset: Record<string, string | null> = {};
-      if (n === "en proceso") {
+      const reset: Record<string, unknown> = {};
+      const limpiarProduccion = () => {
+        reset.porcionador = null;
         reset.inicio = null;
+      };
+      const limpiarAlistado = () => {
         reset.fin = null;
-        reset.despachoFin = null;
+      };
+      const limpiarFactura = () => {
+        reset.facturaNumero = "";
+        reset.facturaValor = null;
+        reset.facturadoPor = null;
         reset.pagoConfirmado = null;
+      };
+      const limpiarDespacho = () => {
+        reset.domiciliario = null;
+        reset.despachoFin = null;
+        reset.despachadoPor = null;
+        reset.replicas = [];
+      };
+      if (n === "en proceso") {
+        limpiarProduccion();
+        limpiarAlistado();
+        limpiarFactura();
+        limpiarDespacho();
       } else if (n === "en producción") {
-        reset.fin = null;
-        reset.despachoFin = null;
-        reset.pagoConfirmado = null;
-      } else if (n === "alistado" || n === "facturado") {
-        reset.despachoFin = null;
+        limpiarAlistado();
+        limpiarFactura();
+        limpiarDespacho();
+      } else if (n === "alistado") {
+        limpiarFactura();
+        limpiarDespacho();
+      } else if (n === "facturado") {
+        limpiarDespacho();
       }
       if (Object.keys(reset).length) {
         actualizarMeta(id, reset as Partial<DespachoMeta>);
@@ -600,6 +687,19 @@ export default function DespachoPage() {
     return pedidos.filter((p) => p.punto?.id != null && idsPuntos.has(String(p.punto.id)));
   }, [pedidos, filtroListo, idsPuntos]);
 
+  // Clones por comanda de origen: comanda del pedido -> comandas de sus clones.
+  // Sirve para mostrar la relación de clonación en ambos sentidos (como en Pedidos).
+  const clonesPorComanda = useMemo(() => {
+    const mapa = new Map<string, string[]>();
+    for (const p of pedidos) {
+      if (!p.clonadoDe) continue;
+      const arr = mapa.get(p.clonadoDe);
+      if (arr) arr.push(p.comanda);
+      else mapa.set(p.clonadoDe, [p.comanda]);
+    }
+    return mapa;
+  }, [pedidos]);
+
   // "De hoy": pedidos para hoy (programados con fecha de hoy o no programados
   // creados hoy). Los contadores y cronómetros del día se basan en estos.
   const pedidosDeHoy = useMemo(
@@ -641,20 +741,36 @@ export default function DespachoPage() {
   );
 
   const pedidosOrdenados = useMemo(
-    () =>
-      pedidosVisibles.slice().sort((a, b) => {
-        // Los posteriores YA IMPRESOS (programados a futuro) van al final; los
+    () => {
+      const hoy = hoyISO();
+      // ¿Arrastrado? Pedido activo cuyo día de entrega ya pasó (quedó pendiente
+      // de un día anterior). Estos deben salir PRIMERO para no perderse de vista.
+      const esArrastrado = (p: Pedido) =>
+        diaEntregaISO(p) < hoy &&
+        !p.anulado &&
+        norm(p.estado) !== "despachado" &&
+        norm(p.estado) !== "anulado";
+      return pedidosVisibles.slice().sort((a, b) => {
+        // 1) Arrastrados de días anteriores van ARRIBA del todo.
+        const ra = esArrastrado(a) ? 0 : 1;
+        const rb = esArrastrado(b) ? 0 : 1;
+        if (ra !== rb) return ra - rb;
+        // 2) Los posteriores YA IMPRESOS (programados a futuro) van al final; los
         // posteriores sin imprimir se ordenan como los de hoy (posición normal).
         const fa = esPosteriorFuturo(a) && impresos.has(a.id) ? 1 : 0;
         const fb = esPosteriorFuturo(b) && impresos.has(b.id) ? 1 : 0;
         if (fa !== fb) return fa - fb;
-        // Orden por número del día (turno) DESCENDENTE: el último que entra
-        // aparece ARRIBA y los anteriores van bajando (10, 9, 8, … 1).
+        // 3) Entre arrastrados, el más antiguo primero (más urgente); en el resto,
+        // orden por número del día (turno) DESCENDENTE (el último que entra arriba).
+        if (ra === 0 && rb === 0) {
+          return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+        }
         const na = numeroDelDiaPorId.get(a.id) ?? 0;
         const nb = numeroDelDiaPorId.get(b.id) ?? 0;
         if (na !== nb) return nb - na;
         return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
-      }),
+      });
+    },
     [pedidosVisibles, numeroDelDiaPorId, impresos],
   );
 
@@ -673,9 +789,9 @@ export default function DespachoPage() {
         nit.includes(q)
       );
     };
-    // Con BÚSQUEDA activa: busca en TODOS los pedidos del punto (cualquier
-    // estado o día), sin importar la card seleccionada, para no revisar 1 a 1.
-    if (q) return pedidosOrdenados.filter(coincide);
+    // Con BÚSQUEDA activa: busca SOLO en los pedidos de HOY (cualquier estado),
+    // sin importar la card seleccionada. Nunca trae pedidos de días anteriores.
+    if (q) return pedidosOrdenados.filter((p) => coincide(p) && esDeHoy(p));
 
     const esAnulado = (p: Pedido) => p.anulado || norm(p.estado) === "anulado";
     // Si hay una card de estado seleccionada, filtra por ese estado; si no,
@@ -697,6 +813,13 @@ export default function DespachoPage() {
       return false;
     });
   }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos]);
+
+  // Pedidos visibles cuya comanda AÚN no se ha impreso (excluye anulados).
+  const noImpresos = useMemo(
+    () =>
+      pedidosFiltrados.filter((p) => !p.anulado && !impresos.has(p.id)).length,
+    [pedidosFiltrados, impresos],
+  );
 
   // Pedidos pendientes (ni despachados ni anulados) clasificados por su cronómetro.
   const { porVencer, vencidos } = useMemo(() => {
@@ -836,6 +959,17 @@ export default function DespachoPage() {
             <span className="rounded-full bg-brand-cream-soft px-2.5 py-0.5 text-xs font-semibold text-brand-brown/60">
               {pedidosFiltrados.length}
             </span>
+            {noImpresos > 0 && (
+              <span
+                title="Pedidos cuya comanda aún no se ha impreso"
+                className="flex items-center gap-1 rounded-full bg-brand-amber/15 px-2.5 py-0.5 text-xs font-semibold text-brand-amber"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
+                </svg>
+                {noImpresos} sin imprimir
+              </span>
+            )}
           </div>
           <div className="relative w-full sm:w-80">
             <svg
@@ -902,7 +1036,7 @@ export default function DespachoPage() {
             <tbody className="divide-y-4 divide-double divide-brand-brown/20">
               {pedidosFiltrados.map((p) => {
                 const anulado = p.anulado;
-                const estado = anulado ? "Anulado" : p.estado || "En proceso";
+                const estado = anulado ? (p.estado === "Cancelado" ? "Cancelado" : "Anulado") : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
                 const porcSel = porcBorrador[p.id] ?? m.porcionador ?? "";
                 // Porcionadores y domiciliarios del punto de venta de este pedido.
@@ -912,6 +1046,8 @@ export default function DespachoPage() {
                 };
                 const porcionadores = personal.porcionadores;
                 const domiciliarios = personal.domiciliarios;
+                // Facturadores (rol facturador) asignados al punto de este pedido.
+                const facturadores = facturadoresPunto[String(p.punto?.id ?? "")] ?? [];
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
@@ -920,6 +1056,16 @@ export default function DespachoPage() {
                 // Transferencia: el cobro se confirma aparte para congelar el cronómetro.
                 const transferencia = norm(p.pago) === "transferencia";
                 const pagoConfirmado = Boolean(m.pagoConfirmado);
+                // El cliente recoge en el punto de venta (no lleva domiciliario).
+                const esRecoge = p.entrega === "recoge";
+                // Arrastrado: pedido activo que quedó pendiente de un día anterior.
+                const esArrastrado =
+                  diaEntregaISO(p) < hoyISO() &&
+                  !anulado &&
+                  norm(estado) !== "despachado" &&
+                  norm(estado) !== "anulado";
+                // Posterior aún sin procesar: se muestra como "Posterior" (no "Pendiente").
+                const esPosteriorPend = esPosteriorFuturo(p) && norm(estado) === "en proceso";
                 // Sin imprimir la comanda NO se habilita ningún cambio de estado
                 // (alistar, producción, facturar, despachar). Al gatear la entrada
                 // a producción y la confirmación de pago, el resto queda bloqueado
@@ -1039,6 +1185,11 @@ export default function DespachoPage() {
                               Clonado de #{p.clonadoDe}
                             </p>
                           )}
+                          {clonesPorComanda.get(p.comanda) && (
+                            <p className="mt-0.5 text-[11px] font-medium text-brand-wine">
+                              Ya clonado en #{clonesPorComanda.get(p.comanda)!.join(", #")}
+                            </p>
+                          )}
                           {p.vendedorNombre && (
                             <div className="mt-1.5">
                               <p className="text-xs font-semibold text-brand-black">Televentas</p>
@@ -1118,19 +1269,31 @@ export default function DespachoPage() {
 
                     {/* Estado */}
                     <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className={esAdmin && !anulado ? "pb-14" : ""}>
+                      <div className={puedeAlgunEstado && !anulado ? "pb-14" : ""}>
                       <div
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
                           anulado
                             ? "border-red-200 bg-red-50 text-red-600"
-                            : "border-brand-amber/30 bg-brand-amber/10 text-brand-amber"
+                            : esPosteriorPend
+                              ? "border-blue-200 bg-blue-50 text-blue-600"
+                              : "border-brand-amber/30 bg-brand-amber/10 text-brand-amber"
                         }`}
                       >
-                        <span className="uppercase tracking-wide">{norm(estado) === "en proceso" ? "Pendiente" : estado}</span>
+                        <span className="uppercase tracking-wide">{esPosteriorPend ? "Posterior" : norm(estado) === "en proceso" ? "Pendiente" : estado}</span>
                       </div>
+                      {anulado && p.motivo && (
+                        <div className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-center text-[11px] font-medium text-red-600">
+                          Motivo: {p.motivo}
+                        </div>
+                      )}
                       <div className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-1.5 text-center text-xs font-semibold text-brand-brown/70">
                         ENTREGA: {fmtFecha(fechaEntregaISO(p))}
                       </div>
+                      {esArrastrado && (
+                        <div className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-red-600">
+                          Pendiente de días anteriores
+                        </div>
+                      )}
                       {!anulado && norm(estado) === "despachado" ? (
                         <div className="mt-1.5 space-y-0.5 rounded-lg border border-brand-wine/20 bg-brand-wine/5 px-3 py-1.5 text-[11px] font-semibold text-brand-brown/70">
                           <p className="whitespace-nowrap">
@@ -1158,10 +1321,10 @@ export default function DespachoPage() {
                         )
                       )}
                       </div>
-                      {esAdmin && !anulado && (
+                      {puedeAlgunEstado && !anulado && (
                         <div className="absolute inset-x-3 bottom-3">
                           <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
-                            Cambiar estado (admin)
+                            Cambiar estado
                           </label>
                           <select
                             value={ESTADOS_FLUJO.find((s) => norm(s) === norm(estado)) ?? "En proceso"}
@@ -1169,7 +1332,7 @@ export default function DespachoPage() {
                             className="w-full rounded-lg border border-brand-wine/25 bg-brand-wine/5 px-2 py-1.5 text-xs font-semibold text-brand-wine outline-none focus:ring-1 focus:ring-brand-wine"
                           >
                             {ESTADOS_FLUJO.map((s) => (
-                              <option key={s} value={s}>
+                              <option key={s} value={s} disabled={!puedeEstado(s)}>
                                 {s}
                               </option>
                             ))}
@@ -1204,7 +1367,7 @@ export default function DespachoPage() {
                           onChange={(ev) =>
                             setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
                           }
-                          disabled={anulado || Boolean(m.fin) || !impreso}
+                          disabled={anulado || Boolean(m.fin) || !impreso || (!puedeEstado("En producción") && !puedeEstado("Alistado"))}
                           className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         >
                           <option value="">Selecciona</option>
@@ -1238,7 +1401,7 @@ export default function DespachoPage() {
                                 cambiarEstado(p.id, "Alistado");
                               }
                             }}
-                            disabled={anulado || !impreso || (!m.inicio && !porcSel.trim())}
+                            disabled={anulado || !impreso || (!m.inicio && !porcSel.trim()) || (!puedeEstado("En producción") && !puedeEstado("Alistado"))}
                             title={
                               !impreso
                                 ? "Imprime la comanda primero para habilitar el despacho"
@@ -1249,7 +1412,7 @@ export default function DespachoPage() {
                                     : "Iniciar el alistamiento del pedido"
                             }
                             className={`w-full whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
-                              permite.estado ? "" : "opacity-50"
+                              puedeEstado(m.inicio ? "Alistado" : "En producción") ? "" : "opacity-50"
                             } ${
                               m.inicio
                                 ? "bg-green-600 hover:bg-green-700"
@@ -1269,7 +1432,7 @@ export default function DespachoPage() {
                           type="text"
                           value={m.facturaNumero ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { facturaNumero: ev.target.value })}
-                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado)}
+                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="N° factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
@@ -1282,13 +1445,36 @@ export default function DespachoPage() {
                               facturaValor: ev.target.value === "" ? undefined : Number(ev.target.value),
                             })
                           }
-                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado)}
+                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="Valor factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
+                        {/* Facturado por: usuario con rol facturador que hizo la factura. */}
+                        <select
+                          value={m.facturadoPor ?? ""}
+                          onChange={(ev) => actualizarMeta(p.id, { facturadoPor: ev.target.value })}
+                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
+                          title="Facturado por (quién realizó la factura)"
+                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
+                        >
+                          <option value="">Facturado por…</option>
+                          {(m.facturadoPor && !facturadores.includes(m.facturadoPor)
+                            ? [m.facturadoPor, ...facturadores]
+                            : facturadores
+                          ).map((nombre) => (
+                            <option key={nombre} value={nombre}>
+                              {nombre}
+                            </option>
+                          ))}
+                        </select>
                         {typeof m.facturaValor === "number" && m.facturaValor > 0 && (
                           <p className="text-[11px] font-semibold text-brand-wine">
                             Valor factura: {fmtMoneda(m.facturaValor)}
+                          </p>
+                        )}
+                        {m.facturadoPor && (
+                          <p className="text-[11px] font-medium text-brand-brown/60">
+                            Facturó: {m.facturadoPor}
                           </p>
                         )}
                       </div>
@@ -1298,9 +1484,9 @@ export default function DespachoPage() {
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
                             }
-                            disabled={anulado || !impreso}
+                            disabled={anulado || !impreso || !puedeEstado("Facturado")}
                             title={!impreso ? "Imprime la comanda primero" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
-                            className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                            className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
                             Confirmar transferencia
                           </button>
@@ -1312,10 +1498,11 @@ export default function DespachoPage() {
                               facturado ||
                               !alistado ||
                               !m.facturaNumero?.trim() ||
-                              !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                              !(typeof m.facturaValor === "number" && m.facturaValor > 0) ||
+                              !puedeEstado("Facturado")
                             }
                             title={!alistado && !facturado ? "Debes terminar el alistamiento antes de facturar" : "Marcar el pedido como facturado"}
-                            className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                            className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
                             Facturado
                           </button>
@@ -1325,11 +1512,24 @@ export default function DespachoPage() {
 
                     {/* Domiciliario: al asignar pasa a Despachado */}
                     <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
+                      {esRecoge ? (
+                        <div className="flex w-full flex-col gap-1.5 pb-12">
+                          <div className="flex items-center gap-2 rounded-lg border border-brand-wine/25 bg-brand-wine/5 px-3 py-2.5 text-sm font-semibold text-brand-wine">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                            </svg>
+                            Recogen en PDV
+                          </div>
+                          <p className="text-[11px] text-brand-brown/50">
+                            El cliente recoge el pedido en el punto de venta; no requiere domiciliario.
+                          </p>
+                        </div>
+                      ) : (
                       <div className="flex w-full flex-col gap-1.5 pb-12">
                         <select
                           value={m.domiciliario ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { domiciliario: ev.target.value })}
-                          disabled={anulado || despachado || !facturado}
+                          disabled={anulado || despachado || !facturado || !puedeEstado("Despachado")}
                           title={!facturado && !despachado ? "Debes facturar el pedido antes de asignar domiciliario" : undefined}
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         >
@@ -1390,14 +1590,15 @@ export default function DespachoPage() {
                           </div>
                         </div>
                       </div>
+                      )}
                       <div className="absolute inset-x-3 bottom-3">
                         <button
                           onClick={() => cambiarEstado(p.id, "Despachado")}
-                          disabled={anulado || despachado || !facturado || !m.domiciliario?.trim()}
-                          title={!facturado && !despachado ? "Debes facturar el pedido antes de despachar" : "Marcar el pedido como despachado"}
-                          className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${permite.estado ? "" : "opacity-50"}`}
+                          disabled={anulado || despachado || !facturado || (!esRecoge && !m.domiciliario?.trim()) || !puedeEstado("Despachado")}
+                          title={!facturado && !despachado ? "Debes facturar el pedido antes de despachar" : esRecoge ? "Marcar como entregado en el punto de venta" : "Marcar el pedido como despachado"}
+                          className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${puedeEstado("Despachado") ? "" : "opacity-50"}`}
                         >
-                          Despachado
+                          {esRecoge ? "Entregado en PDV" : "Despachado"}
                         </button>
                       </div>
                     </td>
@@ -1768,13 +1969,14 @@ function ModalReplica({
   );
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
-  // Puntos integrados con Drivin (suben directo): La 93, Alameda, Olaya y San
-  // Felipe. Cada uno usa su schema en el backend (93->01, La 43->02, Alameda I->04,
-  // Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
+  // Puntos integrados con Drivin (suben directo): La 93, La 70, La 43, Alameda,
+  // Olaya y San Felipe. Cada uno usa su schema en el backend (93->01, 70->03,
+  // 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
   const esDrivin = (() => {
     const nombre = String(pedido.punto?.nombre ?? "").toLowerCase();
     return (
       /\b93\b/.test(nombre) ||
+      /\b70\b/.test(nombre) ||
       /\b43\b/.test(nombre) ||
       nombre.includes("alameda") ||
       nombre.includes("olaya") ||
