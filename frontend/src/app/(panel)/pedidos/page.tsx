@@ -551,16 +551,18 @@ export default function PedidosPage() {
                       )}
                   </td>
                   <td className="px-4 py-3">
-                    <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
-                      {p.anulado
-                        ? (p.estado || "Anulado")
-                        : (p.entregaProgramada && p.fechaProgramada && (!p.estado || p.estado === "En proceso")
-                            ? "Pendiente"
-                            : (p.estado || "En proceso"))}
-                    </span>
-                    {!p.anulado && p.entregaProgramada && p.fechaProgramada && (
-                      <p className="mt-0.5 text-[11px] font-semibold text-blue-600">Posterior</p>
-                    )}
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
+                        {p.anulado
+                          ? (p.estado || "Anulado")
+                          : (p.entregaProgramada && p.fechaProgramada && (!p.estado || p.estado === "En proceso")
+                              ? "Pendiente"
+                              : (p.estado || "En proceso"))}
+                      </span>
+                      {!p.anulado && p.entregaProgramada && p.fechaProgramada && (
+                        <span className="text-[11px] font-semibold text-blue-600">Posterior</span>
+                      )}
+                    </div>
                     {p.motivo && (
                       <p className="mt-0.5 text-[11px] text-brand-brown/50">{p.motivo}</p>
                     )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
-import { misPuntosVenta, facturadoresPorPunto, type PuntoVenta } from "@/lib/puntos-venta";
+import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
@@ -16,6 +16,7 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
+import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import {
   ALERTA_DESPACHO_MS,
   LIMITE_DESPACHO_MS,
@@ -296,11 +297,6 @@ export default function DespachoPage() {
   const [personalPorPunto, setPersonalPorPunto] = useState<
     Record<string, PersonalDespacho>
   >({});
-  // Facturadores (usuarios con rol facturador) por id de punto de venta, para el
-  // selector "Facturado por" de la celda de factura.
-  const [facturadoresPunto, setFacturadoresPunto] = useState<
-    Record<string, string[]>
-  >({});
   // Texto del buscador (consecutivo, nombre o NIT del cliente).
   const [busqueda, setBusqueda] = useState("");
   // Id del pedido cuya ficha completa del cliente está desplegada (al hacer
@@ -320,6 +316,12 @@ export default function DespachoPage() {
     modo: "crear" | "ver";
   } | null>(null);
   const firmaAlertaRef = useRef("");
+  // Modal para REINICIAR los tiempos de alistamiento de un pedido: se abre al
+  // hacer clic en los tiempos y exige la clave dinámica para reiniciarlos.
+  const [resetTiemposId, setResetTiemposId] = useState<string | null>(null);
+  const [codigoReset, setCodigoReset] = useState("");
+  const [verificandoReset, setVerificandoReset] = useState(false);
+  const [errorReset, setErrorReset] = useState<string | null>(null);
   // Contenedor scrolleable de la tabla (scroll normal con la rueda/barra).
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -449,15 +451,6 @@ export default function DespachoPage() {
       });
   }, []);
 
-  // Carga los facturadores (rol facturador) por punto para el selector de factura.
-  useEffect(() => {
-    facturadoresPorPunto()
-      .then((mapa) => setFacturadoresPunto(mapa ?? {}))
-      .catch(() => {
-        /* ignore */
-      });
-  }, []);
-
   // Avanza el reloj cada segundo para refrescar los cronómetros.
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 1000);
@@ -573,6 +566,13 @@ export default function DespachoPage() {
         return { ...prev, [id]: { ...prev[id], despachoFin, despachadoPor } };
       });
     }
+    // Al pasar a "Facturado" se registra automáticamente el nombre del usuario
+    // que realizó la factura (quien pulsó Facturar).
+    if (norm(estado) === "facturado") {
+      const facturadoPor = usuarioDesp?.nombre ?? "";
+      actualizarMetaApi(id, { facturadoPor }).catch(() => { /* ignore */ });
+      setMeta((prev) => ({ ...prev, [id]: { ...prev[id], facturadoPor } }));
+    }
     setPedidos((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, estado } : p));
       const actualizado = next.find((p) => p.id === id);
@@ -631,7 +631,9 @@ export default function DespachoPage() {
         limpiarFactura();
         limpiarDespacho();
       } else if (n === "en producción") {
-        limpiarAlistado();
+        // Al regresar a producción se conservan los TIEMPOS de alistamiento
+        // (inicio y fin) y el alistador queda editable; solo se rehace lo que
+        // viene después (factura y despacho).
         limpiarFactura();
         limpiarDespacho();
       } else if (n === "alistado") {
@@ -647,7 +649,44 @@ export default function DespachoPage() {
     cambiarEstado(id, nuevoEstado);
   };
 
-  /* --- Réplicas del pedido (el mismo pedido enviado por partes) --- */
+  // Verifica la clave dinámica y, si es válida, REINICIA los tiempos de
+  // alistamiento del pedido (inicio y fin). El estado vuelve a "En proceso"
+  // para que el porcionador pueda arrancar de nuevo el alistamiento.
+  const confirmarResetTiempos = async () => {
+    if (verificandoReset || !resetTiemposId) return;
+    const codigo = codigoReset.replace(/\D/g, "");
+    if (codigo.length !== 6) {
+      setErrorReset("Ingresa la clave dinámica de 6 dígitos.");
+      return;
+    }
+    setVerificandoReset(true);
+    setErrorReset(null);
+    try {
+      const { valido } = await verificarClaveDinamica(codigo);
+      if (!valido) {
+        setErrorReset("Clave incorrecta o vencida.");
+        return;
+      }
+      const id = resetTiemposId;
+      actualizarMeta(id, { inicio: null, fin: null } as Partial<DespachoMeta>);
+      setPedidos((prev) => {
+        const next = prev.map((p) =>
+          p.id === id ? { ...p, estado: "En proceso" as Pedido["estado"] } : p,
+        );
+        const actualizado = next.find((p) => p.id === id);
+        if (actualizado) guardarPedidoApi(actualizado).catch(() => { /* ignore */ });
+        return next;
+      });
+      setResetTiemposId(null);
+      setCodigoReset("");
+    } catch {
+      setErrorReset("No se pudo verificar la clave. Inténtalo de nuevo.");
+    } finally {
+      setVerificandoReset(false);
+    }
+  };
+
+
   // Agrega la siguiente réplica en secuencia (máx. 5) con su domiciliario.
   const crearReplica = (id: string, domiciliario: string) => {
     const actuales = meta[id]?.replicas ?? [];
@@ -800,6 +839,9 @@ export default function DespachoPage() {
     return pedidosOrdenados.filter((p) => {
       if (vista === "atrasados") return atrasadosIds.has(p.id);
       if (vista === "posteriores") return esPosteriorFuturo(p) && impresos.has(p.id);
+      // La card "Total" trae TODOS los pedidos de HOY, en cualquier estado
+      // (incluidos despachados, anulados y atrasados).
+      if (vista === "total") return esDeHoy(p);
       // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
       // solo aparece bajo "Atrasados", así el conteo coincide con la tabla.
       if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
@@ -906,14 +948,9 @@ export default function DespachoPage() {
                     // (aunque su estado real sea alistado/producción/etc.), para no
                     // duplicarlo ni inflar el Total.
                     pedidosDeHoy.filter((p) => def.match(p) && !atrasadosIds.has(p.id)).length;
-            // El Total es la suma de todas las demás cards.
+            // El Total son TODOS los pedidos de hoy (cualquier estado).
             const valor =
-              e.key === "total"
-                ? ESTADOS.reduce(
-                    (s, d) => (d.key === "total" ? s : s + valorDeCard(d)),
-                    0,
-                  )
-                : valorDeCard(e);
+              e.key === "total" ? pedidosDeHoy.length : valorDeCard(e);
             // Todas las cards son interactivas: filtran la tabla por su estado.
             const activo = vista === e.key;
             return (
@@ -1046,8 +1083,6 @@ export default function DespachoPage() {
                 };
                 const porcionadores = personal.porcionadores;
                 const domiciliarios = personal.domiciliarios;
-                // Facturadores (rol facturador) asignados al punto de este pedido.
-                const facturadores = facturadoresPunto[String(p.punto?.id ?? "")] ?? [];
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
@@ -1345,7 +1380,16 @@ export default function DespachoPage() {
                     <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
                       <div className="flex flex-col gap-1.5 pb-12">
                         {m.inicio && (
-                          <div className="space-y-0.5 text-[11px] font-semibold text-brand-brown/60">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetTiemposId(p.id);
+                              setCodigoReset("");
+                              setErrorReset(null);
+                            }}
+                            title="Clic para reiniciar los tiempos de alistamiento (requiere clave dinámica)"
+                            className="space-y-0.5 rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold text-brand-brown/60 transition hover:bg-brand-amber/10"
+                          >
                             <p>
                               Inicio: <span className="text-brand-wine">{fmtHora(m.inicio)}</span>
                             </p>
@@ -1360,7 +1404,7 @@ export default function DespachoPage() {
                                 </p>
                               </>
                             )}
-                          </div>
+                          </button>
                         )}
                         <select
                           value={porcSel}
@@ -1449,24 +1493,6 @@ export default function DespachoPage() {
                           placeholder="Valor factura"
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
-                        {/* Facturado por: usuario con rol facturador que hizo la factura. */}
-                        <select
-                          value={m.facturadoPor ?? ""}
-                          onChange={(ev) => actualizarMeta(p.id, { facturadoPor: ev.target.value })}
-                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
-                          title="Facturado por (quién realizó la factura)"
-                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                        >
-                          <option value="">Facturado por…</option>
-                          {(m.facturadoPor && !facturadores.includes(m.facturadoPor)
-                            ? [m.facturadoPor, ...facturadores]
-                            : facturadores
-                          ).map((nombre) => (
-                            <option key={nombre} value={nombre}>
-                              {nombre}
-                            </option>
-                          ))}
-                        </select>
                         {typeof m.facturaValor === "number" && m.facturaValor > 0 && (
                           <p className="text-[11px] font-semibold text-brand-wine">
                             Valor factura: {fmtMoneda(m.facturaValor)}
@@ -1926,6 +1952,62 @@ export default function DespachoPage() {
         />
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
+      {resetTiemposId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-wine/10">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 text-brand-wine">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+            </div>
+            <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
+              Reiniciar tiempos
+            </h3>
+            <p className="mt-1 text-center text-sm text-brand-brown/70">
+              Para reiniciar los tiempos de alistamiento de este pedido, ingresa
+              la <b>clave dinámica</b>. El alistador podrá iniciar de nuevo.
+            </p>
+            <input
+              inputMode="numeric"
+              autoFocus
+              value={codigoReset}
+              onChange={(e) => {
+                setCodigoReset(e.target.value.replace(/\D/g, "").slice(0, 6));
+                setErrorReset(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmarResetTiempos();
+              }}
+              placeholder="••••••"
+              className="mt-4 w-full rounded-xl border border-brand-brown/20 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine"
+            />
+            {errorReset && (
+              <p className="mt-2 text-center text-sm font-medium text-red-600">{errorReset}</p>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetTiemposId(null);
+                  setCodigoReset("");
+                  setErrorReset(null);
+                }}
+                className="flex-1 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarResetTiempos}
+                disabled={verificandoReset || codigoReset.length !== 6}
+                className="flex-1 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+              >
+                {verificandoReset ? "Verificando…" : "Reiniciar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

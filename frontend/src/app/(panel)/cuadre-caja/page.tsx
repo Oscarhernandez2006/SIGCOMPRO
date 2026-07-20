@@ -104,6 +104,7 @@ export default function CuadreCajaPage() {
   const [fecha, setFecha] = useState<string>(hoyISO());
   const [filtroPago, setFiltroPago] = useState<string>("todos");
   const [filtroDomiciliario, setFiltroDomiciliario] = useState<string>("todos");
+  const [filtroFacturador, setFiltroFacturador] = useState<string>("todos");
   // Id del pedido cuya ventanita de detalle (creó/alistó/domiciliario) está abierta.
   const [detalleId, setDetalleId] = useState<string | null>(null);
   // Orden de "completados" (autoguardados con valor): van al final para facilitar
@@ -219,11 +220,19 @@ export default function CuadreCajaPage() {
           (meta[p.id]?.domiciliario ?? "") !== filtroDomiciliario
         )
           return false;
-        // Con algún filtro activo (método de pago o domiciliario) se ocultan los
-        // pedidos ya liquidados (según lo GUARDADO) para dejar solo los
-        // pendientes. Con "todos" en ambos se muestran todos, liquidados o no.
+        // Filtro por facturador (persona que facturó el pedido).
+        if (
+          filtroFacturador !== "todos" &&
+          (meta[p.id]?.facturadoPor ?? "") !== filtroFacturador
+        )
+          return false;
+        // Con algún filtro activo (método de pago, domiciliario o facturador) se
+        // ocultan los pedidos ya liquidados (según lo GUARDADO) para dejar solo
+        // los pendientes. Con "todos" en todos se muestran todos, liquidados o no.
         const filtrando =
-          filtroPago !== "todos" || filtroDomiciliario !== "todos";
+          filtroPago !== "todos" ||
+          filtroDomiciliario !== "todos" ||
+          filtroFacturador !== "todos";
         if (filtrando) {
           const m = meta[p.id];
           const ef = Number(m?.cuadreEfectivo ?? 0);
@@ -239,8 +248,25 @@ export default function CuadreCajaPage() {
         return true;
       })
       .sort((a, b) => {
-        // Los ya liquidados (autoguardados) bajan al final, en orden de
-        // finalización, para que el siguiente por llenar quede arriba.
+        // Los ya liquidados (chuliados) bajan al final y los pendientes suben,
+        // para gestionar arriba lo que falta. Aplica también con el filtro
+        // "Todos" (donde los chuliados sí se muestran, pero al fondo).
+        const yaLiquidado = (p: Pedido) => {
+          const m = meta[p.id];
+          const ef = Number(m?.cuadreEfectivo ?? 0);
+          const om = Number(m?.cuadreOmp ?? 0);
+          const fact = Number(m?.facturaValor ?? p.total ?? 0) || 0;
+          return esMixto(p.pago)
+            ? ef + om > 0 && ef + om - fact === 0
+            : esEfectivo(p.pago)
+              ? ef > 0
+              : om > 0;
+        };
+        const la = yaLiquidado(a);
+        const lb = yaLiquidado(b);
+        if (la !== lb) return la ? 1 : -1;
+        // Dentro del mismo grupo, los completados en esta sesión conservan su
+        // orden de finalización; el resto se ordena por consecutivo.
         const ca = completados[a.id];
         const cb = completados[b.id];
         if (ca != null && cb == null) return 1;
@@ -248,7 +274,7 @@ export default function CuadreCajaPage() {
         if (ca != null && cb != null) return ca - cb;
         return (a.consecutivo ?? 0) - (b.consecutivo ?? 0);
       });
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, completados]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, filtroFacturador, completados]);
 
   // Domiciliarios presentes en los despachados del punto/día (para el filtro).
   const domiciliarios = useMemo(() => {
@@ -261,6 +287,21 @@ export default function CuadreCajaPage() {
       if (fecha && dia !== fecha) continue;
       const d = (meta[p.id]?.domiciliario ?? "").trim();
       if (d) set.add(d);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha]);
+
+  // Facturadores presentes en los despachados del punto/día (para el filtro).
+  const facturadores = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of pedidos) {
+      if (p.estado !== "Despachado") continue;
+      if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
+      if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
+      const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
+      if (fecha && dia !== fecha) continue;
+      const f = (meta[p.id]?.facturadoPor ?? "").trim();
+      if (f) set.add(f);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha]);
@@ -732,6 +773,22 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+            Facturador
+            <select
+              value={filtroFacturador}
+              onChange={(e) => setFiltroFacturador(e.target.value)}
+              title="Filtrar por facturador (para cuadrar por facturador)"
+              className="mt-1 min-w-[11rem] rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-wine"
+            >
+              <option value="todos">Todos</option>
+              {facturadores.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -839,6 +896,9 @@ export default function CuadreCajaPage() {
                               </p>
                               <p className="text-brand-brown/80">
                                 <span className="font-semibold text-brand-black">Domiciliario:</span> {meta[p.id]?.domiciliario || "—"}
+                              </p>
+                              <p className="text-brand-brown/80">
+                                <span className="font-semibold text-brand-black">Facturó:</span> {meta[p.id]?.facturadoPor || "—"}
                               </p>
                             </div>
                           </div>
