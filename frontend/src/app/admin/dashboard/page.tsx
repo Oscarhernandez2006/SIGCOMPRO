@@ -536,8 +536,8 @@ export default function DashboardPage() {
                   col1="Producto"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
                   cabeceras={["Kilos", "Total"]}
@@ -559,9 +559,9 @@ export default function DashboardPage() {
                   col1="Televendedora"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="py-2 pr-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-emerald-700">{cop(f.facturado ?? 0)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-emerald-700">{cop(f.facturado ?? 0)}</td>
                     </>
                   )}
                   cabeceras={["Pedidos", "Vendido", "Facturado"]}
@@ -576,9 +576,9 @@ export default function DashboardPage() {
                   col1="Cliente"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
                   cabeceras={["Pedidos", "Kilos", "Total"]}
@@ -593,10 +593,10 @@ export default function DashboardPage() {
                   col1="Porcionador"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
                   cabeceras={["Pedidos", "Kilos", "T. prom", "Valor"]}
@@ -611,9 +611,9 @@ export default function DashboardPage() {
                   col1="Domiciliario"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
-                      <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
                   cabeceras={["Pedidos", "Kilos", "Valor"]}
@@ -1301,7 +1301,7 @@ function TablaTop({
         <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-brown/50">
           <th className="pb-2 font-semibold">{col1}</th>
           {cabeceras.map((c) => (
-            <th key={c} className="pb-2 text-right font-semibold">
+            <th key={c} className="whitespace-nowrap pb-2 pl-3 text-right font-semibold">
               {c}
             </th>
           ))}
@@ -1310,7 +1310,7 @@ function TablaTop({
       <tbody>
         {filas.map((f, i) => (
           <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 last:border-0">
-            <td className="py-2 pr-3">
+            <td className="w-full max-w-0 py-2 pr-3">
               <div className="flex items-center gap-2">
                 <span className="w-4 shrink-0 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>
                 <span className="truncate font-medium text-brand-black">{f.nombre}</span>
