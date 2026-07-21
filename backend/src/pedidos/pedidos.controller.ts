@@ -96,6 +96,42 @@ export class PedidosController {
     return this.pedidos.marcarImpreso(id, body?.impreso ?? true);
   }
 
+  /** Devuelve el comprobante de pago (imagen) de un pedido, si existe. */
+  @Get(':id/comprobante')
+  obtenerComprobante(@Param('id') id: string) {
+    return this.pedidos.obtenerComprobante(id);
+  }
+
+  /** Sube (o reemplaza) el comprobante de pago de un pedido. Queda sin confirmar. */
+  @Post(':id/comprobante')
+  subirComprobante(
+    @Param('id') id: string,
+    @Body() body: { imagen: string; mime?: string; subidoPor?: string },
+  ) {
+    return this.pedidos.guardarComprobante(
+      id,
+      body?.imagen,
+      body?.mime ?? null,
+      body?.subidoPor ?? null,
+    );
+  }
+
+  /** Confirma el comprobante de pago de un pedido (solo lectura después). */
+  @Patch(':id/comprobante/confirmar')
+  confirmarComprobante(
+    @Param('id') id: string,
+    @Body() body: { confirmadoPor?: string },
+  ) {
+    return this.pedidos.confirmarComprobante(id, body?.confirmadoPor ?? null);
+  }
+
+  /** Elimina el comprobante de pago de un pedido. */
+  @Delete(':id/comprobante')
+  @HttpCode(HttpStatus.OK)
+  eliminarComprobante(@Param('id') id: string) {
+    return this.pedidos.eliminarComprobante(id);
+  }
+
   /** Borra todos los pedidos. Solo administrador/desarrollador. */
   @Delete()
   @HttpCode(HttpStatus.OK)

@@ -1,10 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Se desactiva el body parser por defecto (límite de 100 kb) para configurar
+  // un límite mayor: los comprobantes de pago se suben como imagen en base64.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: '12mb' }));
+  app.use(urlencoded({ extended: true, limit: '12mb' }));
   const config = app.get(ConfigService);
 
   // Prefijo global para todas las rutas: /api/...

@@ -16,6 +16,26 @@ import type { Pedido } from "@/app/(panel)/pedidos/page";
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
 const num = (n: number) => (Number(n) || 0).toLocaleString("es-CO");
 
+/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
+function pesoPedidoKg(p: Pedido): number {
+  return (p.carrito ?? []).reduce((s, i) => {
+    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
+    return s + (esKilo ? Number(i.cantidad) || 0 : 0);
+  }, 0);
+}
+
+/** Formatea una duración promedio en milisegundos: "45s", "7m 12s", "1h 3m". */
+function fmtPromDuracion(ms: number): string {
+  if (!ms || ms <= 0) return "\u2014";
+  const totalSeg = Math.round(ms / 1000);
+  const min = Math.floor(totalSeg / 60);
+  const seg = totalSeg % 60;
+  if (min < 1) return `${seg}s`;
+  if (min < 60) return `${min}m ${seg}s`;
+  const h = Math.floor(min / 60);
+  return `${h}h ${min % 60}m`;
+}
+
 const DAY = 86400000;
 const PALETA = ["#7b1e3b", "#d98c2b", "#2e7d63", "#2b6cb0", "#8e44ad", "#c0392b", "#16a085", "#e67e22"];
 
@@ -516,11 +536,11 @@ export default function DashboardPage() {
                   col1="Producto"
                   render={(f) => (
                     <>
-                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.unidades))}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
-                  cabeceras={["Unidades", "Total"]}
+                  cabeceras={["Kilos", "Total"]}
                   max={m.topProductos[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
@@ -557,42 +577,46 @@ export default function DashboardPage() {
                   render={(f) => (
                     <>
                       <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
-                  cabeceras={["Pedidos", "Total"]}
+                  cabeceras={["Pedidos", "Kilos", "Total"]}
                   max={m.topClientes[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
               </Panel>
               <Panel>
-                <CardHead titulo="Ranking de porcionadores" desc="Pedidos porcionados en el periodo" />
+                <CardHead titulo="Ranking de porcionadores" desc="Pedidos, kilos y tiempo promedio de preparación" />
                 <TablaTop
                   filas={m.topPorcionadores}
                   col1="Porcionador"
                   render={(f) => (
                     <>
                       <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
                       <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
-                  cabeceras={["Pedidos", "Valor"]}
+                  cabeceras={["Pedidos", "Kilos", "T. prom", "Valor"]}
                   max={m.topPorcionadores[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
               </Panel>
               <Panel>
-                <CardHead titulo="Ranking de domiciliarios" desc="Pedidos entregados en el periodo" />
+                <CardHead titulo="Ranking de domiciliarios" desc="Pedidos, kilos y valor entregado en el periodo" />
                 <TablaTop
                   filas={m.topDomiciliarios}
                   col1="Domiciliario"
                   render={(f) => (
                     <>
                       <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="py-2 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
-                  cabeceras={["Pedidos", "Valor"]}
+                  cabeceras={["Pedidos", "Kilos", "Valor"]}
                   max={m.topDomiciliarios[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
@@ -615,6 +639,12 @@ interface FilaTop {
   total: number;
   /** Valor facturado (suma de facturaValor de despacho). Solo televendedoras. */
   facturado?: number;
+  /** Kilos porcionados (suma del peso KG de los pedidos). Solo porcionadores. */
+  kilos?: number;
+  /** Suma de tiempos de preparación (fin - inicio) en ms. Solo porcionadores. */
+  prepMs?: number;
+  /** Número de pedidos con tiempo de preparación registrado. */
+  prepCount?: number;
 }
 
 function diaLocalDate(d: Date): string {
@@ -740,9 +770,10 @@ function métricas(
     const cliKey = cli?.nit_cedula || cli?.nombre || "—";
     clientesSet.add(cliKey);
     const cliNombre = cli?.nombre || cli?.nit_cedula || "Sin cliente";
-    const ce = cliMap.get(cliKey) ?? { nombre: cliNombre, unidades: 0, total: 0 };
+    const ce = cliMap.get(cliKey) ?? { nombre: cliNombre, unidades: 0, total: 0, kilos: 0 };
     ce.unidades += 1;
     ce.total += Number(p.total) || 0;
+    ce.kilos = (ce.kilos ?? 0) + pesoPedidoKg(p);
     cliMap.set(cliKey, ce);
 
     // Televendedora que creó el pedido.
@@ -758,16 +789,25 @@ function métricas(
     const dm = metaMap[p.id];
     const porc = (dm?.porcionador || "").trim();
     if (porc) {
-      const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0 };
+      const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0, kilos: 0, prepMs: 0, prepCount: 0 };
       e.unidades += 1;
       e.total += Number(p.total) || 0;
+      e.kilos = (e.kilos ?? 0) + pesoPedidoKg(p);
+      if (dm?.inicio && dm?.fin) {
+        const ms = new Date(dm.fin).getTime() - new Date(dm.inicio).getTime();
+        if (Number.isFinite(ms) && ms > 0) {
+          e.prepMs = (e.prepMs ?? 0) + ms;
+          e.prepCount = (e.prepCount ?? 0) + 1;
+        }
+      }
       porcMap.set(porc, e);
     }
     const domi = (dm?.domiciliario || "").trim();
     if (domi) {
-      const e = domiMap.get(domi) ?? { nombre: domi, unidades: 0, total: 0 };
+      const e = domiMap.get(domi) ?? { nombre: domi, unidades: 0, total: 0, kilos: 0 };
       e.unidades += 1;
       e.total += Number(p.total) || 0;
+      e.kilos = (e.kilos ?? 0) + pesoPedidoKg(p);
       domiMap.set(domi, e);
     }
 
@@ -777,8 +817,10 @@ function métricas(
       const prod = it.producto;
       const nombre = prod?.producto || prod?.referencia || "Producto";
       const precio = Number(prod?.precio) || 0;
-      const pe = prodMap.get(nombre) ?? { nombre, unidades: 0, total: 0 };
+      const esKilo = (prod?.um || "").trim().toUpperCase() === "KG";
+      const pe = prodMap.get(nombre) ?? { nombre, unidades: 0, total: 0, kilos: 0 };
       pe.unidades += cant;
+      pe.kilos = (pe.kilos ?? 0) + (esKilo ? cant : 0);
       pe.total += precio * cant;
       prodMap.set(nombre, pe);
     }

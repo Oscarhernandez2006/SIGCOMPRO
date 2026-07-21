@@ -44,6 +44,11 @@ export interface DespachoMeta {
   cuadreCerrado?: boolean;
   /** Nombre de quien realizó el despacho (cajera/despachadora). */
   despachadoPor?: string;
+  /**
+   * Bandera liviana del comprobante de pago (la imagen se guarda aparte y se
+   * consulta por separado). Solo aplica a pedidos de transferencia o mixto.
+   */
+  comprobante?: { tiene: boolean; confirmado: boolean } | null;
 }
 
 export interface EstadoPedidos {
@@ -89,6 +94,53 @@ export function marcarImpresoApi(
   return apiFetch<{ id: string }>(`/pedidos/${id}/impreso`, {
     method: "PATCH",
     body: JSON.stringify({ impreso }),
+  });
+}
+
+/** Comprobante de pago de un pedido (imagen en base64 + estado). */
+export interface ComprobantePago {
+  imagen: string;
+  mime: string | null;
+  confirmado: boolean;
+  subidoPor: string | null;
+  confirmadoPor: string | null;
+}
+
+/** Consulta el comprobante de pago de un pedido (o null si no existe). */
+export function obtenerComprobanteApi(
+  id: string,
+): Promise<ComprobantePago | null> {
+  return apiFetch<ComprobantePago | null>(`/pedidos/${id}/comprobante`);
+}
+
+/** Sube (o reemplaza) el comprobante de pago de un pedido. Queda sin confirmar. */
+export function subirComprobanteApi(
+  id: string,
+  imagen: string,
+  mime: string | null,
+  subidoPor?: string | null,
+): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante`, {
+    method: "POST",
+    body: JSON.stringify({ imagen, mime, subidoPor }),
+  });
+}
+
+/** Confirma el comprobante de pago de un pedido (queda solo de lectura). */
+export function confirmarComprobanteApi(
+  id: string,
+  confirmadoPor?: string | null,
+): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante/confirmar`, {
+    method: "PATCH",
+    body: JSON.stringify({ confirmadoPor }),
+  });
+}
+
+/** Elimina el comprobante de pago de un pedido. */
+export function eliminarComprobanteApi(id: string): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante`, {
+    method: "DELETE",
   });
 }
 

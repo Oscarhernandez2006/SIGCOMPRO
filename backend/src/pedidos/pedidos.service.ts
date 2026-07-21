@@ -89,6 +89,21 @@ export class PedidosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Comprobantes de pago (imagen en base64) por pedido. Se guardan aparte de
+    // la metadata para no inflar la carga masiva de pedidos (en la metadata solo
+    // queda una bandera liviana: comprobante = { tiene, confirmado }).
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS comprobantes_pago (
+        pedido_id text PRIMARY KEY,
+        imagen text NOT NULL,
+        mime text,
+        confirmado boolean NOT NULL DEFAULT false,
+        subido_por text,
+        confirmado_por text,
+        creado_en timestamptz NOT NULL DEFAULT now(),
+        actualizado_en timestamptz NOT NULL DEFAULT now()
+      )
+    `);
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
@@ -449,6 +464,94 @@ export class PedidosService implements OnModuleInit {
        WHERE id = $1`,
       [id, JSON.stringify(cambios ?? {})],
     );
+    return { id };
+  }
+
+  /** Devuelve el comprobante de pago (imagen base64) de un pedido, si existe. */
+  async obtenerComprobante(id: string): Promise<{
+    imagen: string;
+    mime: string | null;
+    confirmado: boolean;
+    subidoPor: string | null;
+    confirmadoPor: string | null;
+  } | null> {
+    const res = await this.pool.query<{
+      imagen: string;
+      mime: string | null;
+      confirmado: boolean;
+      subido_por: string | null;
+      confirmado_por: string | null;
+    }>(
+      `SELECT imagen, mime, confirmado, subido_por, confirmado_por
+         FROM comprobantes_pago WHERE pedido_id = $1`,
+      [id],
+    );
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+      imagen: row.imagen,
+      mime: row.mime,
+      confirmado: row.confirmado,
+      subidoPor: row.subido_por,
+      confirmadoPor: row.confirmado_por,
+    };
+  }
+
+  /**
+   * Guarda (o reemplaza) el comprobante de pago de un pedido. Al subir uno nuevo
+   * queda SIN confirmar. Refleja una bandera liviana en la metadata del pedido.
+   */
+  async guardarComprobante(
+    id: string,
+    imagen: string,
+    mime: string | null,
+    subidoPor?: string | null,
+  ): Promise<{ id: string }> {
+    if (!imagen || typeof imagen !== 'string') {
+      throw new Error('Imagen de comprobante inválida');
+    }
+    await this.pool.query(
+      `INSERT INTO comprobantes_pago (pedido_id, imagen, mime, confirmado, subido_por, actualizado_en)
+       VALUES ($1, $2, $3, false, $4, now())
+       ON CONFLICT (pedido_id) DO UPDATE
+         SET imagen = EXCLUDED.imagen,
+             mime = EXCLUDED.mime,
+             confirmado = false,
+             subido_por = EXCLUDED.subido_por,
+             confirmado_por = NULL,
+             actualizado_en = now()`,
+      [id, imagen, mime ?? null, subidoPor ?? null],
+    );
+    await this.actualizarMeta(id, {
+      comprobante: { tiene: true, confirmado: false },
+    });
+    return { id };
+  }
+
+  /** Confirma el comprobante de pago de un pedido (queda solo de lectura). */
+  async confirmarComprobante(
+    id: string,
+    confirmadoPor?: string | null,
+  ): Promise<{ id: string }> {
+    await this.pool.query(
+      `UPDATE comprobantes_pago
+         SET confirmado = true, confirmado_por = $2, actualizado_en = now()
+       WHERE pedido_id = $1`,
+      [id, confirmadoPor ?? null],
+    );
+    await this.actualizarMeta(id, {
+      comprobante: { tiene: true, confirmado: true },
+    });
+    return { id };
+  }
+
+  /** Elimina el comprobante de pago de un pedido. */
+  async eliminarComprobante(id: string): Promise<{ id: string }> {
+    await this.pool.query(
+      `DELETE FROM comprobantes_pago WHERE pedido_id = $1`,
+      [id],
+    );
+    await this.actualizarMeta(id, { comprobante: null });
     return { id };
   }
 
