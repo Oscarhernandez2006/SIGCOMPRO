@@ -17,6 +17,21 @@ export function esTransferencia(p: Pedido): boolean {
   return (p.pago ?? "").trim().toLowerCase() === "transferencia";
 }
 
+/** ¿El cliente RECOGE el pedido en el punto de venta (no lleva domicilio)? */
+export function esRecoge(p: Pedido): boolean {
+  return (p.entrega ?? "").trim().toLowerCase() === "recoge";
+}
+
+/** Hora límite (18:00) para entregar pedidos que se RECOGEN en el punto. */
+export const HORA_LIMITE_RECOGE = 18;
+
+/** Día base del pedido: la fecha programada si aplica; si no, la de creación. */
+function baseDiaPedido(p: Pedido): Date {
+  return p.entregaProgramada && p.fechaProgramada
+    ? new Date(`${p.fechaProgramada}T00:00:00`)
+    : new Date(p.fecha);
+}
+
 /**
  * Instante objetivo de despacho (deadline de entrega).
  * - TRANSFERENCIA: el cronómetro corre 1h SOLO desde que se confirma
@@ -25,6 +40,13 @@ export function esTransferencia(p: Pedido): boolean {
  *   creación + 2 horas.
  */
 export function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): number {
+  // RECOGE en el punto: el objetivo de entrega es SIEMPRE las 6:00 PM del día
+  // (programado o de creación); la cuenta regresiva corre hacia esa hora.
+  if (esRecoge(p)) {
+    const base = baseDiaPedido(p);
+    base.setHours(HORA_LIMITE_RECOGE, 0, 0, 0);
+    return base.getTime();
+  }
   if (esTransferencia(p)) {
     if (pagoConfirmado) {
       return new Date(pagoConfirmado).getTime() + LIMITE_TRANSFERENCIA_MS;
@@ -58,6 +80,11 @@ export function msRestantesDespacho(
  * toda la ventana de 1h desde la confirmación.
  */
 export function deadlinePreparacion(p: Pedido, pagoConfirmado?: string | null): number {
+  // RECOGE: 2 horas para alistarlo desde que entra (independiente del objetivo
+  // de las 6:00 PM para la entrega).
+  if (esRecoge(p)) {
+    return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
+  }
   const obj = objetivoDespacho(p, pagoConfirmado);
   if (!Number.isFinite(obj)) return obj;
   return esTransferencia(p) ? obj : obj - ALERTA_DESPACHO_MS;

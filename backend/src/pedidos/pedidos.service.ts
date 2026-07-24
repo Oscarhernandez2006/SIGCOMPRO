@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
@@ -308,7 +314,11 @@ export class PedidosService implements OnModuleInit {
       const prev = await client.query<{
         consecutivo: number | null;
         data: PedidoData;
-      }>(`SELECT consecutivo, data FROM pedidos WHERE id = $1 FOR UPDATE`, [id]);
+        meta: DespachoMeta;
+      }>(
+        `SELECT consecutivo, data, meta FROM pedidos WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
 
       const prevData: PedidoData | null = prev.rowCount
         ? (prev.rows[0].data ?? {})
@@ -380,6 +390,27 @@ export class PedidosService implements OnModuleInit {
           : null
         : null;
       const anuladoAnterior = prevData ? prevData.anulado === true : false;
+
+      // Integridad de flujo: no se puede marcar un pedido como "Facturado" o
+      // "Despachado" sin número y valor de factura. La factura vive en la
+      // metadata de despacho (columna meta), guardada antes de facturar.
+      const normEstado = (s: unknown) => String(s ?? '').trim().toLowerCase();
+      const nuevoEstadoNorm = normEstado(estado);
+      const entraAFacturadoODespachado =
+        (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado') &&
+        nuevoEstadoNorm !== normEstado(estadoAnterior);
+      if (!anulado && entraAFacturadoODespachado) {
+        const metaActual: DespachoMeta = prev.rowCount
+          ? (prev.rows[0].meta ?? {})
+          : {};
+        const numFactura = String(metaActual.facturaNumero ?? '').trim();
+        const valFactura = Number(metaActual.facturaValor);
+        if (!numFactura || !Number.isFinite(valFactura) || valFactura <= 0) {
+          throw new BadRequestException(
+            'No se puede facturar o despachar sin número y valor de factura.',
+          );
+        }
+      }
 
       let tipoEvento: TrazaEvento['tipo'] | null = null;
       if (!prev.rowCount) {

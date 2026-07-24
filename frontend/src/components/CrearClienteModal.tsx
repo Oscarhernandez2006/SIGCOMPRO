@@ -9,7 +9,7 @@ import {
   type Cliente,
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
-import { aNombrePropio } from "@/lib/format";
+import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -202,14 +202,14 @@ export default function CrearClienteModal({
                 <Campo label="Nombres *">
                   <input
                     value={nombres}
-                    onChange={(e) => setNombres(e.target.value)}
+                    onChange={onChangeNombrePropio(setNombres)}
                     className="campo"
                   />
                 </Campo>
                 <Campo label="Apellidos *">
                   <input
                     value={apellidos}
-                    onChange={(e) => setApellidos(e.target.value)}
+                    onChange={onChangeNombrePropio(setApellidos)}
                     className="campo"
                   />
                 </Campo>
@@ -285,6 +285,7 @@ export default function CrearClienteModal({
                   <AutocompleteInput
                     value={form.barrio ?? ""}
                     onChange={(v) => cambiar("barrio", v)}
+                    formato={aNombrePropio}
                     onBuscar={async (q) =>
                       (await buscarBarrios(q, form.ciudad)).map((b) => ({ value: b }))
                     }
@@ -295,6 +296,7 @@ export default function CrearClienteModal({
                   <AutocompleteInput
                     value={form.ciudad ?? ""}
                     onChange={(v) => cambiar("ciudad", v)}
+                    formato={aNombrePropio}
                     onBuscar={async (q) =>
                       (await buscarCiudades(q)).map((c) => ({
                         value: c.nombre,

@@ -18,6 +18,7 @@ import {
 import { buscarCiudades } from "@/lib/ubicaciones";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
+import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
@@ -702,14 +703,14 @@ export default function ClientesPage() {
                     <Campo label="Nombres *">
                       <input
                         value={nombres}
-                        onChange={(e) => setNombres(e.target.value)}
+                        onChange={onChangeNombrePropio(setNombres)}
                         className="campo"
                       />
                     </Campo>
                     <Campo label="Apellidos *">
                       <input
                         value={apellidos}
-                        onChange={(e) => setApellidos(e.target.value)}
+                        onChange={onChangeNombrePropio(setApellidos)}
                         className="campo"
                       />
                     </Campo>
@@ -790,6 +791,7 @@ export default function ClientesPage() {
                       <AutocompleteInput
                         value={form.barrio ?? ""}
                         onChange={(v) => cambiar("barrio", v)}
+                        formato={aNombrePropio}
                         onBuscar={async (q) =>
                           (await buscarBarrios(q, form.ciudad)).map((b) => ({
                             value: b,
@@ -802,6 +804,7 @@ export default function ClientesPage() {
                       <AutocompleteInput
                         value={form.ciudad ?? ""}
                         onChange={(v) => cambiar("ciudad", v)}
+                        formato={aNombrePropio}
                         onBuscar={async (q) =>
                           (await buscarCiudades(q)).map((c) => ({
                             value: c.nombre,

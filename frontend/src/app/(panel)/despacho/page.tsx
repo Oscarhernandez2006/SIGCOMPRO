@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
-import { getUsuario, puedeMultiPunto } from "@/lib/auth";
+import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import {
@@ -26,6 +26,7 @@ import {
   LIMITE_DESPACHO_MS,
   esTransferencia,
   objetivoDespacho,
+  deadlinePreparacion,
   msRestantesDespacho,
 } from "@/lib/despacho";
 
@@ -411,9 +412,10 @@ export default function DespachoPage() {
     return clave ? puedeAccion(usuarioDesp, clave) : false;
   };
 
-  // ¿Puede el usuario cambiar el estado a AL MENOS uno? Habilita el selector de
-  // cambio de estado (antes exclusivo de administradores).
-  const puedeAlgunEstado = ESTADOS_FLUJO.some((s) => puedeEstado(s));
+  // El selector para CAMBIAR/REVERSAR el estado directamente es EXCLUSIVO de los
+  // roles administrativos con selector (administrador app / desarrollador). Los
+  // demás usuarios avanzan el flujo solo con los botones (según sus permisos).
+  const puedeCambiarEstadoManual = puedeSeleccionarPuntoVenta(usuarioDesp?.rol);
 
   // Alcance por punto: roles con selector (administrador app / desarrollador) o
   // usuarios con el permiso "pedidos.multipunto" eligen UN punto de sus
@@ -586,7 +588,7 @@ export default function DespachoPage() {
   };
 
   /** Cambia el estado de un pedido y lo persiste. */
-  const cambiarEstado = (id: string, estado: Pedido["estado"]) => {
+  const cambiarEstado = async (id: string, estado: Pedido["estado"]) => {
     if (!puedeEstado(estado)) {
       sinPermiso.mostrar();
       return;
@@ -638,10 +640,39 @@ export default function DespachoPage() {
       actualizarMetaApi(id, { facturadoPor }).catch(() => { /* ignore */ });
       setMeta((prev) => ({ ...prev, [id]: { ...prev[id], facturadoPor } }));
     }
+    // Para facturar/despachar, garantiza que la factura ya quedó PERSISTIDA en
+    // el backend antes de guardar el pedido (evita que la validación del backend
+    // falle por una carrera si el último dato de factura seguía en vuelo).
+    if (n === "facturado" || n === "despachado") {
+      try {
+        await actualizarMetaApi(id, {
+          facturaNumero: mm.facturaNumero,
+          facturaValor: mm.facturaValor,
+        });
+      } catch {
+        /* si falla, el guardado del pedido reflejará el rechazo */
+      }
+    }
+    // Al facturar/despachar, si el backend RECHAZA el guardado (p. ej. por falta
+    // de número o valor de factura) se revierte el estado optimista para no
+    // mostrarlo como hecho.
+    const revertible = n === "facturado" || n === "despachado";
     setPedidos((prev) => {
+      const estadoAnterior = prev.find((p) => p.id === id)?.estado;
       const next = prev.map((p) => (p.id === id ? { ...p, estado } : p));
       const actualizado = next.find((p) => p.id === id);
-      if (actualizado) guardarPedidoApi(actualizado).catch(() => { /* ignore */ });
+      if (actualizado)
+        guardarPedidoApi(actualizado).catch(() => {
+          if (!revertible) return;
+          setPedidos((cur) =>
+            cur.map((p) =>
+              p.id === id ? { ...p, estado: estadoAnterior ?? p.estado } : p,
+            ),
+          );
+          alert(
+            "No se pudo facturar o despachar: falta el número o el valor de la factura.",
+          );
+        });
       return next;
     });
   };
@@ -1507,7 +1538,7 @@ export default function DespachoPage() {
 
                     {/* Estado */}
                     <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className={puedeAlgunEstado && !anulado ? "pb-14" : ""}>
+                      <div className={puedeCambiarEstadoManual && !anulado ? "pb-14" : ""}>
                       <div
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
                           anulado
@@ -1559,7 +1590,7 @@ export default function DespachoPage() {
                         )
                       )}
                       </div>
-                      {puedeAlgunEstado && !anulado && (
+                      {puedeCambiarEstadoManual && !anulado && (
                         <div className="absolute inset-x-3 bottom-3">
                           <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
                             Cambiar estado
@@ -1910,7 +1941,8 @@ export default function DespachoPage() {
 
                           // Transferencia: el cronómetro (1 hora) corre SOLO desde
                           // que se confirma la transferencia. Antes: sin cuenta.
-                          if (esTransferencia(p)) {
+                          // Los "recoge" NO usan esta rama (su objetivo es 6:00 PM).
+                          if (esTransferencia(p) && !esRecoge) {
                             if (!m.pagoConfirmado) {
                               return (
                                 <div className={`${box} border-blue-200 bg-blue-50 text-blue-600`}>
@@ -1952,15 +1984,21 @@ export default function DespachoPage() {
                             );
                           }
 
-                          // Resto de pagos: preparación (1h) + entrega (2h) desde que entra.
+                          // Resto de pagos: preparación + entrega.
+                          // - Normal: preparación (1h) y entrega (2h) desde que entra.
+                          // - RECOGE en el punto: 2h para alistar y entrega HASTA las
+                          //   6:00 PM (la cuenta regresiva corre hacia esa hora).
                           const deadlineEntrega = objetivoDespacho(p);
-                          const deadlinePrep = deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
+                          const deadlinePrep = esRecoge
+                            ? deadlinePreparacion(p)
+                            : deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
                           const restEntrega = deadlineEntrega - ahora;
                           const restPrep = deadlinePrep - ahora;
                           const horaObj = (p.horaDespacho ?? "").trim();
                           // Antes de activar: hay hora pedida y faltan más de 2h.
+                          // (No aplica a recoge, cuyo objetivo fijo son las 6:00 PM.)
                           const antesDeActivar =
-                            horaObj !== "" && restEntrega > LIMITE_DESPACHO_MS;
+                            !esRecoge && horaObj !== "" && restEntrega > LIMITE_DESPACHO_MS;
 
                           // Rojo al llegar a la mitad del tiempo (o menos); verde antes.
                           const claseTiempo = (rest: number, mitadMs: number) =>
@@ -2014,13 +2052,13 @@ export default function DespachoPage() {
                             <div className="space-y-2">
                               <div>
                                 <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
-                                  Preparación (1h)
+                                  {esRecoge ? "Alistar (2h)" : "Preparación (1h)"}
                                 </p>
                                 {prep}
                               </div>
                               <div>
                                 <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
-                                  Entrega (2h)
+                                  {esRecoge ? "Entrega (hasta 6:00 pm)" : "Entrega (2h)"}
                                 </p>
                                 {entrega}
                               </div>

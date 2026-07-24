@@ -105,6 +105,8 @@ export default function CuadreCajaPage() {
   const [filtroPago, setFiltroPago] = useState<string>("todos");
   const [filtroDomiciliario, setFiltroDomiciliario] = useState<string>("todos");
   const [filtroFacturador, setFiltroFacturador] = useState<string>("todos");
+  // Filtro de estado de liquidación: "todos" | "liquidados" | "pendientes".
+  const [filtroLiquidacion, setFiltroLiquidacion] = useState<string>("todos");
   // Id del pedido cuya ventanita de detalle (creó/alistó/domiciliario) está abierta.
   const [detalleId, setDetalleId] = useState<string | null>(null);
   // Orden de "completados" (autoguardados con valor): van al final para facilitar
@@ -226,24 +228,30 @@ export default function CuadreCajaPage() {
           (meta[p.id]?.facturadoPor ?? "") !== filtroFacturador
         )
           return false;
-        // Con algún filtro activo (método de pago, domiciliario o facturador) se
-        // ocultan los pedidos ya liquidados (según lo GUARDADO) para dejar solo
-        // los pendientes. Con "todos" en todos se muestran todos, liquidados o no.
-        const filtrando =
-          filtroPago !== "todos" ||
-          filtroDomiciliario !== "todos" ||
-          filtroFacturador !== "todos";
-        if (filtrando) {
-          const m = meta[p.id];
-          const ef = Number(m?.cuadreEfectivo ?? 0);
-          const om = Number(m?.cuadreOmp ?? 0);
-          const fact = Number(m?.facturaValor ?? p.total ?? 0) || 0;
-          const yaLiquidado = esMixto(p.pago)
-            ? ef + om > 0 && ef + om - fact === 0
-            : esEfectivo(p.pago)
-              ? ef > 0
-              : om > 0;
-          if (yaLiquidado) return false;
+        // Estado de liquidación del pedido (si ya tiene el "chulito" guardado).
+        const m = meta[p.id];
+        const ef = Number(m?.cuadreEfectivo ?? 0);
+        const om = Number(m?.cuadreOmp ?? 0);
+        const fact = Number(m?.facturaValor ?? p.total ?? 0) || 0;
+        const yaLiquidado = esMixto(p.pago)
+          ? ef + om > 0 && ef + om - fact === 0
+          : esEfectivo(p.pago)
+            ? ef > 0
+            : om > 0;
+        // Filtro EXPLÍCITO de liquidación: "Liquidados" muestra solo los que ya
+        // tienen chulito; "Pendientes" solo los que faltan (se combina con el
+        // filtro de facturador para ver los liquidados de esa persona).
+        if (filtroLiquidacion === "liquidados" && !yaLiquidado) return false;
+        if (filtroLiquidacion === "pendientes" && yaLiquidado) return false;
+        // Comportamiento previo: SOLO cuando el filtro de liquidación es "todos",
+        // al filtrar por método de pago/domiciliario/facturador se ocultan los ya
+        // liquidados para dejar arriba lo pendiente.
+        if (filtroLiquidacion === "todos") {
+          const filtrando =
+            filtroPago !== "todos" ||
+            filtroDomiciliario !== "todos" ||
+            filtroFacturador !== "todos";
+          if (filtrando && yaLiquidado) return false;
         }
         return true;
       })
@@ -274,7 +282,7 @@ export default function CuadreCajaPage() {
         if (ca != null && cb != null) return ca - cb;
         return (a.consecutivo ?? 0) - (b.consecutivo ?? 0);
       });
-  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, filtroFacturador, completados]);
+  }, [pedidos, meta, esAdmin, idsVisibles, puntoSel, fecha, filtroPago, filtroDomiciliario, filtroFacturador, filtroLiquidacion, completados]);
 
   // Domiciliarios presentes en los despachados del punto/día (para el filtro).
   const domiciliarios = useMemo(() => {
@@ -351,6 +359,29 @@ export default function CuadreCajaPage() {
     [liquidada, desbloqueadoId, editandoId],
   );
 
+  // Nombre (normalizado) del usuario en sesión, para comparar con el facturador.
+  const nombreUsuario = useMemo(
+    () => (usuario?.nombre ?? "").trim().toLowerCase(),
+    [usuario],
+  );
+
+  // ¿El pedido lo facturó OTRA persona (distinta al usuario en sesión)? En ese
+  // caso el pedido APARECE en el cuadre pero queda BLOQUEADO: solo quien lo
+  // facturó puede cuadrarlo. El administrador puede gestionar todos.
+  const facturadoPorOtroId = useCallback(
+    (id: string) => {
+      if (esAdmin) return false;
+      const f = (meta[id]?.facturadoPor ?? "").trim();
+      if (!f) return false; // sin facturador registrado: no se bloquea
+      return f.toLowerCase() !== nombreUsuario;
+    },
+    [esAdmin, meta, nombreUsuario],
+  );
+  const facturadoPorOtro = useCallback(
+    (p: Pedido) => facturadoPorOtroId(p.id),
+    [facturadoPorOtroId],
+  );
+
   // Totales.
   const totales = useMemo(() => {
     let facturado = 0;
@@ -398,6 +429,7 @@ export default function CuadreCajaPage() {
   // y Despacho, ya que edita el pedido real con ese consecutivo).
   function cambiarPago(id: string, pago: string) {
     if (bloqueado) return;
+    if (facturadoPorOtroId(id)) return; // solo quien facturó puede modificarlo
     setPedidos((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, pago } : p));
       const actualizado = next.find((p) => p.id === id);
@@ -412,6 +444,7 @@ export default function CuadreCajaPage() {
 
   function cambiarLiq(id: string, campo: keyof Liq, valor: string) {
     if (bloqueado) return; // cuadre cerrado: requiere autorización para editar
+    if (facturadoPorOtroId(id)) return; // solo quien facturó puede cuadrarlo
     setGuardadoOk(false);
     setLiq((prev) => {
       const actual: Liq = prev[id] ?? { efectivo: "", omp: "" };
@@ -789,6 +822,31 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
+          <div className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+            Liquidación
+            <div className="mt-1 inline-flex rounded-xl border border-brand-brown/15 bg-brand-cream-soft/60 p-0.5">
+              {(
+                [
+                  ["todos", "Todos"],
+                  ["liquidados", "Liquidados"],
+                  ["pendientes", "Pendientes"],
+                ] as [string, string][]
+              ).map(([v, lbl]) => (
+                <button
+                  key={v}
+                  onClick={() => setFiltroLiquidacion(v)}
+                  title="Filtrar por estado de liquidación (los liquidados ya tienen el chulito)"
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                    filtroLiquidacion === v
+                      ? "bg-brand-wine text-white shadow-sm"
+                      : "text-brand-brown/70 hover:bg-white"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -841,8 +899,11 @@ export default function CuadreCajaPage() {
                   const ompActivo = !efectivoRow || mixto;
                   const yaLiquidada = liquidada(p);
                   const bloqueadaCelda = !bloqueado && celdaBloqueada(p);
+                  // Facturado por otra persona: aparece pero bloqueado (solo
+                  // quien lo facturó puede cuadrarlo; el admin no se limita).
+                  const ajena = facturadoPorOtro(p);
                   return (
-                    <tr key={p.id} className={`border-b border-brand-brown/5 last:border-0 ${yaLiquidada ? "bg-emerald-50/40" : ""}`}>
+                    <tr key={p.id} className={`border-b border-brand-brown/5 last:border-0 ${ajena ? "bg-brand-cream-soft/40" : yaLiquidada ? "bg-emerald-50/40" : ""}`}>
                       <td className="truncate px-2 py-2 font-semibold text-brand-wine">
                         <span className="inline-flex items-center gap-1.5">
                           {yaLiquidada && (
@@ -913,7 +974,7 @@ export default function CuadreCajaPage() {
                       <td className="px-2 py-2">
                         <select
                           value={p.pago ?? ""}
-                          disabled={bloqueado}
+                          disabled={bloqueado || ajena}
                           onChange={(e) => cambiarPago(p.id, e.target.value)}
                           title="Cambiar el método de pago (afecta este pedido en Pedidos y Despacho)"
                           className={`w-full cursor-pointer rounded-md border-0 px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-brand-wine disabled:cursor-not-allowed disabled:opacity-70 ${colorMetodo(p.pago)}`}
@@ -935,7 +996,17 @@ export default function CuadreCajaPage() {
                         {cop(valorFacturado(p))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {efectivoActivo && bloqueadaCelda ? (
+                        {ajena ? (
+                          <div
+                            title={`Facturado por ${meta[p.id]?.facturadoPor || "otra persona"}. Solo quien facturó este pedido puede cuadrarlo.`}
+                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-brown/40"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            {efectivoActivo ? cop(numero(l.efectivo)) : "—"}
+                          </div>
+                        ) : efectivoActivo && bloqueadaCelda ? (
                           <button
                             type="button"
                             onClick={() => pedirClaveCelda(p.id)}
@@ -966,7 +1037,17 @@ export default function CuadreCajaPage() {
                         )}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {ompActivo && bloqueadaCelda ? (
+                        {ajena ? (
+                          <div
+                            title={`Facturado por ${meta[p.id]?.facturadoPor || "otra persona"}. Solo quien facturó este pedido puede cuadrarlo.`}
+                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-brown/40"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            {ompActivo ? cop(numero(l.omp)) : "—"}
+                          </div>
+                        ) : ompActivo && bloqueadaCelda ? (
                           <button
                             type="button"
                             onClick={() => pedirClaveCelda(p.id)}

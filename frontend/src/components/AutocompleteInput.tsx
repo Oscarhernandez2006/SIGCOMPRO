@@ -17,12 +17,15 @@ export default function AutocompleteInput({
   onBuscar,
   placeholder,
   minLen = 2,
+  formato,
 }: {
   value: string;
   onChange: (valor: string) => void;
   onBuscar: (q: string) => Promise<OpcionAutocomplete[]>;
   placeholder?: string;
   minLen?: number;
+  /** Formato opcional aplicado al escribir (p. ej. nombre propio). */
+  formato?: (valor: string) => string;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [opciones, setOpciones] = useState<OpcionAutocomplete[]>([]);
@@ -68,7 +71,7 @@ export default function AutocompleteInput({
     ignorarProxima.current = true;
     if (debounce.current) clearTimeout(debounce.current);
     peticion.current++; // invalida cualquier búsqueda en curso
-    onChange(opcion.value);
+    onChange(formato ? formato(opcion.value) : opcion.value);
     setAbierto(false);
     setCargando(false);
     setOpciones([]);
@@ -78,7 +81,28 @@ export default function AutocompleteInput({
     <div className="relative">
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          if (!formato) {
+            onChange(e.target.value);
+            return;
+          }
+          // Aplica el formato (nombre propio) conservando la posición del
+          // caret, ya que solo cambia mayúsculas/minúsculas (misma longitud).
+          const el = e.currentTarget;
+          const bruto = el.value;
+          const pos = el.selectionStart;
+          const val = formato(bruto);
+          onChange(val);
+          if (pos !== null && val.length === bruto.length) {
+            requestAnimationFrame(() => {
+              try {
+                el.setSelectionRange(pos, pos);
+              } catch {
+                /* input ya no está en el DOM */
+              }
+            });
+          }
+        }}
         onFocus={() => {
           setFocado(true);
           if (opciones.length > 0) setAbierto(true);

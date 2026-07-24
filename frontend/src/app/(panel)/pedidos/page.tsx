@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -3357,6 +3357,27 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
         (meta.replicas && meta.replicas.length > 0)),
   );
   const [verTraza, setVerTraza] = useState(false);
+  // Comprobante de pago (solo transferencia o mixto): al pulsar el ícono de foto
+  // se consulta la imagen cargada desde despacho y se muestra (o un aviso si no hay).
+  const pagoTransfMixto = ["transferencia", "mixto"].includes((pedido.pago ?? "").trim().toLowerCase());
+  const [compImg, setCompImg] = useState<string | null>(null);
+  const [compMsg, setCompMsg] = useState<string | null>(null);
+  const [compAbierto, setCompAbierto] = useState(false);
+  const [compCargando, setCompCargando] = useState(false);
+  const verComprobantePago = async () => {
+    setCompAbierto(true);
+    if (compImg || compMsg) return;
+    setCompCargando(true);
+    try {
+      const c = await obtenerComprobanteApi(pedido.id);
+      if (c?.imagen) setCompImg(c.imagen);
+      else setCompMsg("No hay cargado comprobante de pago a este pedido.");
+    } catch {
+      setCompMsg("No se pudo cargar el comprobante de pago.");
+    } finally {
+      setCompCargando(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/40 p-4">
       <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -3418,7 +3439,24 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             <Dato label="Consecutivo">{pedido.consecutivo}</Dato>
             <Dato label="Entrega">{dest}</Dato>
             <Dato label="Punto de venta">{pedido.punto.nombre}</Dato>
-            <Dato label="Método de pago">{pedido.pago || "—"}</Dato>
+            <Dato label="Método de pago">
+              <span className="inline-flex items-center gap-1.5">
+                {pedido.pago || "—"}
+                {pagoTransfMixto && (
+                  <button
+                    type="button"
+                    onClick={verComprobantePago}
+                    title="Ver el comprobante de pago cargado desde despacho"
+                    className="inline-flex items-center justify-center rounded-md border border-blue-300 bg-blue-50 p-1 text-blue-700 transition hover:bg-blue-100"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                    </svg>
+                  </button>
+                )}
+              </span>
+            </Dato>
             {pedido.entrega === "domicilio" && (
               <Dato label="Valor domicilio">{formatoCOP(pedido.valorDomicilio ?? 0)}</Dato>
             )}
@@ -3463,6 +3501,34 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
           <button onClick={onCerrar} title="Cerrar" className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90">Cerrar</button>
         </div>
       </div>
+
+      {compAbierto && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/60 p-4" onClick={() => setCompAbierto(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-brand-wine">Comprobante de pago</h3>
+                <p className="text-xs text-brand-brown/50">Pedido {pedido.comanda}</p>
+              </div>
+              <button onClick={() => setCompAbierto(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex min-h-[8rem] flex-1 items-center justify-center overflow-auto bg-brand-cream-soft/40 p-4">
+              {compCargando ? (
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
+              ) : compImg ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={compImg} alt="Comprobante de pago" className="mx-auto max-h-[70vh] w-auto rounded-lg" />
+              ) : (
+                <p className="px-4 py-8 text-center text-sm font-medium text-brand-brown/60">
+                  {compMsg ?? "No hay cargado comprobante de pago a este pedido."}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {verTraza && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4" onClick={() => setVerTraza(false)}>
