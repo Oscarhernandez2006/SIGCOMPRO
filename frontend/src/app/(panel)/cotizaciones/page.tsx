@@ -121,6 +121,48 @@ function generarPdfCotizacion(cot: Cotizacion) {
 
   const total = totalCotizacion(cot.carrito ?? []);
 
+  // Lista de precios (2ª hoja): productos seleccionados con su precio.
+  const filasLista = (cot.listaPrecios ?? [])
+    .map((pr, idx) => {
+      const kilo = esKilo(pr.um);
+      return `<tr>
+        <td class="c">${idx + 1}</td>
+        <td>${esc(pr.referencia)}</td>
+        <td>${esc((pr.producto || "").toUpperCase())}</td>
+        <td class="c">${esc((pr.um || "U").toUpperCase())}</td>
+        <td class="r">${cop(Number(pr.precio) || 0)}${kilo ? " /kg" : ""}</td>
+      </tr>`;
+    })
+    .join("");
+  const paginaLista =
+    (cot.listaPrecios?.length ?? 0) > 0
+      ? `<div style="page-break-before:always">
+          <div class="head">
+            <div>
+              <img src="${logo}" alt="Carnes Santacruz" onerror="this.style.display='none'">
+              <div class="emp"><b>Carnes Santacruz</b><br>${esc(p?.nombre ?? "")}</div>
+            </div>
+            <div class="doc">
+              <h1>LISTA DE PRECIOS</h1>
+              <div class="num">${esc(numero)}</div>
+              <div class="fec">${esc(fecha)}</div>
+            </div>
+          </div>
+          <table>
+            <thead><tr>
+              <th class="c" style="width:34px">#</th>
+              <th style="width:90px">Referencia</th>
+              <th>Producto</th>
+              <th class="c" style="width:70px">U.M.</th>
+              <th class="r" style="width:130px">Precio</th>
+            </tr></thead>
+            <tbody>${filasLista}</tbody>
+          </table>
+          <div class="nota">${esc(NOTA_COTIZACION)}</div>
+          <div class="pie">Carnes Santacruz · Lista de precios ${esc(numero)}</div>
+        </div>`
+      : "";
+
   const html = `<!doctype html><html><head><meta charset="utf-8">
   <title>Cotización ${esc(numero)}</title>
   <style>
@@ -212,6 +254,7 @@ function generarPdfCotizacion(cot: Cotizacion) {
     <div class="nota">${esc(NOTA_COTIZACION)}</div>
 
     <div class="pie">Carnes Santacruz · Documento generado el ${esc(new Date().toLocaleString("es-CO"))}</div>
+    ${paginaLista}
   </body></html>`;
 
   const w = window.open("", "_blank", "width=900,height=700");
@@ -566,6 +609,11 @@ function EditorCotizacion({
   const [productos, setProductos] = useState<ProductoPrecio[]>([]);
   const [cargandoProd, setCargandoProd] = useState(false);
 
+  // Lista de precios (2ª hoja del PDF): productos seleccionados con su precio.
+  const [listaPrecios, setListaPrecios] = useState<ProductoPrecio[]>(
+    inicial?.listaPrecios ?? [],
+  );
+
   const total = useMemo(() => totalCotizacion(items), [items]);
   // Total de kilos (suma de cantidades de los productos que se venden por kilo).
   const totalKilos = useMemo(
@@ -640,6 +688,24 @@ function EditorCotizacion({
       };
       return [...prev, nuevo];
     });
+  }
+
+  // Lista de precios (2ª hoja): agregar / quitar / editar precio.
+  function agregarAListaPrecios(pr: ProductoPrecio) {
+    setListaPrecios((prev) =>
+      prev.some((x) => x.id === pr.id)
+        ? prev
+        : [...prev, { ...pr, precio: Number(pr.precio) || 0 }],
+    );
+  }
+  function quitarDeListaPrecios(id: string) {
+    setListaPrecios((prev) => prev.filter((x) => x.id !== id));
+  }
+  function cambiarPrecioLista(id: string, valor: string) {
+    const n = Number(valor.replace(/[^\d]/g, ""));
+    setListaPrecios((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, precio: Number.isFinite(n) ? n : 0 } : x)),
+    );
   }
 
   function cambiarCantidad(id: string, valor: string) {
@@ -731,6 +797,7 @@ function EditorCotizacion({
       cliente,
       carrito: items,
       total,
+      listaPrecios: listaPrecios.length ? listaPrecios : undefined,
       observacion: observacion.trim() || undefined,
       vendedorNombre: inicial?.vendedorNombre ?? usuario?.nombre ?? "",
       vendedorCedula: inicial?.vendedorCedula ?? usuario?.cedula ?? "",
@@ -896,27 +963,97 @@ function EditorCotizacion({
                       </p>
                     ) : (
                       productos.slice(0, 40).map((p) => (
-                        <button
+                        <div
                           key={p.id}
-                          onClick={() => agregarProducto(p)}
                           className="flex w-full items-center justify-between gap-2 rounded-lg border border-brand-brown/10 bg-white px-3 py-2 text-left text-sm transition hover:border-brand-amber/40 hover:bg-brand-cream-soft/40"
                         >
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium text-brand-black">
-                              {(p.producto || "").toUpperCase()}
+                          <button
+                            onClick={() => agregarProducto(p)}
+                            title="Agregar a la cotización"
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-brand-black">
+                                {(p.producto || "").toUpperCase()}
+                              </span>
+                              <span className="text-xs text-brand-brown/50">
+                                Ref {p.referencia} · {p.um || "U"}
+                              </span>
                             </span>
-                            <span className="text-xs text-brand-brown/50">
-                              Ref {p.referencia} · {p.um || "U"}
+                            <span className="shrink-0 text-sm font-semibold text-brand-wine">
+                              {cop(Number(p.precio) || 0)}
                             </span>
-                          </span>
-                          <span className="shrink-0 text-sm font-semibold text-brand-wine">
-                            {cop(Number(p.precio) || 0)}
-                          </span>
-                        </button>
+                          </button>
+                          <button
+                            onClick={() => agregarAListaPrecios(p)}
+                            title="Agregar a la lista de precios (2ª hoja del PDF)"
+                            className="shrink-0 rounded-md border border-brand-wine/30 bg-brand-wine/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-wine transition hover:bg-brand-wine/10"
+                          >
+                            + Lista
+                          </button>
+                        </div>
                       ))
                     )}
                   </div>
                 </>
+              )}
+            </section>
+
+            {/* Lista de precios (2ª hoja del PDF) */}
+            <section className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 p-3">
+              <h3 className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-brand-wine">
+                <span>Lista de precios · 2ª hoja</span>
+                {listaPrecios.length > 0 && (
+                  <span className="rounded-full bg-brand-wine/10 px-2 py-0.5 text-[10px] font-bold text-brand-wine">
+                    {listaPrecios.length}
+                  </span>
+                )}
+              </h3>
+              <p className="mb-2 text-[11px] text-brand-brown/55">
+                Productos que saldrán como lista de precios en una segunda hoja del
+                PDF. Agrégalos con “+ Lista” desde el buscador de arriba.
+              </p>
+              {listaPrecios.length === 0 ? (
+                <p className="py-3 text-center text-xs text-brand-brown/50">
+                  Sin productos en la lista de precios.
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto">
+                  {listaPrecios.map((pr) => (
+                    <div
+                      key={pr.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-brand-brown/10 bg-white px-2.5 py-1.5 text-sm"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-brand-black">
+                          {(pr.producto || "").toUpperCase()}
+                        </span>
+                        <span className="text-[10px] text-brand-brown/50">
+                          Ref {pr.referencia} · {pr.um || "U"}
+                        </span>
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className="text-[10px] text-brand-brown/40">$</span>
+                        <input
+                          inputMode="numeric"
+                          value={String(Number(pr.precio) || 0)}
+                          onChange={(e) => cambiarPrecioLista(pr.id, e.target.value)}
+                          title="Precio en la lista"
+                          className="w-20 rounded-md border border-brand-brown/20 px-1.5 py-0.5 text-right tabular-nums outline-none focus:border-brand-wine"
+                        />
+                        <button
+                          onClick={() => quitarDeListaPrecios(pr.id)}
+                          title="Quitar de la lista"
+                          className="rounded-md p-1 text-brand-brown/40 transition hover:bg-red-50 hover:text-red-600"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
           </div>

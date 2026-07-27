@@ -122,6 +122,20 @@ export default function ReferenciaInput({
   );
   const [textoLibre, setTextoLibre] = useState(value);
   const emitidoRef = useRef(value);
+  // Aviso emergente cuando se intenta escribir el nombre sin elegir el tipo.
+  const [avisoTipo, setAvisoTipo] = useState(false);
+  const avisoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mostrarAvisoTipo = () => {
+    setAvisoTipo(true);
+    if (avisoTimer.current) clearTimeout(avisoTimer.current);
+    avisoTimer.current = setTimeout(() => setAvisoTipo(false), 4000);
+  };
+  useEffect(
+    () => () => {
+      if (avisoTimer.current) clearTimeout(avisoTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (value === emitidoRef.current) return;
@@ -195,7 +209,10 @@ export default function ReferenciaInput({
       <div className="grid gap-2 sm:grid-cols-2">
         <select
           value={partes.tipoConjunto}
-          onChange={(e) => cambiarParte("tipoConjunto", e.target.value)}
+          onChange={(e) => {
+            cambiarParte("tipoConjunto", e.target.value);
+            if (e.target.value) setAvisoTipo(false);
+          }}
           className="campo"
         >
           <option value="">Sin conjunto/edificio</option>
@@ -207,7 +224,19 @@ export default function ReferenciaInput({
         </select>
         <input
           value={partes.nombre}
+          readOnly={!partes.tipoConjunto}
+          onFocus={() => {
+            if (!partes.tipoConjunto) mostrarAvisoTipo();
+          }}
+          onMouseDown={() => {
+            if (!partes.tipoConjunto) mostrarAvisoTipo();
+          }}
           onChange={(e) => {
+            // Sin tipo de propiedad no se permite escribir el nombre.
+            if (!partes.tipoConjunto) {
+              mostrarAvisoTipo();
+              return;
+            }
             // Primera letra de CADA palabra en mayúscula (título); resto minúscula.
             const el = e.currentTarget;
             const pos = el.selectionStart;
@@ -224,10 +253,26 @@ export default function ReferenciaInput({
               });
             }
           }}
-          placeholder="Nombre (ej. Torino)"
-          className="campo"
+          placeholder={partes.tipoConjunto ? "Nombre (ej. Torino)" : "Selecciona primero el tipo"}
+          aria-invalid={avisoTipo}
+          className={`campo ${
+            partes.tipoConjunto
+              ? ""
+              : "cursor-not-allowed bg-brand-cream-soft/40 placeholder:text-brand-brown/40"
+          }`}
         />
       </div>
+      {avisoTipo && (
+        <p
+          role="alert"
+          className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+          Primero selecciona el tipo (Conjunto/Edificio) para escribir el nombre.
+        </p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <div className="w-36">

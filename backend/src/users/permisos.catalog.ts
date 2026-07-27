@@ -31,6 +31,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: 'pedidos.crear', label: 'Crear pedido' },
           { key: 'pedidos.editar', label: 'Editar pedido' },
           { key: 'pedidos.anular', label: 'Anular pedido' },
+          { key: 'pedidos.cancelar', label: 'Cancelar pedido' },
           { key: 'pedidos.imprimir', label: 'Reimprimir comanda / Excel' },
           { key: 'pedidos.clonar', label: 'Clonar pedido' },
           {

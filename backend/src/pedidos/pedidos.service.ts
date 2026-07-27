@@ -14,9 +14,11 @@ import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {
-  tipo: 'creacion' | 'estado' | 'anulacion';
+  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
   estadoAnterior?: string | null;
   estadoNuevo?: string | null;
+  /** Motivo de la anulación/cancelación (solo en esos eventos). */
+  motivo?: string | null;
   /** Fecha/hora del evento (ISO, hora del servidor). */
   fecha: string;
   usuarioId?: string | null;
@@ -412,13 +414,36 @@ export class PedidosService implements OnModuleInit {
         }
       }
 
+      // Contenido comparable del pedido para detectar EDICIONES (campos que el
+      // usuario puede cambiar). Orden fijo para no depender del orden de llaves.
+      const contenidoComparable = (d: PedidoData | null): string =>
+        JSON.stringify({
+          pago: d?.pago ?? null,
+          total: (d as { total?: unknown } | null)?.total ?? null,
+          observacion:
+            (d as { observacion?: unknown } | null)?.observacion ?? null,
+          entrega: (d as { entrega?: unknown } | null)?.entrega ?? null,
+          entregaProgramada: d?.entregaProgramada ?? null,
+          fechaProgramada: d?.fechaProgramada ?? null,
+          horaDespacho:
+            (d as { horaDespacho?: unknown } | null)?.horaDespacho ?? null,
+          cliente: d?.cliente ?? null,
+          carrito: d?.carrito ?? null,
+        });
+
       let tipoEvento: TrazaEvento['tipo'] | null = null;
       if (!prev.rowCount) {
         tipoEvento = 'creacion';
       } else if (anulado && !anuladoAnterior) {
-        tipoEvento = 'anulacion';
+        tipoEvento =
+          nuevoEstadoNorm === 'cancelado' ? 'cancelacion' : 'anulacion';
       } else if (estado !== estadoAnterior) {
         tipoEvento = 'estado';
+      } else if (
+        !anulado &&
+        contenidoComparable(prevData) !== contenidoComparable(finalPedido)
+      ) {
+        tipoEvento = 'edicion';
       }
 
       if (tipoEvento) {
@@ -440,6 +465,12 @@ export class PedidosService implements OnModuleInit {
           tipo: tipoEvento,
           estadoAnterior,
           estadoNuevo: estado,
+          motivo:
+            tipoEvento === 'anulacion' || tipoEvento === 'cancelacion'
+              ? finalPedido.motivo != null
+                ? String(finalPedido.motivo)
+                : null
+              : null,
           fecha: new Date().toISOString(),
           usuarioId: user?.sub ?? null,
           usuarioNombre,
@@ -648,6 +679,11 @@ export class PedidosService implements OnModuleInit {
     const creado =
       esReplica || !pedido.fecha ? new Date() : new Date(String(pedido.fecha));
     const programado = !esReplica && pedido.entregaProgramada === true;
+    // ¿El cliente RECOGE en el punto de venta? (no lleva domicilio)
+    const esRecogePdv =
+      String(pedido.entrega ?? '')
+        .trim()
+        .toLowerCase() === 'recoge';
     const fechaISO = (d: Date) =>
       new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
     const horaHM = (d: Date) =>
@@ -682,26 +718,40 @@ export class PedidosService implements OnModuleInit {
     let inicioVentana: string;
     let finVentana: string;
     let prioridad: string;
-    if (programado) {
-      // Pedido programado: usa la fecha elegida. Ventana = hora elegida - 2h a
-      // hora elegida (si hay); si no, ventana fija 8:00–9:00. Prioridad 1.0.
+    if (esRecogePdv) {
+      // RECOGE en PDV: prioridad 4 y promesa DESDE la creación del pedido HASTA
+      // las 7:00 PM (para un pedido programado, ese día a las 7:00 PM).
+      finVentana = '19:00';
+      if (programado) {
+        const elegida = (pedido.fechaProgramada ?? '').trim();
+        const manana = new Date(creado.getTime() + 24 * 60 * 60 * 1000);
+        fechaEntrega = /^\d{4}-\d{2}-\d{2}$/.test(elegida)
+          ? elegida
+          : fechaISO(manana);
+        inicioVentana = '08:00';
+      } else {
+        fechaEntrega = fechaISO(creado);
+        inicioVentana = horaHM(creado);
+      }
+      // La ventana no puede iniciar después de la hora fin (7:00 PM).
+      if (inicioVentana > finVentana) inicioVentana = finVentana;
+      prioridad = '4.00';
+    } else if (programado) {
+      // Pedido con FECHA POSTERIOR (programado): entra a Drivin con prioridad 1
+      // y ventana horaria FIJA de 8:00 AM a 10:00 AM en la fecha elegida.
       const elegida = (pedido.fechaProgramada ?? '').trim();
       // Se usa la fecha elegida tal cual (YYYY-MM-DD); si no hay, se cae a mañana.
       const manana = new Date(creado.getTime() + 24 * 60 * 60 * 1000);
       fechaEntrega = /^\d{4}-\d{2}-\d{2}$/.test(elegida)
         ? elegida
         : fechaISO(manana);
-      if (tieneHora) {
-        inicioVentana = restarDosHoras(horaDespacho);
-        finVentana = normalizarHora(horaDespacho);
-      } else {
-        inicioVentana = '08:00';
-        finVentana = '09:00';
-      }
+      inicioVentana = '08:00';
+      finVentana = '10:00';
       prioridad = '1.00';
     } else {
       // Pedido para hoy: si hay hora de despacho, la ventana es (hora - 2h) a
       // hora (ej. "8" -> 06:00–08:00). Si no, ventana = creación a +2h.
+      // Prioridad 2, o 3 si el pedido es GRANDE (>20 kg).
       fechaEntrega = fechaISO(creado);
       if (tieneHora) {
         inicioVentana = restarDosHoras(horaDespacho);
@@ -710,7 +760,7 @@ export class PedidosService implements OnModuleInit {
         inicioVentana = horaHM(creado);
         finVentana = horaHM(new Date(creado.getTime() + 2 * 60 * 60 * 1000));
       }
-      prioridad = '2.00';
+      prioridad = kilos > 20 ? '3.00' : '2.00';
     }
 
     // Departamento (Región) a partir de la ciudad del cliente.
@@ -917,6 +967,9 @@ export class PedidosService implements OnModuleInit {
               alt_code: null,
               description: null,
               category: 'Delivery',
+              // Prioridad del pedido (recoge en PDV = 4). El Excel la lleva en la
+              // columna "Prioridad"; aquí se envía también por la API.
+              priority: Math.round(Number(d.prioridad)) || null,
               units_1: Number(d.kilos.toFixed(2)),
               units_2: null,
               units_3: null,

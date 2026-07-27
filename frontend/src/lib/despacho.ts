@@ -11,6 +11,11 @@ export const LIMITE_DESPACHO_MS = 2 * 60 * 60 * 1000;
 export const LIMITE_TRANSFERENCIA_MS = 60 * 60 * 1000;
 /** Umbral de advertencia / duración del alistamiento: 1 hora. */
 export const ALERTA_DESPACHO_MS = 60 * 60 * 1000;
+/** Pedido PEQUEÑO (≤10 kg): alistado corto de 40 min y alerta (rojo) a los 20 min. */
+export const LIMITE_ALISTADO_PEQUENO_MS = 40 * 60 * 1000;
+export const ALERTA_ALISTADO_PEQUENO_MS = 20 * 60 * 1000;
+/** Umbral (kg) para considerar "pequeño" un pedido. */
+export const KILOS_PEDIDO_PEQUENO = 10;
 
 /** ¿El pedido se paga por transferencia? */
 export function esTransferencia(p: Pedido): boolean {
@@ -30,6 +35,19 @@ function baseDiaPedido(p: Pedido): Date {
   return p.entregaProgramada && p.fechaProgramada
     ? new Date(`${p.fechaProgramada}T00:00:00`)
     : new Date(p.fecha);
+}
+
+/** Peso del pedido en kilos (ítems vendidos por KG). */
+function pesoKgPedido(p: Pedido): number {
+  return (p.carrito ?? []).reduce((s, i) => {
+    const esKg = (i.producto?.um ?? "").trim().toUpperCase() === "KG";
+    return s + (esKg ? i.cantidad || 0 : 0);
+  }, 0);
+}
+
+/** ¿El pedido es "pequeño" (≤10 kg)? Su alistado dura solo 40 minutos. */
+export function esPedidoPequeno(p: Pedido): boolean {
+  return pesoKgPedido(p) <= KILOS_PEDIDO_PEQUENO;
 }
 
 /**
@@ -80,6 +98,10 @@ export function msRestantesDespacho(
  * toda la ventana de 1h desde la confirmación.
  */
 export function deadlinePreparacion(p: Pedido, pagoConfirmado?: string | null): number {
+  // Pedido PEQUEÑO (≤10 kg): alistado corto de 40 minutos desde que entra.
+  if (esPedidoPequeno(p)) {
+    return new Date(p.fecha).getTime() + LIMITE_ALISTADO_PEQUENO_MS;
+  }
   // RECOGE: 2 horas para alistarlo desde que entra (independiente del objetivo
   // de las 6:00 PM para la entrega).
   if (esRecoge(p)) {

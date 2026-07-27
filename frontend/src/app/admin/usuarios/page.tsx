@@ -124,6 +124,8 @@ export default function AdminUsuariosPage() {
     setPermisos(u.permisos ?? []);
     setPuntosSel([]);
     setBuscarPunto("");
+    setBuscarCopiar("");
+    setCopiarAbierto(false);
     setPaso(0);
     setErrorForm(null);
     setWizardAbierto(true);

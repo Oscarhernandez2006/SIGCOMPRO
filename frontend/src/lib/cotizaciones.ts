@@ -2,6 +2,7 @@ import { apiFetch } from "./api";
 import type { ItemCarrito, Pedido } from "@/app/(panel)/pedidos/page";
 import type { PuntoVenta } from "./puntos-venta";
 import type { Cliente } from "./clientes";
+import type { ProductoPrecio } from "./productos";
 
 /**
  * Cotización: misma estructura base que un pedido (punto, cliente, carrito) pero
@@ -17,6 +18,8 @@ export interface Cotizacion {
   punto: PuntoVenta;
   cliente: Cliente;
   carrito: ItemCarrito[];
+  /** Lista de precios (productos seleccionados) que sale como 2ª hoja del PDF. */
+  listaPrecios?: ProductoPrecio[];
   total: number;
   observacion?: string;
   vendedorNombre?: string;

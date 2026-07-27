@@ -23,8 +23,10 @@ import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/confi
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import {
   ALERTA_DESPACHO_MS,
+  ALERTA_ALISTADO_PEQUENO_MS,
   LIMITE_DESPACHO_MS,
   esTransferencia,
+  esPedidoPequeno,
   objetivoDespacho,
   deadlinePreparacion,
   msRestantesDespacho,
@@ -296,6 +298,15 @@ const ESTADOS_FLUJO = [
 ] as const;
 
 /**
+ * Etiqueta amigable para el selector de "Cambiar estado" (solo cambia el TEXTO
+ * mostrado; el valor guardado sigue siendo el estado real del flujo).
+ */
+const ETIQUETA_ESTADO_FLUJO: Record<string, string> = {
+  "En proceso": "Pendiente",
+  "En producción": "Preparado",
+};
+
+/**
  * Permiso granular requerido para COLOCAR un pedido en cada estado. Cada estado
  * tiene su propio permiso; además, el permiso "maestro" despacho.estado (o un
  * rol con acceso total) habilita todos.
@@ -329,10 +340,10 @@ function fmtHora(iso: string): string {
 
 function tiempoEnEstado(iso: string): string {
   const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-  if (min < 1) return "MENOS DE 1 MIN EN PROCESO";
-  if (min < 60) return `${min} MIN EN PROCESO`;
+  if (min < 1) return "Menos de 1 Mint. EN PROCESO DESDE LA TOMA";
+  if (min < 60) return `${min} Mint. EN PROCESO DESDE LA TOMA`;
   const h = Math.floor(min / 60);
-  return `${h} H ${min % 60} MIN EN PROCESO`;
+  return `${h} h ${min % 60} Mint. EN PROCESO DESDE LA TOMA`;
 }
 
 export default function DespachoPage() {
@@ -523,6 +534,33 @@ export default function DespachoPage() {
     const id = setInterval(() => setAhora(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // AUTO-CORRECCIÓN de estado: si el alistamiento YA terminó (meta.fin) pero el
+  // estado quedó desincronizado en "En producción" (p. ej. falló el guardado del
+  // estado o faltó el permiso al pulsar "Finalizar Preparación"), se corrige a
+  // "Alistado" para no bloquear la facturación. Se hace UNA vez por pedido; si el
+  // guardado falla, se reintenta en el siguiente ciclo.
+  const alistadoCorregidoRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const p of pedidos) {
+      if (p.anulado) continue;
+      if (alistadoCorregidoRef.current.has(p.id)) continue;
+      if (meta[p.id]?.fin && norm(p.estado) === "en producción") {
+        alistadoCorregidoRef.current.add(p.id);
+        setPedidos((prev) => {
+          const next = prev.map((x) =>
+            x.id === p.id ? { ...x, estado: "Alistado" as Pedido["estado"] } : x,
+          );
+          const upd = next.find((x) => x.id === p.id);
+          if (upd)
+            guardarPedidoApi(upd).catch(() => {
+              alistadoCorregidoRef.current.delete(p.id);
+            });
+          return next;
+        });
+      }
+    }
+  }, [pedidos, meta]);
 
   /** Marca un pedido como impreso y lo persiste. */
   const marcarImpreso = (id: string) => {
@@ -727,9 +765,11 @@ export default function DespachoPage() {
         limpiarFactura();
         limpiarDespacho();
       } else if (n === "en producción") {
-        // Al regresar a producción se conservan los TIEMPOS de alistamiento
-        // (inicio y fin) y el alistador queda editable; solo se rehace lo que
-        // viene después (factura y despacho).
+        // Al regresar a "En producción" (Preparado) se REINICIA el alistamiento:
+        // se libera el porcionador y se reinician los tiempos (inicio y fin);
+        // además se rehace lo que viene después (factura y despacho).
+        limpiarProduccion();
+        limpiarAlistado();
         limpiarFactura();
         limpiarDespacho();
       } else if (n === "alistado") {
@@ -1068,9 +1108,10 @@ export default function DespachoPage() {
     return pedidosOrdenados.filter((p) => {
       if (vista === "atrasados") return atrasadosIds.has(p.id);
       if (vista === "posteriores") return esPosteriorFuturo(p) && impresos.has(p.id);
-      // La card "Total" trae TODOS los pedidos de HOY, en cualquier estado
-      // (incluidos despachados, anulados y atrasados).
-      if (vista === "total") return esDeHoy(p);
+      // La card "Total" trae TODOS los pedidos en cualquier estado: los de HOY
+      // (incluidos despachados, anulados y atrasados) + los Posteriores impresos.
+      if (vista === "total")
+        return esDeHoy(p) || (esPosteriorFuturo(p) && impresos.has(p.id));
       // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
       // solo aparece bajo "Atrasados", así el conteo coincide con la tabla.
       if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
@@ -1177,9 +1218,13 @@ export default function DespachoPage() {
                     // (aunque su estado real sea alistado/producción/etc.), para no
                     // duplicarlo ni inflar el Total.
                     pedidosDeHoy.filter((p) => def.match(p) && !atrasadosIds.has(p.id)).length;
-            // El Total son TODOS los pedidos de hoy (cualquier estado).
+            // El Total = TODOS los pedidos de cualquier estado: los de hoy +
+            // los Posteriores (programados a futuro ya impresos). Así el Total
+            // coincide con la suma de todas las cards (incluida Posteriores).
             const valor =
-              e.key === "total" ? pedidosDeHoy.length : valorDeCard(e);
+              e.key === "total"
+                ? pedidosDeHoy.length + posterioresFuturos.length
+                : valorDeCard(e);
             // Todas las cards son interactivas: filtran la tabla por su estado.
             const activo = vista === e.key;
             return (
@@ -1291,11 +1336,11 @@ export default function DespachoPage() {
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-cream-soft text-center text-[11px] uppercase tracking-wide text-brand-brown/50 shadow-sm">
               <tr>
-                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Cliente</th>
-                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Estado</th>
-                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Porcionador</th>
-                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Factura</th>
-                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Domiciliario</th>
+                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Cliente / info. del pedido</th>
+                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Estado actual del pedido</th>
+                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Preparación y alistamiento</th>
+                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Facturación</th>
+                <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Despacho</th>
                 <th className="px-3 py-2.5 font-semibold">Temporizador</th>
               </tr>
             </thead>
@@ -1310,13 +1355,19 @@ export default function DespachoPage() {
                   porcionadores: [],
                   domiciliarios: [],
                 };
-                const porcionadores = personal.porcionadores;
+                const porcionadores = [...personal.porcionadores].sort((a, b) =>
+                  a.localeCompare(b, "es", { sensitivity: "base" }),
+                );
                 const domiciliarios = personal.domiciliarios;
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
-                // Solo se puede facturar cuando el pedido ya está alistado.
-                const alistado = norm(estado) === "alistado";
+                // Solo se puede facturar cuando el pedido ya está alistado. Si el
+                // alistamiento YA terminó (m.fin) pero el estado quedó pegado en
+                // "En producción", se considera alistado igual (y se auto-corrige).
+                const alistado =
+                  norm(estado) === "alistado" ||
+                  (Boolean(m.fin) && !facturado && !despachado);
                 // Transferencia: el cobro se confirma aparte para congelar el cronómetro.
                 const transferencia = norm(p.pago) === "transferencia";
                 const pagoConfirmado = Boolean(m.pagoConfirmado);
@@ -1327,6 +1378,8 @@ export default function DespachoPage() {
                 const compConfirmado = Boolean(comp?.confirmado);
                 // El cliente recoge en el punto de venta (no lleva domiciliario).
                 const esRecoge = p.entrega === "recoge";
+                // Pedido pequeño (≤10 kg): alistado de 40 min (rojo a los 20 min).
+                const esPequeno = esPedidoPequeno(p);
                 // Arrastrado: pedido activo que quedó pendiente de un día anterior.
                 const esArrastrado =
                   diaEntregaISO(p) < hoyISO() &&
@@ -1584,7 +1637,7 @@ export default function DespachoPage() {
                         </div>
                       ) : (
                         !anulado && (
-                          <div className="mt-1.5 rounded-lg border border-brand-amber/25 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-brand-amber">
+                          <div className="mt-1.5 rounded-lg border border-brand-amber/25 px-3 py-1.5 text-center text-[11px] font-bold tracking-wide text-brand-amber">
                             {tiempoEnEstado(p.fecha)}
                           </div>
                         )
@@ -1602,7 +1655,7 @@ export default function DespachoPage() {
                           >
                             {ESTADOS_FLUJO.map((s) => (
                               <option key={s} value={s} disabled={!puedeEstado(s)}>
-                                {s}
+                                {ETIQUETA_ESTADO_FLUJO[s] ?? s}
                               </option>
                             ))}
                           </select>
@@ -1697,7 +1750,7 @@ export default function DespachoPage() {
                                 : "bg-brand-amber hover:bg-brand-amber/90"
                             }`}
                           >
-                            {m.inicio ? "Preparado" : "Iniciar alistamiento"}
+                            {m.inicio ? "Finalizar Preparación" : "Iniciar alistamiento"}
                           </button>
                         </div>
                       )}
@@ -1793,15 +1846,14 @@ export default function DespachoPage() {
                         ) : (
                           <button
                             onClick={() => cambiarEstado(p.id, "Facturado")}
-                            disabled={
-                              anulado ||
-                              facturado ||
-                              !alistado ||
-                              !m.facturaNumero?.trim() ||
-                              !(typeof m.facturaValor === "number" && m.facturaValor > 0) ||
-                              !puedeEstado("Facturado")
+                            disabled={anulado || facturado || !alistado || !puedeEstado("Facturado")}
+                            title={
+                              !alistado && !facturado
+                                ? "Debes terminar el alistamiento antes de facturar"
+                                : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                                  ? "Ingresa el número y el valor de la factura para facturar"
+                                  : "Marcar el pedido como facturado"
                             }
-                            title={!alistado && !facturado ? "Debes terminar el alistamiento antes de facturar" : "Marcar el pedido como facturado"}
                             className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
                             Facturado
@@ -1894,8 +1946,16 @@ export default function DespachoPage() {
                       <div className="absolute inset-x-3 bottom-3">
                         <button
                           onClick={() => cambiarEstado(p.id, "Despachado")}
-                          disabled={anulado || despachado || !facturado || (!esRecoge && !m.domiciliario?.trim()) || !puedeEstado("Despachado")}
-                          title={!facturado && !despachado ? "Debes facturar el pedido antes de despachar" : esRecoge ? "Marcar como entregado en el punto de venta" : "Marcar el pedido como despachado"}
+                          disabled={anulado || despachado || !facturado || !puedeEstado("Despachado")}
+                          title={
+                            !facturado && !despachado
+                              ? "Debes facturar el pedido antes de despachar"
+                              : !esRecoge && !m.domiciliario?.trim()
+                                ? "Asigna un domiciliario para despachar"
+                                : esRecoge
+                                  ? "Marcar como entregado en el punto de venta"
+                                  : "Marcar el pedido como despachado"
+                          }
                           className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${puedeEstado("Despachado") ? "" : "opacity-50"}`}
                         >
                           {esRecoge ? "Entregado en PDV" : "Despachado"}
@@ -1989,9 +2049,9 @@ export default function DespachoPage() {
                           // - RECOGE en el punto: 2h para alistar y entrega HASTA las
                           //   6:00 PM (la cuenta regresiva corre hacia esa hora).
                           const deadlineEntrega = objetivoDespacho(p);
-                          const deadlinePrep = esRecoge
-                            ? deadlinePreparacion(p)
-                            : deadlineEntrega - ALERTA_DESPACHO_MS; // 1h antes de la entrega
+                          // deadlinePreparacion contempla pequeños (40 min), recoge (2h)
+                          // y el resto (1h antes de la entrega).
+                          const deadlinePrep = deadlinePreparacion(p, m.pagoConfirmado);
                           const restEntrega = deadlineEntrega - ahora;
                           const restPrep = deadlinePrep - ahora;
                           const horaObj = (p.horaDespacho ?? "").trim();
@@ -2020,7 +2080,7 @@ export default function DespachoPage() {
                             prep = <div className={`${box} border-indigo-200 bg-indigo-50 text-indigo-600`}>Programado</div>;
                           } else {
                             prep = (
-                              <div className={`${box} ${claseTiempo(restPrep, 30 * 60 * 1000)}`}>
+                              <div className={`${box} ${claseTiempo(restPrep, esPequeno ? ALERTA_ALISTADO_PEQUENO_MS : 30 * 60 * 1000)}`}>
                                 {iconoReloj}
                                 {restPrep <= 0 ? "-" : ""}{fmtCronometro(restPrep)}
                               </div>
@@ -2052,7 +2112,7 @@ export default function DespachoPage() {
                             <div className="space-y-2">
                               <div>
                                 <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
-                                  {esRecoge ? "Alistar (2h)" : "Preparación (1h)"}
+                                  {esPequeno ? "Alistar (40 min)" : esRecoge ? "Alistar (2h)" : "Preparación (1h)"}
                                 </p>
                                 {prep}
                               </div>

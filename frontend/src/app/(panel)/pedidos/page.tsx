@@ -97,6 +97,7 @@ export default function PedidosPage() {
       crear: puedeAccion(usuario, "pedidos.crear"),
       editar: puedeAccion(usuario, "pedidos.editar"),
       anular: puedeAccion(usuario, "pedidos.anular"),
+      cancelar: puedeAccion(usuario, "pedidos.cancelar"),
       imprimir: puedeAccion(usuario, "pedidos.imprimir"),
       clonar: puedeAccion(usuario, "pedidos.clonar"),
       sincronizar: puedeAccion(usuario, "pedidos.sincronizar"),
@@ -619,7 +620,7 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
                             </svg>
                           </button>
-                          <button onClick={permite.anular ? () => cancelarPedido(p) : sinPermiso.mostrar} aria-label="Cancelar pedido" title="Cancelar el pedido (motivo externo: el cliente no lo recibió / devolución)" className={`rounded-lg border border-orange-200 p-1.5 text-orange-600 transition hover:bg-orange-50 ${permite.anular ? "" : "opacity-50"}`}>
+                          <button onClick={permite.cancelar ? () => cancelarPedido(p) : sinPermiso.mostrar} aria-label="Cancelar pedido" title="Cancelar el pedido (motivo externo: el cliente no lo recibió / devolución)" className={`rounded-lg border border-orange-200 p-1.5 text-orange-600 transition hover:bg-orange-50 ${permite.cancelar ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                             </svg>
@@ -3288,9 +3289,10 @@ export interface Pedido extends DatosComanda {
 
 /** Evento de trazabilidad del pedido (lo registra el backend con hora del servidor). */
 export interface TrazaEvento {
-  tipo: "creacion" | "estado" | "anulacion";
+  tipo: "creacion" | "estado" | "anulacion" | "cancelacion" | "edicion";
   estadoAnterior?: string | null;
   estadoNuevo?: string | null;
+  motivo?: string | null;
   fecha: string;
   usuarioId?: string | null;
   usuarioNombre?: string | null;
@@ -3574,30 +3576,39 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   <ol className="relative space-y-3 border-l border-brand-brown/15 pl-4">
                     {pedido.trazabilidad.map((ev, i) => {
                       const esAnul = ev.tipo === "anulacion";
-                      const esCancel = esAnul && ev.estadoNuevo === "Cancelado";
+                      const esCancel =
+                        ev.tipo === "cancelacion" ||
+                        (esAnul && ev.estadoNuevo === "Cancelado");
+                      const esEdicion = ev.tipo === "edicion";
                       const color =
                         ev.tipo === "creacion"
                           ? "bg-emerald-500"
-                          : esAnul
-                            ? esCancel
-                              ? "bg-orange-500"
-                              : "bg-red-500"
-                            : "bg-brand-amber";
+                          : esCancel
+                            ? "bg-orange-500"
+                            : esAnul
+                              ? "bg-red-500"
+                              : esEdicion
+                                ? "bg-sky-500"
+                                : "bg-brand-amber";
                       const titulo =
                         ev.tipo === "creacion"
                           ? "Pedido creado"
-                          : esAnul
-                            ? esCancel
-                              ? "Pedido cancelado"
-                              : "Pedido anulado"
-                            : `Cambió a ${ev.estadoNuevo ?? "—"}${ev.estadoAnterior ? ` desde ${ev.estadoAnterior}` : ""}`;
+                          : esCancel
+                            ? "Pedido cancelado"
+                            : esAnul
+                              ? "Pedido anulado"
+                              : esEdicion
+                                ? "Pedido editado"
+                                : `Cambió a ${ev.estadoNuevo ?? "—"}${ev.estadoAnterior ? ` desde ${ev.estadoAnterior}` : ""}`;
+                      const motivoEv =
+                        ev.motivo ?? (esAnul || esCancel ? pedido.motivo : null);
                       return (
                         <li key={i} className="relative">
                           <span className={`absolute -left-[1.30rem] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white ${color}`} />
                           <p className="font-semibold text-brand-black">{titulo}</p>
-                          {esAnul && pedido.motivo && (
+                          {(esAnul || esCancel) && motivoEv && (
                             <p className="text-xs text-brand-brown/70">
-                              Motivo: <span className="font-medium">{pedido.motivo}</span>
+                              Motivo: <span className="font-medium">{motivoEv}</span>
                             </p>
                           )}
                           <p className="text-xs text-brand-brown/50">
