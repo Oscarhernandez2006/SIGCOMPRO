@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, cargarTrazabilidad, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -111,36 +111,50 @@ export default function PedidosPage() {
   useEffect(() => {
     let activo = true;
     const primera = { current: true };
+    let enVuelo = false;
+    let desde: string | undefined;
     const refrescar = () => {
-      cargarEstadoPedidos()
+      // Evita ENCABALLAR peticiones: si la carga anterior sigue en curso, se
+      // omite este tick. Contra la BD remota una carga puede tardar más que el
+      // intervalo (7 s); acumular peticiones satura la red y todo se vuelve
+      // progresivamente más lento (lento -> rápido -> lento).
+      if (enVuelo) return;
+      enVuelo = true;
+      // Polling INCREMENTAL: tras la primera carga se envía `desde` (el `ahora`
+      // de la respuesta previa) y el backend responde SOLO con lo que cambió.
+      // Alcance 'hoy': activos (cualquier fecha) + finalizados de hoy. Los días
+      // ANTERIORES se cargan aparte al elegir una fecha (ver efecto más abajo).
+      cargarEstadoPedidos({ desde, rango: "hoy" })
         .then((e) => {
           if (!activo) return;
+          desde = e.ahora ?? desde;
           if (primera.current) {
-            // Primera carga: estado completo.
+            // Primera carga: conjunto de trabajo completo.
             setPedidos(e.pedidos);
             setMeta(e.meta ?? {});
             primera.current = false;
             return;
           }
-          // Cargas siguientes: solo agrega pedidos que aún no tenemos.
-          setPedidos((prev) => {
-            const ids = new Set(prev.map((p) => p.id));
-            const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
-            return nuevos.length ? [...nuevos, ...prev] : prev;
-          });
-          setMeta((prev) => {
-            let cambio = false;
-            const merged = { ...prev };
-            for (const [k, v] of Object.entries(e.meta ?? {})) {
-              if (!(k in merged)) {
-                merged[k] = v;
-                cambio = true;
-              }
-            }
-            return cambio ? merged : prev;
-          });
+          // Incremental: e.pedidos trae SOLO los pedidos que cambiaron -> upsert
+          // por id (reemplaza el existente o agrega el nuevo al inicio). Los que
+          // el usuario edita y aún no guarda no vienen aquí, así que no se pisan.
+          if (e.pedidos.length) {
+            setPedidos((prev) => {
+              const cambiados = new Map(e.pedidos.map((p) => [p.id, p]));
+              const idsPrev = new Set(prev.map((p) => p.id));
+              const actualizados = prev.map((p) => cambiados.get(p.id) ?? p);
+              const nuevos = e.pedidos.filter((p) => !idsPrev.has(p.id));
+              return nuevos.length ? [...nuevos, ...actualizados] : actualizados;
+            });
+          }
+          if (e.meta && Object.keys(e.meta).length) {
+            setMeta((prev) => ({ ...prev, ...e.meta }));
+          }
         })
-        .catch(() => { /* ignore */ });
+        .catch(() => { /* ignore */ })
+        .finally(() => {
+          enVuelo = false;
+        });
     };
     refrescar();
     const id = setInterval(refrescar, 7000);
@@ -242,6 +256,42 @@ export default function PedidosPage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
+
+  // Carga BAJO DEMANDA de días ANTERIORES. El polling solo trae "hoy" (activos +
+  // finalizados de hoy). Cuando el usuario elige una fecha distinta a hoy que aún
+  // no se ha cargado, se piden los pedidos de ESE día y se fusionan (una sola vez
+  // por día). Así la carga inicial es liviana y los días viejos se traen solo si
+  // se consultan.
+  const diasCargadosRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const dia = fechaFiltro;
+    if (!dia || dia === hoyISO() || diasCargadosRef.current.has(dia)) return;
+    diasCargadosRef.current.add(dia);
+    cargarEstadoPedidos({ rango: "fecha", fecha: dia })
+      .then((e) => {
+        setPedidos((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]));
+          let cambio = false;
+          const nuevos: Pedido[] = [];
+          for (const p of e.pedidos) {
+            if (byId.has(p.id)) byId.set(p.id, p);
+            else nuevos.push(p);
+            cambio = true;
+          }
+          if (!cambio) return prev;
+          const actualizados = prev.map((p) => byId.get(p.id) ?? p);
+          return nuevos.length ? [...nuevos, ...actualizados] : actualizados;
+        });
+        if (e.meta && Object.keys(e.meta).length) {
+          setMeta((prev) => ({ ...prev, ...e.meta }));
+        }
+      })
+      .catch(() => {
+        // Si falla, permite reintentar al volver a elegir esa fecha.
+        diasCargadosRef.current.delete(dia);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fechaFiltro]);
 
   const guardarPedido = (p: Pedido) => {
     setPedidos((prev) => {
@@ -3359,6 +3409,22 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
         (meta.replicas && meta.replicas.length > 0)),
   );
   const [verTraza, setVerTraza] = useState(false);
+  // La trazabilidad NO viaja en el listado (payload liviano); se carga bajo
+  // demanda al abrir el modal. Si un pedido antiguo aún la trae, se reutiliza.
+  const [traza, setTraza] = useState<TrazaEvento[] | null>(pedido.trazabilidad ?? null);
+  const [trazaCargando, setTrazaCargando] = useState(false);
+  const abrirTrazabilidad = async () => {
+    setVerTraza(true);
+    if (traza !== null) return;
+    setTrazaCargando(true);
+    try {
+      setTraza(await cargarTrazabilidad(pedido.id));
+    } catch {
+      setTraza([]);
+    } finally {
+      setTrazaCargando(false);
+    }
+  };
   // Comprobante de pago (solo transferencia o mixto): al pulsar el ícono de foto
   // se consulta la imagen cargada desde despacho y se muestra (o un aviso si no hay).
   const pagoTransfMixto = ["transferencia", "mixto"].includes((pedido.pago ?? "").trim().toLowerCase());
@@ -3400,7 +3466,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setVerTraza(true)}
+              onClick={abrirTrazabilidad}
               title="Ver la trazabilidad del pedido"
               className="inline-flex items-center gap-1.5 rounded-lg border border-brand-wine/30 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
             >
@@ -3569,12 +3635,18 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 </div>
               )}
 
-              {/* Historial: creación, cambios de estado y anulación (quién y cuándo) */}
-              {pedido.trazabilidad && pedido.trazabilidad.length > 0 && (
+              {/* Historial: creación, cambios de estado y anulación (quién y cuándo).
+                  Se carga bajo demanda (no viaja en el listado). */}
+              {trazaCargando ? (
+                <div className="mb-4 flex items-center justify-center gap-2 py-6 text-brand-brown/50">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
+                  <span className="text-xs font-medium">Cargando historial…</span>
+                </div>
+              ) : traza && traza.length > 0 ? (
                 <div className="mb-4">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Historial</p>
                   <ol className="relative space-y-3 border-l border-brand-brown/15 pl-4">
-                    {pedido.trazabilidad.map((ev, i) => {
+                    {traza.map((ev, i) => {
                       const esAnul = ev.tipo === "anulacion";
                       const esCancel =
                         ev.tipo === "cancelacion" ||
@@ -3622,6 +3694,10 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                     })}
                   </ol>
                 </div>
+              ) : (
+                <p className="mb-4 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/50">
+                  Este pedido no tiene historial registrado.
+                </p>
               )}
 
               {/* Despacho: personal y horas del proceso */}

@@ -1,7 +1,7 @@
 import { apiFetch } from "./api";
 import { API_URL } from "./api";
 import { getToken } from "./auth";
-import type { Pedido } from "@/app/(panel)/pedidos/page";
+import type { Pedido, TrazaEvento } from "@/app/(panel)/pedidos/page";
 
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */
 export interface DespachoMeta {
@@ -55,11 +55,48 @@ export interface EstadoPedidos {
   pedidos: Pedido[];
   meta: Record<string, DespachoMeta>;
   impresos: string[];
+  /**
+   * Instante del servidor de esta respuesta. Se reenvía como `desde` en el
+   * siguiente poll para recibir SOLO lo que cambió (polling incremental).
+   */
+  ahora?: string;
 }
 
-/** Carga todos los pedidos con su metadata de despacho e impresos. */
-export function cargarEstadoPedidos(): Promise<EstadoPedidos> {
-  return apiFetch<EstadoPedidos>("/pedidos");
+/**
+ * Carga los pedidos con su metadata e impresos.
+ * - `desde`: polling incremental — solo lo cambiado desde ese instante.
+ * - `rango`: alcance del conjunto. 'hoy' (Pedidos/Despacho, mucho más liviano),
+ *   'fecha' (un día concreto, para ver días anteriores), 'posteriores'. Sin
+ *   `rango` = comportamiento previo (activos + últimos días) para Cuadre de
+ *   caja, Históricos y Dashboard.
+ * - `fecha`: día concreto (YYYY-MM-DD) cuando `rango='fecha'`.
+ */
+export interface OpcionesCargaPedidos {
+  desde?: string;
+  rango?: "hoy" | "fecha" | "posteriores";
+  fecha?: string;
+}
+
+export function cargarEstadoPedidos(
+  opts?: OpcionesCargaPedidos,
+): Promise<EstadoPedidos> {
+  const p = new URLSearchParams();
+  if (opts?.desde) p.set("desde", opts.desde);
+  if (opts?.rango) p.set("rango", opts.rango);
+  if (opts?.fecha) p.set("fecha", opts.fecha);
+  const qs = p.toString();
+  return apiFetch<EstadoPedidos>(`/pedidos${qs ? `?${qs}` : ""}`);
+}
+
+/**
+ * Trazabilidad (historial) de un pedido, BAJO DEMANDA. El listado no la trae
+ * para aligerar el payload que se refresca por polling; se consulta al abrir
+ * el modal de trazabilidad de un pedido puntual.
+ */
+export function cargarTrazabilidad(id: string): Promise<TrazaEvento[]> {
+  return apiFetch<{ trazabilidad: TrazaEvento[] }>(
+    `/pedidos/${id}/trazabilidad`,
+  ).then((r) => r.trazabilidad ?? []);
 }
 
 /**

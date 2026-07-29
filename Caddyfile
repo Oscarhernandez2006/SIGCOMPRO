@@ -3,6 +3,12 @@
 #   /api/*  -> backend NestJS (3001)  [el backend ya usa prefijo /api]
 #   /*      -> frontend Next.js (3000)
 :80 {
+	# Compresión de respuestas (zstd/gzip). El endpoint que el panel consulta
+	# por polling (/api/pedidos) devuelve varios MB de JSON cada pocos segundos;
+	# comprimirlo reduce ~10x los bytes en la red y descarga al navegador mucho
+	# más rápido. Caddy comprime en el proxy, sin recargar el event loop de Node.
+	encode zstd gzip
+
 	# Backend: todo lo que empiece por /api
 	handle /api/* {
 		reverse_proxy 127.0.0.1:3001

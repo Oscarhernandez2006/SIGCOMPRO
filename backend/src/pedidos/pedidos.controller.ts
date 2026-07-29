@@ -30,8 +30,18 @@ export class PedidosController {
 
   /** Estado completo: pedidos + metadata de despacho + impresos. */
   @Get()
-  estado() {
-    return this.pedidos.estado();
+  estado(
+    @Query('desde') desde?: string,
+    @Query('rango') rango?: string,
+    @Query('fecha') fecha?: string,
+  ) {
+    return this.pedidos.estado(desde, rango, fecha);
+  }
+
+  /** Trazabilidad (historial) de un pedido, bajo demanda (no viaja en el listado). */
+  @Get(':id/trazabilidad')
+  trazabilidad(@Param('id') id: string) {
+    return this.pedidos.trazabilidad(id);
   }
 
   /** Descarga el Excel de despacho del pedido (formato del software de ruteo). */

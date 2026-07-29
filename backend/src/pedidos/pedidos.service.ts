@@ -71,6 +71,11 @@ export interface EstadoPedidos {
   pedidos: PedidoData[];
   meta: Record<string, DespachoMeta>;
   impresos: string[];
+  /**
+   * Instante del servidor de esta respuesta. El cliente lo reenvía como `desde`
+   * en el siguiente poll para recibir SOLO lo que cambió (polling incremental).
+   */
+  ahora: string;
 }
 
 @Injectable()
@@ -97,6 +102,10 @@ export class PedidosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Índice para el polling incremental (WHERE actualizado_en > desde).
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_actualizado ON pedidos (actualizado_en)`,
+    );
     // Comprobantes de pago (imagen en base64) por pedido. Se guardan aparte de
     // la metadata para no inflar la carga masiva de pedidos (en la metadata solo
     // queda una bandera liviana: comprobante = { tiene, confirmado }).
@@ -115,27 +124,75 @@ export class PedidosService implements OnModuleInit {
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
-  async estado(): Promise<EstadoPedidos> {
-    // Para no traer TODO el histórico (miles de pedidos = varios MB por
-    // llamada, agravado por el polling), se cargan solo los pedidos ACTIVOS
-    // (pendientes, cualquier fecha) más los FINALIZADOS de los últimos N días
-    // (para la numeración del día y la vista reciente). El histórico completo
-    // se consulta desde su vista propia. N es configurable por entorno.
+  async estado(
+    desde?: string,
+    rango?: string,
+    fecha?: string,
+  ): Promise<EstadoPedidos> {
+    // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
+    // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
+    // Despacho piden rango='hoy' (mucho más liviano) y cargan días ANTERIORES
+    // solo cuando el usuario aplica ese filtro (rango='fecha'&fecha=YYYY-MM-DD).
     const dias =
       Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
+    // Polling INCREMENTAL: si el cliente envía `desde` (el `ahora` que recibió
+    // en su última respuesta), solo se devuelven los pedidos del conjunto de
+    // trabajo que CAMBIARON desde ese instante (actualizado_en > desde). Así
+    // cada poll pasa de varios MB a unos KB. Sin `desde` = primera carga total.
+    const desdeValido =
+      desde && !Number.isNaN(Date.parse(desde)) ? desde : null;
+    const ahora = new Date().toISOString();
+
+    // Día de ENTREGA efectivo (zona Bogotá): la fecha programada si el pedido se
+    // dejó para otro día; si no, el día de creación.
+    const diaEfectivo = `
+      CASE
+        WHEN (data->>'entregaProgramada') = 'true'
+             AND COALESCE(data->>'fechaProgramada', '') <> ''
+        THEN (data->>'fechaProgramada')::date
+        ELSE (fecha AT TIME ZONE 'America/Bogota')::date
+      END`;
+    const hoy = `(now() AT TIME ZONE 'America/Bogota')::date`;
+    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado'))`;
+
+    const params: unknown[] = [];
+    let scope: string;
+    if (rango === 'hoy') {
+      // HOY: día de entrega = hoy (cualquier estado) + TODO lo que sigue activo
+      // (arrastrados de días anteriores y programados a futuro, que el flujo de
+      // despacho necesita). Excluye los FINALIZADOS de días anteriores (el
+      // bulto que Pedidos/Despacho nunca muestran en la vista de hoy).
+      scope = `((${diaEfectivo}) = ${hoy} OR ${activo})`;
+    } else if (rango === 'posteriores') {
+      // POSTERIORES: programados para un día futuro.
+      scope = `((${diaEfectivo}) > ${hoy})`;
+    } else if (rango === 'fecha' && fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      // Un día CONCRETO (para ver días anteriores bajo demanda).
+      params.push(fecha);
+      scope = `((${diaEfectivo}) = $${params.length}::date)`;
+    } else {
+      // Comportamiento previo (reciente): activos + últimos N días.
+      scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;
+    }
+    params.push(desdeValido);
+    const idxDesde = params.length;
+
     const res = await this.pool.query<{
       id: string;
       impreso: boolean;
       data: PedidoData;
       meta: DespachoMeta;
     }>(
-      `SELECT id, impreso, data, meta
+      // Se OMITE data->'trazabilidad' (el historial completo, que crece con cada
+      // cambio de estado y llega a ser ~60% del blob): no se usa en el listado y
+      // este endpoint se refresca por polling cada pocos segundos. La
+      // trazabilidad se consulta aparte y bajo demanda (ver trazabilidad()).
+      `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
        FROM pedidos
-       WHERE (anulado = false
-              AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado'))
-          OR fecha >= (now() - make_interval(days => $1))
+       WHERE ${scope}
+         AND ($${idxDesde}::timestamptz IS NULL OR actualizado_en > $${idxDesde}::timestamptz)
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
-      [dias],
+      params,
     );
 
     const pedidos: PedidoData[] = [];
@@ -149,8 +206,27 @@ export class PedidosService implements OnModuleInit {
       if (row.impreso) impresos.push(row.id);
     }
     await this.refrescarClientes(pedidos);
-    this.asignarNumerosDia(pedidos);
-    return { pedidos, meta, impresos };
+    // El número de turno (numeroDia) se asigna atómicamente al CREAR el pedido y
+    // queda guardado en el blob. Solo se recalcula en la carga COMPLETA (red de
+    // seguridad para pedidos antiguos); en una respuesta incremental NO se toca,
+    // porque recalcular sobre el subconjunto daría números equivocados.
+    if (!desdeValido) this.asignarNumerosDia(pedidos);
+    return { pedidos, meta, impresos, ahora };
+  }
+
+  /**
+   * Trazabilidad (historial) de un pedido puntual. Se consulta BAJO DEMANDA al
+   * abrir el modal, porque el listado (estado()) omite este arreglo para no
+   * inflar el payload que se refresca por polling cada pocos segundos.
+   */
+  async trazabilidad(id: string): Promise<{ trazabilidad: TrazaEvento[] }> {
+    const res = await this.pool.query<{ trazabilidad: TrazaEvento[] | null }>(
+      `SELECT COALESCE(data->'trazabilidad', '[]'::jsonb) AS trazabilidad
+         FROM pedidos WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    if (res.rowCount === 0) throw new NotFoundException('Pedido no encontrado');
+    return { trazabilidad: res.rows[0].trazabilidad ?? [] };
   }
 
   /** Fecha (YYYY-MM-DD) en zona horaria de Bogotá. Por defecto, hoy. */

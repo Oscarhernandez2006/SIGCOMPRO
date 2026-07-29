@@ -124,11 +124,16 @@ export default function CuadreCajaPage() {
   // Temporizadores de autoguardado por pedido (debounce al escribir).
   const autosaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [autoguardando, setAutoguardando] = useState(false);
+  // Aviso emergente "Guardado automático" (aparece 3 s en el centro de la pantalla
+  // cada vez que el autoguardado persiste una liquidación).
+  const [avisoAutoguardado, setAvisoAutoguardado] = useState(false);
+  const avisoAutoguardadoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Limpia los temporizadores pendientes al desmontar.
   useEffect(() => {
     const timers = autosaveTimers.current;
     return () => {
       Object.values(timers).forEach((t) => clearTimeout(t));
+      if (avisoAutoguardadoTimer.current) clearTimeout(avisoAutoguardadoTimer.current);
     };
   }, []);
 
@@ -471,6 +476,10 @@ export default function CuadreCajaPage() {
     try {
       await actualizarMetaApi(id, cambios);
       setMeta((m) => ({ ...m, [id]: { ...m[id], ...cambios } }));
+      // Muestra el aviso emergente "Guardado automático" durante 3 s.
+      setAvisoAutoguardado(true);
+      if (avisoAutoguardadoTimer.current) clearTimeout(avisoAutoguardadoTimer.current);
+      avisoAutoguardadoTimer.current = setTimeout(() => setAvisoAutoguardado(false), 3000);
       const tieneValor = cambios.cuadreEfectivo > 0 || cambios.cuadreOmp > 0;
       setCompletados((prev) => {
         if (tieneValor) {
@@ -1177,7 +1186,7 @@ export default function CuadreCajaPage() {
                   disabled={guardando}
                   className="rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
                 >
-                  {guardando ? "Guardando…" : cerrado ? "Guardar cambios" : "Guardar cuadre"}
+                  {guardando ? "Guardando…" : cerrado ? "Guardar cambios" : "Cerrar Caja"}
                 </button>
               )}
             </div>
@@ -1250,6 +1259,18 @@ export default function CuadreCajaPage() {
                 {verificandoAuth ? "Verificando…" : authCeldaId ? "Modificar" : "Autorizar"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso emergente centrado: confirma cada guardado automático (3 s) */}
+      {avisoAutoguardado && (
+        <div className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center">
+          <div className="flex items-center gap-2.5 rounded-2xl bg-brand-black/85 px-6 py-4 text-base font-semibold text-white shadow-2xl backdrop-blur-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5 text-emerald-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            Guardado automático
           </div>
         </div>
       )}

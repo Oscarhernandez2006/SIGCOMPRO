@@ -466,10 +466,24 @@ export default function DespachoPage() {
   useEffect(() => {
     let activo = true;
     let primera = true;
+    let enVuelo = false;
+    let desde: string | undefined;
     const refrescar = () => {
-      cargarEstadoPedidos()
+      // Evita ENCABALLAR peticiones: si la carga anterior sigue en curso, se
+      // omite este tick. Contra la BD remota una carga puede tardar más que el
+      // intervalo (7 s); acumular peticiones satura la red y todo se vuelve
+      // progresivamente más lento (lento -> rápido -> lento).
+      if (enVuelo) return;
+      enVuelo = true;
+      // Polling INCREMENTAL: tras la primera carga se envía `desde` (el `ahora`
+      // de la respuesta previa) y el backend responde SOLO con lo que cambió,
+      // haciendo cada poll mucho más liviano (KB en vez de MB). Alcance 'hoy':
+      // activos (cualquier fecha) + finalizados de hoy — Despacho nunca muestra
+      // finalizados de días anteriores, así que no cambia lo que se ve.
+      cargarEstadoPedidos({ desde, rango: "hoy" })
         .then((e) => {
           if (!activo) return;
+          desde = e.ahora ?? desde;
           if (primera) {
             setPedidos(e.pedidos);
             setMeta(e.meta);
@@ -477,36 +491,50 @@ export default function DespachoPage() {
             primera = false;
             return;
           }
-          setPedidos((prev) => {
-            const ids = new Set(prev.map((p) => p.id));
-            const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
-            return nuevos.length ? [...nuevos, ...prev] : prev;
-          });
-          setMeta((prev) => {
-            let cambio = false;
-            const merged = { ...prev };
-            for (const [k, v] of Object.entries(e.meta ?? {})) {
-              if (!(k in merged)) {
-                merged[k] = v;
-                cambio = true;
+          // Incremental: e.pedidos trae SOLO los pedidos que cambiaron.
+          if (e.pedidos.length) {
+            // Agrega los pedidos nuevos (no se reemplazan los existentes para no
+            // pisar el estado que se edita en vivo: factura, estado, etc.).
+            setPedidos((prev) => {
+              const ids = new Set(prev.map((p) => p.id));
+              const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
+              return nuevos.length ? [...nuevos, ...prev] : prev;
+            });
+            // Reconcilia impresos SOLO para los pedidos que cambiaron.
+            const impresosDelta = new Set(e.impresos);
+            setImpresos((prev) => {
+              let cambio = false;
+              const next = new Set(prev);
+              for (const p of e.pedidos) {
+                const debe = impresosDelta.has(p.id);
+                if (debe && !next.has(p.id)) {
+                  next.add(p.id);
+                  cambio = true;
+                } else if (!debe && next.has(p.id)) {
+                  next.delete(p.id);
+                  cambio = true;
+                }
               }
-            }
-            return cambio ? merged : prev;
-          });
-          setImpresos((prev) => {
-            let cambio = false;
-            const next = new Set(prev);
-            for (const id of e.impresos) {
-              if (!next.has(id)) {
-                next.add(id);
-                cambio = true;
+              return cambio ? next : prev;
+            });
+          }
+          if (e.meta && Object.keys(e.meta).length) {
+            // Deep-merge por pedido: aplica los campos del servidor y conserva
+            // los que se estén editando localmente y aún no se hayan guardado.
+            setMeta((prev) => {
+              const merged = { ...prev };
+              for (const [k, v] of Object.entries(e.meta)) {
+                merged[k] = { ...(merged[k] ?? {}), ...v };
               }
-            }
-            return cambio ? next : prev;
-          });
+              return merged;
+            });
+          }
         })
         .catch(() => {
           /* ignore */
+        })
+        .finally(() => {
+          enVuelo = false;
         });
     };
     refrescar();
