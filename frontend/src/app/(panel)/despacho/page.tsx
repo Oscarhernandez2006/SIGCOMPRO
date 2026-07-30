@@ -25,6 +25,7 @@ import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
   LIMITE_DESPACHO_MS,
+  LIMITE_TRANSFERENCIA_MS,
   esTransferencia,
   esPedidoPequeno,
   objetivoDespacho,
@@ -606,47 +607,15 @@ export default function DespachoPage() {
     });
   };
 
-  /** Edita el método de pago de un pedido y lo persiste (se refleja en la comanda). */
+  /** Edita SOLO el método de pago de un pedido y lo persiste. Conserva estado,
+   *  factura, alistamiento, confirmación de transferencia y demás información. */
   const cambiarPago = (id: string, pago: string) => {
     if (!permite.pago) {
       sinPermiso.mostrar();
       return;
     }
-    const m = meta[id];
-    const esTransfer = norm(pago) === "transferencia";
-    // Mantiene consistente el flujo de transferencia para EVITAR facturas sin
-    // confirmar el pago: al marcar transferencia (sin confirmar aún) se descarta
-    // cualquier factura previa, obligando a confirmar la transferencia ANTES de
-    // volver a facturar. Si el pedido ya estaba "Facturado", regresa a
-    // "Alistado". Al cambiar a otro método, se descarta una confirmación de
-    // transferencia que hubiera quedado obsoleta.
-    const reset: Record<string, unknown> = {};
-    let revertirAAlistado = false;
-    if (esTransfer) {
-      if (!m?.pagoConfirmado) {
-        if (m?.facturaNumero) reset.facturaNumero = "";
-        if (m?.facturaValor != null) reset.facturaValor = null;
-        const est = norm(pedidos.find((p) => p.id === id)?.estado);
-        if (est === "facturado") revertirAAlistado = true;
-      }
-    } else if (m?.pagoConfirmado) {
-      reset.pagoConfirmado = null;
-    }
-    if (Object.keys(reset).length) {
-      actualizarMeta(id, reset as Partial<DespachoMeta>);
-    }
     setPedidos((prev) => {
-      const next = prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              pago,
-              ...(revertirAAlistado
-                ? { estado: "Alistado" as Pedido["estado"] }
-                : {}),
-            }
-          : p,
-      );
+      const next = prev.map((p) => (p.id === id ? { ...p, pago } : p));
       const actualizado = next.find((p) => p.id === id);
       if (actualizado) guardarPedidoApi(actualizado).catch(() => { /* ignore */ });
       return next;
@@ -2027,35 +1996,63 @@ export default function DespachoPage() {
                             </svg>
                           );
 
-                          // Transferencia: el cronómetro (1 hora) corre SOLO desde
-                          // que se confirma la transferencia. Antes: sin cuenta.
-                          // Los "recoge" NO usan esta rama (su objetivo es 6:00 PM).
+                          // Transferencia: el cronómetro (1 hora) corre desde que
+                          // se confirma el pago. Solo se muestra "Esperando
+                          // transferencia" si el pedido AÚN no ha empezado; si ya se
+                          // alistó/facturó/despachó (p. ej. se corrigió el método de
+                          // pago), se conserva su cronómetro/estado usando la creación
+                          // como base. Los "recoge" NO usan esta rama (objetivo 6 PM).
                           if (esTransferencia(p) && !esRecoge) {
-                            if (!m.pagoConfirmado) {
+                            const yaEmpezo =
+                              Boolean(m.inicio) || Boolean(m.fin) || facturado || despachado;
+                            if (!m.pagoConfirmado && !yaEmpezo) {
                               return (
                                 <div className={`${box} border-blue-200 bg-blue-50 text-blue-600`}>
                                   Esperando transferencia
                                 </div>
                               );
                             }
-                            const deadline = objetivoDespacho(p, m.pagoConfirmado);
+                            const baseMs = m.pagoConfirmado
+                              ? new Date(m.pagoConfirmado).getTime()
+                              : new Date(p.fecha).getTime();
+                            const deadline = baseMs + LIMITE_TRANSFERENCIA_MS;
                             const rest = deadline - ahora;
-                            let cont;
-                            if (m.despachoFin) {
-                              const aTiempo = new Date(m.despachoFin).getTime() <= deadline;
-                              cont = (
+                            const claseTransfer =
+                              rest <= 30 * 60 * 1000
+                                ? "border-red-300 bg-red-50 text-red-600"
+                                : "border-green-200 bg-green-50 text-green-700";
+                            // Preparación: meta = alistado (m.fin).
+                            let prepT;
+                            if (m.fin) {
+                              const aTiempo = new Date(m.fin).getTime() <= deadline;
+                              prepT = (
                                 <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
                                   {aTiempo ? iconoOk : null}
                                   {aTiempo ? "Cumplido" : "Fuera de tiempo"}
                                 </div>
                               );
                             } else {
-                              const clase =
-                                rest <= 30 * 60 * 1000
-                                  ? "border-red-300 bg-red-50 text-red-600"
-                                  : "border-green-200 bg-green-50 text-green-700";
-                              cont = (
-                                <div className={`${box} ${clase}`}>
+                              prepT = (
+                                <div className={`${box} ${claseTransfer}`}>
+                                  {iconoReloj}
+                                  {rest <= 0 ? "-" : ""}
+                                  {fmtCronometro(rest)}
+                                </div>
+                              );
+                            }
+                            // Entrega: meta = despachado (m.despachoFin).
+                            let entregaT;
+                            if (m.despachoFin) {
+                              const aTiempo = new Date(m.despachoFin).getTime() <= deadline;
+                              entregaT = (
+                                <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
+                                  {aTiempo ? iconoOk : null}
+                                  {aTiempo ? "Cumplido" : "Fuera de tiempo"}
+                                </div>
+                              );
+                            } else {
+                              entregaT = (
+                                <div className={`${box} ${claseTransfer}`}>
                                   {iconoReloj}
                                   {rest <= 0 ? "-" : ""}
                                   {fmtCronometro(rest)}
@@ -2063,11 +2060,19 @@ export default function DespachoPage() {
                               );
                             }
                             return (
-                              <div>
-                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
-                                  Producción (1h)
-                                </p>
-                                {cont}
+                              <div className="space-y-2">
+                                <div>
+                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                    Producción (1h)
+                                  </p>
+                                  {prepT}
+                                </div>
+                                <div>
+                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                    Entrega
+                                  </p>
+                                  {entregaT}
+                                </div>
                               </div>
                             );
                           }
