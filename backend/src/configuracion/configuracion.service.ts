@@ -12,6 +12,8 @@ export interface PersonalDespacho {
 export interface PersonaAsignada {
   nombre: string;
   puntos: string[];
+  /** ¿Activa? Si es false, no aparece en los selectores de despacho. */
+  activo?: boolean;
 }
 
 /** Registro global de personas, centrado en la persona (no en el punto). */
@@ -275,9 +277,11 @@ export class ConfiguracionService implements OnModuleInit {
       return mapa[id];
     };
     for (const p of registro.porcionadores) {
+      if (p.activo === false) continue;
       for (const id of p.puntos) asegurar(id).porcionadores.push(p.nombre);
     }
     for (const d of registro.domiciliarios) {
+      if (d.activo === false) continue;
       for (const id of d.puntos) asegurar(id).domiciliarios.push(d.nombre);
     }
     return mapa;
@@ -289,10 +293,10 @@ export class ConfiguracionService implements OnModuleInit {
     const registro = await this.obtenerRegistro();
     return {
       porcionadores: registro.porcionadores
-        .filter((p) => p.puntos.includes(id))
+        .filter((p) => p.activo !== false && p.puntos.includes(id))
         .map((p) => p.nombre),
       domiciliarios: registro.domiciliarios
-        .filter((d) => d.puntos.includes(id))
+        .filter((d) => d.activo !== false && d.puntos.includes(id))
         .map((d) => d.nombre),
     };
   }
@@ -337,7 +341,7 @@ export class ConfiguracionService implements OnModuleInit {
             ),
           ]
         : [];
-      salida.push({ nombre, puntos });
+      salida.push({ nombre, puntos, activo: obj?.activo !== false });
     }
     return salida;
   }

@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, cargarTrazabilidad, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -1205,6 +1205,41 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     setPaso(1);
   }
 
+  // "Compra presencial": agrega un ítem marcador (código 0000, sin valor) y salta
+  // al paso de Entrega y pago para registrar el valor del domicilio.
+  function agregarCompraPresencial() {
+    const yaEsta = carrito.some((i) => i.producto.referencia === "0000");
+    if (!yaEsta) {
+      const item: ItemCarrito = {
+        id: `presencial-${Date.now()}`,
+        producto: {
+          id: "0000",
+          lista_precio: punto?.lista_precio ?? "",
+          desc_lista: null,
+          referencia: "0000",
+          producto: "COMPRA PRESENCIAL",
+          categoria: null,
+          cia: null,
+          um: "U",
+          precio: 0,
+          fecha_activacion: null,
+          fecha_inactivacion: null,
+          sincronizado_en: new Date().toISOString(),
+        },
+        cantidad: 1,
+        alVacio: false,
+        porcionado: false,
+        corte: "",
+        gramos: 0,
+        unidades: 0,
+        notas: "",
+      };
+      setCarrito((prev) => [...prev, item]);
+    }
+    setEntrega("domicilio");
+    setPaso(2);
+  }
+
   // Punto de venta MÁS CERCANO al cliente (según su dirección). Se conserva la
   // lógica de "redirección por dirección" solo como SUGERENCIA: se resalta en
   // el selector manual, pero no se auto-selecciona.
@@ -1745,6 +1780,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     onCambiar={setCarrito}
                     cliente={cliente}
                     pedidos={pedidos}
+                    onCompraPresencial={agregarCompraPresencial}
                   />
                 )}
                 {paso === 2 && (
@@ -2244,12 +2280,14 @@ function PasoProductos({
   onCambiar,
   cliente,
   pedidos,
+  onCompraPresencial,
 }: {
   punto: PuntoVenta;
   carrito: ItemCarrito[];
   onCambiar: (items: ItemCarrito[]) => void;
   cliente: Cliente | null;
   pedidos: Pedido[];
+  onCompraPresencial: () => void;
 }) {
   const [input, setInput] = useState("");
   const [busqueda, setBusqueda] = useState("");
@@ -2369,6 +2407,19 @@ function PasoProductos({
             className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-amber"
           />
         </div>
+
+        {/* Compra presencial: agrega un ítem 0000 y salta al valor del domicilio. */}
+        <button
+          type="button"
+          onClick={onCompraPresencial}
+          title="Registrar una compra hecha en el punto (código 0000) y pasar al valor del domicilio"
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-wine/30 bg-brand-wine/5 px-4 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+          </svg>
+          Compra presencial
+        </button>
 
         {error && (
           <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
@@ -3385,12 +3436,47 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   }
   const mapa = new Map<string, number>();
   for (const grupo of porDia.values()) {
-    grupo.sort(
-      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-    );
+    // Arrastrados (fecha anterior) van PRIMERO; luego por orden de llegada.
+    // Desempate por id para que el fallback sea determinista.
+    grupo.sort((a, b) => {
+      const d = new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+      return d !== 0 ? d : String(a.id) < String(b.id) ? -1 : 1;
+    });
+    // Usa el número del día GUARDADO (congelado al CREAR el pedido): así un
+    // mismo pedido NUNCA cambia de número al salir y volver a entrar. El
+    // fallback por posición es solo para pedidos antiguos sin número guardado.
     grupo.forEach((p, i) => mapa.set(p.id, p.numeroDia ?? i + 1));
   }
   return mapa;
+}
+
+/** Lee una imagen (archivo) y la comprime a JPEG (máx 1280px) como data URL base64. */
+async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime: string }> {
+  const dataUrl0 = await new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onerror = () => rej(new Error("lectura"));
+    r.onload = () => res(String(r.result));
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const i = new Image();
+    i.onerror = () => rej(new Error("imagen"));
+    i.onload = () => res(i);
+    i.src = dataUrl0;
+  });
+  const maxLado = 1280;
+  let { width, height } = img;
+  if (width > maxLado || height > maxLado) {
+    if (width >= height) { height = Math.round((height * maxLado) / width); width = maxLado; }
+    else { width = Math.round((width * maxLado) / height); height = maxLado; }
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { dataUrl: dataUrl0, mime: file.type || "image/jpeg" };
+  ctx.drawImage(img, 0, 0, width, height);
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.7), mime: "image/jpeg" };
 }
 
 export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta; clones?: string[] }) {
@@ -3444,6 +3530,28 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
       setCompMsg("No se pudo cargar el comprobante de pago.");
     } finally {
       setCompCargando(false);
+    }
+  };
+  // Subida del comprobante desde este modal (si no se ha cargado o para reemplazarlo).
+  const [subiendoComp, setSubiendoComp] = useState(false);
+  const [errorComp, setErrorComp] = useState<string | null>(null);
+  const compInputRef = useRef<HTMLInputElement>(null);
+  const subirComprobante = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setErrorComp("El comprobante debe ser una imagen.");
+      return;
+    }
+    setSubiendoComp(true);
+    setErrorComp(null);
+    try {
+      const { dataUrl, mime } = await comprimirComprobante(file);
+      await subirComprobanteApi(pedido.id, dataUrl, mime, getUsuario()?.nombre ?? null);
+      setCompImg(dataUrl);
+      setCompMsg(null);
+    } catch {
+      setErrorComp("No se pudo subir el comprobante.");
+    } finally {
+      setSubiendoComp(false);
     }
   };
   return (
@@ -3514,7 +3622,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   <button
                     type="button"
                     onClick={verComprobantePago}
-                    title="Ver el comprobante de pago cargado desde despacho"
+                    title="Ver o subir el comprobante de pago (transferencia)"
                     className="inline-flex items-center justify-center rounded-md border border-blue-300 bg-blue-50 p-1 text-blue-700 transition hover:bg-blue-100"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
@@ -3594,6 +3702,35 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 </p>
               )}
             </div>
+            {!compCargando && (
+              <div className="border-t border-brand-brown/10 px-5 py-3">
+                {errorComp && (
+                  <p className="mb-2 text-center text-xs font-medium text-red-600">{errorComp}</p>
+                )}
+                <input
+                  ref={compInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) subirComprobante(f);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={subiendoComp}
+                  onClick={() => compInputRef.current?.click()}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  {subiendoComp ? "Subiendo…" : compImg ? "Reemplazar comprobante" : "Subir comprobante"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3754,8 +3891,8 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
 }
 
 export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, horaDespacho, id, entregaProgramada, fechaProgramada, numeroDia: numeroDiaGuardado }: Pedido, numeroDia?: number) {
-  // Prefiere el número del día asignado por el backend (estable y único por
-  // punto); si el pedido es antiguo y no lo tiene, usa el calculado localmente.
+  // Usa el número del día GUARDADO en el pedido (congelado al crear); si no lo
+  // tiene (pedido antiguo), cae al calculado que se le pasa.
   const numeroDiaFinal = numeroDiaGuardado ?? numeroDia;
   const subtotal = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   const dom = entrega === "domicilio" ? (valorDomicilio ?? 0) : 0;

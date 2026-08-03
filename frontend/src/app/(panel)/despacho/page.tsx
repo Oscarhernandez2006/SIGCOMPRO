@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { imprimirComanda, METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
+import { imprimirComanda, METODOS, numerosDelDia, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
@@ -1019,16 +1019,13 @@ export default function DespachoPage() {
     [pedidosVisibles, impresos],
   );
 
-  // Número del día (turno) por punto: lo asigna el BACKEND de forma rodante
-  // (arrastra pendientes de días anteriores al día de hoy, reinicia por punto y
-  // por día). Aquí solo se lee p.numeroDia para ordenar/mostrar.
-  const numeroDelDiaPorId = useMemo(() => {
-    const mapa = new Map<string, number>();
-    for (const p of pedidosVisibles) {
-      if (typeof p.numeroDia === "number") mapa.set(p.id, p.numeroDia);
-    }
-    return mapa;
-  }, [pedidosVisibles]);
+  // Número del día (turno) por punto: se calcula desde la lista completa
+  // (arrastrados primero, luego por orden de llegada), único por punto/día y
+  // estable — un mismo pedido no cambia de número.
+  const numeroDelDiaPorId = useMemo(
+    () => numerosDelDia(pedidosVisibles),
+    [pedidosVisibles],
+  );
 
   // Pedidos atrasados del día: venció su ventana y siguen sin despachar.
   const atrasados = useMemo(() => {

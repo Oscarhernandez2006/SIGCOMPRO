@@ -54,7 +54,8 @@ export function esPedidoPequeno(p: Pedido): boolean {
  * Instante objetivo de despacho (deadline de entrega).
  * - TRANSFERENCIA: el cronómetro corre 1h SOLO desde que se confirma
  *   (pagoConfirmado). Sin confirmar: Infinity (no vence).
- * - Resto: si hay hora de despacho pedida, ese es el objetivo; si no,
+ * - Resto: si hay hora de despacho pedida, la promesa de 2h corre DESDE esa
+ *   hora (entrega = hora + 2h; antes de la hora queda "Programado"); si no,
  *   creación + 2 horas.
  */
 export function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): number {
@@ -74,12 +75,13 @@ export function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): num
   const hora = (p.horaDespacho ?? "").trim();
   const m = hora.match(/^(\d{1,2}):(\d{2})$/);
   if (m) {
+    // La hora pedida es cuando ARRANCA la promesa de 2h: entrega = hora + 2h.
     const base =
       p.entregaProgramada && p.fechaProgramada
         ? new Date(`${p.fechaProgramada}T00:00:00`)
         : new Date(p.fecha);
     base.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    return base.getTime();
+    return base.getTime() + LIMITE_DESPACHO_MS;
   }
   return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
 }

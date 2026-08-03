@@ -10,6 +10,8 @@ export interface PersonalDespacho {
 export interface PersonaAsignada {
   nombre: string;
   puntos: string[];
+  /** ¿Activa? Si es false, no aparece en los selectores de despacho. */
+  activo?: boolean;
 }
 
 /** Registro global de personas (centrado en la persona, no en el punto). */

@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import * as XLSX from 'xlsx';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
@@ -42,6 +44,8 @@ type PedidoData = Record<string, unknown> & {
   trazabilidad?: TrazaEvento[];
   /** Número del día (turno) por punto, asignado atómicamente por el backend. */
   numeroDia?: number;
+  /** Día (YYYY-MM-DD, Bogotá) para el que es válido numeroDia (congela el turno). */
+  numeroDiaFecha?: string;
   punto?: { id?: string; nombre?: string; codigo?: string | null } | null;
   cliente?: {
     id?: string;
@@ -80,6 +84,7 @@ export interface EstadoPedidos {
 
 @Injectable()
 export class PedidosService implements OnModuleInit {
+  private readonly logger = new Logger(PedidosService.name);
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     private readonly ubicaciones: UbicacionesService,
@@ -207,10 +212,10 @@ export class PedidosService implements OnModuleInit {
     }
     await this.refrescarClientes(pedidos);
     // El número de turno (numeroDia) se asigna atómicamente al CREAR el pedido y
-    // queda guardado en el blob. Solo se recalcula en la carga COMPLETA (red de
-    // seguridad para pedidos antiguos); en una respuesta incremental NO se toca,
-    // porque recalcular sobre el subconjunto daría números equivocados.
-    if (!desdeValido) this.asignarNumerosDia(pedidos);
+    // queda GUARDADO en el blob; NO se recalcula al leer, para que un MISMO
+    // pedido conserve SIEMPRE su número hasta su realización. (Antes se
+    // recalculaba en la carga completa y podía cambiar, p. ej. 87 -> 88, según
+    // los arrastrados u otros pedidos del día.)
     return { pedidos, meta, impresos, ahora };
   }
 
@@ -241,60 +246,135 @@ export class PedidosService implements OnModuleInit {
     }).format(base);
   }
 
+  /** Día de entrega (YYYY-MM-DD, Bogotá): el programado o el de creación. */
+  private diaEntregaDe(p: PedidoData): string {
+    return p.entregaProgramada && p.fechaProgramada
+      ? String(p.fechaProgramada)
+      : this.diaBogota(p.fecha ? String(p.fecha) : null);
+  }
+
   /**
-   * Asigna el "número del día" (turno) a cada pedido, POR PUNTO DE VENTA y con
-   * reinicio diario RODANTE (fuente única de la numeración):
-   *  - Los pedidos ACTIVOS (pendientes) pertenecen SIEMPRE al día de HOY: un
-   *    pedido que quedó pendiente de días anteriores se arrastra a hoy y, al
-   *    haberse creado antes, toma los primeros números (1, 2, 3…). Ej.: si
-   *    quedaron por el #50 y ese quedó pendiente, al cambiar el día ese pedido
-   *    pasa a ser el #1 y los nuevos siguen desde ahí.
-   *  - Los pedidos FINALIZADOS (despachados/anulados) quedan anclados al día en
-   *    que se finalizaron, para que los números del día NO se corran cuando uno
-   *    se despacha.
-   *  - La numeración es independiente por punto: puede existir el #1 en dos
-   *    puntos distintos, pero NUNCA dos #1 el mismo día en el mismo punto.
+   * Bajo el lock del punto: RENUMERA (una sola vez) los ARRASTRADOS de HOY
+   * —activos cuyo día de entrega ya pasó y que aún no tienen número de hoy—,
+   * dándoles los PRIMEROS números por ANTIGÜEDAD (el más viejo, el más bajo) y
+   * los persiste. Devuelve el SIGUIENTE número libre del día `dia` (para el
+   * pedido nuevo). Una vez asignado un número con su `numeroDiaFecha`, NO se
+   * vuelve a recalcular: por eso un pedido nunca cambia ni repite su número.
    */
-  private asignarNumerosDia(pedidos: PedidoData[]): void {
-    const hoy = this.diaBogota();
-    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
-    const estaActivo = (p: PedidoData) => {
-      const e = norm(p.estado);
-      return p.anulado !== true && e !== 'despachado' && e !== 'anulado';
+  private async renumerarYSiguiente(
+    client: PoolClient,
+    puntoId: string,
+    hoy: string,
+    dia: string,
+  ): Promise<number> {
+    // Proyección LIVIANA (sin el blob `data` completo) de los pedidos del punto.
+    const res = await client.query<{
+      id: string;
+      estado: string | null;
+      anulado: boolean | null;
+      fecha: string | null;
+      eprog: string | null;
+      fprog: string | null;
+      numerodia: number | null;
+      numerodiafecha: string | null;
+    }>(
+      `SELECT id, estado, anulado, fecha,
+              data->>'entregaProgramada' AS eprog,
+              data->>'fechaProgramada'   AS fprog,
+              (data->>'numeroDia')::int  AS numerodia,
+              data->>'numeroDiaFecha'    AS numerodiafecha
+         FROM pedidos WHERE punto_id = $1`,
+      [puntoId],
+    );
+    const filas = res.rows;
+    const diaEntrega = (r: (typeof filas)[number]) =>
+      r.eprog === 'true' && r.fprog ? String(r.fprog) : this.diaBogota(r.fecha);
+    const esActivo = (r: (typeof filas)[number]) => {
+      const e = String(r.estado ?? '').trim().toLowerCase();
+      return r.anulado !== true && e !== 'despachado' && e !== 'anulado';
     };
-    const diaEntrega = (p: PedidoData) =>
-      p.entregaProgramada && p.fechaProgramada
-        ? String(p.fechaProgramada)
-        : this.diaBogota(p.fecha ? String(p.fecha) : null);
-    const diaFinalizacion = (p: PedidoData) => {
-      const tz = Array.isArray(p.trazabilidad) ? p.trazabilidad : [];
-      const ultimo = tz.length ? tz[tz.length - 1] : null;
-      return ultimo?.fecha ? this.diaBogota(ultimo.fecha) : diaEntrega(p);
-    };
-    const diaEfectivo = (p: PedidoData) => {
-      if (estaActivo(p)) {
-        const dia = diaEntrega(p);
-        return dia < hoy ? hoy : dia;
-      }
-      return diaFinalizacion(p);
-    };
-    const grupos = new Map<string, PedidoData[]>();
-    for (const p of pedidos) {
-      const clave = `${p.punto?.id ?? '?'}|${diaEfectivo(p)}`;
-      const arr = grupos.get(clave);
-      if (arr) arr.push(p);
-      else grupos.set(clave, [p]);
+    // Máximo número YA usado en el día `d`: cuenta los que tienen numeroDiaFecha
+    // = d y (compatibilidad) los antiguos sin numeroDiaFecha cuyo día de entrega
+    // ES d. NO cuenta arrastrados (traen el número de otro día).
+    const maxDelDia = (d: string) =>
+      filas.reduce((mx, r) => {
+        const nf = String(r.numerodiafecha ?? '');
+        const cuenta = nf === d || (nf === '' && diaEntrega(r) === d);
+        const n = Number(r.numerodia) || 0;
+        return cuenta && n > mx ? n : mx;
+      }, 0);
+
+    // Arrastrados de hoy pendientes de renumerar, del MÁS VIEJO al más nuevo.
+    const arrastrados = filas
+      .filter(
+        (r) =>
+          esActivo(r) &&
+          diaEntrega(r) < hoy &&
+          String(r.numerodiafecha ?? '') !== hoy,
+      )
+      .sort(
+        (a, b) =>
+          new Date(String(a.fecha ?? 0)).getTime() -
+          new Date(String(b.fecha ?? 0)).getTime(),
+      );
+
+    let sigHoy = maxDelDia(hoy) + 1;
+    for (const r of arrastrados) {
+      await client.query(
+        `UPDATE pedidos
+            SET data = data || jsonb_build_object('numeroDia', $2::int, 'numeroDiaFecha', $3::text),
+                actualizado_en = now()
+          WHERE id = $1`,
+        [r.id, sigHoy, hoy],
+      );
+      r.numerodia = sigHoy;
+      r.numerodiafecha = hoy;
+      sigHoy++;
     }
-    for (const grupo of grupos.values()) {
-      grupo.sort((a, b) => {
-        const ta = a.fecha ? new Date(String(a.fecha)).getTime() : 0;
-        const tb = b.fecha ? new Date(String(b.fecha)).getTime() : 0;
-        if (ta !== tb) return ta - tb;
-        return String(a.id ?? '') < String(b.id ?? '') ? -1 : 1;
-      });
-      grupo.forEach((p, i) => {
-        p.numeroDia = i + 1;
-      });
+    return maxDelDia(dia) + 1;
+  }
+
+  /**
+   * Renumera los arrastrados de HOY en TODOS los puntos (para que al cambiar de
+   * día queden de primeros por antigüedad, ya con su número). Corre a las 00:05
+   * de Bogotá; además se hace de forma perezosa al crear el primer pedido del
+   * día en cada punto (ver guardar()).
+   */
+  @Cron('5 0 * * *', {
+    name: 'renumerar-arrastrados-dia',
+    timeZone: 'America/Bogota',
+  })
+  async renumerarArrastradosDia(): Promise<void> {
+    const hoy = this.diaBogota();
+    let puntos: string[] = [];
+    try {
+      const res = await this.pool.query<{ punto_id: string }>(
+        `SELECT DISTINCT punto_id FROM pedidos WHERE punto_id IS NOT NULL AND punto_id <> ''`,
+      );
+      puntos = res.rows.map((r) => r.punto_id);
+    } catch (e) {
+      this.logger.error(
+        `Renumerar arrastrados: no se pudieron listar los puntos: ${e instanceof Error ? e.message : e}`,
+      );
+      return;
+    }
+    for (const puntoId of puntos) {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+          `pedido_consecutivo:${puntoId}`,
+        ]);
+        await this.renumerarYSiguiente(client, puntoId, hoy, hoy);
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        this.logger.error(
+          `Renumerar arrastrados del punto ${puntoId}: ${e instanceof Error ? e.message : e}`,
+        );
+      } finally {
+        client.release();
+      }
     }
   }
 
@@ -411,8 +491,10 @@ export class PedidosService implements OnModuleInit {
             : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
         finalPedido.comanda = prevData!.comanda ?? finalPedido.comanda;
         finalPedido.fecha = prevData!.fecha ?? finalPedido.fecha;
-        // Conserva el número del día original (no se reasigna al editar).
+        // Conserva el número del día original y su día (no se reasigna al editar).
         finalPedido.numeroDia = prevData!.numeroDia ?? finalPedido.numeroDia;
+        finalPedido.numeroDiaFecha =
+          prevData!.numeroDiaFecha ?? finalPedido.numeroDiaFecha;
       } else if (puntoId) {
         // Nuevo pedido: asigna el consecutivo de forma atómica por punto.
         // El lock se libera automáticamente al terminar la transacción.
@@ -432,20 +514,20 @@ export class PedidosService implements OnModuleInit {
         finalPedido.consecutivo = consecutivo;
         finalPedido.comanda = `${numeroPunto}CS${String(consecutivo).padStart(8, '0')}`;
 
-        // Número del día (turno) por punto, con reinicio diario RODANTE: se
-        // calcula con la MISMA lógica que la lectura (asignarNumerosDia), que
-        // arrastra los pendientes de días anteriores al día de hoy y reinicia
-        // la numeración por punto. Bajo el mismo lock del punto -> dos pedidos
-        // simultáneos del mismo punto nunca reciben el mismo número.
-        const existentes = await client.query<{ data: PedidoData }>(
-          `SELECT data FROM pedidos WHERE punto_id = $1`,
-          [puntoId],
+        // Número del día (turno) por punto. Primero se RENUMERAN los arrastrados
+        // (activos de días anteriores) para HOY —de primeros y por antigüedad—;
+        // luego este pedido toma el SIGUIENTE número de su día de entrega. Todo
+        // bajo el mismo lock del punto: números únicos y, una vez asignados con
+        // su numeroDiaFecha, no se recalculan (no cambian ni se repiten).
+        const hoy = this.diaBogota();
+        const diaNuevo = this.diaEntregaDe(finalPedido);
+        finalPedido.numeroDia = await this.renumerarYSiguiente(
+          client,
+          puntoId,
+          hoy,
+          diaNuevo,
         );
-        const listaPunto = existentes.rows.map((r) => r.data ?? {});
-        listaPunto.push(finalPedido);
-        this.asignarNumerosDia(listaPunto);
-        finalPedido.numeroDia =
-          listaPunto.find((p) => String(p.id ?? '') === id)?.numeroDia ?? 1;
+        finalPedido.numeroDiaFecha = diaNuevo;
       }
 
       const consecutivo =

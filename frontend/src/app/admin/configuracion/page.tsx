@@ -169,7 +169,7 @@ export default function AdminConfiguracionPage() {
     };
     nuevo = {
       ...nuevo,
-      [catNuevo]: [...nuevo[catNuevo], { nombre: limpio, puntos: original.puntos }],
+      [catNuevo]: [...nuevo[catNuevo], { nombre: limpio, puntos: original.puntos, activo: original.activo }],
     };
     persistir(nuevo);
     return true;
@@ -182,6 +182,19 @@ export default function AdminConfiguracionPage() {
       [cat]: registro[cat].map((x) =>
         x.nombre.toLowerCase() === p.nombre.toLowerCase()
           ? { ...x, puntos: puntosIds }
+          : x,
+      ),
+    });
+  }
+
+  // Activa/inactiva la persona. Inactiva = no aparece en los selectores de despacho.
+  function cambiarActivo(p: PersonaConRol, activo: boolean) {
+    const cat = CAT[p.rol];
+    persistir({
+      ...registro,
+      [cat]: registro[cat].map((x) =>
+        x.nombre.toLowerCase() === p.nombre.toLowerCase()
+          ? { ...x, activo }
           : x,
       ),
     });
@@ -271,21 +284,24 @@ export default function AdminConfiguracionPage() {
                   <th className="px-4 py-3 font-semibold">Nombre</th>
                   <th className="px-4 py-3 font-semibold">Rol</th>
                   <th className="px-4 py-3 font-semibold">Puntos de venta</th>
+                  <th className="px-4 py-3 text-center font-semibold">Estado</th>
                   <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-brown/5">
                 {filtradas.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-brand-brown/50">
+                    <td colSpan={5} className="px-4 py-10 text-center text-brand-brown/50">
                       {personas.length === 0
                         ? "Aún no hay personas. Agrega la primera con “Nueva persona”."
                         : "No se encontraron resultados."}
                     </td>
                   </tr>
                 ) : (
-                  filtradas.map((p) => (
-                    <tr key={`${p.rol}-${p.nombre}`} className="hover:bg-brand-cream-soft/40">
+                  filtradas.map((p) => {
+                    const activo = p.activo !== false;
+                    return (
+                    <tr key={`${p.rol}-${p.nombre}`} className={`hover:bg-brand-cream-soft/40 ${activo ? "" : "opacity-60"}`}>
                       <td className="px-4 py-3 font-medium text-brand-black">{p.nombre}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP_ROL[p.rol]}`}>
@@ -307,6 +323,23 @@ export default function AdminConfiguracionPage() {
                             ))}
                           </div>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={activo}
+                            onClick={() => cambiarActivo(p, !activo)}
+                            title={activo ? "Activo: aparece en los selectores de despacho. Clic para inactivar." : "Inactivo: oculto en despacho. Clic para activar."}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${activo ? "bg-emerald-500" : "bg-brand-brown/25"}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${activo ? "translate-x-4" : "translate-x-1"}`} />
+                          </button>
+                          <span className={`text-[10px] font-semibold ${activo ? "text-emerald-600" : "text-brand-brown/40"}`}>
+                            {activo ? "Activo" : "Inactivo"}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
@@ -334,7 +367,8 @@ export default function AdminConfiguracionPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
