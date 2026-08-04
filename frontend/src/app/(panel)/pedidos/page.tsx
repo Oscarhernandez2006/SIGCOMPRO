@@ -706,6 +706,7 @@ export default function PedidosPage() {
           onCrear={guardarPedido}
           onCongelar={congelarBorrador}
           pedidos={pedidos}
+          meta={meta}
           inicial={editando}
           clon={clonando}
           borrador={borrador}
@@ -1131,7 +1132,7 @@ function DetalleCongelado({
 /* ---------------------------------------------------------------- */
 /* Wizard de creación de pedido                                     */
 /* ---------------------------------------------------------------- */
-function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, borrador }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null }) {
+function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, clon, borrador }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; meta?: Record<string, DespachoMeta>; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null }) {
   // Fuente para precargar el formulario: edición o clonación.
   const base = inicial ?? clon ?? null;
   // En modo edición solo se permite cambiar entrega/pago/fecha (paso 2). Para
@@ -1786,6 +1787,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                   <PasoCliente
                     seleccionado={cliente}
                     pedidos={pedidos}
+                    meta={meta}
                     onSeleccionar={seleccionarCliente}
                   />
                 )}
@@ -2047,10 +2049,12 @@ function Stepper({ paso }: { paso: number }) {
 function PasoCliente({
   seleccionado,
   pedidos,
+  meta,
   onSeleccionar,
 }: {
   seleccionado: Cliente | null;
   pedidos: Pedido[];
+  meta?: Record<string, DespachoMeta>;
   onSeleccionar: (c: Cliente) => void;
 }) {
   const [input, setInput] = useState("");
@@ -2269,7 +2273,7 @@ function PasoCliente({
       )}
 
       {verPedido && (
-        <DetallePedido pedido={verPedido} numeroDia={numerosDelDia(pedidos).get(verPedido.id)} meta={meta[verPedido.id]} onCerrar={() => setVerPedido(null)} />
+        <DetallePedido pedido={verPedido} numeroDia={numerosDelDia(pedidos).get(verPedido.id)} meta={meta?.[verPedido.id]} onCerrar={() => setVerPedido(null)} />
       )}
     </div>
   );
