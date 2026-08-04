@@ -44,6 +44,16 @@ export class PedidosController {
     return this.pedidos.trazabilidad(id);
   }
 
+  /** Últimos pedidos de un cliente (para la función "espejo"). */
+  @Get('cliente/:clienteId')
+  porCliente(
+    @Param('clienteId') clienteId: string,
+    @Query('limit') limit?: string,
+  ) {
+    const n = limit ? Number(limit) : undefined;
+    return this.pedidos.porCliente(clienteId, Number.isFinite(n) ? n : undefined);
+  }
+
   /** Descarga el Excel de despacho del pedido (formato del software de ruteo). */
   @Get(':id/excel')
   async excel(

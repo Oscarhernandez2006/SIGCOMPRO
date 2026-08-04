@@ -234,6 +234,30 @@ export class PedidosService implements OnModuleInit {
     return { trazabilidad: res.rows[0].trazabilidad ?? [] };
   }
 
+  /**
+   * Últimos pedidos NO anulados de un cliente (por su id), de CUALQUIER fecha,
+   * para la función "espejo" (clonar un pedido anterior). Se omite la
+   * trazabilidad (no se usa aquí) y se limita para no traer todo el historial.
+   */
+  async porCliente(
+    clienteId: string,
+    limit?: number,
+  ): Promise<{ pedidos: PedidoData[] }> {
+    const id = String(clienteId ?? '').trim();
+    if (!id) return { pedidos: [] };
+    const n = Math.min(Math.max(Number(limit) || 15, 1), 50);
+    const res = await this.pool.query<{ data: PedidoData }>(
+      `SELECT (data - 'trazabilidad') AS data
+         FROM pedidos
+        WHERE anulado = false
+          AND data->'cliente'->>'id' = $1
+        ORDER BY fecha DESC NULLS LAST, creado_en DESC
+        LIMIT $2`,
+      [id, n],
+    );
+    return { pedidos: res.rows.map((r) => r.data) };
+  }
+
   /** Fecha (YYYY-MM-DD) en zona horaria de Bogotá. Por defecto, hoy. */
   private diaBogota(fecha?: string | Date | null): string {
     const d = fecha ? new Date(fecha) : new Date();

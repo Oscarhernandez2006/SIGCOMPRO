@@ -100,6 +100,20 @@ export function cargarTrazabilidad(id: string): Promise<TrazaEvento[]> {
 }
 
 /**
+ * Últimos pedidos NO anulados de un cliente (de cualquier fecha), para la
+ * función "espejo" (crear un pedido nuevo a partir de uno anterior). Se carga
+ * bajo demanda al abrir el modal de "Últimos pedidos" dentro del wizard.
+ */
+export function cargarPedidosCliente(
+  clienteId: string,
+  limit = 15,
+): Promise<Pedido[]> {
+  return apiFetch<{ pedidos: Pedido[] }>(
+    `/pedidos/cliente/${encodeURIComponent(clienteId)}?limit=${limit}`,
+  ).then((r) => r.pedidos ?? []);
+}
+
+/**
  * Crea o actualiza un pedido completo en la base de datos. Devuelve el pedido
  * final tal como quedó en el servidor: para pedidos nuevos, el backend asigna
  * el consecutivo y la comanda de forma atómica (evita duplicados en ventas

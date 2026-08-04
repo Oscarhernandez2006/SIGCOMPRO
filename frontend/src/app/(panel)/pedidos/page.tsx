@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -1240,6 +1240,22 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
     setPaso(2);
   }
 
+  // "Espejo": carga en el pedido ACTUAL los productos y condiciones de un pedido
+  // ANTERIOR del cliente (sin tocar el cliente ni el punto ya elegidos). Se
+  // regeneran los ids de cada ítem para que sean nuevos, y el vendedor puede
+  // luego agregar/quitar productos, cambiar cantidades, pago, domicilio, etc.
+  function aplicarEspejo(base: Pedido) {
+    const items = (base.carrito ?? []).map((i) => ({
+      ...structuredClone(i),
+      id: crypto.randomUUID(),
+    }));
+    setCarrito(items);
+    setEntrega(base.entrega ?? null);
+    setPago(base.pago ?? null);
+    setValorDomicilio(base.valorDomicilio ?? 0);
+    setObservacion(base.observacion ?? "");
+  }
+
   // Punto de venta MÁS CERCANO al cliente (según su dirección). Se conserva la
   // lógica de "redirección por dirección" solo como SUGERENCIA: se resalta en
   // el selector manual, pero no se auto-selecciona.
@@ -1781,6 +1797,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, inicial, clon, b
                     cliente={cliente}
                     pedidos={pedidos}
                     onCompraPresencial={agregarCompraPresencial}
+                    onEspejo={aplicarEspejo}
                   />
                 )}
                 {paso === 2 && (
@@ -2252,7 +2269,7 @@ function PasoCliente({
       )}
 
       {verPedido && (
-        <DetallePedido pedido={verPedido} numeroDia={numerosDelDia(pedidos).get(verPedido.id)} onCerrar={() => setVerPedido(null)} />
+        <DetallePedido pedido={verPedido} numeroDia={numerosDelDia(pedidos).get(verPedido.id)} meta={meta[verPedido.id]} onCerrar={() => setVerPedido(null)} />
       )}
     </div>
   );
@@ -2274,6 +2291,123 @@ export interface ItemCarrito {
   notas: string;
 }
 
+function UltimosPedidosModal({
+  cliente,
+  onCerrar,
+  onEspejo,
+}: {
+  cliente: Cliente;
+  onCerrar: () => void;
+  onEspejo: (base: Pedido) => void;
+}) {
+  const [lista, setLista] = useState<Pedido[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [ver, setVer] = useState<Pedido | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setCargando(true);
+    setError(null);
+    cargarPedidosCliente(cliente.id)
+      .then((ps) => vivo && setLista(ps))
+      .catch(() => vivo && setError("No se pudieron cargar los pedidos del cliente."))
+      .finally(() => vivo && setCargando(false));
+    return () => {
+      vivo = false;
+    };
+  }, [cliente.id]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={onCerrar}>
+      <div
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-brand-black">Últimos pedidos</h3>
+            <p className="text-xs text-brand-brown/60">
+              {cliente.nombre || cliente.nit_cedula} · elige uno y crea un pedido igual (espejo)
+            </p>
+          </div>
+          <button
+            onClick={onCerrar}
+            aria-label="Cerrar"
+            className="rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-brand-cream-soft"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {cargando ? (
+            <p className="py-10 text-center text-sm text-brand-brown/50">Cargando pedidos…</p>
+          ) : error ? (
+            <p className="py-10 text-center text-sm text-red-600">{error}</p>
+          ) : lista.length === 0 ? (
+            <p className="py-10 text-center text-sm text-brand-brown/50">
+              Este cliente no tiene pedidos anteriores.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {lista.map((p) => {
+                const items = p.carrito?.length ?? 0;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 rounded-xl border border-brand-brown/10 bg-white px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-brand-black">{p.comanda}</span>
+                        {p.estado && (
+                          <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold text-brand-brown/70">
+                            {p.estado}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-brand-brown/60">
+                        {new Date(p.fecha).toLocaleString("es-CO")} · {items} ítem{items === 1 ? "" : "s"} · {formatoCOP(p.total)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setVer(p)}
+                      title="Ver el detalle del pedido"
+                      className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => onEspejo(p)}
+                      title="Crear un pedido nuevo con esta misma información (espejo)"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                      </svg>
+                      Espejo
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {ver && (
+        <DetallePedido pedido={ver} onCerrar={() => setVer(null)} />
+      )}
+    </div>
+  );
+}
+
 function PasoProductos({
   punto,
   carrito,
@@ -2281,6 +2415,7 @@ function PasoProductos({
   cliente,
   pedidos,
   onCompraPresencial,
+  onEspejo,
 }: {
   punto: PuntoVenta;
   carrito: ItemCarrito[];
@@ -2288,6 +2423,7 @@ function PasoProductos({
   cliente: Cliente | null;
   pedidos: Pedido[];
   onCompraPresencial: () => void;
+  onEspejo: (base: Pedido) => void;
 }) {
   const [input, setInput] = useState("");
   const [busqueda, setBusqueda] = useState("");
@@ -2295,6 +2431,7 @@ function PasoProductos({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<ProductoPrecio | null>(null);
+  const [ultimosAbierto, setUltimosAbierto] = useState(false);
 
   // Historial de productos pedidos antes por este cliente (más recientes primero)
   const historial = useMemo(() => {
@@ -2409,17 +2546,46 @@ function PasoProductos({
         </div>
 
         {/* Compra presencial: agrega un ítem 0000 y salta al valor del domicilio. */}
-        <button
-          type="button"
-          onClick={onCompraPresencial}
-          title="Registrar una compra hecha en el punto (código 0000) y pasar al valor del domicilio"
-          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-wine/30 bg-brand-wine/5 px-4 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/10"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
-          </svg>
-          Compra presencial
-        </button>
+        {/* Compra presencial + Últimos pedidos: en una sola línea (50/50). */}
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={onCompraPresencial}
+            title="Registrar una compra hecha en el punto (código 0000) y pasar al valor del domicilio"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-brand-wine/30 bg-brand-wine/5 px-3 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+            </svg>
+            Compra presencial
+          </button>
+
+          {/* Últimos pedidos del cliente: ver un pedido anterior y clonarlo (espejo). */}
+          {cliente && (
+            <button
+              type="button"
+              onClick={() => setUltimosAbierto(true)}
+              title="Ver los últimos pedidos de este cliente y crear uno igual (espejo)"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2.5 text-sm font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+              Últimos pedidos
+            </button>
+          )}
+        </div>
+
+        {ultimosAbierto && cliente && (
+          <UltimosPedidosModal
+            cliente={cliente}
+            onCerrar={() => setUltimosAbierto(false)}
+            onEspejo={(base) => {
+              onEspejo(base);
+              setUltimosAbierto(false);
+            }}
+          />
+        )}
 
         {error && (
           <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
@@ -3849,10 +4015,12 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                       {meta?.fin && <Dato label="Alistado (listo)">{fH(meta.fin)}</Dato>}
                       {meta?.pagoConfirmado && <Dato label="Pago confirmado">{fH(meta.pagoConfirmado)}</Dato>}
                       {meta?.despachoFin && <Dato label="Despachado">{fH(meta.despachoFin)}</Dato>}
+                      {meta?.despachadoPor && <Dato label="Despachado por">{meta.despachadoPor}</Dato>}
                       {meta?.facturaNumero && <Dato label="N° factura">{meta.facturaNumero}</Dato>}
                       {typeof meta?.facturaValor === "number" && meta.facturaValor > 0 && (
                         <Dato label="Valor facturado">{formatoCOP(meta.facturaValor)}</Dato>
                       )}
+                      {meta?.facturadoPor && <Dato label="Facturó">{meta.facturadoPor}</Dato>}
                     </div>
                     {meta?.replicas && meta.replicas.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">

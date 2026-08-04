@@ -7,7 +7,7 @@ import {
   imprimirComanda,
   type Pedido,
 } from "@/app/(panel)/pedidos/page";
-import { cargarEstadoPedidos, descargarExcelDespacho } from "@/lib/pedidos";
+import { cargarEstadoPedidos, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
 import { misPuntosVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
@@ -16,6 +16,7 @@ const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
 
 export default function HistoricosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [meta, setMeta] = useState<Record<string, DespachoMeta>>({});
   const [cargando, setCargando] = useState(true);
   const [detalle, setDetalle] = useState<Pedido | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -44,7 +45,10 @@ export default function HistoricosPage() {
 
   useEffect(() => {
     cargarEstadoPedidos()
-      .then((e) => setPedidos(e.pedidos))
+      .then((e) => {
+        setPedidos(e.pedidos);
+        setMeta(e.meta ?? {});
+      })
       .catch(() => setPedidos([]))
       .finally(() => setCargando(false));
   }, []);
@@ -219,10 +223,10 @@ export default function HistoricosPage() {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
                 <tr>
-                  <th className="px-4 py-3">Comanda</th>
+                  <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Punto</th>
-                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Total / Facturado</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -231,12 +235,23 @@ export default function HistoricosPage() {
               <tbody>
                 {historicos.map((p) => {
                   const anulado = p.anulado || norm(p.estado) === "anulado";
+                  const m = meta[p.id];
                   return (
                     <tr key={p.id} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
-                      <td className="px-4 py-3 font-semibold text-brand-wine">{p.comanda}</td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-semibold text-brand-wine">{p.comanda}</div>
+                        {m?.facturaNumero && (
+                          <div className="text-[11px] font-semibold text-emerald-600">Fact. {m.facturaNumero}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                       <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
-                      <td className="px-4 py-3 font-medium">{formatoCOP(p.total)}</td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium">{formatoCOP(p.total)}</div>
+                        {typeof m?.facturaValor === "number" && m.facturaValor > 0 && (
+                          <div className="text-xs font-semibold text-emerald-600">{formatoCOP(m.facturaValor)}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${anulado ? "bg-red-100 text-red-600" : "bg-teal-100 text-teal-700"}`}>
                           {anulado ? "Anulado" : "Despachado"}
@@ -245,11 +260,24 @@ export default function HistoricosPage() {
                       <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button onClick={() => setDetalle(p)} title="Ver el detalle del pedido" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Ver</button>
+                          <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver el detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            </svg>
+                          </button>
                           {permiteImprimir && (
                             <>
-                              <button onClick={() => imprimirComanda(p)} title="Reimprimir la comanda" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Reimprimir</button>
-                              <button onClick={() => reimprimirExcel(p)} title="Descargar el Excel del pedido" className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Excel</button>
+                              <button onClick={() => imprimirComanda(p)} aria-label="Reimprimir comanda" title="Reimprimir la comanda" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
+                                </svg>
+                              </button>
+                              <button onClick={() => reimprimirExcel(p)} aria-label="Descargar Excel" title="Descargar el Excel del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
+                                </svg>
+                              </button>
                             </>
                           )}
                         </div>
@@ -263,7 +291,7 @@ export default function HistoricosPage() {
         </div>
       )}
 
-      {detalle && <DetallePedido pedido={detalle} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} meta={meta[detalle.id]} onCerrar={() => setDetalle(null)} />}
     </div>
   );
 }
