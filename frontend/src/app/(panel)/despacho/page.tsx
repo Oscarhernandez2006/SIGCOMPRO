@@ -569,15 +569,19 @@ export default function DespachoPage() {
     return () => clearInterval(id);
   }, []);
 
-  // AUTO-CORRECCIÓN de estado: si el alistamiento YA terminó (meta.fin) pero el
-  // estado quedó desincronizado en "En producción" (p. ej. falló el guardado del
-  // estado o faltó el permiso al pulsar "Finalizar Preparación"), se corrige a
-  // "Alistado" para no bloquear la facturación. Se hace UNA vez por pedido; si el
-  // guardado falla, se reintenta en el siguiente ciclo.
+  // AUTO-CORRECCIÓN de estado (SOLO en la vista, no se guarda): si el
+  // alistamiento YA terminó (meta.fin) pero el estado quedó desincronizado en
+  // "En producción", se muestra como "Alistado" para no bloquear la facturación.
+  // Solo aplica a los pedidos de los puntos del usuario. NO persiste ni registra
+  // trazabilidad (la factura se habilita porque `alistado` se deriva de meta.fin).
   const alistadoCorregidoRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const p of pedidos) {
       if (p.anulado) continue;
+      // SOLO pedidos de los puntos del usuario: el backend devuelve pedidos de
+      // TODOS los puntos, y auto-guardar los de OTROS puntos registraría a este
+      // usuario en su trazabilidad sin haberlos tocado.
+      if (!p.punto?.id || !idsPuntos.has(String(p.punto.id))) continue;
       if (alistadoCorregidoRef.current.has(p.id)) continue;
       // NO "corregir" a Alistado si el pedido ya avanzó (tiene factura o ya se
       // despachó): hacerlo revertiría el estado puesto por otra estación. Solo se
@@ -589,20 +593,18 @@ export default function DespachoPage() {
         !String(meta[p.id]?.facturaNumero ?? "").trim()
       ) {
         alistadoCorregidoRef.current.add(p.id);
-        setPedidos((prev) => {
-          const next = prev.map((x) =>
+        // Corrección SOLO LOCAL (display): NO se guarda, para no registrar una
+        // "edición" en la trazabilidad ni atribuir al usuario un cambio que no
+        // hizo. La facturación se habilita igual porque `alistado` se deriva de
+        // meta.fin, no del estado guardado.
+        setPedidos((prev) =>
+          prev.map((x) =>
             x.id === p.id ? { ...x, estado: "Alistado" as Pedido["estado"] } : x,
-          );
-          const upd = next.find((x) => x.id === p.id);
-          if (upd)
-            guardarPedidoApi(upd).catch(() => {
-              alistadoCorregidoRef.current.delete(p.id);
-            });
-          return next;
-        });
+          ),
+        );
       }
     }
-  }, [pedidos, meta]);
+  }, [pedidos, meta, idsPuntos]);
 
   /** Marca un pedido como impreso y lo persiste. */
   const marcarImpreso = (id: string) => {
