@@ -494,12 +494,17 @@ export default function DespachoPage() {
           }
           // Incremental: e.pedidos trae SOLO los pedidos que cambiaron.
           if (e.pedidos.length) {
-            // Agrega los pedidos nuevos (no se reemplazan los existentes para no
-            // pisar el estado que se edita en vivo: factura, estado, etc.).
+            // UPSERT por id: reemplaza el pedido existente con la versión del
+            // servidor (para REFLEJAR cambios de OTRA estación: estado, etc.) y
+            // agrega los nuevos al inicio. El delta solo trae lo que cambió, así
+            // que un pedido que se edita localmente sin guardar NO viene aquí y
+            // no se pisa.
             setPedidos((prev) => {
-              const ids = new Set(prev.map((p) => p.id));
-              const nuevos = e.pedidos.filter((p) => !ids.has(p.id));
-              return nuevos.length ? [...nuevos, ...prev] : prev;
+              const cambiados = new Map(e.pedidos.map((p) => [p.id, p]));
+              const idsPrev = new Set(prev.map((p) => p.id));
+              const actualizados = prev.map((p) => cambiados.get(p.id) ?? p);
+              const nuevos = e.pedidos.filter((p) => !idsPrev.has(p.id));
+              return nuevos.length ? [...nuevos, ...actualizados] : actualizados;
             });
             // Reconcilia impresos SOLO para los pedidos que cambiaron.
             const impresosDelta = new Set(e.impresos);
@@ -574,7 +579,15 @@ export default function DespachoPage() {
     for (const p of pedidos) {
       if (p.anulado) continue;
       if (alistadoCorregidoRef.current.has(p.id)) continue;
-      if (meta[p.id]?.fin && norm(p.estado) === "en producción") {
+      // NO "corregir" a Alistado si el pedido ya avanzó (tiene factura o ya se
+      // despachó): hacerlo revertiría el estado puesto por otra estación. Solo se
+      // sana la desincronización real "en producción" -> "alistado".
+      if (
+        meta[p.id]?.fin &&
+        norm(p.estado) === "en producción" &&
+        !meta[p.id]?.despachoFin &&
+        !String(meta[p.id]?.facturaNumero ?? "").trim()
+      ) {
         alistadoCorregidoRef.current.add(p.id);
         setPedidos((prev) => {
           const next = prev.map((x) =>
