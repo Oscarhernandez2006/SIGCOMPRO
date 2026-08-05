@@ -1089,6 +1089,8 @@ export default function DespachoPage() {
         ...prev,
         [id]: { ...prev[id], comprobante: { tiene: true, confirmado: true } },
       }));
+      // Al confirmar, cierra la ventana del comprobante.
+      setCompModal((prev) => (prev && prev.id === id ? null : prev));
     } catch {
       alert("No se pudo confirmar el comprobante.");
     }
