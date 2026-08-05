@@ -3626,17 +3626,18 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
   // Comprobante de pago (solo transferencia o mixto): al pulsar el ícono de foto
   // se consulta la imagen cargada desde despacho y se muestra (o un aviso si no hay).
   const pagoTransfMixto = ["transferencia", "mixto"].includes((pedido.pago ?? "").trim().toLowerCase());
-  const [compImg, setCompImg] = useState<string | null>(null);
+  const [compImg, setCompImg] = useState<string[]>([]);
   const [compMsg, setCompMsg] = useState<string | null>(null);
   const [compAbierto, setCompAbierto] = useState(false);
   const [compCargando, setCompCargando] = useState(false);
   const verComprobantePago = async () => {
     setCompAbierto(true);
-    if (compImg || compMsg) return;
+    if (compImg.length || compMsg) return;
     setCompCargando(true);
     try {
       const c = await obtenerComprobanteApi(pedido.id);
-      if (c?.imagen) setCompImg(c.imagen);
+      const imgs = (c?.imagenes ?? []).map((x) => x.imagen).filter(Boolean);
+      if (imgs.length) setCompImg(imgs);
       else setCompMsg("No hay cargado comprobante de pago a este pedido.");
     } catch {
       setCompMsg("No se pudo cargar el comprobante de pago.");
@@ -3658,7 +3659,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
     try {
       const { dataUrl, mime } = await comprimirComprobante(file);
       await subirComprobanteApi(pedido.id, dataUrl, mime, getUsuario()?.nombre ?? null);
-      setCompImg(dataUrl);
+      setCompImg((prev) => [...prev, dataUrl]);
       setCompMsg(null);
     } catch {
       setErrorComp("No se pudo subir el comprobante.");
@@ -3802,12 +3803,14 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex min-h-[8rem] flex-1 items-center justify-center overflow-auto bg-brand-cream-soft/40 p-4">
+            <div className="flex min-h-[8rem] flex-1 flex-col items-center justify-start gap-3 overflow-auto bg-brand-cream-soft/40 p-4">
               {compCargando ? (
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
-              ) : compImg ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={compImg} alt="Comprobante de pago" className="mx-auto max-h-[70vh] w-auto rounded-lg" />
+              ) : compImg.length ? (
+                compImg.map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={src} alt={`Comprobante ${i + 1}`} className="mx-auto max-h-[70vh] w-auto rounded-lg" />
+                ))
               ) : (
                 <p className="px-4 py-8 text-center text-sm font-medium text-brand-brown/60">
                   {compMsg ?? "No hay cargado comprobante de pago a este pedido."}
@@ -3823,11 +3826,12 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   ref={compInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) subirComprobante(f);
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
                     e.target.value = "";
+                    for (const f of files) await subirComprobante(f);
                   }}
                 />
                 <button
@@ -3839,7 +3843,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                   </svg>
-                  {subiendoComp ? "Subiendo…" : compImg ? "Reemplazar comprobante" : "Subir comprobante"}
+                  {subiendoComp ? "Subiendo…" : compImg.length ? "Agregar otra imagen" : "Subir comprobante"}
                 </button>
               </div>
             )}

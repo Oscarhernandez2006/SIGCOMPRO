@@ -179,6 +179,15 @@ export class PedidosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Múltiples imágenes por comprobante (array jsonb de { imagen, mime }). La
+    // columna `imagen` (única) queda como legado; se migra a `imagenes` al leer/
+    // subir. `imagen` se hace opcional para no exigirla en filas nuevas.
+    await this.pool.query(
+      `ALTER TABLE comprobantes_pago ADD COLUMN IF NOT EXISTS imagenes jsonb NOT NULL DEFAULT '[]'::jsonb`,
+    );
+    await this.pool.query(
+      `ALTER TABLE comprobantes_pago ALTER COLUMN imagen DROP NOT NULL`,
+    );
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
@@ -764,30 +773,36 @@ export class PedidosService implements OnModuleInit {
     return { id };
   }
 
-  /** Devuelve el comprobante de pago (imagen base64) de un pedido, si existe. */
+  /** Devuelve el comprobante de pago (una o varias imágenes) de un pedido. */
   async obtenerComprobante(id: string): Promise<{
-    imagen: string;
-    mime: string | null;
+    imagenes: { imagen: string; mime: string | null }[];
     confirmado: boolean;
     subidoPor: string | null;
     confirmadoPor: string | null;
   } | null> {
     const res = await this.pool.query<{
-      imagen: string;
+      imagen: string | null;
       mime: string | null;
+      imagenes: { imagen: string; mime: string | null }[] | null;
       confirmado: boolean;
       subido_por: string | null;
       confirmado_por: string | null;
     }>(
-      `SELECT imagen, mime, confirmado, subido_por, confirmado_por
+      `SELECT imagen, mime, imagenes, confirmado, subido_por, confirmado_por
          FROM comprobantes_pago WHERE pedido_id = $1`,
       [id],
     );
     const row = res.rows[0];
     if (!row) return null;
+    // Preferimos el array `imagenes`; si está vacío pero hay `imagen` (legado),
+    // devolvemos esa única imagen.
+    let imagenes = Array.isArray(row.imagenes) ? row.imagenes : [];
+    if (imagenes.length === 0 && row.imagen) {
+      imagenes = [{ imagen: row.imagen, mime: row.mime }];
+    }
+    if (imagenes.length === 0) return null;
     return {
-      imagen: row.imagen,
-      mime: row.mime,
+      imagenes,
       confirmado: row.confirmado,
       subidoPor: row.subido_por,
       confirmadoPor: row.confirmado_por,
@@ -795,8 +810,8 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
-   * Guarda (o reemplaza) el comprobante de pago de un pedido. Al subir uno nuevo
-   * queda SIN confirmar. Refleja una bandera liviana en la metadata del pedido.
+   * AGREGA una imagen al comprobante de pago de un pedido (sin reemplazar las
+   * anteriores). Al agregar una nueva, el comprobante queda SIN confirmar.
    */
   async guardarComprobante(
     id: string,
@@ -808,15 +823,21 @@ export class PedidosService implements OnModuleInit {
       throw new Error('Imagen de comprobante inválida');
     }
     await this.pool.query(
-      `INSERT INTO comprobantes_pago (pedido_id, imagen, mime, confirmado, subido_por, actualizado_en)
-       VALUES ($1, $2, $3, false, $4, now())
-       ON CONFLICT (pedido_id) DO UPDATE
-         SET imagen = EXCLUDED.imagen,
-             mime = EXCLUDED.mime,
-             confirmado = false,
-             subido_por = EXCLUDED.subido_por,
-             confirmado_por = NULL,
-             actualizado_en = now()`,
+      `INSERT INTO comprobantes_pago (pedido_id, imagenes, confirmado, subido_por, actualizado_en)
+       VALUES ($1, jsonb_build_array(jsonb_build_object('imagen', $2::text, 'mime', $3::text)), false, $4, now())
+       ON CONFLICT (pedido_id) DO UPDATE SET
+         imagenes = (
+           CASE
+             WHEN jsonb_array_length(COALESCE(comprobantes_pago.imagenes, '[]'::jsonb)) = 0
+                  AND comprobantes_pago.imagen IS NOT NULL
+             THEN jsonb_build_array(jsonb_build_object('imagen', comprobantes_pago.imagen, 'mime', comprobantes_pago.mime))
+             ELSE COALESCE(comprobantes_pago.imagenes, '[]'::jsonb)
+           END
+         ) || jsonb_build_array(jsonb_build_object('imagen', $2::text, 'mime', $3::text)),
+         confirmado = false,
+         confirmado_por = NULL,
+         subido_por = COALESCE(comprobantes_pago.subido_por, EXCLUDED.subido_por),
+         actualizado_en = now()`,
       [id, imagen, mime ?? null, subidoPor ?? null],
     );
     await this.actualizarMeta(id, {
@@ -842,8 +863,46 @@ export class PedidosService implements OnModuleInit {
     return { id };
   }
 
-  /** Elimina el comprobante de pago de un pedido. */
-  async eliminarComprobante(id: string): Promise<{ id: string }> {
+  /**
+   * Elimina el comprobante de pago de un pedido. Si se indica `indice`, borra
+   * SOLO esa imagen (y si quedan más, el comprobante permanece). Sin `indice`,
+   * borra todas las imágenes del pedido.
+   */
+  async eliminarComprobante(
+    id: string,
+    indice?: number,
+  ): Promise<{ id: string }> {
+    if (typeof indice === 'number' && Number.isInteger(indice) && indice >= 0) {
+      // Migra el legado a `imagenes` y quita el elemento en la posición dada.
+      const res = await this.pool.query<{ n: number }>(
+        `UPDATE comprobantes_pago SET
+           imagenes = (
+             CASE
+               WHEN jsonb_array_length(COALESCE(imagenes, '[]'::jsonb)) = 0 AND imagen IS NOT NULL
+               THEN jsonb_build_array(jsonb_build_object('imagen', imagen, 'mime', mime))
+               ELSE COALESCE(imagenes, '[]'::jsonb)
+             END
+           ) - $2::int,
+           imagen = NULL,
+           actualizado_en = now()
+         WHERE pedido_id = $1
+         RETURNING jsonb_array_length(imagenes) AS n`,
+        [id, indice],
+      );
+      const quedan = res.rows[0]?.n ?? 0;
+      if (quedan <= 0) {
+        await this.pool.query(
+          `DELETE FROM comprobantes_pago WHERE pedido_id = $1`,
+          [id],
+        );
+        await this.actualizarMeta(id, { comprobante: null });
+      } else {
+        await this.actualizarMeta(id, {
+          comprobante: { tiene: true, confirmado: false },
+        });
+      }
+      return { id };
+    }
     await this.pool.query(
       `DELETE FROM comprobantes_pago WHERE pedido_id = $1`,
       [id],

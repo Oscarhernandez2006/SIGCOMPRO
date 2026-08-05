@@ -154,10 +154,9 @@ export function marcarImpresoApi(
   });
 }
 
-/** Comprobante de pago de un pedido (imagen en base64 + estado). */
+/** Comprobante de pago de un pedido (una o varias imágenes + estado). */
 export interface ComprobantePago {
-  imagen: string;
-  mime: string | null;
+  imagenes: { imagen: string; mime: string | null }[];
   confirmado: boolean;
   subidoPor: string | null;
   confirmadoPor: string | null;
@@ -170,7 +169,7 @@ export function obtenerComprobanteApi(
   return apiFetch<ComprobantePago | null>(`/pedidos/${id}/comprobante`);
 }
 
-/** Sube (o reemplaza) el comprobante de pago de un pedido. Queda sin confirmar. */
+/** AGREGA una imagen al comprobante de pago de un pedido. Queda sin confirmar. */
 export function subirComprobanteApi(
   id: string,
   imagen: string,
@@ -194,9 +193,13 @@ export function confirmarComprobanteApi(
   });
 }
 
-/** Elimina el comprobante de pago de un pedido. */
-export function eliminarComprobanteApi(id: string): Promise<{ id: string }> {
-  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante`, {
+/** Elimina el comprobante: una imagen (indica `indice`) o todas. */
+export function eliminarComprobanteApi(
+  id: string,
+  indice?: number,
+): Promise<{ id: string }> {
+  const qs = typeof indice === "number" ? `?indice=${indice}` : "";
+  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante${qs}`, {
     method: "DELETE",
   });
 }

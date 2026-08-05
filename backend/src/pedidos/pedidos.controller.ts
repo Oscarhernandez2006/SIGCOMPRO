@@ -139,7 +139,7 @@ export class PedidosController {
     return this.pedidos.obtenerComprobante(id);
   }
 
-  /** Sube (o reemplaza) el comprobante de pago de un pedido. Queda sin confirmar. */
+  /** Sube (AGREGA) una imagen al comprobante de pago de un pedido. Sin confirmar. */
   @Post(':id/comprobante')
   subirComprobante(
     @Param('id') id: string,
@@ -162,11 +162,18 @@ export class PedidosController {
     return this.pedidos.confirmarComprobante(id, body?.confirmadoPor ?? null);
   }
 
-  /** Elimina el comprobante de pago de un pedido. */
+  /** Elimina el comprobante: una imagen (?indice=N) o todas. */
   @Delete(':id/comprobante')
   @HttpCode(HttpStatus.OK)
-  eliminarComprobante(@Param('id') id: string) {
-    return this.pedidos.eliminarComprobante(id);
+  eliminarComprobante(
+    @Param('id') id: string,
+    @Query('indice') indice?: string,
+  ) {
+    const n = indice != null && indice !== '' ? Number(indice) : undefined;
+    return this.pedidos.eliminarComprobante(
+      id,
+      Number.isFinite(n) ? n : undefined,
+    );
   }
 
   /** Borra todos los pedidos. Solo administrador/desarrollador. */

@@ -396,8 +396,9 @@ export default function DespachoPage() {
   const compFileRef = useRef<HTMLInputElement>(null);
   const [compSubirId, setCompSubirId] = useState<string | null>(null);
   const [compSubiendo, setCompSubiendo] = useState<Record<string, boolean>>({});
-  const [compImg, setCompImg] = useState<Record<string, string>>({});
-  const [compModal, setCompModal] = useState<{ id: string; imagen: string } | null>(null);
+  // Imágenes del comprobante por pedido (varias) y modal con la imagen actual.
+  const [compImg, setCompImg] = useState<Record<string, string[]>>({});
+  const [compModal, setCompModal] = useState<{ id: string; indice: number } | null>(null);
   // Pedidos cuyo comprobante YA confirmado se desbloqueó (con clave dinámica)
   // para poder reemplazarlo o eliminarlo en esta sesión.
   const [compDesbloqueo, setCompDesbloqueo] = useState<Set<string>>(new Set());
@@ -670,7 +671,9 @@ export default function DespachoPage() {
         if (asg) {
           // Drivin tiene un domiciliario asignado.
           const cambioDomi = m.domiciliarioCodigo !== asg.code;
-          const debeDespachar = est === "facturado";
+          // NO auto-despachar si hay comprobante subido sin confirmar.
+          const compPendiente = !!m.comprobante?.tiene && !m.comprobante?.confirmado;
+          const debeDespachar = est === "facturado" && !compPendiente;
           if (cambioDomi || debeDespachar) {
             const despachoFin = m.despachoFin ?? new Date().toISOString();
             const despachadoPor = m.despachadoPor || usuarioDesp?.nombre || "Auto (Drivin)";
@@ -800,6 +803,12 @@ export default function DespachoPage() {
         alert(`No se puede ${verbo} sin número y valor de factura.`);
         return;
       }
+    }
+    // Comprobante SUBIDO pero SIN confirmar: no se puede FACTURAR (sí puede pasar
+    // sin comprobante o con el comprobante confirmado, pero no sin confirmar).
+    if (n === "facturado" && mm.comprobante?.tiene && !mm.comprobante?.confirmado) {
+      alert("Debes confirmar el comprobante de pago para poder facturar.");
+      return;
     }
     if (n === "despachado" && !mm.domiciliario?.trim()) {
       const esRecoge = pedidos.find((x) => x.id === id)?.entrega === "recoge";
@@ -1008,22 +1017,27 @@ export default function DespachoPage() {
     }
   };
 
-  // Procesa el archivo elegido: comprime, sube y refleja la bandera en la meta.
+  // Procesa los archivos elegidos (uno o VARIOS): comprime, sube (agrega) cada
+  // uno y refleja la bandera en la meta.
   const onArchivoComprobante = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     const id = compSubirId;
     e.target.value = "";
-    if (!file || !id) return;
-    if (!file.type.startsWith("image/")) {
+    if (!files.length || !id) return;
+    const imagenes = files.filter((f) => f.type.startsWith("image/"));
+    if (!imagenes.length) {
       alert("El comprobante debe ser una imagen.");
       return;
     }
     setCompSubiendo((prev) => ({ ...prev, [id]: true }));
     try {
-      const { dataUrl, mime } = await comprimirImagen(file);
-      await subirComprobanteApi(id, dataUrl, mime, usuarioDesp?.nombre ?? null);
-      setCompImg((prev) => ({ ...prev, [id]: dataUrl }));
-      setCompModal((prev) => (prev && prev.id === id ? { id, imagen: dataUrl } : prev));
+      const subidas: string[] = [];
+      for (const file of imagenes) {
+        const { dataUrl, mime } = await comprimirImagen(file);
+        await subirComprobanteApi(id, dataUrl, mime, usuarioDesp?.nombre ?? null);
+        subidas.push(dataUrl);
+      }
+      setCompImg((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), ...subidas] }));
       setCompDesbloqueo((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -1041,21 +1055,22 @@ export default function DespachoPage() {
     }
   };
 
-  // Abre la previsualización del comprobante (lo consulta si no está en caché).
+  // Abre la galería del comprobante (lo consulta si no está en caché).
   const verComprobante = async (id: string) => {
     const cache = compImg[id];
-    if (cache) {
-      setCompModal({ id, imagen: cache });
+    if (cache && cache.length) {
+      setCompModal({ id, indice: 0 });
       return;
     }
     try {
       const c = await obtenerComprobanteApi(id);
-      if (!c?.imagen) {
+      const imgs = (c?.imagenes ?? []).map((x) => x.imagen).filter(Boolean);
+      if (!imgs.length) {
         alert("Este pedido no tiene comprobante cargado.");
         return;
       }
-      setCompImg((prev) => ({ ...prev, [id]: c.imagen }));
-      setCompModal({ id, imagen: c.imagen });
+      setCompImg((prev) => ({ ...prev, [id]: imgs }));
+      setCompModal({ id, indice: 0 });
     } catch {
       alert("No se pudo cargar el comprobante.");
     }
@@ -1080,15 +1095,31 @@ export default function DespachoPage() {
   };
 
   // Elimina el comprobante del pedido (con confirmación).
-  const eliminarComprobante = async (id: string) => {
-    if (!window.confirm("¿Eliminar el comprobante de pago de este pedido?")) return;
+  // Elimina UNA imagen del comprobante (por índice) o TODAS (indice undefined).
+  const eliminarComprobante = async (id: string, indice?: number) => {
+    const varias = (compImg[id]?.length ?? 0) > 1;
+    const msg =
+      typeof indice === "number" && varias
+        ? "¿Eliminar esta imagen del comprobante?"
+        : "¿Eliminar el comprobante de pago de este pedido?";
+    if (!window.confirm(msg)) return;
     try {
-      await eliminarComprobanteApi(id);
-      setCompModal((prev) => (prev && prev.id === id ? null : prev));
+      await eliminarComprobanteApi(id, indice);
+      // Actualiza la caché local de imágenes.
+      const restantes =
+        typeof indice === "number"
+          ? (compImg[id] ?? []).filter((_, i) => i !== indice)
+          : [];
       setCompImg((prev) => {
         const next = { ...prev };
-        delete next[id];
+        if (restantes.length) next[id] = restantes;
+        else delete next[id];
         return next;
+      });
+      setCompModal((prev) => {
+        if (!prev || prev.id !== id) return prev;
+        if (!restantes.length) return null;
+        return { id, indice: Math.min(prev.indice, restantes.length - 1) };
       });
       setCompDesbloqueo((prev) => {
         const next = new Set(prev);
@@ -1097,7 +1128,10 @@ export default function DespachoPage() {
       });
       setMeta((prev) => ({
         ...prev,
-        [id]: { ...prev[id], comprobante: null },
+        [id]: {
+          ...prev[id],
+          comprobante: restantes.length ? { tiene: true, confirmado: false } : null,
+        },
       }));
     } catch {
       alert("No se pudo eliminar el comprobante.");
@@ -1551,6 +1585,8 @@ export default function DespachoPage() {
                 const requiereComprobante = transferencia || mixto;
                 const comp = m.comprobante ?? null;
                 const compConfirmado = Boolean(comp?.confirmado);
+                // Comprobante SUBIDO pero SIN confirmar: bloquea el despacho.
+                const comprobantePendiente = Boolean(comp?.tiene) && !compConfirmado;
                 // El cliente recoge en el punto de venta (no lleva domiciliario).
                 const esRecoge = p.entrega === "recoge";
                 // Pedido pequeño (≤10 kg): alistado de 40 min (rojo a los 20 min).
@@ -2021,13 +2057,15 @@ export default function DespachoPage() {
                         ) : (
                           <button
                             onClick={() => cambiarEstado(p.id, "Facturado")}
-                            disabled={anulado || facturado || !alistado || !puedeEstado("Facturado")}
+                            disabled={anulado || facturado || !alistado || comprobantePendiente || !puedeEstado("Facturado")}
                             title={
                               !alistado && !facturado
                                 ? "Debes terminar el alistamiento antes de facturar"
-                                : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
-                                  ? "Ingresa el número y el valor de la factura para facturar"
-                                  : "Marcar el pedido como facturado"
+                                : comprobantePendiente
+                                  ? "Debes confirmar el comprobante de pago para facturar"
+                                  : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                                    ? "Ingresa el número y el valor de la factura para facturar"
+                                    : "Marcar el pedido como facturado"
                             }
                             className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
@@ -2069,7 +2107,7 @@ export default function DespachoPage() {
                           </div>
                         ) : (
                           <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-brown/50">
-                            Factura el pedido; Drivin asignará el domiciliario.
+                            Factura el pedido y asigna en Drivin el domiciliario.
                           </div>
                         )}
 
@@ -2627,12 +2665,12 @@ export default function DespachoPage() {
         </div>
       )}
 
-      {/* Input oculto para subir la imagen del comprobante de pago */}
+      {/* Input oculto para subir imágenes del comprobante de pago (varias) */}
       <input
         ref={compFileRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        multiple
         onChange={onArchivoComprobante}
         className="hidden"
       />
@@ -2643,6 +2681,11 @@ export default function DespachoPage() {
         const cConf = Boolean(meta[cid]?.comprobante?.confirmado);
         const cDesb = compDesbloqueo.has(cid);
         const subiendo = Boolean(compSubiendo[cid]);
+        const imgs = compImg[cid] ?? [];
+        const total = imgs.length;
+        const idx = Math.min(compModal.indice, Math.max(0, total - 1));
+        const imgActual = imgs[idx];
+        const puedeEditar = !cConf || cDesb;
         return (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/70 p-4"
@@ -2655,6 +2698,11 @@ export default function DespachoPage() {
               <div className="flex items-center justify-between gap-2 border-b border-brand-brown/10 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <h3 className="font-serif text-base font-bold text-brand-wine">Comprobante de pago</h3>
+                  {total > 1 && (
+                    <span className="rounded-full bg-brand-brown/10 px-2 py-0.5 text-[10px] font-bold text-brand-brown/70">
+                      {idx + 1}/{total}
+                    </span>
+                  )}
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                       cConf ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
@@ -2673,12 +2721,53 @@ export default function DespachoPage() {
                   </svg>
                 </button>
               </div>
-              <div className="overflow-auto bg-brand-cream-soft/40 p-3">
+              <div className="relative overflow-auto bg-brand-cream-soft/40 p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={compModal.imagen} alt="Comprobante de pago" className="mx-auto max-h-[60vh] w-auto rounded-lg" />
+                <img src={imgActual} alt={`Comprobante ${idx + 1}`} className="mx-auto max-h-[55vh] w-auto rounded-lg" />
+                {total > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCompModal({ id: cid, indice: (idx - 1 + total) % total })}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
+                      aria-label="Anterior"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCompModal({ id: cid, indice: (idx + 1) % total })}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
+                      aria-label="Siguiente"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </div>
+              {/* Miniaturas para saltar entre imágenes */}
+              {total > 1 && (
+                <div className="flex gap-1.5 overflow-x-auto border-t border-brand-brown/10 px-3 py-2">
+                  {imgs.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`Miniatura ${i + 1}`}
+                      onClick={() => setCompModal({ id: cid, indice: i })}
+                      className={`h-12 w-12 shrink-0 cursor-pointer rounded-md object-cover ring-2 transition ${
+                        i === idx ? "ring-brand-wine" : "ring-transparent hover:ring-brand-amber/60"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="border-t border-brand-brown/10 px-4 py-3">
-                {!cConf ? (
+                {puedeEditar ? (
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -2686,40 +2775,24 @@ export default function DespachoPage() {
                       disabled={subiendo}
                       className="flex-1 rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-50"
                     >
-                      {subiendo ? "Subiendo…" : "Reemplazar"}
+                      {subiendo ? "Subiendo…" : "Agregar imagen"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => eliminarComprobante(cid)}
+                      onClick={() => eliminarComprobante(cid, total > 1 ? idx : undefined)}
                       className="flex-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
                     >
-                      Eliminar
+                      {total > 1 ? "Eliminar esta" : "Eliminar"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => confirmarComprobante(cid)}
-                      className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                    >
-                      Confirmar
-                    </button>
-                  </div>
-                ) : cDesb ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => abrirSelectorComprobante(cid)}
-                      disabled={subiendo}
-                      className="flex-1 rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-50"
-                    >
-                      {subiendo ? "Subiendo…" : "Reemplazar"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => eliminarComprobante(cid)}
-                      className="flex-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
-                    >
-                      Eliminar
-                    </button>
+                    {!cConf && (
+                      <button
+                        type="button"
+                        onClick={() => confirmarComprobante(cid)}
+                        className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        Confirmar
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button
