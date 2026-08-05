@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -1164,9 +1164,6 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
   const [codigoAuth, setCodigoAuth] = useState("");
   const [verificandoAuth, setVerificandoAuth] = useState(false);
   const [errorAuth, setErrorAuth] = useState<string | null>(null);
-  // Estado del envío directo a Drivin (solo La 93) tras crear el pedido.
-  const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">("idle");
-  const [drivinMsg, setDrivinMsg] = useState<string>("");
   const [editandoItem, setEditandoItem] = useState<ItemCarrito | null>(null);
 
   // Punto de venta del pedido
@@ -1445,19 +1442,12 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
     }
     onCrear(finalPedido);
     setPedidoCreado(finalPedido);
-    // Si el pedido es de un punto integrado con Drivin (La 93 o Alameda), se
-    // ENVÍA automáticamente al crearlo. El Excel ya NO se descarga solo: queda
-    // como respaldo manual por si el envío directo falla.
-    if (esPuntoDrivin(finalPedido.punto)) {
-      enviarDrivinCreacion(finalPedido);
-    } else {
-      setDrivinEstado("idle");
-    }
+    // El envío a Drivin ya NO ocurre al crear/clonar el pedido: se hace cuando
+    // el pedido se DESPACHA (estado "Despachado") en la vista de Despacho.
   }
 
-  // Puntos integrados con Drivin (envío automático): La 93, La 70, La 43,
-  // Alameda, Olaya y San Felipe. Cada uno usa su propio schema en el backend
-  // (93->01, 70->03, 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07).
+  // Puntos integrados con Drivin (para mostrar el Excel como respaldo): La 93,
+  // La 70, La 43, Alameda, Olaya y San Felipe.
   function esPuntoDrivin(p?: { nombre?: string } | null): boolean {
     const nombre = String(p?.nombre ?? "").toLowerCase();
     return (
@@ -1468,19 +1458,6 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
       nombre.includes("olaya") ||
       nombre.includes("felipe")
     );
-  }
-
-  // Envía el pedido recién creado a Drivin y refleja el resultado en el modal.
-  async function enviarDrivinCreacion(p: Pedido) {
-    setDrivinEstado("enviando");
-    setDrivinMsg("");
-    try {
-      await enviarADrivinApi(p.id);
-      setDrivinEstado("ok");
-    } catch (e) {
-      setDrivinEstado("error");
-      setDrivinMsg(e instanceof Error ? e.message : "");
-    }
   }
 
   return (
@@ -1613,41 +1590,6 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
               <p className="mt-1 text-sm text-brand-brown/60">
                 Comanda <b>{pedidoCreado.comanda}</b> · Total {formatoCOP(pedidoCreado.total)}
               </p>
-
-              {/* Estado del envío directo a Drivin (solo La 93) */}
-              {esPuntoDrivin(pedidoCreado.punto) && drivinEstado !== "idle" && (
-                <div className="mt-4 w-full max-w-md">
-                  {drivinEstado === "enviando" && (
-                    <div className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                      Enviando el pedido a Drivin…
-                    </div>
-                  )}
-                  {drivinEstado === "ok" && (
-                    <div className="flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      Envío exitoso del pedido {pedidoCreado.comanda} a Drivin.
-                    </div>
-                  )}
-                  {drivinEstado === "error" && (
-                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm text-red-700">
-                      <p className="font-semibold">Error al subir el pedido a Drivin.</p>
-                      <p className="mt-0.5">Por favor genera el Excel e inténtalo manual.</p>
-                      {drivinMsg && (
-                        <p className="mt-1 break-words text-xs text-red-500/80">{drivinMsg}</p>
-                      )}
-                      <button
-                        onClick={() => enviarDrivinCreacion(pedidoCreado)}
-                        className="mt-2 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-                      >
-                        Reintentar envío
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
 
               <p className="mt-4 max-w-sm text-sm text-brand-brown/60">
                 El pedido quedó guardado. Imprime la comanda ahora o vuelve a imprimirla cuando quieras desde la lista.

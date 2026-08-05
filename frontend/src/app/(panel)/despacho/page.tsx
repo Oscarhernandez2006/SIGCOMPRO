@@ -17,6 +17,7 @@ import {
   subirComprobanteApi,
   confirmarComprobanteApi,
   eliminarComprobanteApi,
+  cargarAsignacionesDrivin,
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
@@ -359,6 +360,11 @@ export default function DespachoPage() {
   const [personalPorPunto, setPersonalPorPunto] = useState<
     Record<string, PersonalDespacho>
   >({});
+  // Asignaciones bajadas de Drivin: comanda -> domiciliario que Drivin asignó
+  // (null = está en Drivin pero SIN domiciliario; ausente = no está en Drivin).
+  const [asignacionesDrivin, setAsignacionesDrivin] = useState<
+    Record<string, { code: string; nombre: string } | null>
+  >({});
   // Texto del buscador (consecutivo, nombre o NIT del cliente).
   const [busqueda, setBusqueda] = useState("");
   // Id del pedido cuya ficha completa del cliente está desplegada (al hacer
@@ -402,6 +408,14 @@ export default function DespachoPage() {
   const [errorComp, setErrorComp] = useState<string | null>(null);
   // Contenedor scrolleable de la tabla (scroll normal con la rueda/barra).
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Ids cuyo pedido base ya se subió a Drivin al despachar (evita reenvíos).
+  const drivinDespachoRef = useRef<Set<string>>(new Set());
+  // Resultado del envío a Drivin al despachar (modal central).
+  const [drivinModal, setDrivinModal] = useState<{
+    estado: "enviando" | "ok" | "error";
+    comanda: string;
+    msg?: string;
+  } | null>(null);
 
   // Permisos granulares de despacho y modal de acción no permitida.
   const sinPermiso = useSinPermiso();
@@ -569,6 +583,32 @@ export default function DespachoPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Baja de Drivin las asignaciones (comanda -> domiciliario) cada 15s. Con esto
+  // SIGCOMPRO sabe a quién asignó Drivin cada pedido facturado.
+  useEffect(() => {
+    let vivo = true;
+    const bajar = () => {
+      cargarAsignacionesDrivin()
+        .then((mapa) => vivo && setAsignacionesDrivin(mapa ?? {}))
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    bajar();
+    const id = setInterval(bajar, 15000);
+    return () => {
+      vivo = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Cierra solo el modal de Drivin cuando el envío fue exitoso (a los 4s).
+  useEffect(() => {
+    if (drivinModal?.estado !== "ok") return;
+    const t = setTimeout(() => setDrivinModal(null), 4000);
+    return () => clearTimeout(t);
+  }, [drivinModal]);
+
   // AUTO-CORRECCIÓN de estado (SOLO en la vista, no se guarda): si el
   // alistamiento YA terminó (meta.fin) pero el estado quedó desincronizado en
   // "En producción", se muestra como "Alistado" para no bloquear la facturación.
@@ -605,6 +645,102 @@ export default function DespachoPage() {
       }
     }
   }, [pedidos, meta, idsPuntos]);
+
+  // SINCRONIZACIÓN CONTINUA con Drivin (el domiciliario lo decide Drivin y puede
+  // CAMBIAR o DESASIGNARSE, incluso después de despachado):
+  //  - Facturado + Drivin asignó  -> guarda el domiciliario y pasa a Despachado.
+  //  - Despachado + Drivin cambió  -> actualiza el domiciliario.
+  //  - Despachado + Drivin DESASIGNÓ -> quita el domiciliario y vuelve a Facturado
+  //    (a esperar hasta que Drivin reasigne).
+  // Solo aplica a pedidos de los puntos del usuario y ya subidos a Drivin.
+  useEffect(() => {
+    // Si el mapa vino vacío (posible fallo de lectura), NO desasignamos nada.
+    const mapaTieneDatos = Object.keys(asignacionesDrivin).length > 0;
+    for (const p of pedidos) {
+      if (p.anulado) continue;
+      if (p.entrega === "recoge") continue; // recoge en PDV no usa domiciliario
+      if (!p.punto?.id || !idsPuntos.has(String(p.punto.id))) continue;
+      const m = meta[p.id] ?? {};
+      const est = norm(p.estado);
+      if (est !== "facturado" && est !== "despachado") continue;
+
+      // BASE: si la comanda está en Drivin, refleja su asignación.
+      if (p.comanda in asignacionesDrivin) {
+        const asg = asignacionesDrivin[p.comanda]; // {code,nombre} | null
+        if (asg) {
+          // Drivin tiene un domiciliario asignado.
+          const cambioDomi = m.domiciliarioCodigo !== asg.code;
+          const debeDespachar = est === "facturado";
+          if (cambioDomi || debeDespachar) {
+            const despachoFin = m.despachoFin ?? new Date().toISOString();
+            const despachadoPor = m.despachadoPor || usuarioDesp?.nombre || "Auto (Drivin)";
+            setMeta((prev) => {
+              const nuevo = { ...prev[p.id], domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor };
+              actualizarMetaApi(p.id, { domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor }).catch(() => { /* ignore */ });
+              return { ...prev, [p.id]: nuevo };
+            });
+            if (debeDespachar) {
+              setPedidos((prev) => {
+                const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Despachado" as Pedido["estado"] } : x));
+                const upd = next.find((x) => x.id === p.id);
+                if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+                return next;
+              });
+            }
+          }
+        } else if (mapaTieneDatos) {
+          // Drivin DESASIGNÓ: quitar el domiciliario y, si estaba despachado,
+          // volver a Facturado para esperar la reasignación.
+          const teniaDomi = !!(m.domiciliario || m.domiciliarioCodigo);
+          if (teniaDomi || est === "despachado") {
+            setMeta((prev) => {
+              const nuevo = { ...prev[p.id], domiciliario: "", domiciliarioCodigo: "" };
+              actualizarMetaApi(p.id, { domiciliario: "", domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
+              return { ...prev, [p.id]: nuevo };
+            });
+            if (est === "despachado") {
+              setPedidos((prev) => {
+                const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Facturado" as Pedido["estado"] } : x));
+                const upd = next.find((x) => x.id === p.id);
+                if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+                return next;
+              });
+            }
+          }
+        }
+      }
+
+      // RÉPLICAS: cada réplica es una orden aparte en Drivin (código "comanda-N").
+      // Se baja su domiciliario asignado igual que la base.
+      const reps = m.replicas ?? [];
+      if (reps.length > 0) {
+        let cambioRep = false;
+        const nuevas = reps.map((r) => {
+          const key = `${p.comanda}-${r.numero}`;
+          if (!(key in asignacionesDrivin)) return r;
+          const a = asignacionesDrivin[key];
+          if (a) {
+            if (r.domiciliarioCodigo !== a.code) {
+              cambioRep = true;
+              return { ...r, domiciliario: a.nombre, domiciliarioCodigo: a.code };
+            }
+            return r;
+          }
+          if (mapaTieneDatos && (r.domiciliario || r.domiciliarioCodigo)) {
+            cambioRep = true;
+            return { ...r, domiciliario: "", domiciliarioCodigo: "" };
+          }
+          return r;
+        });
+        if (cambioRep) {
+          setMeta((prev) => {
+            actualizarMetaApi(p.id, { replicas: nuevas }).catch(() => { /* ignore */ });
+            return { ...prev, [p.id]: { ...prev[p.id], replicas: nuevas } };
+          });
+        }
+      }
+    }
+  }, [pedidos, asignacionesDrivin, idsPuntos, meta, usuarioDesp]);
 
   /** Marca un pedido como impreso y lo persiste. */
   const marcarImpreso = (id: string) => {
@@ -683,12 +819,40 @@ export default function DespachoPage() {
         return { ...prev, [id]: { ...prev[id], despachoFin, despachadoPor } };
       });
     }
-    // Al pasar a "Facturado" se registra automáticamente el nombre del usuario
-    // que realizó la factura (quien pulsó Facturar).
+    // Al pasar a "Facturado" se registra el facturador y se SUBE el pedido a
+    // Drivin SIN domiciliario: Drivin asigna el vehículo y SIGCOMPRO lo baja
+    // luego (poll de asignaciones) para despachar automáticamente.
     if (norm(estado) === "facturado") {
       const facturadoPor = usuarioDesp?.nombre ?? "";
       actualizarMetaApi(id, { facturadoPor }).catch(() => { /* ignore */ });
       setMeta((prev) => ({ ...prev, [id]: { ...prev[id], facturadoPor } }));
+      // NO reenviar si ya se subió antes (p. ej. si revierten a Alistado y
+      // vuelven a facturar por corregir la factura/un valor). La bandera
+      // `drivinEnviado` queda PERSISTIDA en la meta.
+      const sinReplicas = (mm.replicas ?? []).length === 0;
+      if (
+        sinReplicas &&
+        !mm.drivinEnviado &&
+        !drivinDespachoRef.current.has(id)
+      ) {
+        drivinDespachoRef.current.add(id);
+        const comanda = pedidos.find((x) => x.id === id)?.comanda ?? id;
+        setDrivinModal({ estado: "enviando", comanda });
+        enviarADrivinApi(id)
+          .then(() => {
+            setDrivinModal({ estado: "ok", comanda });
+            actualizarMetaApi(id, { drivinEnviado: true }).catch(() => { /* ignore */ });
+            setMeta((prev) => ({ ...prev, [id]: { ...prev[id], drivinEnviado: true } }));
+          })
+          .catch((e) => {
+            drivinDespachoRef.current.delete(id); // permite reintentar
+            setDrivinModal({
+              estado: "error",
+              comanda,
+              msg: e instanceof Error ? e.message : "",
+            });
+          });
+      }
     }
     // Para facturar/despachar, garantiza que la factura ya quedó PERSISTIDA en
     // el backend antes de guardar el pedido (evita que la validación del backend
@@ -969,12 +1133,15 @@ export default function DespachoPage() {
 
 
   // Agrega la siguiente réplica en secuencia (máx. 5) con su domiciliario.
-  const crearReplica = (id: string, domiciliario: string) => {
+  const crearReplica = (id: string, domiciliario: string, code?: string) => {
     const actuales = meta[id]?.replicas ?? [];
     const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
     if (max >= 5) return;
     actualizarMeta(id, {
-      replicas: [...actuales, { numero: max + 1, domiciliario }],
+      replicas: [
+        ...actuales,
+        { numero: max + 1, domiciliario, domiciliarioCodigo: code },
+      ],
     });
   };
   // Quita la última réplica (para mantener la secuencia).
@@ -1367,7 +1534,6 @@ export default function DespachoPage() {
                 const porcionadores = [...personal.porcionadores].sort((a, b) =>
                   a.localeCompare(b, "es", { sensitivity: "base" }),
                 );
-                const domiciliarios = personal.domiciliarios;
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
                 const despachado = norm(estado) === "despachado";
                 const facturado = norm(estado) === "facturado" || despachado;
@@ -1887,23 +2053,25 @@ export default function DespachoPage() {
                         </div>
                       ) : (
                       <div className="flex w-full flex-col gap-1.5 pb-12">
-                        <select
-                          value={m.domiciliario ?? ""}
-                          onChange={(ev) => actualizarMeta(p.id, { domiciliario: ev.target.value })}
-                          disabled={anulado || despachado || !facturado || !puedeEstado("Despachado")}
-                          title={!facturado && !despachado ? "Debes facturar el pedido antes de asignar domiciliario" : undefined}
-                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                        >
-                          <option value="">Selecciona</option>
-                          {(m.domiciliario && !domiciliarios.includes(m.domiciliario)
-                            ? [m.domiciliario, ...domiciliarios]
-                            : domiciliarios
-                          ).map((nombre) => (
-                            <option key={nombre} value={nombre}>
-                              {nombre}
-                            </option>
-                          ))}
-                        </select>
+                        {/* Domiciliario: lo ASIGNA Drivin. SIGCOMPRO solo lo
+                            muestra (y despacha automáticamente al bajarlo). */}
+                        {m.domiciliario ? (
+                          <div className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold uppercase tracking-wide text-green-700/70">
+                              Domiciliario (Drivin)
+                            </p>
+                            <p className="text-xs font-semibold text-green-800">{m.domiciliario}</p>
+                          </div>
+                        ) : facturado ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700">
+                            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                            Esperando asignación de Drivin…
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-brown/50">
+                            Factura el pedido; Drivin asignará el domiciliario.
+                          </div>
+                        )}
 
                         {/* Réplicas del pedido: el mismo pedido enviado por partes */}
                         <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
@@ -2298,9 +2466,6 @@ export default function DespachoPage() {
           pedido={modalReplica.pedido}
           numero={modalReplica.numero}
           modo={modalReplica.modo}
-          domiciliarios={
-            personalPorPunto[String(modalReplica.pedido.punto?.id ?? "")]?.domiciliarios ?? []
-          }
           domiciliarioAsignado={
             (meta[modalReplica.pedido.id]?.replicas ?? []).find(
               (r) => r.numero === modalReplica.numero,
@@ -2318,8 +2483,8 @@ export default function DespachoPage() {
               (r) => r.numero === modalReplica.numero,
             )?.drivinEnviado ?? false
           }
-          onCrear={(domi) => {
-            crearReplica(modalReplica.pedido.id, domi);
+          onCrear={(domi, code) => {
+            crearReplica(modalReplica.pedido.id, domi, code);
           }}
           onDescargar={() =>
             descargarReplica(modalReplica.pedido, modalReplica.numero)
@@ -2336,6 +2501,73 @@ export default function DespachoPage() {
           }}
           onCerrar={() => setModalReplica(null)}
         />
+      )}
+      {/* Resultado del envío a Drivin al despachar (modal central). */}
+      {drivinModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            {drivinModal.estado === "enviando" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
+                  <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
+                </div>
+                <h3 className="mt-4 font-serif text-xl font-bold text-brand-wine">
+                  Enviando a Drivin…
+                </h3>
+                <p className="mt-1 text-sm text-brand-brown/60">
+                  Pedido <b>{drivinModal.comanda}</b>
+                </p>
+              </>
+            )}
+            {drivinModal.estado === "ok" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-8 w-8 text-green-600">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 font-serif text-xl font-bold text-green-700">
+                  Envío a Drivin exitoso
+                </h3>
+                <p className="mt-1 text-sm text-brand-brown/60">
+                  El pedido <b>{drivinModal.comanda}</b> se envió correctamente a Drivin.
+                </p>
+                <button
+                  onClick={() => setDrivinModal(null)}
+                  className="mt-5 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+                >
+                  Aceptar
+                </button>
+              </>
+            )}
+            {drivinModal.estado === "error" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-8 w-8 text-red-600">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.34 3.94l-7.5 12.99A1.5 1.5 0 0 0 4.14 19.5h15.72a1.5 1.5 0 0 0 1.3-2.57l-7.5-12.99a1.5 1.5 0 0 0-2.6 0Z" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 font-serif text-xl font-bold text-red-700">
+                  El pedido se despachó, pero falló el envío a Drivin
+                </h3>
+                <p className="mt-1 text-sm text-brand-brown/60">
+                  Pedido <b>{drivinModal.comanda}</b>. Un administrador puede reversar y volver a despachar para reintentar.
+                </p>
+                {drivinModal.msg && (
+                  <p className="mt-2 break-words rounded-lg bg-red-50 px-3 py-2 text-left text-xs text-red-500/90">
+                    {drivinModal.msg}
+                  </p>
+                )}
+                <button
+                  onClick={() => setDrivinModal(null)}
+                  className="mt-5 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+                >
+                  Cerrar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
       {resetTiemposId && (
@@ -2580,7 +2812,6 @@ function ModalReplica({
   pedido,
   numero,
   modo,
-  domiciliarios,
   domiciliarioAsignado,
   esUltima,
   yaEnviado,
@@ -2594,19 +2825,16 @@ function ModalReplica({
   pedido: Pedido;
   numero: number;
   modo: "crear" | "ver";
-  domiciliarios: string[];
   domiciliarioAsignado: string;
   esUltima: boolean;
   yaEnviado: boolean;
-  onCrear: (domiciliario: string) => void;
+  onCrear: (domiciliario: string, code: string) => void;
   onDescargar: () => void;
-  onDrivin: () => Promise<{ comanda: string; status: number }>;
+  onDrivin: (code?: string) => Promise<{ comanda: string; status: number }>;
   onMarcarEnviado: () => void;
   onQuitar: () => void;
   onCerrar: () => void;
 }) {
-  const [domi, setDomi] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [drivinEstado, setDrivinEstado] = useState<"idle" | "enviando" | "ok" | "error">(
     yaEnviado ? "ok" : "idle",
   );
@@ -2627,7 +2855,8 @@ function ModalReplica({
     );
   })();
 
-  // Sube la réplica a Drivin (se usa al confirmar y como reintento).
+  // Sube la réplica a Drivin (se usa al confirmar y como reintento). SIN
+  // domiciliario: Drivin lo asigna y SIGCOMPRO lo baja luego.
   async function enviarDrivin() {
     if (drivinEstado === "enviando") return;
     setDrivinEstado("enviando");
@@ -2642,14 +2871,10 @@ function ModalReplica({
     }
   }
 
-  // Confirmar (modo crear): crea la réplica y, si el punto es Drivin, sube
-  // enseguida a Drivin mostrando el resultado sin tener que reabrir el modal.
+  // Confirmar (modo crear): crea la réplica SIN domiciliario y la sube a Drivin.
+  // El domiciliario lo asigna Drivin (queda "esperando asignación").
   function confirmar() {
-    if (!domi.trim()) {
-      setError("Selecciona el domiciliario para esta réplica.");
-      return;
-    }
-    onCrear(domi);
+    onCrear("", "");
     if (esDrivin) {
       enviarDrivin();
     } else {
@@ -2707,34 +2932,17 @@ function ModalReplica({
           </div>
 
           {modo === "crear" ? (
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-brand-brown">
-                Domiciliario
-              </label>
-              <select
-                value={domi}
-                autoFocus
-                onChange={(e) => {
-                  setDomi(e.target.value);
-                  setError(null);
-                }}
-                className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
-              >
-                <option value="">Selecciona…</option>
-                {domiciliarios.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              {error && <p className="mt-1 text-sm font-medium text-red-600">{error}</p>}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+              Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
+              <b> esperará que Drivin le asigne el domiciliario</b> (no se
+              selecciona aquí).
             </div>
           ) : (
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
-                Domiciliario asignado
+                Domiciliario (Drivin)
               </p>
-              <p className="font-bold text-brand-black">{domiciliarioAsignado || "—"}</p>
+              <p className="font-bold text-brand-black">{domiciliarioAsignado || "Esperando asignación…"}</p>
             </div>
           )}
 

@@ -16,6 +16,10 @@ export interface DespachoMeta {
   facturadoPor?: string;
   /** Domiciliario asignado para el despacho. */
   domiciliario?: string;
+  /** Code del vehículo (domiciliario) de Drivin correspondiente a `domiciliario`. */
+  domiciliarioCodigo?: string;
+  /** El pedido ya se subió a Drivin (evita reenviar si se re-factura). */
+  drivinEnviado?: boolean;
   /** Instante en que el pedido pasó a "Despachado". */
   despachoFin?: string;
   /**
@@ -33,6 +37,8 @@ export interface DespachoMeta {
   replicas?: {
     numero: number;
     domiciliario?: string;
+    /** Code del vehículo (domiciliario) de Drivin de esta réplica. */
+    domiciliarioCodigo?: string;
     /** La réplica ya se subió a Drivin correctamente. */
     drivinEnviado?: boolean;
   }[];
@@ -237,15 +243,57 @@ export async function descargarExcelDespacho(
 /**
  * Envía el pedido directamente a Drivin (reemplazo del Excel de cargue).
  * Usa el mismo mapeo de campos. Si se indica `replica` (1-5), el consecutivo
- * lleva el sufijo "-N". Devuelve la respuesta del API de Drivin.
+ * lleva el sufijo "-N". `vehiculo` = code del domiciliario de Drivin a
+ * preasignar. Devuelve la respuesta del API de Drivin.
  */
 export function enviarADrivinApi(
   id: string,
   replica?: number,
+  vehiculo?: string,
 ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
-  const qs = replica ? `?replica=${replica}` : "";
+  const p = new URLSearchParams();
+  if (replica) p.set("replica", String(replica));
+  if (vehiculo) p.set("vehiculo", vehiculo);
+  const qs = p.toString();
   return apiFetch<{ status: number; comanda: string; respuesta: unknown }>(
-    `/pedidos/${id}/drivin${qs}`,
+    `/pedidos/${id}/drivin${qs ? `?${qs}` : ""}`,
     { method: "POST" },
+  );
+}
+
+/** Domiciliario (vehículo de Drivin) simplificado para el selector. */
+export interface DomiciliarioDrivin {
+  code: string;
+  nombre: string;
+  tipo?: string | null;
+}
+
+/**
+ * Domiciliarios (vehículos de Drivin) asignados a un punto de venta. Se filtran
+ * por la flota "Domiciliarios PDV <localidad>" del punto. Reemplaza la lista de
+ * "Gestión de recursos" en el selector de despacho.
+ */
+export function cargarDomiciliariosDrivin(
+  codigo: string,
+  nombre: string,
+): Promise<DomiciliarioDrivin[]> {
+  const p = new URLSearchParams();
+  if (codigo) p.set("codigo", codigo);
+  if (nombre) p.set("nombre", nombre);
+  return apiFetch<DomiciliarioDrivin[]>(
+    `/pedidos/drivin/domiciliarios?${p.toString()}`,
+  );
+}
+
+/**
+ * Mapa comanda → domiciliario que Drivin asignó (o `null` si está en Drivin
+ * pero sin domiciliario). Si la comanda NO está en el mapa, no está en Drivin.
+ * Se consulta por polling para "bajar" la asignación y despachar automáticamente.
+ */
+export function cargarAsignacionesDrivin(): Promise<
+  Record<string, { code: string; nombre: string } | null>
+> {
+  return apiFetch<Record<string, { code: string; nombre: string } | null>>(
+    `/pedidos/drivin/asignaciones`,
   );
 }

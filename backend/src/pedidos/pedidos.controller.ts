@@ -75,16 +75,33 @@ export class PedidosController {
     res.end(buffer);
   }
 
+  /** Domiciliarios (vehículos de Drivin) asignados a un punto de venta. */
+  @Get('drivin/domiciliarios')
+  domiciliariosDrivin(
+    @Query('codigo') codigo?: string,
+    @Query('nombre') nombre?: string,
+  ) {
+    return this.pedidos.domiciliariosDrivinPunto(codigo ?? '', nombre ?? '');
+  }
+
+  /** Mapa comanda -> domiciliario que Drivin asignó (para bajar la asignación). */
+  @Get('drivin/asignaciones')
+  asignacionesDrivin() {
+    return this.pedidos.asignacionesDrivin();
+  }
+
   /** Envía el pedido directamente a Drivin (reemplazo del Excel de cargue). */
   @Post(':id/drivin')
   async drivin(
     @Param('id') id: string,
     @Query('replica') replica: string | undefined,
+    @Query('vehiculo') vehiculo: string | undefined,
   ) {
     const n = replica ? Number(replica) : undefined;
     return this.pedidos.enviarADrivin(
       id,
       Number.isFinite(n) ? n : undefined,
+      vehiculo,
     );
   }
 

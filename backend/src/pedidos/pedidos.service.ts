@@ -7,6 +7,9 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import * as XLSX from 'xlsx';
+import * as https from 'https';
+import { promises as dnsPromises } from 'dns';
+import { Resolver as DnsResolver } from 'dns/promises';
 import { Pool, PoolClient } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
@@ -71,6 +74,40 @@ type PedidoData = Record<string, unknown> & {
 /** Metadata de despacho asociada a un pedido. */
 type DespachoMeta = Record<string, unknown>;
 
+/** Escenario de ruteo de Drivin (GET external/v2/scenarios). */
+interface DrivinScenario {
+  token: string;
+  deploy_date?: string;
+  description?: string | null;
+  status?: string;
+  schema_name?: string;
+  schema_code?: string;
+  created_at?: string;
+}
+
+/** Vehículo (domiciliario) de Drivin (GET external/v2/vehicles). */
+interface DrivinVehicle {
+  id?: number;
+  code?: string;
+  is_active?: boolean;
+  vehicle_type?: string | null;
+  driver?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    phone?: string | null;
+    dni?: string | null;
+  } | null;
+  /** CSV de flotas, ej. "Domiciliarios PDV La 93,Domiciliarios PDV Olaya". */
+  fleets?: string | null;
+}
+
+/** Domiciliario (vehículo) simplificado para el frontend. */
+export interface DomiciliarioDrivin {
+  code: string;
+  nombre: string;
+  tipo?: string | null;
+}
+
 export interface EstadoPedidos {
   pedidos: PedidoData[];
   meta: Record<string, DespachoMeta>;
@@ -85,6 +122,22 @@ export interface EstadoPedidos {
 @Injectable()
 export class PedidosService implements OnModuleInit {
   private readonly logger = new Logger(PedidosService.name);
+  /** Caché en memoria de scenarios de Drivin por fecha (TTL corto). */
+  private cacheScenarios = new Map<
+    string,
+    { ts: number; datos: DrivinScenario[] }
+  >();
+  /** Caché en memoria de vehículos (domiciliarios) de Drivin (TTL corto). */
+  private cacheVehiculos: { ts: number; datos: DrivinVehicle[] } | null = null;
+  /** Tiempo de vida de la caché de Drivin (ms). */
+  private readonly DRIVIN_TTL = 5 * 60 * 1000;
+  /** IP resuelta de external.driv.in (cache), para saltar el DNS intermitente. */
+  private drivinIp: { ip: string; ts: number } | null = null;
+  /** Caché del mapa de asignaciones (comanda -> vehículo) de Drivin. */
+  private cacheAsignaciones: {
+    ts: number;
+    datos: Record<string, { code: string; nombre: string } | null>;
+  } | null = null;
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     private readonly ubicaciones: UbicacionesService,
@@ -987,6 +1040,9 @@ export class PedidosService implements OnModuleInit {
       direccion: String(cliente.direccion ?? ''),
       barrio: String(cliente.barrio ?? ''),
       ciudad: String(cliente.ciudad ?? ''),
+      // Coordenadas del cliente (para que Drivin geocodifique la dirección).
+      lat: typeof cliente.lat === 'number' ? cliente.lat : null,
+      lng: typeof cliente.lng === 'number' ? cliente.lng : null,
     };
   }
 
@@ -1099,12 +1155,299 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
+   * Localidad del punto para casar con las flotas de Drivin (fleets), cuyo
+   * formato es "Domiciliarios PDV <localidad>". Se decide por el NÚMERO del
+   * punto (prefijo del código), con respaldo por nombre.
+   */
+  private localidadDrivin(puntoCodigo: string, nombrePunto: string): string {
+    const num = String(puntoCodigo ?? '').match(/^\d+/)?.[0] ?? '';
+    const porNumero: Record<string, string> = {
+      '1': 'La 93',
+      '2': 'La 70',
+      '3': 'La 43',
+      '4': 'Alameda I',
+      '5': 'Alameda II',
+      '6': 'Olaya',
+      '7': 'San Felipe',
+    };
+    if (porNumero[num]) return porNumero[num];
+    const nombre = (nombrePunto ?? '').toLowerCase();
+    if (/alameda\s+ii\b/.test(nombre)) return 'Alameda II';
+    if (/alameda\s+i\b/.test(nombre) || nombre.includes('alameda'))
+      return 'Alameda I';
+    if (nombre.includes('olaya')) return 'Olaya';
+    if (nombre.includes('felipe')) return 'San Felipe';
+    if (/\b93\b/.test(nombre)) return 'La 93';
+    if (/\b70\b/.test(nombre)) return 'La 70';
+    if (/\b43\b/.test(nombre)) return 'La 43';
+    return '';
+  }
+
+  /**
+   * GET autenticado a la API externa de Drivin. La API es intermitente (a veces
+   * falla el primer intento), así que se REINTENTA hasta 3 veces con un pequeño
+   * backoff antes de rendirse.
+   */
+  private async drivinGet<T>(path: string): Promise<T> {
+    const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+    if (!apiKey) {
+      throw new Error('Falta DRIVIN_API_KEY en el backend (.env).');
+    }
+    const INTENTOS = 3;
+    let ultimoError: unknown;
+    for (let intento = 1; intento <= INTENTOS; intento++) {
+      try {
+        const { status, text } = await this.drivinRequest('GET', path, apiKey);
+        if (status < 200 || status >= 300) {
+          throw new Error(`Drivin ${path} respondió ${status}: ${text}`);
+        }
+        return (text ? JSON.parse(text) : null) as T;
+      } catch (e) {
+        ultimoError = e;
+        // Si falló por DNS, invalidamos la IP cacheada para re-resolver.
+        this.drivinIp = null;
+        if (intento < INTENTOS) {
+          await new Promise((r) => setTimeout(r, 400 * intento));
+        }
+      }
+    }
+    throw ultimoError instanceof Error
+      ? ultimoError
+      : new Error(`Drivin ${path}: fallo tras ${INTENTOS} intentos`);
+  }
+
+  /**
+   * Resuelve la IP de external.driv.in. Primero con el resolver del sistema y,
+   * si falla (algunos DNS bloquean driv.in de forma intermitente), con un DNS
+   * PÚBLICO (8.8.8.8 / 1.1.1.1). Se cachea 10 min.
+   */
+  private async resolveDrivinIp(): Promise<string> {
+    const host = 'external.driv.in';
+    if (this.drivinIp && Date.now() - this.drivinIp.ts < 10 * 60 * 1000) {
+      return this.drivinIp.ip;
+    }
+    try {
+      const res = await dnsPromises.lookup(host, { family: 4 });
+      this.drivinIp = { ip: res.address, ts: Date.now() };
+      return res.address;
+    } catch {
+      const resolver = new DnsResolver();
+      resolver.setServers(['8.8.8.8', '1.1.1.1']);
+      const ips = await resolver.resolve4(host);
+      if (!ips.length) throw new Error('Sin IP para external.driv.in');
+      this.drivinIp = { ip: ips[0], ts: Date.now() };
+      return ips[0];
+    }
+  }
+
+  /**
+   * Petición HTTPS a la API de Drivin conectando por IP (para saltar el DNS del
+   * sistema cuando bloquea driv.in), manteniendo el certificado con SNI.
+   */
+  private async drivinRequest(
+    method: string,
+    path: string,
+    apiKey: string,
+    body?: string,
+  ): Promise<{ status: number; text: string }> {
+    const host = 'external.driv.in';
+    const ip = await this.resolveDrivinIp();
+    return new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          host: ip,
+          servername: host, // SNI + validación de certificado para external.driv.in
+          port: 443,
+          path: `/api/external/v2${path}`,
+          method,
+          headers: {
+            'X-API-Key': apiKey,
+            Host: host,
+            ...(body
+              ? {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                }
+              : {}),
+          },
+          timeout: 15000,
+        },
+        (res) => {
+          let data = '';
+          res.setEncoding('utf8');
+          res.on('data', (c) => (data += c));
+          res.on('end', () =>
+            resolve({ status: res.statusCode ?? 0, text: data }),
+          );
+        },
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Drivin: timeout')));
+      if (body) req.write(body);
+      req.end();
+    });
+  }
+
+  /** Scenarios de Drivin para una fecha (YYYY-MM-DD), con caché por fecha. */
+  private async drivinScenarios(date: string): Promise<DrivinScenario[]> {
+    const cached = this.cacheScenarios.get(date);
+    if (cached && Date.now() - cached.ts < this.DRIVIN_TTL) {
+      return cached.datos;
+    }
+    const r = await this.drivinGet<{ response?: DrivinScenario[] }>(
+      `/scenarios?date=${encodeURIComponent(date)}`,
+    );
+    const datos = Array.isArray(r?.response) ? r.response : [];
+    this.cacheScenarios.set(date, { ts: Date.now(), datos });
+    return datos;
+  }
+
+  /** Vehículos (domiciliarios) de Drivin, con caché. */
+  private async drivinVehicles(): Promise<DrivinVehicle[]> {
+    if (
+      this.cacheVehiculos &&
+      Date.now() - this.cacheVehiculos.ts < this.DRIVIN_TTL
+    ) {
+      return this.cacheVehiculos.datos;
+    }
+    const r = await this.drivinGet<{ response?: DrivinVehicle[] }>(`/vehicles`);
+    const datos = Array.isArray(r?.response) ? r.response : [];
+    this.cacheVehiculos = { ts: Date.now(), datos };
+    return datos;
+  }
+
+  /**
+   * Token del scenario de Drivin de un punto (por schema_code) para un DÍA
+   * dado (YYYY-MM-DD). Los escenarios se consultan por el día en curso.
+   * Devuelve null si no hay coincidencia.
+   */
+  private async tokenScenarioPunto(
+    schemaCode: string,
+    fecha: string,
+  ): Promise<string | null> {
+    try {
+      const scen = await this.drivinScenarios(fecha);
+      // Preferimos el que además calce con el deploy_date; si no, el primero
+      // que tenga el schema_code del punto.
+      const exacto = scen.find(
+        (s) => s.schema_code === schemaCode && s.deploy_date === fecha,
+      );
+      const porSchema = exacto ?? scen.find((s) => s.schema_code === schemaCode);
+      return porSchema?.token ?? null;
+    } catch (e) {
+      this.logger.warn(
+        `No se pudo obtener el scenario de Drivin: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Domiciliarios (vehículos) de Drivin asignados a un punto de venta. Se casa
+   * por la flota "Domiciliarios PDV <localidad>" (coincidencia exacta de
+   * segmento para no confundir "Alameda I" con "Alameda II"). Solo activos.
+   */
+  async domiciliariosDrivinPunto(
+    puntoCodigo: string,
+    puntoNombre: string,
+  ): Promise<DomiciliarioDrivin[]> {
+    const localidad = this.localidadDrivin(puntoCodigo, puntoNombre);
+    const flota = localidad ? `Domiciliarios PDV ${localidad}` : '';
+    const vehiculos = await this.drivinVehicles();
+    const out: DomiciliarioDrivin[] = [];
+    for (const v of vehiculos) {
+      if (v.is_active === false) continue;
+      if (!v.code) continue;
+      const flotas = String(v.fleets ?? '')
+        .split(',')
+        .map((s) => s.trim());
+      if (flota && !flotas.includes(flota)) continue;
+      const nombre = `${v.driver?.first_name ?? ''} ${
+        v.driver?.last_name ?? ''
+      }`.trim();
+      out.push({
+        code: v.code,
+        nombre: nombre || v.code,
+        tipo: v.vehicle_type ?? null,
+      });
+    }
+    // Orden alfabético por nombre para el selector.
+    out.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    return out;
+  }
+
+  /**
+   * Mapa de asignaciones de Drivin: comanda (código de orden) -> vehículo
+   * (domiciliario) que Drivin le asignó, o `null` si la orden está en Drivin
+   * pero SIN domiciliario (desasignada). Si la comanda NO aparece en el mapa,
+   * es que no está en ningún escenario de Drivin. Recorre los escenarios del día
+   * y lee `GET /orders?token=` de cada uno. Se cachea 15s.
+   */
+  async asignacionesDrivin(): Promise<
+    Record<string, { code: string; nombre: string } | null>
+  > {
+    if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 15000) {
+      return this.cacheAsignaciones.datos;
+    }
+    const out: Record<string, { code: string; nombre: string } | null> = {};
+    try {
+      const hoy = this.diaBogota();
+      const scenarios = await this.drivinScenarios(hoy);
+      const vehiculos = await this.drivinVehicles();
+      const nombrePorCode = new Map<string, string>();
+      for (const v of vehiculos) {
+        if (!v.code) continue;
+        const nombre = `${v.driver?.first_name ?? ''} ${
+          v.driver?.last_name ?? ''
+        }`.trim();
+        nombrePorCode.set(v.code, nombre || v.code);
+      }
+      for (const s of scenarios) {
+        if (!s.token) continue;
+        try {
+          const r = await this.drivinGet<{
+            response?: Array<{
+              orders?: Array<{ code?: string; vehicle_code?: string | null }>;
+            }>;
+          }>(`/orders?token=${encodeURIComponent(s.token)}`);
+          const arr = Array.isArray(r?.response) ? r.response : [];
+          for (const g of arr) {
+            for (const o of g.orders ?? []) {
+              if (!o.code) continue;
+              out[o.code] = o.vehicle_code
+                ? {
+                    code: o.vehicle_code,
+                    nombre: nombrePorCode.get(o.vehicle_code) ?? o.vehicle_code,
+                  }
+                : null;
+            }
+          }
+        } catch {
+          /* si un escenario falla, seguimos con los demás */
+        }
+      }
+      this.cacheAsignaciones = { ts: Date.now(), datos: out };
+    } catch (e) {
+      this.logger.warn(
+        `No se pudieron leer las asignaciones de Drivin: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+    return out;
+  }
+
+  /**
    * Envía un pedido directamente a Drivin (endpoint external/v2/orders), con el
    * MISMO mapeo de campos que el Excel de cargue. Reemplaza el flujo de Excel.
+   * `vehiculo` = code del vehículo de Drivin a preasignar (opcional).
    */
   async enviarADrivin(
     id: string,
     replica?: number,
+    vehiculo?: string,
   ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
     const apiKey = this.config.get<string>('DRIVIN_API_KEY');
     if (!apiKey) {
@@ -1112,10 +1455,6 @@ export class PedidosService implements OnModuleInit {
         'Falta DRIVIN_API_KEY en el backend (.env) para enviar a Drivin.',
       );
     }
-    const baseUrl = this.config.get<string>(
-      'DRIVIN_ORDERS_URL',
-      'https://external.driv.in/api/external/v2/orders',
-    );
 
     const d = await this.construirDespacho(id, replica);
 
@@ -1123,7 +1462,12 @@ export class PedidosService implements OnModuleInit {
     //  - La 93 -> 01 | Alameda I -> 04 | Alameda II -> 05
     //  - Otros -> DRIVIN_SCHEMA_CODE del .env (por defecto 01)
     const schema = this.schemaDrivinPara(d.puntoCodigo, d.puntoNombre);
-    const url = `${baseUrl}?schema_code=${encodeURIComponent(schema)}`;
+    // La orden se sube al GESTOR DE ÓRDENES del schema (solo `schema_code`, sin
+    // `token` ni `autoassign`). El planeador de Drivin la asigna a un vehículo y
+    // SIGCOMPRO baja esa asignación después (ver asignacionesDrivin()).
+    const path = `/orders?schema_code=${encodeURIComponent(schema)}`;
+    // Vehículo a preasignar, si se indicó (normalmente no: Drivin asigna).
+    const vehicleCode = String(vehiculo ?? '').trim() || null;
 
     const body = {
       clients: [
@@ -1135,6 +1479,9 @@ export class PedidosService implements OnModuleInit {
           county: d.ciudad,
           state: d.region,
           country: 'Colombia',
+          // Coordenadas del cliente (campos `lat`/`lng` según la doc de Drivin)
+          // para que la dirección quede geocodificada y sea planificable.
+          ...(d.lat != null && d.lng != null ? { lat: d.lat, lng: d.lng } : {}),
           name: d.nombre,
           client_name: d.nombre,
           client_code: d.nit,
@@ -1149,6 +1496,12 @@ export class PedidosService implements OnModuleInit {
               alt_code: null,
               description: null,
               category: 'Delivery',
+              // Si se eligió vehículo: se preasigna y se FUERZA la asignación
+              // (necesario cuando el esquema está optimizado). Si no, se omite
+              // para que Drivin optimice/asigne solo.
+              ...(vehicleCode
+                ? { vehicle_code: vehicleCode, force_vehicle_assignation: true }
+                : {}),
               // Prioridad del pedido (recoge en PDV = 4). El Excel la lleva en la
               // columna "Prioridad"; aquí se envía también por la API.
               priority: Math.round(Number(d.prioridad)) || null,
@@ -1174,27 +1527,29 @@ export class PedidosService implements OnModuleInit {
       ],
     };
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
-      body: JSON.stringify(body),
-    });
-    const texto = await resp.text();
+    const { status, text } = await this.drivinRequest(
+      'POST',
+      path,
+      apiKey,
+      JSON.stringify(body),
+    );
     let data: unknown;
     try {
-      data = texto ? JSON.parse(texto) : null;
+      data = text ? JSON.parse(text) : null;
     } catch {
-      data = texto;
+      data = text;
     }
-    if (!resp.ok) {
+    // Traza de la operación (para diagnosticar en Drivin).
+    this.logger.log(
+      `Drivin orden ${d.comanda} (Gestor): status=${status} schema_code=${schema} ` +
+        `vehicle_code=${vehicleCode ?? '-'} resp=${(text ?? '').slice(0, 500)}`,
+    );
+    if (status < 200 || status >= 300) {
       const detalle =
         typeof data === 'string' ? data : JSON.stringify(data ?? {});
-      throw new Error(`Drivin respondió ${resp.status}: ${detalle}`);
+      throw new Error(`Drivin respondió ${status}: ${detalle}`);
     }
-    return { status: resp.status, comanda: d.comanda, respuesta: data };
+    return { status, comanda: d.comanda, respuesta: data };
   }
 }
 
