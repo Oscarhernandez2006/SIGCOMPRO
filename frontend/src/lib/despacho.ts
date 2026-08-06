@@ -54,9 +54,10 @@ export function esPedidoPequeno(p: Pedido): boolean {
  * Instante objetivo de despacho (deadline de entrega).
  * - TRANSFERENCIA: el cronómetro corre 1h SOLO desde que se confirma
  *   (pagoConfirmado). Sin confirmar: Infinity (no vence).
- * - Resto: si hay hora de despacho pedida, la promesa de 2h corre DESDE esa
- *   hora (entrega = hora + 2h; antes de la hora queda "Programado"); si no,
- *   creación + 2 horas.
+ * - PROGRAMADO / con hora pedida: la hora de despacho ES el deadline de entrega
+ *   y la promesa de 2h corre en las 2 HORAS PREVIAS (ej. entrega 8:00 → ventana
+ *   6:00–8:00). Un programado sin hora usa las 8:00 a. m. del día de entrega.
+ * - Resto (mismo día, sin hora): creación + 2 horas.
  */
 export function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): number {
   // RECOGE en el punto: el objetivo de entrega es SIEMPRE las 6:00 PM del día
@@ -74,14 +75,17 @@ export function objetivoDespacho(p: Pedido, pagoConfirmado?: string | null): num
   }
   const hora = (p.horaDespacho ?? "").trim();
   const m = hora.match(/^(\d{1,2}):(\d{2})$/);
-  if (m) {
-    // La hora pedida es cuando ARRANCA la promesa de 2h: entrega = hora + 2h.
-    const base =
-      p.entregaProgramada && p.fechaProgramada
-        ? new Date(`${p.fechaProgramada}T00:00:00`)
-        : new Date(p.fecha);
-    base.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    return base.getTime() + LIMITE_DESPACHO_MS;
+  const programado = Boolean(p.entregaProgramada && p.fechaProgramada);
+  if (m || programado) {
+    // La hora de despacho es el DEADLINE de entrega; la promesa de 2h corre en
+    // las 2 horas PREVIAS. Un programado sin hora usa las 8:00 a. m. del día de
+    // entrega (ventana 6:00–8:00 a. m.).
+    const base = programado
+      ? new Date(`${p.fechaProgramada}T00:00:00`)
+      : new Date(p.fecha);
+    if (m) base.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    else base.setHours(8, 0, 0, 0);
+    return base.getTime();
   }
   return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
 }
@@ -100,15 +104,17 @@ export function msRestantesDespacho(
  * toda la ventana de 1h desde la confirmación.
  */
 export function deadlinePreparacion(p: Pedido, pagoConfirmado?: string | null): number {
-  // Pedido PEQUEÑO (≤10 kg): alistado corto de 40 minutos desde que entra.
-  if (esPedidoPequeno(p)) {
+  const programado = Boolean(p.entregaProgramada && p.fechaProgramada);
+  // Pedido PEQUEÑO (≤10 kg) NO programado: alistado corto de 40 min desde que entra.
+  if (!programado && esPedidoPequeno(p)) {
     return new Date(p.fecha).getTime() + LIMITE_ALISTADO_PEQUENO_MS;
   }
-  // RECOGE: 2 horas para alistarlo desde que entra (independiente del objetivo
-  // de las 6:00 PM para la entrega).
-  if (esRecoge(p)) {
+  // RECOGE NO programado: 2 horas para alistarlo desde que entra (independiente
+  // del objetivo de las 6:00 PM para la entrega).
+  if (!programado && esRecoge(p)) {
     return new Date(p.fecha).getTime() + LIMITE_DESPACHO_MS;
   }
+  // Programado (y el resto): la preparación se ancla al objetivo de entrega.
   const obj = objetivoDespacho(p, pagoConfirmado);
   if (!Number.isFinite(obj)) return obj;
   return esTransferencia(p) ? obj : obj - ALERTA_DESPACHO_MS;
