@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { imprimirComanda, METODOS, numerosDelDia, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
-import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta } from "@/lib/auth";
+import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdministrativo } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import {
@@ -813,8 +813,27 @@ export default function DespachoPage() {
     if (n === "despachado" && !mm.domiciliario?.trim()) {
       const esRecoge = pedidos.find((x) => x.id === id)?.entrega === "recoge";
       if (!esRecoge) {
-        alert("No se puede despachar sin un domiciliario asignado.");
-        return;
+        // Solo ADMIN puede asignar un domiciliario MANUAL para cerrar el ciclo
+        // (p. ej. si Drivin rebotó el pedido por consecutivo cruzado y no lo
+        // asignó). El resto no puede despachar sin domiciliario.
+        if (tieneAccesoAdministrativo(usuarioDesp?.rol)) {
+          const nombre = window.prompt(
+            "Drivin no asignó domiciliario a este pedido. Ingresa un domiciliario MANUAL para cerrar el ciclo (solo admin):",
+            "",
+          );
+          const limpio = (nombre ?? "").trim();
+          if (!limpio) return; // cancelado o vacío
+          mm.domiciliario = limpio;
+          mm.domiciliarioCodigo = "";
+          actualizarMetaApi(id, { domiciliario: limpio, domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
+          setMeta((prev) => ({
+            ...prev,
+            [id]: { ...prev[id], domiciliario: limpio, domiciliarioCodigo: "" },
+          }));
+        } else {
+          alert("No se puede despachar sin un domiciliario asignado.");
+          return;
+        }
       }
     }
     // Al pasar a "Despachado" se registra la hora exacta del cambio (si aún no
