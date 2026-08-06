@@ -383,6 +383,11 @@ export default function DespachoPage() {
     numero: number;
     modo: "crear" | "ver";
   } | null>(null);
+  // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
+  // recursos, según el punto) y así cerrar el ciclo a Despachado cuando Drivin
+  // rebotó el pedido y no lo asignó.
+  const [despachoManual, setDespachoManual] = useState<{ id: string } | null>(null);
+  const [despachoManualSel, setDespachoManualSel] = useState("");
   const firmaAlertaRef = useRef("");
   // Modal para REINICIAR los tiempos de alistamiento de un pedido: se abre al
   // hacer clic en los tiempos y exige la clave dinámica para reiniciarlos.
@@ -777,7 +782,11 @@ export default function DespachoPage() {
   };
 
   /** Cambia el estado de un pedido y lo persiste. */
-  const cambiarEstado = async (id: string, estado: Pedido["estado"]) => {
+  const cambiarEstado = async (
+    id: string,
+    estado: Pedido["estado"],
+    opts?: { domiManual?: string },
+  ) => {
     if (!puedeEstado(estado)) {
       sinPermiso.mostrar();
       return;
@@ -816,20 +825,20 @@ export default function DespachoPage() {
         // Solo ADMIN puede asignar un domiciliario MANUAL para cerrar el ciclo
         // (p. ej. si Drivin rebotó el pedido por consecutivo cruzado y no lo
         // asignó). El resto no puede despachar sin domiciliario.
-        if (tieneAccesoAdministrativo(usuarioDesp?.rol)) {
-          const nombre = window.prompt(
-            "Drivin no asignó domiciliario a este pedido. Ingresa un domiciliario MANUAL para cerrar el ciclo (solo admin):",
-            "",
-          );
-          const limpio = (nombre ?? "").trim();
-          if (!limpio) return; // cancelado o vacío
-          mm.domiciliario = limpio;
+        const manual = opts?.domiManual?.trim();
+        if (manual) {
+          mm.domiciliario = manual;
           mm.domiciliarioCodigo = "";
-          actualizarMetaApi(id, { domiciliario: limpio, domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
+          actualizarMetaApi(id, { domiciliario: manual, domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
           setMeta((prev) => ({
             ...prev,
-            [id]: { ...prev[id], domiciliario: limpio, domiciliarioCodigo: "" },
+            [id]: { ...prev[id], domiciliario: manual, domiciliarioCodigo: "" },
           }));
+        } else if (tieneAccesoAdministrativo(usuarioDesp?.rol)) {
+          // Abre el modal para elegir el domiciliario del punto y reintenta.
+          setDespachoManualSel("");
+          setDespachoManual({ id });
+          return;
         } else {
           alert("No se puede despachar sin un domiciliario asignado.");
           return;
@@ -2629,6 +2638,67 @@ export default function DespachoPage() {
         </div>
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
+      {despachoManual && (() => {
+        const ped = pedidos.find((x) => x.id === despachoManual.id);
+        const personal = personalPorPunto[String(ped?.punto?.id ?? "")] ?? {
+          porcionadores: [],
+          domiciliarios: [],
+        };
+        const domiciliarios = [...personal.domiciliarios].sort((a, b) =>
+          a.localeCompare(b, "es", { sensitivity: "base" }),
+        );
+        return (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/50 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+              <h3 className="font-serif text-xl font-bold text-brand-wine">
+                Domiciliario manual
+              </h3>
+              <p className="mt-1 text-sm text-brand-brown/60">
+                Drivin no asignó domiciliario al pedido <b>{ped?.comanda ?? ""}</b>.
+                Selecciona uno de la Gestión de recursos para cerrar el ciclo a
+                Despachado.
+              </p>
+              <select
+                value={despachoManualSel}
+                onChange={(e) => setDespachoManualSel(e.target.value)}
+                className="mt-4 w-full rounded-xl border border-brand-brown/20 bg-white px-3 py-2.5 text-sm text-brand-brown focus:border-brand-wine focus:outline-none"
+              >
+                <option value="">— Selecciona domiciliario —</option>
+                {domiciliarios.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+              {domiciliarios.length === 0 && (
+                <p className="mt-2 text-xs text-red-500/90">
+                  Este punto no tiene domiciliarios en la Gestión de recursos.
+                </p>
+              )}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  onClick={() => setDespachoManual(null)}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-brand-brown/70 transition hover:bg-brand-cream"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={!despachoManualSel}
+                  onClick={() => {
+                    const sel = despachoManualSel;
+                    const pid = despachoManual.id;
+                    setDespachoManual(null);
+                    if (sel) cambiarEstado(pid, "Despachado", { domiManual: sel });
+                  }}
+                  className="rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition enabled:hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Despachar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {resetTiemposId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/60 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
