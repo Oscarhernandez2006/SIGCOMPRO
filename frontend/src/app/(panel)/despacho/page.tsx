@@ -238,6 +238,14 @@ const ESTADOS: EstadoDef[] = [
     alerta: true,
   },
   {
+    key: "retenido",
+    label: "Retenido",
+    sub: "Cartera",
+    icon: Icono.tarjeta,
+    match: (x) => norm(x.estado) === "liberación",
+    chip: "bg-brand-gold/20 text-brand-amber",
+  },
+  {
     key: "cancelados",
     label: "Cancelados",
     sub: "Anulados",
@@ -1522,42 +1530,99 @@ export default function DespachoPage() {
 
   return (
     <div>
-      {/* Encabezado */}
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-wine">Despacho</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
-          Seguimiento de los pedidos del día en Carnes Santacruz.
-        </p>
-        {esSelector && puntosAsignados.length > 0 && (
-          <label className="mt-2 inline-flex items-center gap-2">
-            <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
-            <div className="relative">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
-              </svg>
-              <select
-                value={puntoActivoId ?? ""}
-                onChange={(e) => setPuntoActivoId(e.target.value)}
-                title="Punto de venta que estás viendo"
-                className="cursor-pointer appearance-none rounded-full border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-8 text-xs font-semibold text-brand-wine outline-none transition hover:bg-brand-wine/10 focus:border-brand-wine/40"
-              >
-                {puntosAsignados.map((p) => (
-                  <option key={p.id} value={String(p.id)}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-brand-wine/70">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-              </svg>
-            </div>
-          </label>
-        )}
+      {/* Encabezado + cards Total/Entregados alineadas al grid (misma columna/tamaño). */}
+      <div className="mb-3 grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="col-span-2 flex flex-col justify-center sm:col-span-1 lg:col-span-2 xl:col-span-3">
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">Despacho</h1>
+          <p className="mt-1 text-sm text-brand-brown/70">
+            Seguimiento de los pedidos del día en Carnes Santacruz.
+          </p>
+          {esSelector && puntosAsignados.length > 0 && (
+            <label className="mt-2 inline-flex items-center gap-2">
+              <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+              <div className="relative">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                </svg>
+                <select
+                  value={puntoActivoId ?? ""}
+                  onChange={(e) => setPuntoActivoId(e.target.value)}
+                  title="Punto de venta que estás viendo"
+                  className="cursor-pointer appearance-none rounded-full border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-8 text-xs font-semibold text-brand-wine outline-none transition hover:bg-brand-wine/10 focus:border-brand-wine/40"
+                >
+                  {puntosAsignados.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-brand-wine/70">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+            </label>
+          )}
+        </div>
+        {/* Cards TOTAL y ENTREGADOS: celdas del grid (mismo tamaño que las de abajo). */}
+        <button
+          type="button"
+          onClick={() => setVista((v) => (v === "total" ? null : "total"))}
+          aria-pressed={vista === "total"}
+          title={vista === "total" ? "Ocultar filtro: Total" : "Filtrar pedidos por: Total"}
+          className={`group flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
+            vista === "total"
+              ? "border-brand-wine bg-brand-wine/5 ring-1 ring-brand-wine"
+              : "border-brand-brown/10 bg-white"
+          }`}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-wine/10 text-brand-wine">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+              {Icono.caja}
+            </svg>
+          </span>
+          <div className="min-w-0 pr-1">
+            <p className="text-xs font-semibold text-brand-black">Total</p>
+            <p className="text-[10px] text-brand-brown/55">Activos de hoy</p>
+            <p className="text-[10px] font-semibold text-brand-wine">
+              {vista === "total" ? "Mostrando · clic para ocultar" : "Clic para ver"}
+            </p>
+          </div>
+          <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">
+            {pedidosDeHoy.length + posterioresFuturos.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setVista((v) => (v === "entregados" ? null : "entregados"))}
+          aria-pressed={vista === "entregados"}
+          title={vista === "entregados" ? "Ocultar filtro: Entregados" : "Filtrar pedidos por: Entregados"}
+          className={`group flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
+            vista === "entregados"
+              ? "border-brand-wine bg-brand-wine/5 ring-1 ring-brand-wine"
+              : "border-brand-brown/10 bg-white"
+          }`}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </span>
+          <div className="min-w-0 pr-1">
+            <p className="text-xs font-semibold text-brand-black">Entregados</p>
+            <p className="text-[10px] text-brand-brown/55">Entregados (Drivin)</p>
+            <p className="text-[10px] font-semibold text-brand-wine">
+              {vista === "entregados" ? "Mostrando · clic para ocultar" : "Clic para ver"}
+            </p>
+          </div>
+          <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">
+            {pedidosDeHoy.filter((p) => norm(p.estado) === "entregado").length}
+          </span>
+        </button>
       </div>
 
       {/* Grid de estados */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {ESTADOS.map((e) => {
+        {ESTADOS.filter((e) => e.key !== "total" && e.key !== "entregados").map((e) => {
             const valorDeCard = (def: EstadoDef) =>
               def.key === "atrasados"
                 ? atrasados.length

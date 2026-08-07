@@ -71,20 +71,53 @@ export class ConfiguracionController {
   async cuadreCerrado(
     @Query('puntoId') puntoId: string,
     @Query('fecha') fecha: string,
+    @Query('facturadora') facturadora?: string,
   ) {
-    const cerrado = await this.configuracion.cuadreEstaCerrado(puntoId, fecha);
+    const cerrado = await this.configuracion.cuadreEstaCerrado(
+      puntoId,
+      fecha,
+      facturadora,
+    );
     return { cerrado };
+  }
+
+  /** Estado del cierre de un punto+fecha: general y facturadoras cerradas. */
+  @Get('cuadre/estado')
+  estadoCuadre(
+    @Query('puntoId') puntoId: string,
+    @Query('fecha') fecha: string,
+  ) {
+    return this.configuracion.estadoCuadre(puntoId, fecha);
   }
 
   /** Cierra el cuadre de caja de un punto en una fecha. Autenticado. */
   @Post('cuadre/cerrar')
-  cerrarCuadre(@Body() body: { puntoId?: string; fecha?: string }) {
-    return this.configuracion.cerrarCuadre(body?.puntoId ?? '', body?.fecha ?? '');
+  cerrarCuadre(
+    @Body()
+    body: {
+      puntoId?: string;
+      fecha?: string;
+      facturadora?: string;
+      facturadoras?: string[];
+    },
+  ) {
+    return this.configuracion.cerrarCuadre(
+      body?.puntoId ?? '',
+      body?.fecha ?? '',
+      body?.facturadora,
+      body?.facturadoras,
+    );
   }
 
   /** Reabre (quita el cierre de) el cuadre de un punto en una fecha. Autenticado. */
   @Post('cuadre/reabrir')
-  reabrirCuadre(@Body() body: { puntoId?: string; fecha?: string }) {
-    return this.configuracion.reabrirCuadre(body?.puntoId ?? '', body?.fecha ?? '');
+  reabrirCuadre(
+    @Body() body: { puntoId?: string; fecha?: string; facturadora?: string },
+  ) {
+    return this.configuracion.reabrirCuadre(
+      body?.puntoId ?? '',
+      body?.fecha ?? '',
+      body?.facturadora,
+    );
   }
 }

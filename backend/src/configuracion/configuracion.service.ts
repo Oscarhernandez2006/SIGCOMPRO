@@ -213,47 +213,12 @@ export class ConfiguracionService implements OnModuleInit {
     return valor && Array.isArray(valor.claves) ? valor.claves.map(String) : [];
   }
 
-  /** ¿El cuadre de un punto en una fecha (YYYY-MM-DD) ya está cerrado? */
-  async cuadreEstaCerrado(puntoId: string, fecha: string): Promise<boolean> {
-    const clave = `${String(puntoId).trim()}|${String(fecha).trim()}`;
-    const claves = await this.obtenerCierresCuadre();
-    return claves.includes(clave);
+  /** Clave del cierre de UNA facturadora: "punto|fecha|F=<nombre en minúsculas>". */
+  private claveFacturadora(p: string, f: string, facturadora: string): string {
+    return `${p}|${f}|F=${facturadora.trim().toLowerCase()}`;
   }
 
-  /** Marca como cerrado el cuadre de un punto en una fecha concreta. */
-  async cerrarCuadre(
-    puntoId: string,
-    fecha: string,
-  ): Promise<{ cerrado: boolean }> {
-    const p = String(puntoId ?? '').trim();
-    const f = String(fecha ?? '').trim();
-    if (!p || !f) return { cerrado: false };
-    const claves = new Set(await this.obtenerCierresCuadre());
-    claves.add(`${p}|${f}`);
-    await this.pool.query(
-      `INSERT INTO configuracion (clave, valor)
-       VALUES ($1, $2::jsonb)
-       ON CONFLICT (clave) DO UPDATE SET
-         valor = EXCLUDED.valor,
-         actualizado_en = now()`,
-      [CLAVE_CUADRE_CERRADOS, JSON.stringify({ claves: [...claves] })],
-    );
-    return { cerrado: true };
-  }
-
-  /**
-   * Reabre (quita el cierre de) el cuadre de un punto en una fecha. Se usa tras
-   * autorizar la edición con la clave dinámica: así el cuadre queda editable y
-   * lo sigue estando aunque se recargue la página, hasta que se vuelva a cerrar.
-   */
-  async reabrirCuadre(
-    puntoId: string,
-    fecha: string,
-  ): Promise<{ cerrado: boolean }> {
-    const clave = `${String(puntoId ?? '').trim()}|${String(fecha ?? '').trim()}`;
-    const claves = (await this.obtenerCierresCuadre()).filter(
-      (c) => c !== clave,
-    );
+  private async persistirCierres(claves: string[]): Promise<void> {
     await this.pool.query(
       `INSERT INTO configuracion (clave, valor)
        VALUES ($1, $2::jsonb)
@@ -262,6 +227,106 @@ export class ConfiguracionService implements OnModuleInit {
          actualizado_en = now()`,
       [CLAVE_CUADRE_CERRADOS, JSON.stringify({ claves })],
     );
+  }
+
+  /**
+   * ¿El cuadre de un punto en una fecha está cerrado? Si se pasa `facturadora`,
+   * responde por ESA facturadora (cerrado si cerró ella o si el punto entero ya
+   * está cerrado); si no, por el cierre GENERAL del punto.
+   */
+  async cuadreEstaCerrado(
+    puntoId: string,
+    fecha: string,
+    facturadora?: string,
+  ): Promise<boolean> {
+    const p = String(puntoId ?? '').trim();
+    const f = String(fecha ?? '').trim();
+    const claves = new Set(await this.obtenerCierresCuadre());
+    if (facturadora && facturadora.trim()) {
+      return (
+        claves.has(`${p}|${f}`) ||
+        claves.has(this.claveFacturadora(p, f, facturadora))
+      );
+    }
+    return claves.has(`${p}|${f}`);
+  }
+
+  /** Estado del cierre de un punto+fecha: cierre general y facturadoras cerradas. */
+  async estadoCuadre(
+    puntoId: string,
+    fecha: string,
+  ): Promise<{ general: boolean; facturadoras: string[] }> {
+    const p = String(puntoId ?? '').trim();
+    const f = String(fecha ?? '').trim();
+    const claves = await this.obtenerCierresCuadre();
+    const prefijo = `${p}|${f}|F=`;
+    return {
+      general: claves.includes(`${p}|${f}`),
+      facturadoras: claves
+        .filter((c) => c.startsWith(prefijo))
+        .map((c) => c.slice(prefijo.length)),
+    };
+  }
+
+  /**
+   * Cierra el cuadre. Si se pasa `facturadora`, cierra SOLO esa facturadora; con
+   * la lista `facturadoras` (todas las del punto/día) detecta si ya cerraron
+   * TODAS y, en ese caso, marca también el cierre GENERAL del punto. Sin
+   * `facturadora`, cierra el punto entero (comportamiento anterior).
+   */
+  async cerrarCuadre(
+    puntoId: string,
+    fecha: string,
+    facturadora?: string,
+    facturadoras?: string[],
+  ): Promise<{ cerrado: boolean; todasCerradas: boolean }> {
+    const p = String(puntoId ?? '').trim();
+    const f = String(fecha ?? '').trim();
+    if (!p || !f) return { cerrado: false, todasCerradas: false };
+    const claves = new Set(await this.obtenerCierresCuadre());
+    let todasCerradas = true;
+    if (facturadora && facturadora.trim()) {
+      claves.add(this.claveFacturadora(p, f, facturadora));
+      const lista = (
+        Array.isArray(facturadoras) && facturadoras.length
+          ? facturadoras
+          : [facturadora]
+      )
+        .map((x) => String(x).trim().toLowerCase())
+        .filter(Boolean);
+      todasCerradas = lista.every((x) => claves.has(`${p}|${f}|F=${x}`));
+      if (todasCerradas) claves.add(`${p}|${f}`);
+    } else {
+      claves.add(`${p}|${f}`);
+    }
+    await this.persistirCierres([...claves]);
+    return { cerrado: true, todasCerradas };
+  }
+
+  /**
+   * Reabre (quita el cierre de) el cuadre. Con `facturadora` reabre solo esa (y
+   * quita el cierre general, porque ya no están todas). Sin ella, reabre el
+   * punto entero (general + todas las facturadoras). Se usa tras autorizar la
+   * edición con la clave dinámica.
+   */
+  async reabrirCuadre(
+    puntoId: string,
+    fecha: string,
+    facturadora?: string,
+  ): Promise<{ cerrado: boolean }> {
+    const p = String(puntoId ?? '').trim();
+    const f = String(fecha ?? '').trim();
+    let claves = await this.obtenerCierresCuadre();
+    if (facturadora && facturadora.trim()) {
+      const kf = this.claveFacturadora(p, f, facturadora);
+      claves = claves.filter((c) => c !== kf && c !== `${p}|${f}`);
+    } else {
+      const prefijo = `${p}|${f}|F=`;
+      claves = claves.filter(
+        (c) => c !== `${p}|${f}` && !c.startsWith(prefijo),
+      );
+    }
+    await this.persistirCierres(claves);
     return { cerrado: false };
   }
 

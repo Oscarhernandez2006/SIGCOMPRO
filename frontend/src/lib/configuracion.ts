@@ -77,33 +77,55 @@ export function invalidarCacheCortes(): void {
 /* Cuadre de caja: cierre por punto de venta + día                            */
 /* -------------------------------------------------------------------------- */
 
-/** Consulta si el cuadre de un punto en una fecha (YYYY-MM-DD) está cerrado. */
+/** Consulta si el cuadre está cerrado (por facturadora si se indica; si no, general). */
 export function cuadreCerrado(
   puntoId: string,
   fecha: string,
+  facturadora?: string,
 ): Promise<{ cerrado: boolean }> {
-  const qs = `puntoId=${encodeURIComponent(puntoId)}&fecha=${encodeURIComponent(fecha)}`;
+  let qs = `puntoId=${encodeURIComponent(puntoId)}&fecha=${encodeURIComponent(fecha)}`;
+  if (facturadora) qs += `&facturadora=${encodeURIComponent(facturadora)}`;
   return apiFetch<{ cerrado: boolean }>(`/configuracion/cuadre/cerrado?${qs}`);
 }
 
-/** Cierra el cuadre de un punto en una fecha concreta. */
+/** Estado del cierre de un punto+fecha: general y facturadoras que ya cerraron. */
+export function estadoCuadre(
+  puntoId: string,
+  fecha: string,
+): Promise<{ general: boolean; facturadoras: string[] }> {
+  const qs = `puntoId=${encodeURIComponent(puntoId)}&fecha=${encodeURIComponent(fecha)}`;
+  return apiFetch<{ general: boolean; facturadoras: string[] }>(
+    `/configuracion/cuadre/estado?${qs}`,
+  );
+}
+
+/**
+ * Cierra el cuadre. Con `facturadora` cierra SOLO esa; `facturadoras` (todas las
+ * del punto/día) permite detectar si ya cerraron todas (`todasCerradas`).
+ */
 export function cerrarCuadre(
   puntoId: string,
   fecha: string,
-): Promise<{ cerrado: boolean }> {
-  return apiFetch<{ cerrado: boolean }>("/configuracion/cuadre/cerrar", {
-    method: "POST",
-    body: JSON.stringify({ puntoId, fecha }),
-  });
+  facturadora?: string,
+  facturadoras?: string[],
+): Promise<{ cerrado: boolean; todasCerradas: boolean }> {
+  return apiFetch<{ cerrado: boolean; todasCerradas: boolean }>(
+    "/configuracion/cuadre/cerrar",
+    {
+      method: "POST",
+      body: JSON.stringify({ puntoId, fecha, facturadora, facturadoras }),
+    },
+  );
 }
 
-/** Reabre (quita el cierre de) el cuadre de un punto en una fecha. */
+/** Reabre el cuadre (por facturadora si se indica; si no, el punto entero). */
 export function reabrirCuadre(
   puntoId: string,
   fecha: string,
+  facturadora?: string,
 ): Promise<{ cerrado: boolean }> {
   return apiFetch<{ cerrado: boolean }>("/configuracion/cuadre/reabrir", {
     method: "POST",
-    body: JSON.stringify({ puntoId, fecha }),
+    body: JSON.stringify({ puntoId, fecha, facturadora }),
   });
 }

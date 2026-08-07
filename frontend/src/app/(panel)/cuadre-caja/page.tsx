@@ -388,21 +388,43 @@ export default function CuadreCajaPage() {
     [facturadoPorOtroId],
   );
 
+  // Totales de un conjunto de filas (se usa para la vista y para cada reporte).
+  const totalesDe = useCallback(
+    (rows: Pedido[]) => {
+      let facturado = 0;
+      let efectivo = 0;
+      let omp = 0;
+      for (const p of rows) {
+        const l = liq[p.id] ?? { efectivo: "", omp: "" };
+        facturado += valorFacturado(p);
+        const mixto = esMixto(p.pago);
+        if (esEfectivo(p.pago) || mixto) efectivo += numero(l.efectivo);
+        if (!esEfectivo(p.pago) || mixto) omp += numero(l.omp);
+      }
+      return { facturado, efectivo, omp, diferencia: efectivo + omp - facturado };
+    },
+    [liq, valorFacturado],
+  );
+
   // Totales.
-  const totales = useMemo(() => {
-    let facturado = 0;
-    let efectivo = 0;
-    let omp = 0;
-    for (const p of filas) {
-      const l = liq[p.id] ?? { efectivo: "", omp: "" };
-      facturado += valorFacturado(p);
-      // "mixto" aporta a AMBAS columnas; efectivo a Efectivo y el resto a O.M.P.
-      const mixto = esMixto(p.pago);
-      if (esEfectivo(p.pago) || mixto) efectivo += numero(l.efectivo);
-      if (!esEfectivo(p.pago) || mixto) omp += numero(l.omp);
-    }
-    return { facturado, efectivo, omp, diferencia: efectivo + omp - facturado };
-  }, [filas, liq, valorFacturado]);
+  const totales = useMemo(() => totalesDe(filas), [totalesDe, filas]);
+
+  // Facturadora "actual" del cierre: para una cajera es ella misma; para un
+  // admin, la facturadora elegida en el filtro (o vacío = cierre general).
+  const facturadoraActual = useMemo(() => {
+    if (!esAdmin) return (usuario?.nombre ?? "").trim();
+    return filtroFacturador !== "todos" ? filtroFacturador.trim() : "";
+  }, [esAdmin, usuario, filtroFacturador]);
+
+  // Filas del cierre de la facturadora actual (sus facturas). Con admin en
+  // "todos" abarca todas las filas (cierre general).
+  const filasFacturadora = useMemo(() => {
+    if (!facturadoraActual) return filas;
+    const fa = facturadoraActual.toLowerCase();
+    return filas.filter(
+      (p) => (meta[p.id]?.facturadoPor ?? "").trim().toLowerCase() === fa,
+    );
+  }, [filas, facturadoraActual, meta]);
 
   // El cuadre se cierra POR PUNTO y POR DÍA (no global). `cerrado` se consulta
   // al backend para el punto y la fecha elegidos.
@@ -419,7 +441,7 @@ export default function CuadreCajaPage() {
       return;
     }
     let cancelado = false;
-    consultarCuadreCerrado(puntoSel, fecha)
+    consultarCuadreCerrado(puntoSel, fecha, facturadoraActual || undefined)
       .then((r) => {
         if (!cancelado) setCerrado(Boolean(r.cerrado));
       })
@@ -429,7 +451,7 @@ export default function CuadreCajaPage() {
     return () => {
       cancelado = true;
     };
-  }, [fecha, puntoSel]);
+  }, [fecha, puntoSel, facturadoraActual]);
 
   // Cambia el método de pago de un pedido y lo persiste (se refleja en Pedidos
   // y Despacho, ya que edita el pedido real con ese consecutivo).
@@ -561,7 +583,7 @@ export default function CuadreCajaPage() {
       }
       // Reabre el cuadre en el backend: así la edición persiste tras refrescar.
       try {
-        if (puntoSel !== "todos") await reabrirCuadre(puntoSel, fecha);
+        if (puntoSel !== "todos") await reabrirCuadre(puntoSel, fecha, facturadoraActual || undefined);
       } catch {
         /* si falla la reapertura, igual se permite editar en esta sesión */
       }
@@ -576,8 +598,10 @@ export default function CuadreCajaPage() {
     }
   }
 
-  /** Genera un PDF (ventana de impresión) con todo el cuadre digitado. */
-  function generarPdf() {
+  /** Genera un PDF (ventana de impresión) del cuadre. `filasRep` limita el
+   *  reporte (a una facturadora o a todo) y `alcance` es la etiqueta mostrada. */
+  function generarPdf(filasRep: Pedido[] = filas, alcance = "") {
+    const tot = totalesDe(filasRep);
     const logo = `${window.location.origin}/LOGOCARNESSANTACRUZ.png`;
     const esc = (s: unknown) =>
       String(s ?? "").replace(/[&<>"]/g, (c) =>
@@ -591,7 +615,7 @@ export default function CuadreCajaPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const filasHtml = filas
+    const filasHtml = filasRep
       .map((p) => {
         const l = liq[p.id] ?? { efectivo: "", omp: "" };
         const dif = diferenciaFila(p);
@@ -611,11 +635,16 @@ export default function CuadreCajaPage() {
       })
       .join("");
     const resumen =
-      totales.diferencia === 0
+      tot.diferencia === 0
         ? "Caja cuadrada"
-        : totales.diferencia < 0
-          ? `Falta ${cop(Math.abs(totales.diferencia))}`
-          : `Sobra ${cop(totales.diferencia)}`;
+        : tot.diferencia < 0
+          ? `Falta ${cop(Math.abs(tot.diferencia))}`
+          : `Sobra ${cop(tot.diferencia)}`;
+    const titulo = alcance === "General"
+      ? "Cuadre de caja — General (todas las facturadoras)"
+      : alcance
+        ? `Cuadre de caja — ${alcance}`
+        : "Cuadre de caja";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cuadre de caja ${esc(fecha)}</title>
       <style>
         @page { size: Letter; margin: 12mm; }
@@ -638,13 +667,14 @@ export default function CuadreCajaPage() {
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
       </style></head><body>
       <div class="logo"><img src="${esc(logo)}" alt="Carnes Santacruz"></div>
-      <h1>Cuadre de caja</h1>
+      <h1>${esc(titulo)}</h1>
       <div class="meta">
         <div><b>Punto de venta:</b> ${esc(nombrePunto)}</div>
         <div><b>Fecha del cuadre:</b> ${esc(fecha)}</div>
+        ${alcance && alcance !== "General" ? `<div><b>Facturadora:</b> ${esc(alcance)}</div>` : ""}
         <div><b>Realizado por:</b> ${esc(usuario?.nombre ?? "—")}${usuario?.rol ? ` (${esc(usuario.rol)})` : ""}${usuario?.cedula ? ` · C.C. ${esc(usuario.cedula)}` : ""}</div>
         <div><b>Generado:</b> ${esc(generado)}</div>
-        <div><b>Pedidos:</b> ${filas.length}</div>
+        <div><b>Pedidos:</b> ${filasRep.length}</div>
       </div>
       <table>
         <thead><tr>
@@ -654,10 +684,10 @@ export default function CuadreCajaPage() {
         <tbody>${filasHtml}</tbody>
         <tfoot><tr>
           <td colspan="5">Total general</td>
-          <td class="r">${cop(totales.facturado)}</td>
-          <td class="r">${cop(totales.efectivo)}</td>
-          <td class="r">${cop(totales.omp)}</td>
-          <td class="r ${totales.diferencia === 0 ? "" : totales.diferencia < 0 ? "neg" : "pos"}">${totales.diferencia === 0 ? "$ 0" : `${cop(Math.abs(totales.diferencia))} ${totales.diferencia < 0 ? "(falta)" : "(sobra)"}`}</td>
+          <td class="r">${cop(tot.facturado)}</td>
+          <td class="r">${cop(tot.efectivo)}</td>
+          <td class="r">${cop(tot.omp)}</td>
+          <td class="r ${tot.diferencia === 0 ? "" : tot.diferencia < 0 ? "neg" : "pos"}">${tot.diferencia === 0 ? "$ 0" : `${cop(Math.abs(tot.diferencia))} ${tot.diferencia < 0 ? "(falta)" : "(sobra)"}`}</td>
         </tr></tfoot>
       </table>
       <div class="resumen">${esc(resumen)}</div>
@@ -688,9 +718,9 @@ export default function CuadreCajaPage() {
     setError(null);
     setGuardadoOk(false);
     try {
-      // Persiste la liquidación de cada pedido visible.
+      // Persiste la liquidación de las filas de la facturadora (sus facturas).
       await Promise.all(
-        filas.map((p) => {
+        filasFacturadora.map((p) => {
           const l = liq[p.id] ?? { efectivo: "", omp: "" };
           return actualizarMetaApi(p.id, {
             cuadreEfectivo: numero(l.efectivo),
@@ -701,7 +731,7 @@ export default function CuadreCajaPage() {
       // Refleja los valores guardados en la metadata local.
       setMeta((prev) => {
         const copia = { ...prev };
-        for (const p of filas) {
+        for (const p of filasFacturadora) {
           const l = liq[p.id] ?? { efectivo: "", omp: "" };
           copia[p.id] = {
             ...copia[p.id],
@@ -711,13 +741,25 @@ export default function CuadreCajaPage() {
         }
         return copia;
       });
-      // Cierra el cuadre de ESTE punto y ESTE día (no afecta otros puntos/días).
-      await cerrarCuadre(puntoSel, fecha);
+      // Cierra el cuadre: por FACTURADORA si aplica (cajera o admin con filtro);
+      // si es admin en "todos", cierra el punto entero. `todasCerradas` indica
+      // que ya cerraron todas las facturadoras del punto/día.
+      const { todasCerradas } = await cerrarCuadre(
+        puntoSel,
+        fecha,
+        facturadoraActual || undefined,
+        facturadores,
+      );
       setCerrado(true);
       setAutorizado(false);
       setGuardadoOk(true);
-      // Genera el PDF del cuadre con toda la información digitada.
-      generarPdf();
+      // Reporte de la facturadora (solo sus facturas) o general si es admin/todos.
+      generarPdf(filasFacturadora, facturadoraActual || "General");
+      // Si con este cierre ya cerraron TODAS las facturadoras, genera además el
+      // reporte GENERAL del punto (todas las facturas).
+      if (todasCerradas && facturadoraActual) {
+        generarPdf(filas, "General");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar el cuadre");
     } finally {
@@ -1157,7 +1199,7 @@ export default function CuadreCajaPage() {
                 </span>
               )}
               <button
-                onClick={generarPdf}
+                onClick={() => generarPdf(filasFacturadora, facturadoraActual || "General")}
                 title="Volver a generar el PDF del cuadre (sin guardar)"
                 className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
               >
