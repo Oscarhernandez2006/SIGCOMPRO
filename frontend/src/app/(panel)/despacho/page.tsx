@@ -25,6 +25,7 @@ import { verificarClaveDinamica } from "@/lib/clave-dinamica";
 import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
+  LIMITE_ALISTADO_PEQUENO_MS,
   LIMITE_DESPACHO_MS,
   LIMITE_TRANSFERENCIA_MS,
   esTransferencia,
@@ -589,7 +590,7 @@ export default function DespachoPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Baja de Drivin las asignaciones (comanda -> domiciliario) cada 15s. Con esto
+  // Baja de Drivin las asignaciones (comanda -> domiciliario) cada 5s. Con esto
   // SIGCOMPRO sabe a quién asignó Drivin cada pedido facturado.
   useEffect(() => {
     let vivo = true;
@@ -601,7 +602,7 @@ export default function DespachoPage() {
         });
     };
     bajar();
-    const id = setInterval(bajar, 15000);
+    const id = setInterval(bajar, 5000);
     return () => {
       vivo = false;
       clearInterval(id);
@@ -1621,6 +1622,15 @@ export default function DespachoPage() {
                 const esRecoge = p.entrega === "recoge";
                 // Pedido pequeño (≤10 kg): alistado de 40 min (rojo a los 20 min).
                 const esPequeno = esPedidoPequeno(p);
+                // Límite de DURACIÓN del alistamiento (producción): pequeño 40 min,
+                // recoge 2h, resto (normal/transferencia) 1h. El "Cumplido" se mide
+                // por lo que TARDÓ el alistamiento (fin − inicio), no por el reloj
+                // de entrega.
+                const limitePrepMs = esPequeno
+                  ? LIMITE_ALISTADO_PEQUENO_MS
+                  : esRecoge
+                    ? LIMITE_DESPACHO_MS
+                    : ALERTA_DESPACHO_MS;
                 // Arrastrado: pedido activo que quedó pendiente de un día anterior.
                 const esArrastrado =
                   diaEntregaISO(p) < hoyISO() &&
@@ -2272,7 +2282,9 @@ export default function DespachoPage() {
                             // Preparación: meta = alistado (m.fin).
                             let prepT;
                             if (m.fin) {
-                              const aTiempo = new Date(m.fin).getTime() <= deadline;
+                              const aTiempo = m.inicio
+                                ? new Date(m.fin).getTime() - new Date(m.inicio).getTime() <= limitePrepMs
+                                : new Date(m.fin).getTime() <= deadline;
                               prepT = (
                                 <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
                                   {aTiempo ? iconoOk : null}
@@ -2350,7 +2362,9 @@ export default function DespachoPage() {
                           // Preparación (1h): meta = marcar "Alistado" (m.fin).
                           let prep;
                           if (m.fin) {
-                            const aTiempo = new Date(m.fin).getTime() <= deadlinePrep;
+                            const aTiempo = m.inicio
+                              ? new Date(m.fin).getTime() - new Date(m.inicio).getTime() <= limitePrepMs
+                              : new Date(m.fin).getTime() <= deadlinePrep;
                             prep = (
                               <div className={`${box} ${aTiempo ? "border-green-200 bg-green-50 text-green-700" : "border-red-300 bg-red-50 text-red-600"}`}>
                                 {aTiempo ? iconoOk : null}

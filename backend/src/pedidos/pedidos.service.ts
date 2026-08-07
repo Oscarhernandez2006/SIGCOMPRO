@@ -1447,7 +1447,7 @@ export class PedidosService implements OnModuleInit {
   async asignacionesDrivin(): Promise<
     Record<string, { code: string; nombre: string } | null>
   > {
-    if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 15000) {
+    if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 5000) {
       return this.cacheAsignaciones.datos;
     }
     const out: Record<string, { code: string; nombre: string } | null> = {};
@@ -1463,28 +1463,35 @@ export class PedidosService implements OnModuleInit {
         }`.trim();
         nombrePorCode.set(v.code, nombre || v.code);
       }
-      for (const s of scenarios) {
-        if (!s.token) continue;
-        try {
-          const r = await this.drivinGet<{
-            response?: Array<{
-              orders?: Array<{ code?: string; vehicle_code?: string | null }>;
-            }>;
-          }>(`/orders?token=${encodeURIComponent(s.token)}`);
-          const arr = Array.isArray(r?.response) ? r.response : [];
-          for (const g of arr) {
-            for (const o of g.orders ?? []) {
-              if (!o.code) continue;
-              out[o.code] = o.vehicle_code
-                ? {
-                    code: o.vehicle_code,
-                    nombre: nombrePorCode.get(o.vehicle_code) ?? o.vehicle_code,
-                  }
-                : null;
+      // Consulta los escenarios EN PARALELO (antes era secuencial y tardaba
+      // mucho cuando hay varios) para bajar la latencia de la asignación.
+      const grupos = await Promise.all(
+        scenarios
+          .filter((s) => s.token)
+          .map(async (s) => {
+            try {
+              const r = await this.drivinGet<{
+                response?: Array<{
+                  orders?: Array<{ code?: string; vehicle_code?: string | null }>;
+                }>;
+              }>(`/orders?token=${encodeURIComponent(s.token as string)}`);
+              return Array.isArray(r?.response) ? r.response : [];
+            } catch {
+              return []; // si un escenario falla, seguimos con los demás
             }
+          }),
+      );
+      for (const arr of grupos) {
+        for (const g of arr) {
+          for (const o of g.orders ?? []) {
+            if (!o.code) continue;
+            out[o.code] = o.vehicle_code
+              ? {
+                  code: o.vehicle_code,
+                  nombre: nombrePorCode.get(o.vehicle_code) ?? o.vehicle_code,
+                }
+              : null;
           }
-        } catch {
-          /* si un escenario falla, seguimos con los demás */
         }
       }
       this.cacheAsignaciones = { ts: Date.now(), datos: out };
