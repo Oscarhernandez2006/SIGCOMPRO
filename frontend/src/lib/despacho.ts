@@ -27,6 +27,44 @@ export function esRecoge(p: Pedido): boolean {
   return (p.entrega ?? "").trim().toLowerCase() === "recoge";
 }
 
+/**
+ * ¿El pedido ya SALIÓ a reparto? Incluye "Despachado", "En tránsito" y
+ * "Entregado" (los dos últimos vienen del estado de Drivin). Para Cuadre de
+ * caja, Históricos y Dashboard estos tres cuentan igual que despachado.
+ */
+export function yaDespachado(estado?: string | null): boolean {
+  const e = (estado ?? "").trim().toLowerCase();
+  return e === "despachado" || e === "en tránsito" || e === "entregado";
+}
+
+/**
+ * Clases de color (borde + fondo + texto) por estado, IGUALES a las cards de
+ * Despacho, para mantener el mismo estándar de color en toda la app. En los
+ * badges tipo "pill" (sin la clase `border`) el color de borde es inerte.
+ */
+export function colorEstado(estado?: string | null): string {
+  switch ((estado ?? "").trim().toLowerCase()) {
+    case "en producción":
+      return "border-orange-200 bg-orange-100 text-orange-600";
+    case "alistado":
+      return "border-violet-200 bg-violet-100 text-violet-600";
+    case "facturado":
+      return "border-emerald-200 bg-emerald-100 text-emerald-600";
+    case "despachado":
+      return "border-teal-200 bg-teal-100 text-teal-700";
+    case "en tránsito":
+      return "border-sky-200 bg-sky-100 text-sky-600";
+    case "entregado":
+      return "border-green-200 bg-green-100 text-green-700";
+    case "anulado":
+    case "cancelado":
+      return "border-red-200 bg-red-100 text-red-600";
+    case "en proceso":
+    default:
+      return "border-amber-200 bg-amber-100 text-amber-700";
+  }
+}
+
 /** Hora límite (18:00) para entregar pedidos que se RECOGEN en el punto. */
 export const HORA_LIMITE_RECOGE = 18;
 

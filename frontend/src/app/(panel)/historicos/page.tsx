@@ -8,6 +8,7 @@ import {
   type Pedido,
 } from "@/app/(panel)/pedidos/page";
 import { cargarEstadoPedidos, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
+import { yaDespachado, colorEstado } from "@/lib/despacho";
 import { misPuntosVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
@@ -57,9 +58,9 @@ export default function HistoricosPage() {
     const q = busqueda.trim().toLowerCase();
     return pedidos
       .filter((p) => {
-        // Solo despachados o anulados.
+        // Solo despachados (incluye en tránsito/entregado) o anulados.
         const esAnulado = p.anulado || norm(p.estado) === "anulado";
-        const esDespachado = norm(p.estado) === "despachado";
+        const esDespachado = !esAnulado && yaDespachado(p.estado);
         if (!esAnulado && !esDespachado) return false;
         // Filtro por punto (acceso operativo).
         if (filtroIds && !(p.punto?.id && filtroIds.has(p.punto.id))) return false;
@@ -95,7 +96,8 @@ export default function HistoricosPage() {
     () =>
       pedidos.filter(
         (p) =>
-          norm(p.estado) === "despachado" &&
+          !p.anulado &&
+          yaDespachado(p.estado) &&
           (!filtroIds || (p.punto?.id && filtroIds.has(p.punto.id))),
       ).length,
     [pedidos, filtroIds],
@@ -253,8 +255,8 @@ export default function HistoricosPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${anulado ? "bg-red-100 text-red-600" : "bg-teal-100 text-teal-700"}`}>
-                          {anulado ? "Anulado" : "Despachado"}
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${colorEstado(p.estado)}`}>
+                          {p.estado || (anulado ? "Anulado" : "Despachado")}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>

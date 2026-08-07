@@ -18,6 +18,7 @@ import {
   confirmarComprobanteApi,
   eliminarComprobanteApi,
   cargarAsignacionesDrivin,
+  cargarEntregasDrivin,
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
@@ -33,6 +34,8 @@ import {
   objetivoDespacho,
   deadlinePreparacion,
   msRestantesDespacho,
+  yaDespachado,
+  colorEstado,
 } from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
@@ -135,9 +138,10 @@ function esDeHoy(p: Pedido): boolean {
   const hoy = hoyISO();
   if (dia === hoy) return true;
   if (dia < hoy) {
-    // Quedó de un día anterior: solo se arrastra si sigue activo.
+    // Quedó de un día anterior: solo se arrastra si sigue activo (no despachado/
+    // en tránsito/entregado ni anulado).
     const e = norm(p.estado);
-    return !p.anulado && e !== "despachado" && e !== "anulado";
+    return !p.anulado && !yaDespachado(p.estado) && e !== "anulado";
   }
   return false;
 }
@@ -212,7 +216,7 @@ const ESTADOS: EstadoDef[] = [
     icon: Icono.caja,
     match: (x) =>
       !x.anulado &&
-      norm(x.estado) !== "despachado" &&
+      !yaDespachado(x.estado) &&
       norm(x.estado) !== "anulado",
     chip: "bg-brand-wine/10 text-brand-wine",
   },
@@ -234,12 +238,12 @@ const ESTADOS: EstadoDef[] = [
     alerta: true,
   },
   {
-    key: "liberacion",
-    label: "Retenidos",
-    sub: "Cartera",
-    icon: Icono.tarjeta,
-    match: (x) => norm(x.estado) === "liberación",
-    chip: "bg-brand-gold/20 text-brand-amber",
+    key: "cancelados",
+    label: "Cancelados",
+    sub: "Anulados",
+    icon: Icono.xcirculo,
+    match: (x) => x.anulado || norm(x.estado) === "anulado",
+    chip: "bg-red-100 text-red-500",
   },
   {
     key: "posteriores",
@@ -276,18 +280,28 @@ const ESTADOS: EstadoDef[] = [
   {
     key: "despachados",
     label: "Despachados",
-    sub: "En ruta o entregados",
+    sub: "En ruta",
     icon: Icono.camion,
     match: (x) => norm(x.estado) === "despachado",
     chip: "bg-teal-100 text-teal-600",
   },
   {
-    key: "cancelados",
-    label: "Cancelados",
-    sub: "Anulados",
-    icon: Icono.xcirculo,
-    match: (x) => x.anulado || norm(x.estado) === "anulado",
-    chip: "bg-red-100 text-red-500",
+    key: "transito",
+    label: "En tránsito",
+    sub: "En reparto (Drivin)",
+    icon: Icono.camion,
+    match: (x) => norm(x.estado) === "en tránsito",
+    chip: "bg-sky-100 text-sky-600",
+  },
+  {
+    key: "entregados",
+    label: "Entregados",
+    sub: "Entregados (Drivin)",
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    ),
+    match: (x) => norm(x.estado) === "entregado",
+    chip: "bg-green-100 text-green-600",
   },
 ];
 
@@ -298,6 +312,8 @@ const ESTADOS_FLUJO = [
   "Alistado",
   "Facturado",
   "Despachado",
+  "En tránsito",
+  "Entregado",
 ] as const;
 
 /**
@@ -320,6 +336,8 @@ const PERMISO_POR_ESTADO: Record<string, string> = {
   "alistado": "despacho.estado.alistado",
   "facturado": "despacho.estado.facturado",
   "despachado": "despacho.estado.despachado",
+  "en tránsito": "despacho.estado.despachado",
+  "entregado": "despacho.estado.despachado",
 };
 
 function fmtFecha(iso: string): string {
@@ -603,6 +621,96 @@ export default function DespachoPage() {
     };
     bajar();
     const id = setInterval(bajar, 5000);
+    return () => {
+      vivo = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Estado de ENTREGA (POD) de Drivin. Máquina de estados por pedido:
+  //   customer_status "approved"    -> estado "Entregado"  (final)
+  //   customer_status "rejected"    -> estado "Cancelado"  (anulado; final)
+  //   customer_status "in-transit"  -> estado "En tránsito" (sigue consultando)
+  //   "pending" / sin POD           -> se deja igual (sigue consultando)
+  // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
+  // (despachado / en tránsito); los "entregado" solo cada 6 ciclos (~30s), para
+  // AUTO-CORREGIR a Cancelado si Drivin los rechazó, sin inflar la consulta.
+  const entregaRef = useRef({ pedidos, idsPuntos });
+  entregaRef.current = { pedidos, idsPuntos };
+  useEffect(() => {
+    let vivo = true;
+    let enVuelo = false; // evita encaballar consultas (una a la vez)
+    let ciclo = 0;
+    const revisar = async () => {
+      if (enVuelo) return;
+      const { pedidos: peds, idsPuntos: ids } = entregaRef.current;
+      ciclo += 1;
+      const revisarEntregados = ciclo % 6 === 0;
+      const candidatos = peds.filter((p) => {
+        // Incluye recoge en PDV: también tienen POD en Drivin (se aprueban al
+        // entregarse/recogerse).
+        if (p.anulado || !p.punto?.id || !ids.has(String(p.punto.id))) return false;
+        const e = norm(p.estado);
+        if (e === "despachado" || e === "en tránsito") return true;
+        if (e === "entregado" && revisarEntregados) return true;
+        return false;
+      });
+      const comandas = candidatos.map((p) => p.comanda).filter(Boolean);
+      if (!comandas.length) return;
+      enVuelo = true;
+      try {
+        const res = await cargarEntregasDrivin(comandas);
+        if (!vivo) return;
+        for (const p of candidatos) {
+          const info = res[p.comanda];
+          const st = info?.status;
+          if (st === "approved") {
+            const entregadoEn = info?.entregadoEn ?? new Date().toISOString();
+            setMeta((prev) => {
+              if (prev[p.id]?.entregadoEn === entregadoEn && prev[p.id]?.entregado) return prev;
+              actualizarMetaApi(p.id, { entregado: true, entregadoEn }).catch(() => { /* ignore */ });
+              return { ...prev, [p.id]: { ...prev[p.id], entregado: true, entregadoEn } };
+            });
+            setPedidos((prev) => {
+              if (norm(prev.find((x) => x.id === p.id)?.estado) === "entregado") return prev;
+              const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Entregado" as Pedido["estado"] } : x));
+              const upd = next.find((x) => x.id === p.id);
+              if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+              return next;
+            });
+          } else if (st === "rejected") {
+            const motivo = (info?.comment || "").trim() || "Rechazado por el cliente (Drivin)";
+            setPedidos((prev) => {
+              const actual = prev.find((x) => x.id === p.id);
+              if (!actual || (actual.anulado && norm(actual.estado) === "cancelado")) return prev;
+              const next = prev.map((x) =>
+                x.id === p.id ? { ...x, anulado: true, estado: "Cancelado" as Pedido["estado"], motivo } : x,
+              );
+              const upd = next.find((x) => x.id === p.id);
+              if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+              return next;
+            });
+          } else if (st === "in-transit") {
+            setPedidos((prev) => {
+              // Solo sube de "Despachado" a "En tránsito"; nunca degrada un
+              // "Entregado" ya confirmado.
+              if (norm(prev.find((x) => x.id === p.id)?.estado) !== "despachado") return prev;
+              const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "En tránsito" as Pedido["estado"] } : x));
+              const upd = next.find((x) => x.id === p.id);
+              if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+              return next;
+            });
+          }
+          // "pending" / sin POD: no se toca (seguirá consultándose).
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        enVuelo = false;
+      }
+    };
+    revisar();
+    const id = setInterval(revisar, 5000);
     return () => {
       vivo = false;
       clearInterval(id);
@@ -1279,7 +1387,7 @@ export default function DespachoPage() {
     return pedidosDeHoy.filter((p) => {
       if (p.anulado) return false;
       const e = norm(p.estado);
-      if (e === "despachado" || e === "anulado") return false;
+      if (yaDespachado(p.estado) || e === "anulado") return false;
       // Transferencia sin confirmar -> objetivo Infinity -> nunca atrasado.
       return msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado) <= 0;
     });
@@ -1297,7 +1405,7 @@ export default function DespachoPage() {
       const esArrastrado = (p: Pedido) =>
         diaEntregaISO(p) < hoy &&
         !p.anulado &&
-        norm(p.estado) !== "despachado" &&
+        !yaDespachado(p.estado) &&
         norm(p.estado) !== "anulado";
       return pedidosVisibles.slice().sort((a, b) => {
         // 1) Arrastrados de días anteriores van ARRIBA del todo.
@@ -1358,8 +1466,8 @@ export default function DespachoPage() {
       if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
       // Vista por defecto: activos de HOY + posteriores aún no impresos (para
       // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
-      // la card de Posteriores).
-      const activo = norm(p.estado) !== "despachado" && !esAnulado(p);
+      // la card de Posteriores). Oculta los ya despachados/en tránsito/entregados.
+      const activo = !yaDespachado(p.estado) && !esAnulado(p);
       if (!activo) return false;
       if (esDeHoy(p)) return true;
       if (esPosteriorFuturo(p) && !impresos.has(p.id)) return true;
@@ -1377,7 +1485,7 @@ export default function DespachoPage() {
   // Pedidos pendientes (ni despachados ni anulados) clasificados por su cronómetro.
   const { porVencer, vencidos } = useMemo(() => {
     const pendientes = pedidosDeHoy.filter(
-      (p) => !p.anulado && norm(p.estado) !== "despachado" && norm(p.estado) !== "anulado",
+      (p) => !p.anulado && !yaDespachado(p.estado) && norm(p.estado) !== "anulado",
     );
     const porVencer: Pedido[] = [];
     const vencidos: Pedido[] = [];
@@ -1600,7 +1708,8 @@ export default function DespachoPage() {
                   a.localeCompare(b, "es", { sensitivity: "base" }),
                 );
                 // Bloqueos: un pedido despachado ya no se reversa; uno facturado no se vuelve a facturar.
-                const despachado = norm(estado) === "despachado";
+                // "En tránsito" y "Entregado" cuentan como despachado (ya salió a reparto).
+                const despachado = yaDespachado(estado);
                 const facturado = norm(estado) === "facturado" || despachado;
                 // Solo se puede facturar cuando el pedido ya está alistado. Si el
                 // alistamiento YA terminó (m.fin) pero el estado quedó pegado en
@@ -1845,11 +1954,9 @@ export default function DespachoPage() {
                       <div className={puedeCambiarEstadoManual && !anulado ? "pb-14" : ""}>
                       <div
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
-                          anulado
-                            ? "border-red-200 bg-red-50 text-red-600"
-                            : esPosteriorPend
-                              ? "border-blue-200 bg-blue-50 text-blue-600"
-                              : "border-brand-amber/30 bg-brand-amber/10 text-brand-amber"
+                          esPosteriorPend
+                            ? "border-blue-200 bg-blue-50 text-blue-600"
+                            : colorEstado(estado)
                         }`}
                       >
                         <span className="uppercase tracking-wide">{esPosteriorPend ? "Posterior" : norm(estado) === "en proceso" ? "Pendiente" : estado}</span>
@@ -2139,6 +2246,14 @@ export default function DespachoPage() {
                               Domiciliario (Drivin)
                             </p>
                             <p className="text-xs font-semibold text-green-800">{m.domiciliario}</p>
+                            {m.entregado && (
+                              <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-green-700">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3 w-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                </svg>
+                                Entregado{m.entregadoEn ? ` · ${fmtHora(m.entregadoEn)}` : ""}
+                              </p>
+                            )}
                           </div>
                         ) : facturado ? (
                           <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700">

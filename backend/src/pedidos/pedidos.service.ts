@@ -86,8 +86,7 @@ interface DrivinScenario {
 }
 
 /** Vehículo (domiciliario) de Drivin (GET external/v2/vehicles). */
-interface DrivinVehicle {
-  id?: number;
+interface DrivinVehicle {  id?: number;
   code?: string;
   is_active?: boolean;
   vehicle_type?: string | null;
@@ -1247,7 +1246,7 @@ export class PedidosService implements OnModuleInit {
    * falla el primer intento), así que se REINTENTA hasta 3 veces con un pequeño
    * backoff antes de rendirse.
    */
-  private async drivinGet<T>(path: string): Promise<T> {
+  private async drivinGet<T>(path: string, version: 'v2' | 'v3' = 'v2'): Promise<T> {
     const apiKey = this.config.get<string>('DRIVIN_API_KEY');
     if (!apiKey) {
       throw new Error('Falta DRIVIN_API_KEY en el backend (.env).');
@@ -1256,7 +1255,7 @@ export class PedidosService implements OnModuleInit {
     let ultimoError: unknown;
     for (let intento = 1; intento <= INTENTOS; intento++) {
       try {
-        const { status, text } = await this.drivinRequest('GET', path, apiKey);
+        const { status, text } = await this.drivinRequest('GET', path, apiKey, undefined, version);
         if (status < 200 || status >= 300) {
           throw new Error(`Drivin ${path} respondió ${status}: ${text}`);
         }
@@ -1308,6 +1307,7 @@ export class PedidosService implements OnModuleInit {
     path: string,
     apiKey: string,
     body?: string,
+    version: 'v2' | 'v3' = 'v2',
   ): Promise<{ status: number; text: string }> {
     const host = 'external.driv.in';
     const ip = await this.resolveDrivinIp();
@@ -1317,7 +1317,7 @@ export class PedidosService implements OnModuleInit {
           host: ip,
           servername: host, // SNI + validación de certificado para external.driv.in
           port: 443,
-          path: `/api/external/v2${path}`,
+          path: `/api/external/${version}${path}`,
           method,
           headers: {
             'X-API-Key': apiKey,
@@ -1463,23 +1463,21 @@ export class PedidosService implements OnModuleInit {
         }`.trim();
         nombrePorCode.set(v.code, nombre || v.code);
       }
-      // Consulta los escenarios EN PARALELO (antes era secuencial y tardaba
-      // mucho cuando hay varios) para bajar la latencia de la asignación.
+      const tokens = scenarios.filter((s) => s.token).map((s) => s.token as string);
+      // Consulta los escenarios EN PARALELO (antes era secuencial y tardaba).
       const grupos = await Promise.all(
-        scenarios
-          .filter((s) => s.token)
-          .map(async (s) => {
-            try {
-              const r = await this.drivinGet<{
-                response?: Array<{
-                  orders?: Array<{ code?: string; vehicle_code?: string | null }>;
-                }>;
-              }>(`/orders?token=${encodeURIComponent(s.token as string)}`);
-              return Array.isArray(r?.response) ? r.response : [];
-            } catch {
-              return []; // si un escenario falla, seguimos con los demás
-            }
-          }),
+        tokens.map(async (t) => {
+          try {
+            const r = await this.drivinGet<{
+              response?: Array<{
+                orders?: Array<{ code?: string; vehicle_code?: string | null }>;
+              }>;
+            }>(`/orders?token=${encodeURIComponent(t)}`);
+            return Array.isArray(r?.response) ? r.response : [];
+          } catch {
+            return []; // si un escenario falla, seguimos con los demás
+          }
+        }),
       );
       for (const arr of grupos) {
         for (const g of arr) {
@@ -1500,6 +1498,102 @@ export class PedidosService implements OnModuleInit {
         `No se pudieron leer las asignaciones de Drivin: ${
           e instanceof Error ? e.message : String(e)
         }`,
+      );
+    }
+    return out;
+  }
+
+  /** Caché por comanda del estado de entrega (POD v3). TTL corto. */
+  private cachePods = new Map<
+    string,
+    { ts: number; status: string | null; entregadoEn: string | null; comment: string | null }
+  >();
+
+  /**
+   * Estado de ENTREGA por pedido (POD) vía v3 `GET /pods?order_code=`. El campo
+   * `customer_status` vale: `approved` (ENTREGADO), `rejected`, `in-transit`,
+   * `pending`. Devuelve, por comanda, `{ status, entregadoEn }` (entregadoEn =
+   * hora de llegada del POD). Consulta solo las comandas pedidas (el endpoint es
+   * por pedido), en lotes y con caché de 20s por comanda para no saturar.
+   */
+  async estadoEntregaDrivin(
+    comandas: string[],
+  ): Promise<
+    Record<string, { status: string | null; entregadoEn: string | null; comment: string | null }>
+  > {
+    const out: Record<
+      string,
+      { status: string | null; entregadoEn: string | null; comment: string | null }
+    > = {};
+    const ahora = Date.now();
+    const pendientes: string[] = [];
+    for (const c of comandas) {
+      if (!c) continue;
+      const cached = this.cachePods.get(c);
+      // Los estados FINALES (approved/rejected) cambian poco: se cachean 5 min;
+      // los no finales (in-transit/pending/sin POD) se refrescan cada 20s.
+      const ttl =
+        cached && (cached.status === 'approved' || cached.status === 'rejected')
+          ? 5 * 60 * 1000
+          : 20000;
+      if (cached && ahora - cached.ts < ttl) {
+        out[c] = {
+          status: cached.status,
+          entregadoEn: cached.entregadoEn,
+          comment: cached.comment,
+        };
+      } else {
+        pendientes.push(c);
+      }
+    }
+    const LOTE = 8; // concurrencia máxima
+    for (let i = 0; i < pendientes.length; i += LOTE) {
+      const lote = pendientes.slice(i, i + LOTE);
+      await Promise.all(
+        lote.map(async (c) => {
+          try {
+            const r = await this.drivinGet<{
+              data?: Array<{
+                attributes?: {
+                  customer_status?: string;
+                  pod_arrival?: string | null;
+                  created_at?: string | null;
+                  comment?: string | null;
+                  reason?: string | null;
+                };
+              }>;
+            }>(`/pods?order_code=${encodeURIComponent(c)}`, 'v3');
+            // Un mismo order_code puede traer VARIOS PODs (entregas anteriores del
+            // mismo código recurrente). Se toma el MÁS RECIENTE (por created_at):
+            // data[0] es el más viejo y daría un estado equivocado.
+            const arr = Array.isArray(r?.data) ? r.data : [];
+            let mejor: {
+              customer_status?: string;
+              pod_arrival?: string | null;
+              created_at?: string | null;
+              comment?: string | null;
+              reason?: string | null;
+            } | null = null;
+            for (const d of arr) {
+              const a = d?.attributes;
+              if (!a) continue;
+              if (!mejor) {
+                mejor = a;
+                continue;
+              }
+              const ta = new Date(a.created_at ?? a.pod_arrival ?? 0).getTime();
+              const tb = new Date(mejor.created_at ?? mejor.pod_arrival ?? 0).getTime();
+              if (ta >= tb) mejor = a;
+            }
+            const status = mejor?.customer_status ?? null;
+            const entregadoEn = mejor?.pod_arrival ?? mejor?.created_at ?? null;
+            const comment = mejor?.comment ?? mejor?.reason ?? null;
+            this.cachePods.set(c, { ts: Date.now(), status, entregadoEn, comment });
+            out[c] = { status, entregadoEn, comment };
+          } catch {
+            out[c] = { status: null, entregadoEn: null, comment: null };
+          }
+        }),
       );
     }
     return out;

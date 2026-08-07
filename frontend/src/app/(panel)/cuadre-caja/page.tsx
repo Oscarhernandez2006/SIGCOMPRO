@@ -12,6 +12,7 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { yaDespachado } from "@/lib/despacho";
 import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
 import { METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 
@@ -206,7 +207,7 @@ export default function CuadreCajaPage() {
   const filas = useMemo(() => {
     return pedidos
       .filter((p) => {
-        if (p.estado !== "Despachado") return false;
+        if (!yaDespachado(p.estado)) return false;
         // Punto: acotado a los visibles del usuario y al punto seleccionado.
         if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) return false;
         if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) return false;
@@ -293,7 +294,7 @@ export default function CuadreCajaPage() {
   const domiciliarios = useMemo(() => {
     const set = new Set<string>();
     for (const p of pedidos) {
-      if (p.estado !== "Despachado") continue;
+      if (!yaDespachado(p.estado)) continue;
       if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
       if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
       const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);
@@ -308,7 +309,7 @@ export default function CuadreCajaPage() {
   const facturadores = useMemo(() => {
     const set = new Set<string>();
     for (const p of pedidos) {
-      if (p.estado !== "Despachado") continue;
+      if (!yaDespachado(p.estado)) continue;
       if (!esAdmin && !idsVisibles.has(String(p.punto?.id))) continue;
       if (puntoSel !== "todos" && String(p.punto?.id) !== puntoSel) continue;
       const dia = diaLocal(meta[p.id]?.despachoFin) || diaLocal(p.fecha);

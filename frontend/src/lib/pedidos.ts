@@ -22,6 +22,10 @@ export interface DespachoMeta {
   drivinEnviado?: boolean;
   /** Instante en que el pedido pasó a "Despachado". */
   despachoFin?: string;
+  /** Drivin marcó la ruta del domiciliario como finalizada: el pedido se ENTREGÓ. */
+  entregado?: boolean;
+  /** Instante en que Drivin finalizó la entrega (finished_at de la ruta). */
+  entregadoEn?: string;
   /**
    * Instante en que se confirmó el pago (solo para transferencia). Al fijarse,
    * congela el cronómetro de despacho: el pedido ya está alistado y solo espera
@@ -299,4 +303,21 @@ export function cargarAsignacionesDrivin(): Promise<
   return apiFetch<Record<string, { code: string; nombre: string } | null>>(
     `/pedidos/drivin/asignaciones`,
   );
+}
+
+/**
+ * Estado de ENTREGA (POD) de una lista de comandas. Devuelve por comanda
+ * `{ status, entregadoEn }`. `status === "approved"` significa ENTREGADO.
+ */
+export function cargarEntregasDrivin(
+  comandas: string[],
+): Promise<
+  Record<string, { status: string | null; entregadoEn: string | null; comment: string | null }>
+> {
+  return apiFetch<
+    Record<string, { status: string | null; entregadoEn: string | null; comment: string | null }>
+  >(`/pedidos/drivin/entregas`, {
+    method: "POST",
+    body: JSON.stringify({ comandas }),
+  });
 }

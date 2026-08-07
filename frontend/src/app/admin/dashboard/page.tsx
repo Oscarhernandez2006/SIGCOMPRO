@@ -10,7 +10,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
-import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho } from "@/lib/despacho";
+import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho, yaDespachado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -45,6 +45,8 @@ const COLOR_ESTADO: Record<string, string> = {
   Alistado: "#8e44ad",
   Facturado: "#16a085",
   Despachado: "#2e7d63",
+  "En tránsito": "#2b6cb0",
+  Entregado: "#2e7d63",
   Anulado: "#c0392b",
   Cancelado: "#e67e22",
 };
@@ -101,7 +103,7 @@ function esDeHoyd(p: Pedido): boolean {
   if (dia === hoy) return true;
   if (dia < hoy) {
     const e = normEstado(p.estado);
-    return !p.anulado && e !== "despachado" && e !== "anulado";
+    return !p.anulado && !yaDespachado(p.estado) && e !== "anulado";
   }
   return false;
 }
@@ -133,7 +135,7 @@ function calcularMovimientos(
   const esAtrasado = (p: Pedido) => {
     if (p.anulado) return false;
     const e = normEstado(p.estado);
-    if (e === "despachado" || e === "anulado") return false;
+    if (yaDespachado(p.estado) || e === "anulado") return false;
     return msRestantesDespacho(p, ahora, metaMap[p.id]?.pagoConfirmado) <= 0;
   };
   const atrasadosSet = new Set(base.filter(esAtrasado).map((p) => p.id));
@@ -147,7 +149,7 @@ function calcularMovimientos(
     produccion: cuenta((p) => normEstado(p.estado) === "en producción"),
     alistados: cuenta((p) => normEstado(p.estado) === "alistado"),
     facturados: cuenta((p) => normEstado(p.estado) === "facturado"),
-    despachados: cuenta((p) => normEstado(p.estado) === "despachado"),
+    despachados: cuenta((p) => yaDespachado(p.estado)),
     cancelados: cuenta((p) => p.anulado || normEstado(p.estado) === "anulado"),
   };
   cards.total = MOV_DEFS.reduce((s, d) => s + (cards[d.key] ?? 0), 0);

@@ -90,6 +90,15 @@ export class PedidosController {
     return this.pedidos.asignacionesDrivin();
   }
 
+  /**
+   * Estado de ENTREGA (POD) de una lista de comandas vía v3 /pods. Devuelve, por
+   * comanda, `{ status, entregadoEn }` (status `approved` = entregado).
+   */
+  @Post('drivin/entregas')
+  entregasDrivin(@Body('comandas') comandas: string[]) {
+    return this.pedidos.estadoEntregaDrivin(Array.isArray(comandas) ? comandas : []);
+  }
+
   /** Envía el pedido directamente a Drivin (reemplazo del Excel de cargue). */
   @Post(':id/drivin')
   async drivin(

@@ -20,6 +20,7 @@ import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { yaDespachado, colorEstado } from "@/lib/despacho";
 import CrearClienteModal from "@/components/CrearClienteModal";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
@@ -603,7 +604,7 @@ export default function PedidosPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-center gap-0.5">
-                      <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.anulado ? (p.estado === "Cancelado" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-600") : "bg-amber-100 text-amber-700"}`}>
+                      <span title={p.motivo ? `Motivo: ${p.motivo}` : undefined} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${colorEstado(p.estado)}`}>
                         {p.anulado
                           ? (p.estado || "Anulado")
                           : (p.entregaProgramada && p.fechaProgramada && (!p.estado || p.estado === "En proceso")
@@ -652,8 +653,8 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
                             </svg>
                           </button>
-                          {/* Un pedido DESPACHADO solo permite Ver y Reimprimir. */}
-                          {p.estado !== "Despachado" && (
+                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver y Reimprimir. */}
+                          {!yaDespachado(p.estado) && (
                           <>
                           <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} aria-label="Descargar Excel" title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
@@ -3480,7 +3481,7 @@ export interface Pedido extends DatosComanda {
   total: number;
   vendedorNombre?: string;
   vendedorCedula?: string;
-  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "Anulado" | "Cancelado";
+  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "En tránsito" | "Entregado" | "Anulado" | "Cancelado";
   anulado?: boolean;
   /** Motivo de anulación o cancelación (se guarda al anular/cancelar). */
   motivo?: string;
@@ -3532,7 +3533,7 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
     const dia = diaEntrega(p);
     if (dia < hoy) {
       const e = norm(p.estado);
-      if (!p.anulado && e !== "despachado" && e !== "anulado") return hoy;
+      if (!p.anulado && !yaDespachado(p.estado) && e !== "anulado") return hoy;
     }
     return dia;
   };
