@@ -17,9 +17,23 @@ import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
+/**
+ * Estados TERMINALES (el pedido ya salió del punto o quedó cerrado): no cuentan
+ * como "activos" y NO se arrastran ni renumeran al día siguiente. Incluye los
+ * posteriores al despacho que llegan de la integración con Drivin
+ * ("en tránsito", "entregado") y la cancelación de la entrega.
+ */
+const ESTADOS_FINALIZADOS = new Set([
+  'despachado',
+  'en tránsito',
+  'en transito',
+  'entregado',
+  'cancelado',
+  'anulado',
+]);
+
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
-export interface TrazaEvento {
-  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
+export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
   estadoAnterior?: string | null;
   estadoNuevo?: string | null;
   /** Motivo de la anulación/cancelación (solo en esos eventos). */
@@ -376,7 +390,7 @@ export class PedidosService implements OnModuleInit {
       r.eprog === 'true' && r.fprog ? String(r.fprog) : this.diaBogota(r.fecha);
     const esActivo = (r: (typeof filas)[number]) => {
       const e = String(r.estado ?? '').trim().toLowerCase();
-      return r.anulado !== true && e !== 'despachado' && e !== 'anulado';
+      return r.anulado !== true && !ESTADOS_FINALIZADOS.has(e);
     };
     // Máximo número YA usado en el día `d`: cuenta los que tienen numeroDiaFecha
     // = d y (compatibilidad) los antiguos sin numeroDiaFecha cuyo día de entrega

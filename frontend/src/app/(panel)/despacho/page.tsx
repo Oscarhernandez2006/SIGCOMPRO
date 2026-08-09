@@ -813,7 +813,6 @@ export default function DespachoPage() {
     const mapaTieneDatos = Object.keys(asignacionesDrivin).length > 0;
     for (const p of pedidos) {
       if (p.anulado) continue;
-      if (p.entrega === "recoge") continue; // recoge en PDV no usa domiciliario
       if (!p.punto?.id || !idsPuntos.has(String(p.punto.id))) continue;
       const m = meta[p.id] ?? {};
       const est = norm(p.estado);
@@ -969,29 +968,27 @@ export default function DespachoPage() {
       return;
     }
     if (n === "despachado" && !mm.domiciliario?.trim()) {
-      const esRecoge = pedidos.find((x) => x.id === id)?.entrega === "recoge";
-      if (!esRecoge) {
-        // Solo ADMIN puede asignar un domiciliario MANUAL para cerrar el ciclo
-        // (p. ej. si Drivin rebotó el pedido por consecutivo cruzado y no lo
-        // asignó). El resto no puede despachar sin domiciliario.
-        const manual = opts?.domiManual?.trim();
-        if (manual) {
-          mm.domiciliario = manual;
-          mm.domiciliarioCodigo = "";
-          actualizarMetaApi(id, { domiciliario: manual, domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
-          setMeta((prev) => ({
-            ...prev,
-            [id]: { ...prev[id], domiciliario: manual, domiciliarioCodigo: "" },
-          }));
-        } else if (tieneAccesoAdministrativo(usuarioDesp?.rol)) {
-          // Abre el modal para elegir el domiciliario del punto y reintenta.
-          setDespachoManualSel("");
-          setDespachoManual({ id });
-          return;
-        } else {
-          alert("No se puede despachar sin un domiciliario asignado.");
-          return;
-        }
+      // Solo ADMIN puede asignar un domiciliario MANUAL para cerrar el ciclo
+      // (p. ej. si Drivin rebotó el pedido por consecutivo cruzado y no lo
+      // asignó). El resto no puede despachar sin domiciliario. Los "recoge en
+      // PDV" también llevan domiciliario (el simulado que Drivin asigna).
+      const manual = opts?.domiManual?.trim();
+      if (manual) {
+        mm.domiciliario = manual;
+        mm.domiciliarioCodigo = "";
+        actualizarMetaApi(id, { domiciliario: manual, domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
+        setMeta((prev) => ({
+          ...prev,
+          [id]: { ...prev[id], domiciliario: manual, domiciliarioCodigo: "" },
+        }));
+      } else if (tieneAccesoAdministrativo(usuarioDesp?.rol)) {
+        // Abre el modal para elegir el domiciliario del punto y reintenta.
+        setDespachoManualSel("");
+        setDespachoManual({ id });
+        return;
+      } else {
+        alert("No se puede despachar sin un domiciliario asignado.");
+        return;
       }
     }
     // Al pasar a "Despachado" se registra la hora exacta del cambio (si aún no
@@ -2321,22 +2318,11 @@ export default function DespachoPage() {
 
                     {/* Domiciliario: al asignar pasa a Despachado */}
                     <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
-                      {esRecoge ? (
-                        <div className="flex w-full flex-col gap-1.5 pb-12">
-                          <div className="flex items-center gap-2 rounded-lg border border-brand-wine/25 bg-brand-wine/5 px-3 py-2.5 text-sm font-semibold text-brand-wine">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
-                            </svg>
-                            Recogen en PDV
-                          </div>
-                          <p className="text-[11px] text-brand-brown/50">
-                            El cliente recoge el pedido en el punto de venta; no requiere domiciliario.
-                          </p>
-                        </div>
-                      ) : (
                       <div className="flex w-full flex-col gap-1.5 pb-12">
                         {/* Domiciliario: lo ASIGNA Drivin. SIGCOMPRO solo lo
-                            muestra (y despacha automáticamente al bajarlo). */}
+                            muestra (y despacha automáticamente al bajarlo). Los
+                            "recoge en PDV" llevan el domiciliario simulado que
+                            Drivin asigna para tener trazabilidad. */}
                         {m.domiciliario ? (
                           <div className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5">
                             <p className="text-[9px] font-bold uppercase tracking-wide text-green-700/70">
@@ -2355,7 +2341,7 @@ export default function DespachoPage() {
                         ) : facturado ? (
                           <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700">
                             <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-                            Esperando asignación de Drivin…
+                            En espera de domiciliario…
                           </div>
                         ) : (
                           <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-brown/50">
@@ -2409,7 +2395,6 @@ export default function DespachoPage() {
                           </div>
                         </div>
                       </div>
-                      )}
                       <div className="absolute inset-x-3 bottom-3">
                         <button
                           onClick={() => cambiarEstado(p.id, "Despachado")}
@@ -2417,15 +2402,13 @@ export default function DespachoPage() {
                           title={
                             !facturado && !despachado
                               ? "Debes facturar el pedido antes de despachar"
-                              : !esRecoge && !m.domiciliario?.trim()
+                              : !m.domiciliario?.trim()
                                 ? "Asigna un domiciliario para despachar"
-                                : esRecoge
-                                  ? "Marcar como entregado en el punto de venta"
-                                  : "Marcar el pedido como despachado"
+                                : "Marcar el pedido como despachado"
                           }
                           className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${puedeEstado("Despachado") ? "" : "opacity-50"}`}
                         >
-                          {esRecoge ? "Entregado en PDV" : "Despachado"}
+                          Despachado
                         </button>
                       </div>
                     </td>

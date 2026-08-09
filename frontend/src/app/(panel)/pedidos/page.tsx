@@ -2384,23 +2384,44 @@ function PasoProductos({
   const [config, setConfig] = useState<ProductoPrecio | null>(null);
   const [ultimosAbierto, setUltimosAbierto] = useState(false);
 
-  // Historial de productos pedidos antes por este cliente (más recientes primero)
+  // Historial COMPLETO de pedidos del cliente (cualquier fecha), para armar la
+  // barra "Pedidos anteriores" aunque no haya pedido hoy.
+  const [histPedidos, setHistPedidos] = useState<Pedido[]>([]);
+  useEffect(() => {
+    if (!cliente) {
+      setHistPedidos([]);
+      return;
+    }
+    let vivo = true;
+    cargarPedidosCliente(cliente.id, 30)
+      .then((ps) => vivo && setHistPedidos(ps))
+      .catch(() => vivo && setHistPedidos([]));
+    return () => {
+      vivo = false;
+    };
+  }, [cliente]);
+
+  // Historial de productos pedidos antes por este cliente (más recientes primero):
+  // combina su historial completo + lo cargado hoy.
   const historial = useMemo(() => {
     if (!cliente) return [] as ProductoPrecio[];
     const vistos = new Set<string>();
     const out: ProductoPrecio[] = [];
-    for (const p of pedidos) {
+    const fuentes = [
+      ...histPedidos,
+      ...pedidos.filter((p) => p.cliente?.id === cliente.id),
+    ];
+    for (const p of fuentes) {
       if (p.anulado) continue;
-      if (p.cliente?.id !== cliente.id) continue;
-      for (const it of p.carrito) {
-        const key = it.producto.id;
-        if (vistos.has(key)) continue;
+      for (const it of p.carrito ?? []) {
+        const key = it.producto?.id;
+        if (!key || vistos.has(key)) continue;
         vistos.add(key);
         out.push(it.producto);
       }
     }
     return out;
-  }, [cliente, pedidos]);
+  }, [cliente, histPedidos, pedidos]);
 
   // Precios actuales para los productos del historial (si están en el catálogo cargado)
   const preciosActuales = useMemo(() => {
@@ -2604,6 +2625,18 @@ function PasoProductos({
 
 /* ---------- Panel de resumen siempre visible ---------- */
 
+// Etiquetas y orden de los días de despacho HORECA.
+const DIAS_DESPACHO_LABEL: Record<string, string> = {
+  lun: "Lun",
+  mar: "Mar",
+  mie: "Mié",
+  jue: "Jue",
+  vie: "Vie",
+  sab: "Sáb",
+  dom: "Dom",
+};
+const ORDEN_DIAS_DESPACHO = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"];
+
 function ResumenPedido({
   punto,
   cliente,
@@ -2645,6 +2678,25 @@ function ResumenPedido({
                   <p className="mt-0.5 text-xs text-brand-brown/60">
                     {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}
                   </p>
+                )}
+                {cliente.horeca && (cliente.dias_despacho?.length ?? 0) > 0 && (
+                  <div className="mt-1.5 border-t border-brand-brown/10 pt-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-wine/70">
+                      Días de despacho
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {ORDEN_DIAS_DESPACHO.filter((d) =>
+                        cliente.dias_despacho?.includes(d),
+                      ).map((d) => (
+                        <span
+                          key={d}
+                          className="rounded-full bg-brand-wine/10 px-2 py-0.5 text-[10px] font-semibold text-brand-wine"
+                        >
+                          {DIAS_DESPACHO_LABEL[d] ?? d}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

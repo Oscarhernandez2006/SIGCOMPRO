@@ -478,41 +478,17 @@ export default function MapaDireccion({
       {(puntoVenta?.trim() || recomendado) && (
         <div className="mt-1.5 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 p-2 text-xs">
           {onPuntoVenta && puedeElegirPunto && (recomendado || puntoCreado.trim() || puntos.length > 0) ? (
-            // COMPACTO (dev/admin app): elegir a qué punto asignar, en una sola fila.
-            <div className="flex flex-wrap items-center gap-1.5">
+            // COMPACTO (dev/admin app): elegir a qué punto asignar, apilado.
+            // Orden: Seleccionar punto → Recomendado. "Donde se creó" es solo texto.
+            <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-medium text-brand-brown/60">Asignar a:</span>
-              {recomendado && (
-                <button
-                  type="button"
-                  onClick={() => onPuntoVenta(recomendado.punto.nombre)}
-                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
-                    norm(puntoVenta) === norm(recomendado.punto.nombre)
-                      ? "border-brand-wine bg-brand-wine text-white"
-                      : "border-brand-amber/50 bg-brand-amber/10 text-brand-amber hover:bg-brand-amber/20"
-                  }`}
-                >
-                  Recomendado ({recomendado.punto.nombre} · {recomendado.km.toFixed(1)} km)
-                </button>
-              )}
-              {puntoCreado.trim() && norm(puntoCreado) !== norm(recomendado?.punto.nombre ?? "") && (
-                <button
-                  type="button"
-                  onClick={() => onPuntoVenta(puntoCreado)}
-                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
-                    norm(puntoVenta) === norm(puntoCreado)
-                      ? "border-brand-wine bg-brand-wine text-white"
-                      : "border-brand-wine/30 bg-white text-brand-wine hover:bg-brand-wine/5"
-                  }`}
-                >
-                  Donde se creó ({puntoCreado})
-                </button>
-              )}
+              {/* 1. Seleccionar punto (desplegable) */}
               <select
                 value=""
                 onChange={(e) => {
                   if (e.target.value) onPuntoVenta(e.target.value);
                 }}
-                className="rounded-md border border-brand-brown/20 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown outline-none transition focus:border-brand-wine"
+                className="w-full max-w-[16rem] rounded-md border border-brand-brown/20 bg-white px-2 py-1.5 text-[11px] font-semibold text-brand-brown outline-none transition focus:border-brand-wine"
               >
                 <option value="">Seleccionar punto…</option>
                 {puntos
@@ -527,7 +503,21 @@ export default function MapaDireccion({
                     </option>
                   ))}
               </select>
-              <span className="ml-auto text-[11px] text-brand-brown/60">
+              {/* Recomendado (seleccionable) */}
+              {recomendado && (
+                <button
+                  type="button"
+                  onClick={() => onPuntoVenta(recomendado.punto.nombre)}
+                  className={`w-full max-w-[16rem] rounded-md border px-2 py-1.5 text-left text-[11px] font-semibold transition ${
+                    norm(puntoVenta) === norm(recomendado.punto.nombre)
+                      ? "border-brand-wine bg-brand-wine text-white"
+                      : "border-brand-amber/50 bg-brand-amber/10 text-brand-amber hover:bg-brand-amber/20"
+                  }`}
+                >
+                  Recomendado ({recomendado.punto.nombre} · {recomendado.km.toFixed(1)} km)
+                </button>
+              )}
+              <span className="text-[11px] text-brand-brown/60">
                 Actual: <b className="text-brand-wine">{puntoVenta?.trim() || "Sin asignar"}</b>
               </span>
             </div>
