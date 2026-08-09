@@ -29,6 +29,7 @@ export interface ClienteRow {
   activo: boolean;
   horeca: boolean;
   direccion_incorrecta: boolean;
+  dias_despacho: string[];
   creado_en: string;
 }
 
@@ -51,7 +52,7 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, creado_en';
 
 @Injectable()
 export class ClientesService implements OnModuleInit {
@@ -73,6 +74,10 @@ export class ClientesService implements OnModuleInit {
     // Punto de venta al que está asignado el cliente (viene del Excel de importación).
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS punto_venta text`,
+    );
+    // Días de despacho (HORECA): arreglo de días lun..dom en jsonb.
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dias_despacho jsonb NOT NULL DEFAULT '[]'::jsonb`,
     );
   }
 
@@ -214,8 +219,8 @@ export class ClientesService implements OnModuleInit {
 
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
        RETURNING ${COLUMNS}`,
       [
         nit,
@@ -233,6 +238,7 @@ export class ClientesService implements OnModuleInit {
         dto.activo ?? true,
         dto.horeca ?? false,
         dto.direccion_incorrecta ?? false,
+        JSON.stringify(Array.isArray(dto.dias_despacho) ? dto.dias_despacho : []),
       ],
     );
     return res.rows[0];
@@ -288,6 +294,11 @@ export class ClientesService implements OnModuleInit {
     if (dto.direccion_incorrecta !== undefined) {
       sets.push(`direccion_incorrecta = $${i++}`);
       valores.push(dto.direccion_incorrecta);
+    }
+
+    if (dto.dias_despacho !== undefined) {
+      sets.push(`dias_despacho = $${i++}::jsonb`);
+      valores.push(JSON.stringify(Array.isArray(dto.dias_despacho) ? dto.dias_despacho : []));
     }
 
     if (sets.length === 0) {

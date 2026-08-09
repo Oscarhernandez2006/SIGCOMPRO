@@ -19,6 +19,7 @@ export interface Cliente {
   activo: boolean;
   horeca: boolean;
   direccion_incorrecta: boolean;
+  dias_despacho?: string[];
   creado_en: string;
 }
 
@@ -43,6 +44,7 @@ export interface ClienteInput {
   activo?: boolean;
   horeca?: boolean;
   direccion_incorrecta?: boolean;
+  dias_despacho?: string[];
 }
 
 export function listarClientes(

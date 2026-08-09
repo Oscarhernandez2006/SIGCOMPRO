@@ -584,23 +584,27 @@ export default function PedidosPage() {
                 {pedidosFiltrados.map((p) => (
                 <tr key={p.id} className={`border-t border-brand-brown/5 hover:bg-brand-cream-soft/30 ${p.anulado ? "opacity-50" : ""}`}>
                   <td className="px-4 py-3 font-semibold text-brand-wine">
-                    <div>{p.comanda}</div>
-                    {meta[p.id]?.facturaNumero?.trim() && (
-                      <div className="text-[11px] font-semibold text-emerald-700">
-                        Fact. {meta[p.id]!.facturaNumero}
-                      </div>
+                    {meta[p.id]?.facturaNumero?.trim() ? (
+                      <>
+                        <div>Fact. {meta[p.id]!.facturaNumero}</div>
+                        <div className="text-[11px] font-semibold text-brand-brown/60">{p.comanda}</div>
+                      </>
+                    ) : (
+                      <div>{p.comanda}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                   <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
                   <td className="px-4 py-3 font-medium">
-                    <div>{formatoCOP(p.total)}</div>
                     {typeof meta[p.id]?.facturaValor === "number" &&
-                      (meta[p.id]!.facturaValor as number) > 0 && (
-                        <div className="text-[11px] font-semibold text-emerald-700">
-                          {formatoCOP(meta[p.id]!.facturaValor as number)}
-                        </div>
-                      )}
+                    (meta[p.id]!.facturaValor as number) > 0 ? (
+                      <>
+                        <div>{formatoCOP(meta[p.id]!.facturaValor as number)}</div>
+                        <div className="text-[11px] text-brand-brown/55">{formatoCOP(p.total)}</div>
+                      </>
+                    ) : (
+                      <div>{formatoCOP(p.total)}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-center gap-0.5">

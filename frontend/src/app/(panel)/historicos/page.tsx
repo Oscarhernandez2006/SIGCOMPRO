@@ -241,17 +241,25 @@ export default function HistoricosPage() {
                   return (
                     <tr key={p.id} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
                       <td className="px-4 py-3 align-top">
-                        <div className="font-semibold text-brand-wine">{p.comanda}</div>
-                        {m?.facturaNumero && (
-                          <div className="text-[11px] font-semibold text-emerald-600">Fact. {m.facturaNumero}</div>
+                        {m?.facturaNumero ? (
+                          <>
+                            <div className="font-semibold text-brand-wine">Fact. {m.facturaNumero}</div>
+                            <div className="text-[11px] font-semibold text-brand-brown/60">{p.comanda}</div>
+                          </>
+                        ) : (
+                          <div className="font-semibold text-brand-wine">{p.comanda}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                       <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
                       <td className="px-4 py-3 align-top">
-                        <div className="font-medium">{formatoCOP(p.total)}</div>
-                        {typeof m?.facturaValor === "number" && m.facturaValor > 0 && (
-                          <div className="text-xs font-semibold text-emerald-600">{formatoCOP(m.facturaValor)}</div>
+                        {typeof m?.facturaValor === "number" && m.facturaValor > 0 ? (
+                          <>
+                            <div className="font-medium">{formatoCOP(m.facturaValor)}</div>
+                            <div className="text-xs text-brand-brown/55">{formatoCOP(p.total)}</div>
+                          </>
+                        ) : (
+                          <div className="font-medium">{formatoCOP(p.total)}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">

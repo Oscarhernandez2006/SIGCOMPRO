@@ -1,12 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   puntosUbicaciones,
   puntoMasCercano,
   type PuntoUbicacion,
 } from "@/lib/puntos-venta";
+import { getUsuario, puedeSeleccionarPuntoVenta } from "@/lib/auth";
 
 const MapaLeaflet = dynamic(() => import("./MapaLeaflet"), {
   ssr: false,
@@ -127,6 +128,7 @@ export default function MapaDireccion({
   onCiudad,
   onPuntoVenta,
   ocultarPuntos,
+  altoMapa = 260,
 }: {
   direccion: string;
   barrio: string;
@@ -146,6 +148,8 @@ export default function MapaDireccion({
   onPuntoVenta?: (nombre: string) => void;
   /** Oculta la recomendación de puntos (p. ej. al ubicar un punto de venta). */
   ocultarPuntos?: boolean;
+  /** Alto del mapa en px (para compactar en modales pequeños). */
+  altoMapa?: number;
 }) {
   const [abierto, setAbierto] = useState(lat != null && lng != null);
   const [cargando, setCargando] = useState(false);
@@ -170,6 +174,15 @@ export default function MapaDireccion({
     lat != null && lng != null ? puntoMasCercano(puntos, lat, lng) : null;
   const norm = (s?: string | null) =>
     (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  // Punto donde se CREÓ el cliente (el asignado original): se captura una sola
+  // vez y no cambia aunque el usuario elija otro punto después.
+  const puntoCreadoRef = useRef(puntoVenta ?? "");
+  const puntoCreado = puntoCreadoRef.current;
+  // Elegir/cambiar el punto de venta del cliente: solo desarrollador y
+  // administrador app.
+  const [rolUsuario, setRolUsuario] = useState<string | undefined>(undefined);
+  useEffect(() => setRolUsuario(getUsuario()?.rol), []);
+  const puedeElegirPunto = puedeSeleccionarPuntoVenta(rolUsuario);
   // ¿El asignado ES el más cercano?
   const asignadoEsCercano =
     !!recomendado && !!puntoVenta && norm(recomendado.punto.nombre) === norm(puntoVenta);
@@ -371,7 +384,7 @@ export default function MapaDireccion({
   const tieneUbicacion = lat != null && lng != null;
 
   return (
-    <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 p-3">
+    <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs font-medium text-brand-brown/70">
           Ubicación en el mapa
@@ -439,6 +452,7 @@ export default function MapaDireccion({
           <MapaLeaflet
             lat={centroLat}
             lng={centroLng}
+            height={altoMapa}
             onMover={(la, lo) => {
               onUbicacion(la, lo);
               setEstado({ tipo: "ok", msg: "Ubicación ajustada manualmente. Presiona Guardar." });
@@ -462,72 +476,93 @@ export default function MapaDireccion({
 
       {/* Punto de venta: asignado (del Excel) y recomendado (más cercano). */}
       {(puntoVenta?.trim() || recomendado) && (
-        <div className="mt-2 space-y-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 p-2.5 text-xs">
-          {/* Fila: asignado + recomendado, lado a lado */}
-          <div className="flex flex-wrap items-stretch gap-2">
-            {puntoVenta?.trim() && (
-              <div className="flex-1 rounded-md border border-brand-brown/15 bg-white px-2.5 py-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
-                  {horeca ? "Punto asignado HORECA" : "Punto asignado"}
-                </p>
-                <p className="font-semibold text-brand-wine">{puntoVenta}</p>
-              </div>
-            )}
-            {recomendado && (
-              <div
-                className={`flex-1 rounded-md border px-2.5 py-1.5 ${
-                  asignadoEsCercano
-                    ? "border-emerald-300 bg-emerald-50"
-                    : "border-brand-amber/40 bg-brand-amber/10"
-                }`}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
-                  Recomendado (más cercano)
-                </p>
-                <p className="font-semibold text-brand-black">
-                  {recomendado.punto.nombre}
-                  <span className="ml-1 font-normal text-brand-brown/50">
-                    · {recomendado.km.toFixed(1)} km
-                  </span>
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Mensaje/acciones según el caso */}
-          {recomendado && asignadoEsCercano ? (
-            <p className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-              </svg>
-              El punto asignado{horeca ? " (HORECA)" : ""} también es el más cercano.
-            </p>
-          ) : recomendado && onPuntoVenta ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {horeca && puntoVenta?.trim() && (
-                <span className="w-full text-[11px] text-brand-brown/60">
-                  Cliente <b>HORECA</b>: se mantiene el punto asignado (<b>{puntoVenta}</b>) porque está creado desde ese punto, pero puedes cambiarlo:
-                </span>
-              )}
-              <span className="text-[11px] text-brand-brown/60">Usar:</span>
-              {puntoVenta?.trim() && (
+        <div className="mt-1.5 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 p-2 text-xs">
+          {onPuntoVenta && puedeElegirPunto && (recomendado || puntoCreado.trim() || puntos.length > 0) ? (
+            // COMPACTO (dev/admin app): elegir a qué punto asignar, en una sola fila.
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-medium text-brand-brown/60">Asignar a:</span>
+              {recomendado && (
                 <button
                   type="button"
-                  onClick={() => onPuntoVenta(puntoVenta)}
-                  className="rounded-md border border-brand-wine/30 bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-wine transition hover:bg-brand-wine/5"
+                  onClick={() => onPuntoVenta(recomendado.punto.nombre)}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                    norm(puntoVenta) === norm(recomendado.punto.nombre)
+                      ? "border-brand-wine bg-brand-wine text-white"
+                      : "border-brand-amber/50 bg-brand-amber/10 text-brand-amber hover:bg-brand-amber/20"
+                  }`}
                 >
-                  Asignado ({puntoVenta})
+                  Recomendado ({recomendado.punto.nombre} · {recomendado.km.toFixed(1)} km)
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => onPuntoVenta(recomendado.punto.nombre)}
-                className="rounded-md border border-brand-amber/50 bg-brand-amber/10 px-2.5 py-1 text-[11px] font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+              {puntoCreado.trim() && norm(puntoCreado) !== norm(recomendado?.punto.nombre ?? "") && (
+                <button
+                  type="button"
+                  onClick={() => onPuntoVenta(puntoCreado)}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                    norm(puntoVenta) === norm(puntoCreado)
+                      ? "border-brand-wine bg-brand-wine text-white"
+                      : "border-brand-wine/30 bg-white text-brand-wine hover:bg-brand-wine/5"
+                  }`}
+                >
+                  Donde se creó ({puntoCreado})
+                </button>
+              )}
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) onPuntoVenta(e.target.value);
+                }}
+                className="rounded-md border border-brand-brown/20 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown outline-none transition focus:border-brand-wine"
               >
-                Recomendado ({recomendado.punto.nombre})
-              </button>
+                <option value="">Seleccionar punto…</option>
+                {puntos
+                  .filter(
+                    (p) =>
+                      norm(p.nombre) !== norm(recomendado?.punto.nombre ?? "") &&
+                      norm(p.nombre) !== norm(puntoCreado),
+                  )
+                  .map((p) => (
+                    <option key={p.nombre} value={p.nombre}>
+                      {p.nombre}
+                    </option>
+                  ))}
+              </select>
+              <span className="ml-auto text-[11px] text-brand-brown/60">
+                Actual: <b className="text-brand-wine">{puntoVenta?.trim() || "Sin asignar"}</b>
+              </span>
             </div>
-          ) : null}
+          ) : (
+            // READ-ONLY (resto de usuarios): asignado + recomendado, lado a lado.
+            <div className="flex flex-wrap items-stretch gap-2">
+              {puntoVenta?.trim() && (
+                <div className="flex-1 rounded-md border border-brand-brown/15 bg-white px-2 py-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                    {horeca ? "Punto asignado HORECA" : "Punto asignado"}
+                  </p>
+                  <p className="font-semibold text-brand-wine">{puntoVenta}</p>
+                </div>
+              )}
+              {recomendado && (
+                <div
+                  className={`flex-1 rounded-md border px-2 py-1 ${
+                    asignadoEsCercano
+                      ? "border-emerald-300 bg-emerald-50"
+                      : "border-brand-amber/40 bg-brand-amber/10"
+                  }`}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                    Recomendado (más cercano)
+                  </p>
+                  <p className="font-semibold text-brand-black">
+                    {recomendado.punto.nombre}
+                    <span className="ml-1 font-normal text-brand-brown/50">
+                      · {recomendado.km.toFixed(1)} km
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

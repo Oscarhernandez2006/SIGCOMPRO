@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsLatitude,
@@ -79,4 +80,10 @@ export class CreateClienteDto {
   @IsOptional()
   @IsLongitude()
   lng?: number;
+
+  /** Días en que se puede despachar al cliente HORECA (lun..dom). */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dias_despacho?: string[];
 }

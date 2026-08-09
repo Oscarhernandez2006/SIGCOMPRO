@@ -29,7 +29,19 @@ const FORM_VACIO: ClienteInput = {
   activo: true,
   horeca: false,
   direccion_incorrecta: false,
+  dias_despacho: [],
 };
+
+/** Días de la semana para el despacho de clientes HORECA. */
+const DIAS_SEMANA = [
+  { key: "lun", label: "L" },
+  { key: "mar", label: "Ma" },
+  { key: "mie", label: "Mi" },
+  { key: "jue", label: "J" },
+  { key: "vie", label: "V" },
+  { key: "sab", label: "S" },
+  { key: "dom", label: "D" },
+] as const;
 
 /**
  * Modal de creación rápida de cliente.
@@ -82,6 +94,7 @@ export default function CrearClienteModal({
           ciudad: c.ciudad ?? "",
           punto_venta: c.punto_venta ?? "",
           horeca: c.horeca ?? false,
+          dias_despacho: c.dias_despacho ?? [],
         }));
         // `nombre` guarda el nombre COMPLETO y `apellidos` solo el apellido: se
         // separan para no duplicar el apellido al reconstruir el nombre.
@@ -145,6 +158,7 @@ export default function CrearClienteModal({
         nombre: nombreCompleto,
         apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
+        dias_despacho: tipoCliente === "horeca" ? (form.dias_despacho ?? []) : [],
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       });
       onCreado(nuevo);
@@ -156,8 +170,8 @@ export default function CrearClienteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
-      <div className="max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-2">
+      <div className="max-h-[96vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-3 shadow-2xl">
         <button
           onClick={onCerrar}
           disabled={guardando}
@@ -177,9 +191,9 @@ export default function CrearClienteModal({
           </div>
         )}
 
-        <div className="mt-2 grid items-start gap-2 lg:grid-cols-2">
+        <div className="mt-1.5 grid items-start gap-2 lg:grid-cols-2">
           {/* Columna izquierda */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Bloque titulo="Identificación">
               <div className="grid gap-2 sm:grid-cols-2">
                 <Campo label="NIT / Cédula *">
@@ -274,11 +288,50 @@ export default function CrearClienteModal({
                   Cliente HORECA (hotel, restaurante o café)
                 </label>
               </div>
+
+              {/* Días de despacho: solo para clientes HORECA. */}
+              {tipoCliente === "horeca" && (
+                <div className="mt-2 border-t border-brand-brown/10 pt-2">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                    Días de despacho
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DIAS_SEMANA.map((d) => {
+                      const activo = (form.dias_despacho ?? []).includes(d.key);
+                      return (
+                        <button
+                          key={d.key}
+                          type="button"
+                          onClick={() =>
+                            cambiar(
+                              "dias_despacho",
+                              activo
+                                ? (form.dias_despacho ?? []).filter((x) => x !== d.key)
+                                : [...(form.dias_despacho ?? []), d.key],
+                            )
+                          }
+                          title={activo ? "Quitar día" : "Agregar día"}
+                          className={`h-8 min-w-[2.25rem] rounded-md border px-2 text-xs font-bold transition ${
+                            activo
+                              ? "border-brand-wine bg-brand-wine text-white"
+                              : "border-brand-brown/20 bg-white text-brand-brown hover:bg-brand-cream-soft"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[11px] text-brand-brown/50">
+                    Días en que se le puede despachar a este cliente.
+                  </p>
+                </div>
+              )}
             </Bloque>
           </div>
 
           {/* Columna derecha */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Bloque titulo="Barrio y ciudad">
               <div className="grid gap-2 sm:grid-cols-2">
                 <Campo label="Barrio *">
@@ -319,6 +372,7 @@ export default function CrearClienteModal({
                 horeca={tipoCliente === "horeca"}
                 lat={form.lat ?? null}
                 lng={form.lng ?? null}
+                altoMapa={120}
                 onUbicacion={(la, lo) => setForm((p) => ({ ...p, lat: la, lng: lo }))}
                 onBarrio={(b) => cambiar("barrio", b)}
                 onCiudad={(ci) => cambiar("ciudad", ci)}
@@ -328,7 +382,7 @@ export default function CrearClienteModal({
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end gap-2">
           <button
             onClick={onCerrar}
             disabled={guardando}
@@ -370,8 +424,8 @@ function Campo({
 
 function Bloque({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 p-2.5">
-      <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-wine">{titulo}</h3>
+    <section className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 p-2">
+      <h3 className="mb-1 text-[11px] font-bold uppercase tracking-wide text-brand-wine">{titulo}</h3>
       {children}
     </section>
   );

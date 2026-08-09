@@ -389,12 +389,15 @@ export class PedidosService implements OnModuleInit {
         return cuenta && n > mx ? n : mx;
       }, 0);
 
-    // Arrastrados de hoy pendientes de renumerar, del MÁS VIEJO al más nuevo.
+    // Pedidos que DEBEN numerarse para hoy y aún no lo están (del más viejo al
+    // más nuevo): arrastrados (día de entrega anterior) Y posteriores que llegan
+    // HOY pero cuyo número quedó de otro día (p. ej. reprogramados). Todos toman
+    // los siguientes números de hoy por antigüedad.
     const arrastrados = filas
       .filter(
         (r) =>
           esActivo(r) &&
-          diaEntrega(r) < hoy &&
+          diaEntrega(r) <= hoy &&
           String(r.numerodiafecha ?? '') !== hoy,
       )
       .sort(
@@ -576,10 +579,32 @@ export class PedidosService implements OnModuleInit {
             : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
         finalPedido.comanda = prevData!.comanda ?? finalPedido.comanda;
         finalPedido.fecha = prevData!.fecha ?? finalPedido.fecha;
-        // Conserva el número del día original y su día (no se reasigna al editar).
-        finalPedido.numeroDia = prevData!.numeroDia ?? finalPedido.numeroDia;
-        finalPedido.numeroDiaFecha =
-          prevData!.numeroDiaFecha ?? finalPedido.numeroDiaFecha;
+        // Día al que pertenece el número guardado vs día de entrega ACTUAL.
+        const diaAnterior = prevData!.numeroDiaFecha
+          ? String(prevData!.numeroDiaFecha)
+          : this.diaEntregaDe(prevData!);
+        const diaNuevoEdit = this.diaEntregaDe(finalPedido);
+        if (puntoId && diaNuevoEdit !== diaAnterior) {
+          // Cambió el día de entrega (p. ej. pasó a POSTERIOR o cambió la fecha
+          // programada): REASIGNA el número del día para el nuevo día en vez de
+          // conservar el del día anterior (así el posterior toma el turno que le
+          // corresponde en su día de despacho).
+          await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+            `pedido_consecutivo:${puntoId}`,
+          ]);
+          finalPedido.numeroDia = await this.renumerarYSiguiente(
+            client,
+            puntoId,
+            this.diaBogota(),
+            diaNuevoEdit,
+          );
+          finalPedido.numeroDiaFecha = diaNuevoEdit;
+        } else {
+          // Mismo día de entrega: conserva el número del día y su día.
+          finalPedido.numeroDia = prevData!.numeroDia ?? finalPedido.numeroDia;
+          finalPedido.numeroDiaFecha =
+            prevData!.numeroDiaFecha ?? finalPedido.numeroDiaFecha;
+        }
       } else if (puntoId) {
         // Nuevo pedido: asigna el consecutivo de forma atómica por punto.
         // El lock se libera automáticamente al terminar la transacción.

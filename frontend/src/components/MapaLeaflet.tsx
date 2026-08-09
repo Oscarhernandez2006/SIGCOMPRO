@@ -36,18 +36,21 @@ export default function MapaLeaflet({
   lat,
   lng,
   onMover,
+  height = 260,
 }: {
   lat: number;
   lng: number;
   /** Si se define, el marcador es arrastrable y se puede ubicar con clic. */
   onMover?: (lat: number, lng: number) => void;
+  /** Alto del mapa en px. */
+  height?: number;
 }) {
   return (
     <MapContainer
       center={[lat, lng]}
       zoom={16}
       scrollWheelZoom
-      style={{ height: 260, width: "100%" }}
+      style={{ height, width: "100%" }}
       className="rounded-xl"
     >
       <TileLayer

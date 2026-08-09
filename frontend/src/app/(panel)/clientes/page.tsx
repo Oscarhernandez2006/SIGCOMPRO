@@ -43,7 +43,19 @@ const FORM_VACIO: FormState = {
   activo: true,
   horeca: false,
   direccion_incorrecta: false,
+  dias_despacho: [],
 };
+
+/** Días de la semana para el despacho de clientes HORECA. */
+const DIAS_SEMANA = [
+  { key: "lun", label: "L" },
+  { key: "mar", label: "Ma" },
+  { key: "mie", label: "Mi" },
+  { key: "jue", label: "J" },
+  { key: "vie", label: "V" },
+  { key: "sab", label: "S" },
+  { key: "dom", label: "D" },
+] as const;
 
 export default function ClientesPage() {
   const [items, setItems] = useState<Cliente[]>([]);
@@ -163,6 +175,7 @@ export default function ClientesPage() {
       activo: c.activo,
       horeca: c.horeca,
       direccion_incorrecta: c.direccion_incorrecta ?? false,
+      dias_despacho: c.dias_despacho ?? [],
     });
     // Si el cliente ya tiene apellidos guardados, respetamos la división exacta.
     const apel = (c.apellidos ?? "").trim();
@@ -229,6 +242,8 @@ export default function ClientesPage() {
         nombre: nombreCompleto,
         apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
+        // Los días de despacho solo aplican a HORECA.
+        dias_despacho: tipoCliente === "horeca" ? (form.dias_despacho ?? []) : [],
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       };
       if (editandoId) {
@@ -792,6 +807,45 @@ export default function ClientesPage() {
                       Cliente HORECA (hotel, restaurante o café)
                     </label>
                   </div>
+
+                  {/* Días de despacho: solo para clientes HORECA. */}
+                  {tipoCliente === "horeca" && (
+                    <div className="mt-3 border-t border-brand-brown/10 pt-2">
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                        Días de despacho
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {DIAS_SEMANA.map((d) => {
+                          const activo = (form.dias_despacho ?? []).includes(d.key);
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() =>
+                                cambiar(
+                                  "dias_despacho",
+                                  activo
+                                    ? (form.dias_despacho ?? []).filter((x) => x !== d.key)
+                                    : [...(form.dias_despacho ?? []), d.key],
+                                )
+                              }
+                              title={activo ? "Quitar día" : "Agregar día"}
+                              className={`h-8 min-w-[2.25rem] rounded-md border px-2 text-xs font-bold transition ${
+                                activo
+                                  ? "border-brand-wine bg-brand-wine text-white"
+                                  : "border-brand-brown/20 bg-white text-brand-brown hover:bg-brand-cream-soft"
+                              }`}
+                            >
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1 text-[11px] text-brand-brown/50">
+                        Días en que se le puede despachar a este cliente.
+                      </p>
+                    </div>
+                  )}
                 </Bloque>
               </div>
 

@@ -643,15 +643,15 @@ export default function DespachoPage() {
   // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
   // (despachado / en tránsito); los "entregado" solo cada 6 ciclos (~30s), para
   // AUTO-CORREGIR a Cancelado si Drivin los rechazó, sin inflar la consulta.
-  const entregaRef = useRef({ pedidos, idsPuntos });
-  entregaRef.current = { pedidos, idsPuntos };
+  const entregaRef = useRef({ pedidos, meta, idsPuntos });
+  entregaRef.current = { pedidos, meta, idsPuntos };
   useEffect(() => {
     let vivo = true;
     let enVuelo = false; // evita encaballar consultas (una a la vez)
     let ciclo = 0;
     const revisar = async () => {
       if (enVuelo) return;
-      const { pedidos: peds, idsPuntos: ids } = entregaRef.current;
+      const { pedidos: peds, meta: mts, idsPuntos: ids } = entregaRef.current;
       ciclo += 1;
       const revisarEntregados = ciclo % 6 === 0;
       const candidatos = peds.filter((p) => {
@@ -663,21 +663,53 @@ export default function DespachoPage() {
         if (e === "entregado" && revisarEntregados) return true;
         return false;
       });
-      const comandas = candidatos.map((p) => p.comanda).filter(Boolean);
+      // Códigos Drivin por pedido: si tiene RÉPLICAS son "comanda-N" (cada parte
+      // es una orden aparte en Drivin); si no, la comanda base.
+      const codigosDe = (p: Pedido): string[] => {
+        const reps = mts[p.id]?.replicas ?? [];
+        return reps.length > 0
+          ? reps.map((r) => `${p.comanda}-${r.numero}`)
+          : [p.comanda];
+      };
+      const comandas = Array.from(
+        new Set(candidatos.flatMap(codigosDe).filter(Boolean)),
+      );
       if (!comandas.length) return;
       enVuelo = true;
       try {
         const res = await cargarEntregasDrivin(comandas);
         if (!vivo) return;
         for (const p of candidatos) {
-          const info = res[p.comanda];
-          const st = info?.status;
+          const reps = mts[p.id]?.replicas ?? [];
+          // Estado AGREGADO del pedido. Con réplicas: se entrega cuando TODAS
+          // las partes están aprobadas; va "en tránsito" si alguna va en camino
+          // o ya se entregó. (No se auto-cancela por rechazo parcial.)
+          let st: string | null | undefined;
+          let entregadoEn: string | null | undefined;
+          let comment: string | null | undefined;
+          if (reps.length > 0) {
+            const infos = reps.map((r) => res[`${p.comanda}-${r.numero}`]);
+            const sts = infos.map((x) => x?.status);
+            if (sts.length && sts.every((s) => s === "approved")) {
+              st = "approved";
+              entregadoEn =
+                infos.map((x) => x?.entregadoEn).filter(Boolean).sort().pop() ??
+                new Date().toISOString();
+            } else if (sts.some((s) => s === "in-transit" || s === "approved")) {
+              st = "in-transit";
+            }
+          } else {
+            const info = res[p.comanda];
+            st = info?.status;
+            entregadoEn = info?.entregadoEn;
+            comment = info?.comment;
+          }
           if (st === "approved") {
-            const entregadoEn = info?.entregadoEn ?? new Date().toISOString();
+            const en = entregadoEn ?? new Date().toISOString();
             setMeta((prev) => {
-              if (prev[p.id]?.entregadoEn === entregadoEn && prev[p.id]?.entregado) return prev;
-              actualizarMetaApi(p.id, { entregado: true, entregadoEn }).catch(() => { /* ignore */ });
-              return { ...prev, [p.id]: { ...prev[p.id], entregado: true, entregadoEn } };
+              if (prev[p.id]?.entregadoEn === en && prev[p.id]?.entregado) return prev;
+              actualizarMetaApi(p.id, { entregado: true, entregadoEn: en }).catch(() => { /* ignore */ });
+              return { ...prev, [p.id]: { ...prev[p.id], entregado: true, entregadoEn: en } };
             });
             setPedidos((prev) => {
               if (norm(prev.find((x) => x.id === p.id)?.estado) === "entregado") return prev;
@@ -687,7 +719,7 @@ export default function DespachoPage() {
               return next;
             });
           } else if (st === "rejected") {
-            const motivo = (info?.comment || "").trim() || "Rechazado por el cliente (Drivin)";
+            const motivo = (comment || "").trim() || "Rechazado por el cliente (Drivin)";
             setPedidos((prev) => {
               const actual = prev.find((x) => x.id === p.id);
               if (!actual || (actual.anulado && norm(actual.estado) === "cancelado")) return prev;
