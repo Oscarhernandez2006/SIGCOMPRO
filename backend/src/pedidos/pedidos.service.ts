@@ -233,7 +233,12 @@ export class PedidosService implements OnModuleInit {
         ELSE (fecha AT TIME ZONE 'America/Bogota')::date
       END`;
     const hoy = `(now() AT TIME ZONE 'America/Bogota')::date`;
-    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado'))`;
+    // "Activo" = aún en proceso (NO terminal). Excluye TODOS los estados
+    // finales, incluidos los posteriores al despacho que trae Drivin
+    // (entregado / en tránsito / cancelado). Si no se excluyeran, el conjunto de
+    // "activos" crecería sin límite (cada pedido entregado quedaría "activo"
+    // para siempre) e inflaría la consulta por defecto hasta saturarla.
+    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito'))`;
 
     const params: unknown[] = [];
     let scope: string;
