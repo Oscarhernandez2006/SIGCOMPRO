@@ -26,10 +26,9 @@ export const PG_POOL = 'PG_POOL';
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 15000,
           // Ninguna consulta debe colgar una conexión indefinidamente: si una
-          // tarda más de 30s se aborta y la conexión vuelve al pool (evita que
-          // consultas lentas agoten el pool y todo empiece a dar 500).
+          // tarda más de 30s se aborta (server-side) y la conexión vuelve al
+          // pool (evita que consultas lentas agoten el pool y todo dé 500).
           statement_timeout: 30000,
-          query_timeout: 30000,
           keepAlive: true,
         });
         // Sin este manejador, un error en un cliente OCIOSO del pool (p. ej.

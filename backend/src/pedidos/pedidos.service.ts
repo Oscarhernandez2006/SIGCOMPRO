@@ -17,21 +17,6 @@ import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
-/**
- * Estados TERMINALES (el pedido ya salió del punto o quedó cerrado): no cuentan
- * como "activos" y NO se arrastran ni renumeran al día siguiente. Incluye los
- * posteriores al despacho que llegan de la integración con Drivin
- * ("en tránsito", "entregado") y la cancelación de la entrega.
- */
-const ESTADOS_FINALIZADOS = new Set([
-  'despachado',
-  'en tránsito',
-  'en transito',
-  'entregado',
-  'cancelado',
-  'anulado',
-]);
-
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
   estadoAnterior?: string | null;
@@ -176,6 +161,16 @@ export class PedidosService implements OnModuleInit {
     // Índice para el polling incremental (WHERE actualizado_en > desde).
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_pedidos_actualizado ON pedidos (actualizado_en)`,
+    );
+    // Índices por punto: las consultas de creación (MAX(consecutivo) y la
+    // renumeración del turno del día) filtran por punto_id. Sin estos, cada
+    // creación hacía un SEQ SCAN de toda la tabla bajo el lock del punto, y con
+    // el tiempo confirmar un pedido tardaba tanto que se caía por timeout.
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_punto ON pedidos (punto_id)`,
+    );
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_punto_consecutivo ON pedidos (punto_id, consecutivo)`,
     );
     // Comprobantes de pago (imagen en base64) por pedido. Se guardan aparte de
     // la metadata para no inflar la carga masiva de pedidos (en la metadata solo
@@ -371,74 +366,58 @@ export class PedidosService implements OnModuleInit {
     hoy: string,
     dia: string,
   ): Promise<number> {
-    // Proyección LIVIANA (sin el blob `data` completo) de los pedidos del punto.
-    const res = await client.query<{
-      id: string;
-      estado: string | null;
-      anulado: boolean | null;
-      fecha: string | null;
-      eprog: string | null;
-      fprog: string | null;
-      numerodia: number | null;
-      numerodiafecha: string | null;
-    }>(
-      `SELECT id, estado, anulado, fecha,
-              data->>'entregaProgramada' AS eprog,
-              data->>'fechaProgramada'   AS fprog,
-              (data->>'numeroDia')::int  AS numerodia,
-              data->>'numeroDiaFecha'    AS numerodiafecha
-         FROM pedidos WHERE punto_id = $1`,
-      [puntoId],
-    );
-    const filas = res.rows;
-    const diaEntrega = (r: (typeof filas)[number]) =>
-      r.eprog === 'true' && r.fprog ? String(r.fprog) : this.diaBogota(r.fecha);
-    const esActivo = (r: (typeof filas)[number]) => {
-      const e = String(r.estado ?? '').trim().toLowerCase();
-      return r.anulado !== true && !ESTADOS_FINALIZADOS.has(e);
+    // Día de entrega (YYYY-MM-DD, Bogotá) en SQL: el programado o el de creación.
+    const diaEntregaSql = `
+      CASE
+        WHEN (data->>'entregaProgramada') = 'true'
+             AND COALESCE(data->>'fechaProgramada', '') <> ''
+        THEN (data->>'fechaProgramada')
+        ELSE to_char((fecha AT TIME ZONE 'America/Bogota'), 'YYYY-MM-DD')
+      END`;
+    const terminales = `('despachado','anulado','entregado','cancelado','en tránsito','en transito')`;
+
+    // Máximo número YA usado en el día `d` (cuenta los de numeroDiaFecha = d y,
+    // por compatibilidad, los antiguos sin numeroDiaFecha cuyo día de entrega es
+    // d). Consulta indexada por punto; no trae filas al backend.
+    const maxDelDia = async (d: string): Promise<number> => {
+      const r = await client.query<{ mx: number }>(
+        `SELECT COALESCE(MAX((data->>'numeroDia')::int), 0) AS mx
+           FROM pedidos
+          WHERE punto_id = $1
+            AND ( (data->>'numeroDiaFecha') = $2
+                  OR ( COALESCE(data->>'numeroDiaFecha','') = ''
+                       AND (${diaEntregaSql}) = $2 ) )`,
+        [puntoId, d],
+      );
+      return Number(r.rows[0]?.mx) || 0;
     };
-    // Máximo número YA usado en el día `d`: cuenta los que tienen numeroDiaFecha
-    // = d y (compatibilidad) los antiguos sin numeroDiaFecha cuyo día de entrega
-    // ES d. NO cuenta arrastrados (traen el número de otro día).
-    const maxDelDia = (d: string) =>
-      filas.reduce((mx, r) => {
-        const nf = String(r.numerodiafecha ?? '');
-        const cuenta = nf === d || (nf === '' && diaEntrega(r) === d);
-        const n = Number(r.numerodia) || 0;
-        return cuenta && n > mx ? n : mx;
-      }, 0);
 
-    // Pedidos que DEBEN numerarse para hoy y aún no lo están (del más viejo al
-    // más nuevo): arrastrados (día de entrega anterior) Y posteriores que llegan
-    // HOY pero cuyo número quedó de otro día (p. ej. reprogramados). Todos toman
-    // los siguientes números de hoy por antigüedad.
-    const arrastrados = filas
-      .filter(
-        (r) =>
-          esActivo(r) &&
-          diaEntrega(r) <= hoy &&
-          String(r.numerodiafecha ?? '') !== hoy,
-      )
-      .sort(
-        (a, b) =>
-          new Date(String(a.fecha ?? 0)).getTime() -
-          new Date(String(b.fecha ?? 0)).getTime(),
-      );
+    // Renumera de una sola vez los ARRASTRADOS de hoy (activos con día de entrega
+    // <= hoy y sin número de hoy), por ANTIGÜEDAD, tomando los primeros números
+    // libres del día. Todo en UN solo UPDATE (mínimo tiempo con el lock tomado).
+    const base = await maxDelDia(hoy);
+    await client.query(
+      `WITH arr AS (
+         SELECT id,
+                (ROW_NUMBER() OVER (ORDER BY fecha ASC NULLS FIRST)) + $2::int AS n
+           FROM pedidos
+          WHERE punto_id = $1
+            AND anulado = false
+            AND lower(coalesce(estado, '')) NOT IN ${terminales}
+            AND (${diaEntregaSql}) <= $3
+            AND COALESCE(data->>'numeroDiaFecha','') <> $3
+       )
+       UPDATE pedidos p
+          SET data = data || jsonb_build_object('numeroDia', arr.n, 'numeroDiaFecha', $3::text),
+              actualizado_en = now()
+         FROM arr
+        WHERE p.id = arr.id`,
+      [puntoId, base, hoy],
+    );
 
-    let sigHoy = maxDelDia(hoy) + 1;
-    for (const r of arrastrados) {
-      await client.query(
-        `UPDATE pedidos
-            SET data = data || jsonb_build_object('numeroDia', $2::int, 'numeroDiaFecha', $3::text),
-                actualizado_en = now()
-          WHERE id = $1`,
-        [r.id, sigHoy, hoy],
-      );
-      r.numerodia = sigHoy;
-      r.numerodiafecha = hoy;
-      sigHoy++;
-    }
-    return maxDelDia(dia) + 1;
+    // Siguiente número libre del día del pedido nuevo. Si su día es hoy, ya
+    // incluye los arrastrados recién numerados.
+    return (await maxDelDia(dia)) + 1;
   }
 
   /**
