@@ -2,7 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 
 /** Pin personalizado (SVG en línea) para no depender de las imágenes de Leaflet. */
@@ -45,8 +45,14 @@ export default function MapaLeaflet({
   /** Alto del mapa en px. */
   height?: number;
 }) {
+  // Id único POR MONTAJE: fuerza a React a crear un contenedor DOM nuevo cada
+  // vez que el mapa se monta, evitando el error de react-leaflet "Map container
+  // is being reused by another instance" cuando un modal/HMR lo re-monta sobre
+  // un div que ya tenía un mapa Leaflet inicializado.
+  const idRef = useRef(`map-${Math.random().toString(36).slice(2)}`);
   return (
     <MapContainer
+      key={idRef.current}
       center={[lat, lng]}
       zoom={16}
       scrollWheelZoom
