@@ -31,6 +31,19 @@ const COLUMNS_PUBLICAS = 'id, cedula, nombre, rol, activo, creado_en, permisos';
 export class UsersService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
+  /**
+   * Caché en memoria del usuario público por id (TTL corto). El PermisosGuard
+   * lee el usuario en CADA petición; con muchas pestañas haciendo polling eso
+   * satura el pool de conexiones. La caché elimina casi todas esas consultas y
+   * se invalida al actualizar/eliminar para que los cambios de permisos/rol
+   * apliquen de inmediato.
+   */
+  private cacheUsuario = new Map<
+    string,
+    { ts: number; usuario: UsuarioPublico }
+  >();
+  private readonly USUARIO_TTL = 15000;
+
   async findByCedula(cedula: string): Promise<UsuarioRow | null> {
     const res = await this.pool.query<UsuarioRow>(
       `SELECT id, cedula, nombre, password_hash, rol, activo, creado_en, permisos
@@ -61,6 +74,26 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
     return usuario;
+  }
+
+  /**
+   * Igual que obtener() pero con caché de {@link USUARIO_TTL} ms. Para el
+   * PermisosGuard (se llama en cada request); reduce drásticamente la carga
+   * sobre el pool de conexiones.
+   */
+  async obtenerCacheado(id: string): Promise<UsuarioPublico> {
+    const hit = this.cacheUsuario.get(id);
+    if (hit && Date.now() - hit.ts < this.USUARIO_TTL) {
+      return hit.usuario;
+    }
+    const usuario = await this.obtener(id);
+    this.cacheUsuario.set(id, { ts: Date.now(), usuario });
+    return usuario;
+  }
+
+  /** Invalida la caché de un usuario (tras actualizar/eliminar). */
+  private invalidarCache(id: string): void {
+    this.cacheUsuario.delete(id);
   }
 
   async crear(dto: CreateUserDto): Promise<UsuarioPublico> {
@@ -139,6 +172,7 @@ export class UsersService {
        RETURNING ${COLUMNS_PUBLICAS}`,
       valores,
     );
+    this.invalidarCache(id);
     return res.rows[0];
   }
 
@@ -149,6 +183,7 @@ export class UsersService {
     if (res.rowCount === 0) {
       throw new NotFoundException('Usuario no encontrado');
     }
+    this.invalidarCache(id);
     return { id };
   }
 }

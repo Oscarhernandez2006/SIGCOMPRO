@@ -22,9 +22,14 @@ export const PG_POOL = 'PG_POOL';
             config.get<string>('DB_SSL') === 'true'
               ? { rejectUnauthorized: false }
               : false,
-          max: 10,
+          max: 20,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 15000,
+          // Ninguna consulta debe colgar una conexión indefinidamente: si una
+          // tarda más de 30s se aborta y la conexión vuelve al pool (evita que
+          // consultas lentas agoten el pool y todo empiece a dar 500).
+          statement_timeout: 30000,
+          query_timeout: 30000,
           keepAlive: true,
         });
         // Sin este manejador, un error en un cliente OCIOSO del pool (p. ej.

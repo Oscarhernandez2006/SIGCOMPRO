@@ -49,7 +49,7 @@ export class PermisosGuard implements CanActivate {
       throw new ForbiddenException('No tienes permiso para esta acción');
     }
 
-    const usuario = await this.users.obtener(user.sub);
+    const usuario = await this.users.obtenerCacheado(user.sub);
     const permisos = usuario.permisos ?? [];
     const permitido = required.some((modulo) => permisos.includes(modulo));
 
