@@ -111,6 +111,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           },
         ],
       },
+      {
+        key: 'mi_resumen',
+        label: 'Mi resumen',
+      },
     ],
   },
 ];
@@ -137,6 +141,8 @@ export const ROLES_ACCESO_TOTAL = [
   'administrador',
   'administrador app',
   'desarrollador',
+  'gerencia',
+  'gerente',
 ];
 
 /** ¿El rol indicado tiene acceso total a todos los módulos? */

@@ -121,15 +121,16 @@ function esPosteriorFuturod(p: Pedido): boolean {
 function calcularMovimientos(
   pedidos: Pedido[],
   metaMap: Record<string, DespachoMeta>,
-  periodo: Periodo,
+  enHoy: boolean,
   desde: number | null,
+  hasta: number | null,
 ): Record<string, number> {
-  const enHoy = periodo === 1;
   const base = pedidos.filter((p) => {
     if (enHoy) return esDeHoyd(p);
-    if (desde == null) return true; // "Todo"
     const t = new Date(`${diaEntregaISOd(p)}T00:00:00`).getTime();
-    return Number.isFinite(t) && t >= desde;
+    if (desde != null && t < desde) return false;
+    if (hasta != null && t > hasta) return false;
+    return true;
   });
   const ahora = Date.now();
   const esAtrasado = (p: Pedido) => {
@@ -174,6 +175,11 @@ export default function DashboardPage() {
 
   const [puntoSel, setPuntoSel] = useState<string>("todos");
   const [periodo, setPeriodo] = useState<Periodo>(30);
+  // Rango de fechas personalizado (YYYY-MM-DD). Si hay alguno, manda sobre el
+  // preset (Hoy/7/30/Todo) y desactiva la comparación con el periodo anterior.
+  const [rangoDesde, setRangoDesde] = useState("");
+  const [rangoHasta, setRangoHasta] = useState("");
+  const usaRango = Boolean(rangoDesde || rangoHasta);
   // Muestra las cards de "movimientos" (conteo por estado del periodo elegido).
   const [verMovimientos, setVerMovimientos] = useState(false);
 
@@ -230,17 +236,31 @@ export default function DashboardPage() {
 
   // Ventanas de tiempo (periodo actual y anterior, para comparar).
   const { desde, prevDesde } = useMemo(() => {
+    if (usaRango) {
+      const d = rangoDesde ? new Date(`${rangoDesde}T00:00:00`).getTime() : null;
+      return { desde: d, prevDesde: null as number | null };
+    }
     if (periodo === 0) return { desde: null as number | null, prevDesde: null as number | null };
     const hoy0 = new Date();
     hoy0.setHours(0, 0, 0, 0);
     const d = hoy0.getTime() - (periodo - 1) * DAY;
     return { desde: d, prevDesde: d - periodo * DAY };
-  }, [periodo]);
+  }, [periodo, usaRango, rangoDesde]);
+
+  // Fin del rango personalizado (ms). null = sin tope.
+  const hastaMs = useMemo(() => {
+    if (!usaRango || !rangoHasta) return null;
+    return new Date(`${rangoHasta}T23:59:59.999`).getTime();
+  }, [usaRango, rangoHasta]);
 
   const enPeriodo = useMemo(() => {
-    if (desde == null) return pedidosBase;
-    return pedidosBase.filter((p) => tsPedido(p) >= desde);
-  }, [pedidosBase, desde]);
+    return pedidosBase.filter((p) => {
+      const t = tsPedido(p);
+      if (desde != null && t < desde) return false;
+      if (hastaMs != null && t > hastaMs) return false;
+      return true;
+    });
+  }, [pedidosBase, desde, hastaMs]);
 
   const enPrevio = useMemo(() => {
     if (desde == null || prevDesde == null) return [];
@@ -253,6 +273,15 @@ export default function DashboardPage() {
   // Días exactos que deben aparecer en el eje de la gráfica (rellena con 0 los
   // días sin ventas). Para "Todo" se deja null (se rellena entre min y max).
   const rangoDias = useMemo(() => {
+    if (usaRango) {
+      if (!rangoDesde || !rangoHasta) return null;
+      const arr: string[] = [];
+      const end = new Date(`${rangoHasta}T00:00:00`);
+      for (let d = new Date(`${rangoDesde}T00:00:00`); d <= end; d.setDate(d.getDate() + 1)) {
+        arr.push(diaLocalDate(new Date(d)));
+      }
+      return arr;
+    }
     if (periodo === 0) return null;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -264,7 +293,7 @@ export default function DashboardPage() {
       arr.push(diaLocalDate(d));
     }
     return arr;
-  }, [periodo]);
+  }, [periodo, usaRango, rangoDesde, rangoHasta]);
 
   // Métricas principales.
   const m = useMemo(() => métricas(enPeriodo, meta, rangoDias), [enPeriodo, meta, rangoDias]);
@@ -272,8 +301,8 @@ export default function DashboardPage() {
 
   // Movimientos por estado (misma clasificación que Despacho), según periodo.
   const mov = useMemo(
-    () => calcularMovimientos(pedidosBase, meta, periodo, desde),
-    [pedidosBase, meta, periodo, desde],
+    () => calcularMovimientos(pedidosBase, meta, periodo === 1 && !usaRango, desde, hastaMs),
+    [pedidosBase, meta, periodo, usaRango, desde, hastaMs],
   );
 
   // Serie de la gráfica de tendencia: SIEMPRE del primer día con actividad a
@@ -314,14 +343,14 @@ export default function DashboardPage() {
               {periodo !== 0 && ` · últimos ${periodo === 1 ? "1 día" : `${periodo} días`}`}
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-2 lg:flex-nowrap">
             <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-white/60">
               Punto de venta
               <div className="relative mt-1">
                 <select
                   value={puntoSel}
                   onChange={(e) => setPuntoSel(e.target.value)}
-                  className="min-w-[13rem] appearance-none rounded-xl border border-white/15 bg-white/10 px-3 py-2 pr-9 text-sm font-semibold text-white outline-none backdrop-blur transition focus:border-brand-gold [&>option]:text-brand-black"
+                  className="w-full min-w-[8rem] max-w-[11rem] appearance-none rounded-xl border border-white/15 bg-white/10 px-3 py-2 pr-9 text-sm font-semibold text-white outline-none backdrop-blur transition focus:border-brand-gold [&>option]:text-brand-black"
                 >
                   <option value="todos">
                     {esAdmin ? "Todos los puntos" : "Todos mis puntos"}
@@ -350,9 +379,13 @@ export default function DashboardPage() {
                 ).map(([v, lbl]) => (
                   <button
                     key={v}
-                    onClick={() => setPeriodo(v)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                      periodo === v
+                    onClick={() => {
+                      setPeriodo(v);
+                      setRangoDesde("");
+                      setRangoHasta("");
+                    }}
+                    className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                      periodo === v && !usaRango
                         ? "bg-white text-brand-wine shadow-sm"
                         : "text-white/70 hover:bg-white/10"
                     }`}
@@ -362,6 +395,38 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
+            <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-white/60">
+              Desde
+              <input
+                type="date"
+                value={rangoDesde}
+                max={rangoHasta || undefined}
+                onChange={(e) => setRangoDesde(e.target.value)}
+                className="mt-1 w-[8.5rem] rounded-xl border border-white/15 bg-white/10 px-2.5 py-2 text-sm font-semibold text-white outline-none backdrop-blur focus:border-brand-gold [color-scheme:dark]"
+              />
+            </label>
+            <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-white/60">
+              Hasta
+              <input
+                type="date"
+                value={rangoHasta}
+                min={rangoDesde || undefined}
+                onChange={(e) => setRangoHasta(e.target.value)}
+                className="mt-1 w-[8.5rem] rounded-xl border border-white/15 bg-white/10 px-2.5 py-2 text-sm font-semibold text-white outline-none backdrop-blur focus:border-brand-gold [color-scheme:dark]"
+              />
+            </label>
+            {usaRango && (
+              <button
+                onClick={() => {
+                  setRangoDesde("");
+                  setRangoHasta("");
+                }}
+                title="Quitar el rango de fechas"
+                className="self-end rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white/80 backdrop-blur transition hover:bg-white/20"
+              >
+                Limpiar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -431,28 +496,28 @@ export default function DashboardPage() {
               <Kpi
                 titulo="Ventas (pedidos)"
                 valor={cop(m.ventas)}
-                delta={periodo === 0 ? null : delta(m.ventas, mPrev.ventas)}
+                delta={periodo === 0 || usaRango ? null : delta(m.ventas, mPrev.ventas)}
                 color="wine"
                 icon="M2.25 18 9 11.25l4.306 4.307a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.28m5.94 2.28-2.28 5.941"
               />
               <Kpi
                 titulo="Facturado"
                 valor={cop(m.facturado)}
-                delta={periodo === 0 ? null : delta(m.facturado, mPrev.facturado)}
+                delta={periodo === 0 || usaRango ? null : delta(m.facturado, mPrev.facturado)}
                 color="amber"
                 icon="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"
               />
               <Kpi
                 titulo="Pedidos"
                 valor={num(m.numPedidos)}
-                delta={periodo === 0 ? null : delta(m.numPedidos, mPrev.numPedidos)}
+                delta={periodo === 0 || usaRango ? null : delta(m.numPedidos, mPrev.numPedidos)}
                 color="green"
                 icon="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9h6m-6 4h4"
               />
               <Kpi
                 titulo="Ticket promedio"
                 valor={cop(m.ticket)}
-                delta={periodo === 0 ? null : delta(m.ticket, mPrev.ticket)}
+                delta={periodo === 0 || usaRango ? null : delta(m.ticket, mPrev.ticket)}
                 color="blue"
                 icon="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"
               />

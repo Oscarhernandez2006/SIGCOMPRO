@@ -668,13 +668,9 @@ function EditorCotizacion({
   }, [punto, busProdDeb]);
 
   function agregarProducto(p: ProductoPrecio) {
+    // Cada clic agrega una LÍNEA nueva (aunque el producto se repita), para que
+    // cada una lleve su propia cantidad. No se consolida por producto.
     setItems((prev) => {
-      const existe = prev.find((i) => i.producto.id === p.id);
-      if (existe) {
-        return prev.map((i) =>
-          i.producto.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i,
-        );
-      }
       const nuevo: ItemCarrito = {
         id: crypto.randomUUID(),
         producto: { ...p, precio: Number(p.precio) || 0 },

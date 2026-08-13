@@ -20,6 +20,8 @@ export const ROLES_ADMINISTRATIVOS = [
   "administrador",
   "administrador app",
   "desarrollador",
+  "gerencia",
+  "gerente",
 ] as const;
 
 /** Indica si un rol tiene acceso al panel administrativo (acceso total). */
@@ -34,7 +36,7 @@ export function tieneAccesoAdministrativo(rol?: string | null): boolean {
  * y Despacho (uno a la vez, entre sus puntos asignados). El resto de usuarios
  * ve únicamente lo de sus puntos asignados (unión), sin selector.
  */
-export const ROLES_SELECTOR_PUNTO = ["administrador app", "desarrollador"] as const;
+export const ROLES_SELECTOR_PUNTO = ["administrador app", "desarrollador", "gerencia", "gerente"] as const;
 
 /** ¿El rol puede usar el selector de punto de venta en Pedidos/Despacho? */
 export function puedeSeleccionarPuntoVenta(rol?: string | null): boolean {

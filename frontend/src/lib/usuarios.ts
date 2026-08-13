@@ -126,6 +126,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: "cotizaciones.convertir", label: "Convertir cotización en pedido" },
         ],
       },
+      {
+        key: "mi_resumen",
+        label: "Mi resumen",
+      },
     ],
   },
 ];

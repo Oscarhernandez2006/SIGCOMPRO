@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { getUsuario, type Usuario } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
+import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
 import { objetivoDespacho, colorEstado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
@@ -79,14 +81,33 @@ function esPosteriorFuturo(p: Pedido): boolean {
 }
 
 export default function MiResumenPage() {
+  const router = useRouter();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [meta, setMeta] = useState<Record<string, DespachoMeta>>({});
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>(30);
+  // Rango de fechas personalizado (YYYY-MM-DD). Si hay alguno, manda sobre el
+  // preset (Hoy/7/30/Todo).
+  const [rangoDesde, setRangoDesde] = useState("");
+  const [rangoHasta, setRangoHasta] = useState("");
+  const usaRango = Boolean(rangoDesde || rangoHasta);
+  // Solo los roles con acceso total pueden ver el resumen de OTRA televendedora
+  // (vacío = mi propio resumen).
+  const [vendedoraSel, setVendedoraSel] = useState("");
+  const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
-  useEffect(() => setUsuario(getUsuario()), []);
+  // "Mi resumen" es un permiso: si el usuario no lo tiene, no puede entrar
+  // (ni por URL directa); se le manda a su primer módulo disponible.
+  useEffect(() => {
+    const u = getUsuario();
+    if (!puedeVerModulo(u, "mi_resumen")) {
+      router.replace(rutaOperativaInicial(u) ?? "/seleccionar-panel");
+      return;
+    }
+    setUsuario(u);
+  }, [router]);
 
   useEffect(() => {
     if (usuario === null) return;
@@ -110,7 +131,20 @@ export default function MiResumenPage() {
     };
   }, [usuario]);
 
-  const nombre = useMemo(() => norm(usuario?.nombre), [usuario]);
+  // Nombre del que se está viendo: para roles con acceso total puede ser otra
+  // televendedora seleccionada; para el resto, siempre el propio.
+  const nombreMostrado = (esAdmin && vendedoraSel) || usuario?.nombre || "";
+  const nombre = useMemo(() => norm(nombreMostrado), [nombreMostrado]);
+
+  // Lista de televendedoras (por vendedorNombre) para el selector de admin.
+  const vendedoras = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of pedidos) {
+      const v = (p.vendedorNombre ?? "").trim();
+      if (v) m.set(norm(v), v);
+    }
+    return [...m.values()].sort((a, b) => a.localeCompare(b));
+  }, [pedidos]);
 
   // Ventana de tiempo del periodo elegido.
   const desde = useMemo(() => {
@@ -121,9 +155,18 @@ export default function MiResumenPage() {
   }, [periodo]);
 
   const enPeriodo = useMemo(() => {
+    // Rango personalizado (desde/hasta) tiene prioridad sobre el preset.
+    if (usaRango) {
+      const min = rangoDesde ? new Date(`${rangoDesde}T00:00:00`).getTime() : -Infinity;
+      const max = rangoHasta ? new Date(`${rangoHasta}T23:59:59.999`).getTime() : Infinity;
+      return pedidos.filter((p) => {
+        const t = tsPedido(p);
+        return t >= min && t <= max;
+      });
+    }
     if (desde == null) return pedidos;
     return pedidos.filter((p) => tsPedido(p) >= desde);
-  }, [pedidos, desde]);
+  }, [pedidos, desde, usaRango, rangoDesde, rangoHasta]);
 
   // --- VENTAS: pedidos que YO creé (vendedorNombre === mi nombre) ---
   const misVentas = useMemo(
@@ -204,7 +247,13 @@ export default function MiResumenPage() {
       .slice(0, 8);
   }, [tieneVentas, misVentas, facture, despache]);
 
-  const periodoLabel = periodo === 0 ? "todo el histórico" : periodo === 1 ? "hoy" : `los últimos ${periodo} días`;
+  const periodoLabel = usaRango
+    ? `${rangoDesde || "el inicio"} a ${rangoHasta || "hoy"}`
+    : periodo === 0
+      ? "todo el histórico"
+      : periodo === 1
+        ? "hoy"
+        : `los últimos ${periodo} días`;
 
   return (
     <div className="pb-4">
@@ -212,24 +261,80 @@ export default function MiResumenPage() {
       <div className="mb-6 overflow-hidden rounded-3xl border border-brand-brown/10 bg-gradient-to-br from-brand-wine to-brand-wine-dark p-6 text-white shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-gold">Mi resumen</p>
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">
-          Hola, {usuario?.nombre ?? ""}
+          {esAdmin && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}
         </h1>
         <p className="mt-1 text-sm text-white/70">
-          Tu información personal de {periodoLabel}
-          {usuario?.rol ? ` · ${usuario.rol}` : ""}
+          {esAdmin && vendedoraSel ? "Resumen" : "Tu información personal"} de {periodoLabel}
+          {esAdmin && vendedoraSel ? "" : usuario?.rol ? ` · ${usuario.rol}` : ""}
         </p>
-        <div className="mt-4 inline-flex rounded-xl border border-white/15 bg-white/10 p-0.5 backdrop-blur">
-          {([[1, "Hoy"], [7, "7 días"], [30, "30 días"], [0, "Todo"]] as [Periodo, string][]).map(([v, lbl]) => (
+        {/* Fila: televendedora (solo admin) + rango de fechas, lado a lado. */}
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          {esAdmin && vendedoras.length > 0 && (
+            <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
+              Ver resumen de
+              <select
+                value={vendedoraSel}
+                onChange={(e) => setVendedoraSel(e.target.value)}
+                className="mt-0.5 w-full max-w-xs rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none backdrop-blur focus:border-white/50 sm:w-auto"
+              >
+                <option className="text-brand-black" value="">Yo ({usuario?.nombre ?? ""})</option>
+                {vendedoras.map((v) => (
+                  <option className="text-brand-black" key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {/* Rango de fechas personalizado. */}
+          <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
+            Desde
+            <input
+              type="date"
+              value={rangoDesde}
+              max={rangoHasta || undefined}
+              onChange={(e) => setRangoDesde(e.target.value)}
+              className="mt-0.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none backdrop-blur focus:border-white/50 [color-scheme:dark]"
+            />
+          </label>
+          <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
+            Hasta
+            <input
+              type="date"
+              value={rangoHasta}
+              min={rangoDesde || undefined}
+              onChange={(e) => setRangoHasta(e.target.value)}
+              className="mt-0.5 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none backdrop-blur focus:border-white/50 [color-scheme:dark]"
+            />
+          </label>
+          {usaRango && (
             <button
-              key={v}
-              onClick={() => setPeriodo(v)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                periodo === v ? "bg-white text-brand-wine shadow-sm" : "text-white/70 hover:bg-white/10"
-              }`}
+              onClick={() => {
+                setRangoDesde("");
+                setRangoHasta("");
+              }}
+              title="Quitar el rango de fechas"
+              className="rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white/80 transition hover:bg-white/20"
             >
-              {lbl}
+              Limpiar
             </button>
-          ))}
+          )}
+          {/* Presets rápidos, en la misma fila. */}
+          <div className="inline-flex rounded-xl border border-white/15 bg-white/10 p-0.5 backdrop-blur">
+            {([[1, "Hoy"], [7, "7 días"], [30, "30 días"], [0, "Todo"]] as [Periodo, string][]).map(([v, lbl]) => (
+              <button
+                key={v}
+                onClick={() => {
+                  setPeriodo(v);
+                  setRangoDesde("");
+                  setRangoHasta("");
+                }}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                  periodo === v && !usaRango ? "bg-white text-brand-wine shadow-sm" : "text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -241,7 +346,9 @@ export default function MiResumenPage() {
         <div className="rounded-2xl border border-red-200 bg-red-50 py-10 text-center text-sm text-red-600">{error}</div>
       ) : !tieneVentas && !tieneDespacho ? (
         <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
-          No tienes actividad registrada en {periodoLabel}.
+          {esAdmin && vendedoraSel
+            ? `${nombreMostrado} no tiene actividad registrada en ${periodoLabel}.`
+            : `No tienes actividad registrada en ${periodoLabel}.`}
         </div>
       ) : (
         <div className="space-y-8">
@@ -285,17 +392,26 @@ export default function MiResumenPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-brand-cream-soft/60 text-[11px] uppercase tracking-wide text-brand-brown/60">
                     <tr>
-                      <th className="px-4 py-2.5">Comanda</th>
+                      <th className="px-4 py-2.5">Factura / Comanda</th>
                       <th className="px-4 py-2.5">Cliente</th>
                       <th className="px-4 py-2.5">Estado</th>
-                      <th className="px-4 py-2.5 text-right">Total</th>
+                      <th className="px-4 py-2.5 text-right">Facturado / Total</th>
                       <th className="px-4 py-2.5">Fecha</th>
                     </tr>
                   </thead>
                   <tbody>
                     {ultimos.map((p) => (
                       <tr key={p.id} className="border-t border-brand-brown/5">
-                        <td className="px-4 py-2.5 font-semibold text-brand-wine">{p.comanda}</td>
+                        <td className="px-4 py-2.5 font-semibold text-brand-wine">
+                          {meta[p.id]?.facturaNumero?.trim() ? (
+                            <>
+                              <div className="text-green-600">Fact. {meta[p.id]!.facturaNumero}</div>
+                              <div className="text-[11px] font-semibold text-brand-brown/60">{p.comanda}</div>
+                            </>
+                          ) : (
+                            <div>{p.comanda}</div>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5">{p.cliente?.nombre || p.cliente?.nit_cedula || "—"}</td>
                         <td className="px-4 py-2.5">
                           <div className="inline-flex flex-col items-center">
@@ -307,7 +423,16 @@ export default function MiResumenPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-medium">{cop(p.total)}</td>
+                        <td className="px-4 py-2.5 text-right font-medium">
+                          {typeof meta[p.id]?.facturaValor === "number" && (meta[p.id]!.facturaValor as number) > 0 ? (
+                            <>
+                              <div className="font-semibold text-green-600">{cop(meta[p.id]!.facturaValor as number)}</div>
+                              <div className="text-[11px] text-brand-brown/55">{cop(p.total)}</div>
+                            </>
+                          ) : (
+                            <div>{cop(p.total)}</div>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 text-brand-brown/60">{new Date(p.fecha).toLocaleDateString("es-CO")}</td>
                       </tr>
                     ))}

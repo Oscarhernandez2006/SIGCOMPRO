@@ -188,10 +188,11 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   // Mostrar "Cambiar de panel" solo si el usuario tiene acceso a más de un panel.
   const puedeCambiarPanel = panelesAccesibles(usuario).length > 1;
 
-  // Módulos visibles para este usuario según sus permisos.
+  // Módulos visibles para este usuario según sus permisos. "Mi resumen" también
+  // se gobierna por permiso (módulo mi_resumen): solo lo ve quien lo tenga.
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
   const itemsVisibles = navItems.filter((item) =>
-    item.personal ? true : item.soloAdmin ? esAdmin : puedeVerModulo(usuario, item.modulo),
+    item.soloAdmin ? esAdmin : puedeVerModulo(usuario, item.modulo),
   );
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {

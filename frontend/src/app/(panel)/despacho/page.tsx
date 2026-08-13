@@ -2319,6 +2319,16 @@ export default function DespachoPage() {
                     {/* Domiciliario: al asignar pasa a Despachado */}
                     <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
                       <div className="flex w-full flex-col gap-1.5 pb-12">
+                        {/* Indicador (solo visual) de que el cliente RECOGE en el
+                            punto de venta. */}
+                        {esRecoge && (
+                          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-brand-wine/25 bg-brand-wine/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-wine">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-8 2a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z" />
+                            </svg>
+                            Recoge en PDV
+                          </span>
+                        )}
                         {/* Domiciliario: lo ASIGNA Drivin. SIGCOMPRO solo lo
                             muestra (y despacha automáticamente al bajarlo). Los
                             "recoge en PDV" llevan el domiciliario simulado que
@@ -2341,11 +2351,15 @@ export default function DespachoPage() {
                         ) : facturado ? (
                           <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700">
                             <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-                            En espera de domiciliario…
+                            {esRecoge
+                              ? "Esperando que asignes como recoge en punto de venta"
+                              : "En espera de domiciliario…"}
                           </div>
                         ) : (
                           <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-brown/50">
-                            Factura el pedido y asigna en Drivin el domiciliario.
+                            {esRecoge
+                              ? "Factura el pedido y asígnalo en Drivin como recoge en punto de venta."
+                              : "Factura el pedido y asigna en Drivin el domiciliario."}
                           </div>
                         )}
 
@@ -3213,6 +3227,8 @@ function ModalReplica({
   );
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
+  // Solo se puede REPLICAR un pedido que esté en estado "Facturado".
+  const esFacturado = norm(pedido.estado) === "facturado";
   // Puntos integrados con Drivin (suben directo): La 93, La 70, La 43, Alameda,
   // Olaya y San Felipe. Cada uno usa su schema en el backend (93->01, 70->03,
   // 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
@@ -3305,11 +3321,17 @@ function ModalReplica({
           </div>
 
           {modo === "crear" ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
-              Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
-              <b> esperará que Drivin le asigne el domiciliario</b> (no se
-              selecciona aquí).
-            </div>
+            esFacturado ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
+                <b> esperará que Drivin le asigne el domiciliario</b> (no se
+                selecciona aquí).
+              </div>
+            ) : (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
+                No se puede realizar réplica si el pedido no está facturado.
+              </div>
+            )
           ) : (
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
@@ -3381,7 +3403,7 @@ function ModalReplica({
                 >
                   Reintentar envío
                 </button>
-              ) : (
+              ) : esFacturado ? (
                 <button
                   onClick={confirmar}
                   disabled={drivinEstado === "enviando"}
@@ -3397,7 +3419,7 @@ function ModalReplica({
                       ? "Confirmar y subir"
                       : "Confirmar"}
                 </button>
-              )
+              ) : null
             ) : esDrivin ? (
               <>
                 <button
