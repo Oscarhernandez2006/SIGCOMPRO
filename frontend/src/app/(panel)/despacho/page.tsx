@@ -2757,6 +2757,11 @@ export default function DespachoPage() {
           pedido={modalReplica.pedido}
           numero={modalReplica.numero}
           modo={modalReplica.modo}
+          facturado={
+            ["facturado", "despachado", "en tránsito", "en transito", "entregado"].includes(
+              norm(modalReplica.pedido.estado),
+            ) || !!(meta[modalReplica.pedido.id]?.facturaNumero ?? "").trim()
+          }
           domiciliarioAsignado={
             (meta[modalReplica.pedido.id]?.replicas ?? []).find(
               (r) => r.numero === modalReplica.numero,
@@ -3199,6 +3204,7 @@ function ModalReplica({
   pedido,
   numero,
   modo,
+  facturado,
   domiciliarioAsignado,
   esUltima,
   yaEnviado,
@@ -3212,6 +3218,7 @@ function ModalReplica({
   pedido: Pedido;
   numero: number;
   modo: "crear" | "ver";
+  facturado: boolean;
   domiciliarioAsignado: string;
   esUltima: boolean;
   yaEnviado: boolean;
@@ -3227,8 +3234,10 @@ function ModalReplica({
   );
   const [drivinMsg, setDrivinMsg] = useState("");
   const codigoReplica = `${pedido.comanda}-${numero}`;
-  // Solo se puede REPLICAR un pedido que esté en estado "Facturado".
-  const esFacturado = norm(pedido.estado) === "facturado";
+  // Solo se puede REPLICAR un pedido que YA esté facturado. La factura es la del
+  // pedido ORIGINAL, así que basta con que el pedido tenga factura registrada,
+  // aunque ya haya avanzado a Despachado/En tránsito/Entregado.
+  const esFacturado = facturado;
   // Puntos integrados con Drivin (suben directo): La 93, La 70, La 43, Alameda,
   // Olaya y San Felipe. Cada uno usa su schema en el backend (93->01, 70->03,
   // 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
