@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -10,6 +10,8 @@ import { UsersService } from '../users/users.service';
 export class AuthService {
   /** Periodo de rotación de la clave dinámica (segundos), tipo Nequi. */
   private static readonly PERIODO_CLAVE_S = 60;
+
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly jwt: JwtService,
@@ -27,6 +29,79 @@ export class AuthService {
     const passwordOk = bcrypt.compareSync(dto.password, usuario.password_hash);
     if (!passwordOk) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const payload = {
+      sub: usuario.id,
+      cedula: usuario.cedula,
+      rol: usuario.rol,
+    };
+
+    return {
+      accessToken: await this.jwt.signAsync(payload),
+      user: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        cedula: usuario.cedula,
+        rol: usuario.rol,
+        permisos: usuario.permisos ?? [],
+      },
+    };
+  }
+
+  /**
+   * Inicia sesión con un ticket SSO emitido por la suite (SCTOOLS).
+   * El ticket se canjea server-to-server contra la suite, que devuelve la
+   * cédula del usuario. Con esa cédula (clave común entre sistemas) se busca la
+   * cuenta local y se emite un JWT propio de esta aplicación.
+   */
+  async loginBySso(ticket: string) {
+    const issuerUrl = (
+      this.config.get<string>('SSO_ISSUER_URL') ?? ''
+    ).replace(/\/+$/, '');
+    const sharedSecret = this.config.get<string>('SSO_SHARED_SECRET') ?? '';
+
+    if (!issuerUrl || !sharedSecret) {
+      throw new ServiceUnavailableException('SSO no está configurado');
+    }
+
+    let redeem: { cedula?: string };
+    try {
+      const res = await fetch(`${issuerUrl}/api/sso/redeem`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-SSO-Secret': sharedSecret,
+        },
+        body: JSON.stringify({ ticket }),
+      });
+
+      if (!res.ok) {
+        throw new UnauthorizedException('Ticket SSO inválido o expirado');
+      }
+
+      redeem = (await res.json()) as { cedula?: string };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) {
+        throw err;
+      }
+      this.logger.error(`No se pudo contactar la suite SSO: ${String(err)}`);
+      throw new ServiceUnavailableException(
+        'No se pudo validar la sesión con la suite',
+      );
+    }
+
+    const cedula = (redeem.cedula ?? '').trim();
+    if (!cedula) {
+      throw new UnauthorizedException('Ticket SSO inválido');
+    }
+
+    const usuario = await this.users.findByCedula(cedula);
+    if (!usuario || !usuario.activo) {
+      throw new UnauthorizedException(
+        'El usuario no está registrado en esta aplicación',
+      );
     }
 
     const payload = {

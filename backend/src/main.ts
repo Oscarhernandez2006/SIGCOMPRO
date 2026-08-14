@@ -24,9 +24,15 @@ async function bootstrap() {
     }),
   );
 
-  // CORS para permitir las peticiones del frontend Next.js
+  // CORS para permitir las peticiones del frontend Next.js.
+  // Admite varios orígenes separados por comas (p. ej. dev en 3000 y 3002).
+  const corsOrigins = config
+    .get<string>('CORS_ORIGIN', 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0);
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3000'),
+    origin: corsOrigins,
     credentials: true,
   });
 

@@ -12,6 +12,7 @@ import {
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { SsoLoginDto } from './dto/sso-login.dto';
 import { JwtAuthGuard, JwtPayload } from './guards/jwt-auth.guard';
 
 /** Roles autorizados a ver/usar la clave dinámica (NO el "administrador" liso). */
@@ -25,6 +26,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  /** Inicia sesión canjeando un ticket SSO emitido por la suite (SCTOOLS). */
+  @Post('sso')
+  @HttpCode(HttpStatus.OK)
+  ssoLogin(@Body() dto: SsoLoginDto) {
+    return this.authService.loginBySso(dto.ticket);
   }
 
   @Get('clave-dinamica')
