@@ -34,6 +34,7 @@ export const ROLES_SUGERIDOS = [
   "Administrador pdv",
   "Administrador app",
   "Supervisor",
+  "Tesorería",
   "Televendedor",
   "Asesor Comercial",
   "Facturador",
