@@ -12,7 +12,6 @@ import { promises as dnsPromises } from 'dns';
 import { Resolver as DnsResolver } from 'dns/promises';
 import { Pool, PoolClient } from 'pg';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
@@ -172,6 +171,18 @@ export class PedidosService implements OnModuleInit {
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_pedidos_punto_consecutivo ON pedidos (punto_id, consecutivo)`,
     );
+    // Contador del "número del día" (turno) por punto y día (YYYY-MM-DD Bogotá).
+    // Reinicia solo cada día (clave por día) y se incrementa de forma atómica
+    // (O(1), sin escanear pedidos), evitando el timeout al crear pedidos.
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS contador_numero_dia (
+        punto_id text NOT NULL,
+        dia text NOT NULL,
+        ultimo int NOT NULL DEFAULT 0,
+        actualizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (punto_id, dia)
+      )
+    `);
     // Comprobantes de pago (imagen en base64) por pedido. Se guardan aparte de
     // la metadata para no inflar la carga masiva de pedidos (en la metadata solo
     // queda una bandera liviana: comprobante = { tiene, confirmado }).
@@ -353,20 +364,51 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
-   * Bajo el lock del punto: RENUMERA (una sola vez) los ARRASTRADOS de HOY
-   * —activos cuyo día de entrega ya pasó y que aún no tienen número de hoy—,
-   * dándoles los PRIMEROS números por ANTIGÜEDAD (el más viejo, el más bajo) y
-   * los persiste. Devuelve el SIGUIENTE número libre del día `dia` (para el
-   * pedido nuevo). Una vez asignado un número con su `numeroDiaFecha`, NO se
-   * vuelve a recalcular: por eso un pedido nunca cambia ni repite su número.
+   * Siguiente "número del día" (turno) del punto para un día dado, usando un
+   * CONTADOR dedicado por (punto, día). Es O(1): NO escanea pedidos. El contador
+   * reinicia solo cada día (clave por día); la PRIMERA vez que se usa un
+   * (punto, día) se siembra con el máximo ya existente ese día (para no chocar
+   * con números previos) y luego solo incrementa. Así los posteriores toman el
+   * número del día que les corresponde y el turno reinicia cada jornada.
    */
-  private async renumerarYSiguiente(
+  private async siguienteNumeroDia(
     client: PoolClient,
     puntoId: string,
-    hoy: string,
     dia: string,
   ): Promise<number> {
-    // Día de entrega (YYYY-MM-DD, Bogotá) en SQL: el programado o el de creación.
+    // Camino rápido: si ya existe el contador del día, solo incrementa.
+    const upd = await client.query<{ ultimo: number }>(
+      `UPDATE contador_numero_dia
+          SET ultimo = ultimo + 1, actualizado_en = now()
+        WHERE punto_id = $1 AND dia = $2
+        RETURNING ultimo`,
+      [puntoId, dia],
+    );
+    if (upd.rowCount) return Number(upd.rows[0].ultimo) || 1;
+
+    // Primera vez en este (punto, día): siembra con el máximo ya usado ese día.
+    const seed = await this.maxNumeroDelDia(client, puntoId, dia);
+    const ins = await client.query<{ ultimo: number }>(
+      `INSERT INTO contador_numero_dia (punto_id, dia, ultimo)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (punto_id, dia)
+         DO UPDATE SET ultimo = contador_numero_dia.ultimo + 1, actualizado_en = now()
+       RETURNING ultimo`,
+      [puntoId, dia, seed + 1],
+    );
+    return Number(ins.rows[0]?.ultimo) || 1;
+  }
+
+  /**
+   * Máximo `numeroDia` ya usado en un día `d` para el punto (para SEMBRAR el
+   * contador la primera vez). Cuenta los pedidos con numeroDiaFecha = d y, por
+   * compatibilidad, los antiguos sin numeroDiaFecha cuyo día de entrega es d.
+   */
+  private async maxNumeroDelDia(
+    client: PoolClient,
+    puntoId: string,
+    d: string,
+  ): Promise<number> {
     const diaEntregaSql = `
       CASE
         WHEN (data->>'entregaProgramada') = 'true'
@@ -374,94 +416,16 @@ export class PedidosService implements OnModuleInit {
         THEN (data->>'fechaProgramada')
         ELSE to_char((fecha AT TIME ZONE 'America/Bogota'), 'YYYY-MM-DD')
       END`;
-    const terminales = `('despachado','anulado','entregado','cancelado','en tránsito','en transito')`;
-
-    // Máximo número YA usado en el día `d` (cuenta los de numeroDiaFecha = d y,
-    // por compatibilidad, los antiguos sin numeroDiaFecha cuyo día de entrega es
-    // d). Consulta indexada por punto; no trae filas al backend.
-    const maxDelDia = async (d: string): Promise<number> => {
-      const r = await client.query<{ mx: number }>(
-        `SELECT COALESCE(MAX((data->>'numeroDia')::int), 0) AS mx
-           FROM pedidos
-          WHERE punto_id = $1
-            AND ( (data->>'numeroDiaFecha') = $2
-                  OR ( COALESCE(data->>'numeroDiaFecha','') = ''
-                       AND (${diaEntregaSql}) = $2 ) )`,
-        [puntoId, d],
-      );
-      return Number(r.rows[0]?.mx) || 0;
-    };
-
-    // Renumera de una sola vez los ARRASTRADOS de hoy (activos con día de entrega
-    // <= hoy y sin número de hoy), por ANTIGÜEDAD, tomando los primeros números
-    // libres del día. Todo en UN solo UPDATE (mínimo tiempo con el lock tomado).
-    const base = await maxDelDia(hoy);
-    await client.query(
-      `WITH arr AS (
-         SELECT id,
-                (ROW_NUMBER() OVER (ORDER BY fecha ASC NULLS FIRST)) + $2::int AS n
-           FROM pedidos
-          WHERE punto_id = $1
-            AND anulado = false
-            AND lower(coalesce(estado, '')) NOT IN ${terminales}
-            AND (${diaEntregaSql}) <= $3
-            AND COALESCE(data->>'numeroDiaFecha','') <> $3
-       )
-       UPDATE pedidos p
-          SET data = data || jsonb_build_object('numeroDia', arr.n, 'numeroDiaFecha', $3::text),
-              actualizado_en = now()
-         FROM arr
-        WHERE p.id = arr.id`,
-      [puntoId, base, hoy],
+    const r = await client.query<{ mx: number }>(
+      `SELECT COALESCE(MAX((data->>'numeroDia')::int), 0) AS mx
+         FROM pedidos
+        WHERE punto_id = $1
+          AND ( (data->>'numeroDiaFecha') = $2
+                OR ( COALESCE(data->>'numeroDiaFecha','') = ''
+                     AND (${diaEntregaSql}) = $2 ) )`,
+      [puntoId, d],
     );
-
-    // Siguiente número libre del día del pedido nuevo. Si su día es hoy, ya
-    // incluye los arrastrados recién numerados.
-    return (await maxDelDia(dia)) + 1;
-  }
-
-  /**
-   * Renumera los arrastrados de HOY en TODOS los puntos (para que al cambiar de
-   * día queden de primeros por antigüedad, ya con su número). Corre a las 00:05
-   * de Bogotá; además se hace de forma perezosa al crear el primer pedido del
-   * día en cada punto (ver guardar()).
-   */
-  @Cron('5 0 * * *', {
-    name: 'renumerar-arrastrados-dia',
-    timeZone: 'America/Bogota',
-  })
-  async renumerarArrastradosDia(): Promise<void> {
-    const hoy = this.diaBogota();
-    let puntos: string[] = [];
-    try {
-      const res = await this.pool.query<{ punto_id: string }>(
-        `SELECT DISTINCT punto_id FROM pedidos WHERE punto_id IS NOT NULL AND punto_id <> ''`,
-      );
-      puntos = res.rows.map((r) => r.punto_id);
-    } catch (e) {
-      this.logger.error(
-        `Renumerar arrastrados: no se pudieron listar los puntos: ${e instanceof Error ? e.message : e}`,
-      );
-      return;
-    }
-    for (const puntoId of puntos) {
-      const client = await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-          `pedido_consecutivo:${puntoId}`,
-        ]);
-        await this.renumerarYSiguiente(client, puntoId, hoy, hoy);
-        await client.query('COMMIT');
-      } catch (e) {
-        await client.query('ROLLBACK').catch(() => undefined);
-        this.logger.error(
-          `Renumerar arrastrados del punto ${puntoId}: ${e instanceof Error ? e.message : e}`,
-        );
-      } finally {
-        client.release();
-      }
-    }
+    return Number(r.rows[0]?.mx) || 0;
   }
 
   /**
@@ -590,10 +554,9 @@ export class PedidosService implements OnModuleInit {
           await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
             `pedido_consecutivo:${puntoId}`,
           ]);
-          finalPedido.numeroDia = await this.renumerarYSiguiente(
+          finalPedido.numeroDia = await this.siguienteNumeroDia(
             client,
             puntoId,
-            this.diaBogota(),
             diaNuevoEdit,
           );
           finalPedido.numeroDiaFecha = diaNuevoEdit;
@@ -622,17 +585,12 @@ export class PedidosService implements OnModuleInit {
         finalPedido.consecutivo = consecutivo;
         finalPedido.comanda = `${numeroPunto}CS${String(consecutivo).padStart(8, '0')}`;
 
-        // Número del día (turno) por punto. Primero se RENUMERAN los arrastrados
-        // (activos de días anteriores) para HOY —de primeros y por antigüedad—;
-        // luego este pedido toma el SIGUIENTE número de su día de entrega. Todo
-        // bajo el mismo lock del punto: números únicos y, una vez asignados con
-        // su numeroDiaFecha, no se recalculan (no cambian ni se repiten).
-        const hoy = this.diaBogota();
+        // Número del día (turno) por punto: contador atómico por (punto, día).
+        // Reinicia cada día y el posterior toma el número del día de su entrega.
         const diaNuevo = this.diaEntregaDe(finalPedido);
-        finalPedido.numeroDia = await this.renumerarYSiguiente(
+        finalPedido.numeroDia = await this.siguienteNumeroDia(
           client,
           puntoId,
-          hoy,
           diaNuevo,
         );
         finalPedido.numeroDiaFecha = diaNuevo;
