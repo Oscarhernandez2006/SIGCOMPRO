@@ -2015,6 +2015,8 @@ function PasoCliente({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
+  // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
+  const [ocultos, setOcultos] = useState<Set<string>>(() => new Set());
   // Pedido a visualizar (solo lectura) al hacer clic en un consecutivo.
   const [verPedido, setVerPedido] = useState<Pedido | null>(null);
 
@@ -2133,11 +2135,11 @@ function PasoCliente({
             </button>
           </div>
         ) : (
-          items.map((c) => {
+          items.filter((c) => !ocultos.has(c.id)).map((c) => {
             const activo = seleccionado?.id === c.id;
             const pedidosHoy = pedidosHoyPorNit.get((c.nit_cedula ?? "").trim()) ?? [];
             return (
-              <div key={c.id}>
+              <div key={c.id} className="relative">
                 <button
                   onClick={() => onSeleccionar(c)}
                   title={`Seleccionar el cliente ${c.nombre || c.nit_cedula}`}
@@ -2183,6 +2185,18 @@ function PasoCliente({
                       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                     </svg>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOcultos((prev) => new Set(prev).add(c.id))}
+                  title="Quitar esta sugerencia de la lista (solo temporal)"
+                  aria-label="Quitar sugerencia"
+                  className="absolute right-2 top-2 rounded-md p-1 text-brand-brown/25 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
                 </button>
 
                 {pedidosHoy.length > 0 && (
@@ -2401,6 +2415,8 @@ function PasoProductos({
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<ProductoPrecio | null>(null);
   const [ultimosAbierto, setUltimosAbierto] = useState(false);
+  // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
+  const [ocultos, setOcultos] = useState<Set<string>>(() => new Set());
 
   // Historial COMPLETO de pedidos del cliente (cualquier fecha), para armar la
   // barra "Pedidos anteriores" aunque no haya pedido hoy.
@@ -2606,32 +2622,44 @@ function PasoProductos({
               No se encontraron productos.
             </p>
           ) : (
-            items.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setConfig(p)}
-                title={`Agregar ${p.producto || "producto"} al pedido`}
-                className={`flex flex-col rounded-xl border p-3 text-left transition ${
-                  enCarrito(p.id)
-                    ? "border-brand-amber bg-brand-amber/5"
-                    : "border-brand-brown/10 bg-white hover:border-brand-amber/50 hover:shadow-sm"
-                }`}
-              >
-                <span className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-brand-black">
-                  {p.producto || "Sin nombre"}
-                </span>
-                <span className="mt-1 text-[11px] text-brand-brown/50">
-                  {p.referencia} · {p.um || "U"}
-                </span>
-                {p.categoria && (
-                  <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                    {p.categoria.replace(/^\s*\d+\s*-\s*/, "")}
+            items.filter((p) => !ocultos.has(p.id)).map((p) => (
+              <div key={p.id} className="relative">
+                <button
+                  onClick={() => setConfig(p)}
+                  title={`Agregar ${p.producto || "producto"} al pedido`}
+                  className={`flex w-full flex-col rounded-xl border p-3 pr-8 text-left transition ${
+                    enCarrito(p.id)
+                      ? "border-brand-amber bg-brand-amber/5"
+                      : "border-brand-brown/10 bg-white hover:border-brand-amber/50 hover:shadow-sm"
+                  }`}
+                >
+                  <span className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-brand-black">
+                    {p.producto || "Sin nombre"}
                   </span>
-                )}
-                <span className="mt-2 text-sm font-bold text-brand-wine">
-                  {formatoCOP(p.precio)}
-                </span>
-              </button>
+                  <span className="mt-1 text-[11px] text-brand-brown/50">
+                    {p.referencia} · {p.um || "U"}
+                  </span>
+                  {p.categoria && (
+                    <span className="mt-1.5 inline-flex w-fit items-center rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                      {p.categoria.replace(/^\s*\d+\s*-\s*/, "")}
+                    </span>
+                  )}
+                  <span className="mt-2 text-sm font-bold text-brand-wine">
+                    {formatoCOP(p.precio)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOcultos((prev) => new Set(prev).add(p.id))}
+                  title="Quitar esta sugerencia de la lista (solo temporal)"
+                  aria-label="Quitar sugerencia"
+                  className="absolute right-1.5 top-1.5 rounded-md p-1 text-brand-brown/25 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ))
           )}
         </div>

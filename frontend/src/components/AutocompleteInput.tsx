@@ -31,6 +31,9 @@ export default function AutocompleteInput({
   const [opciones, setOpciones] = useState<OpcionAutocomplete[]>([]);
   const [cargando, setCargando] = useState(false);
   const [focado, setFocado] = useState(false);
+  // Opciones ocultadas por el usuario con la "X" (solo visual, en memoria; no
+  // toca la base de datos y se restablece al recargar la página).
+  const [ocultas, setOcultas] = useState<Set<string>>(() => new Set());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peticion = useRef(0);
   const ignorarProxima = useRef(false);
@@ -76,6 +79,9 @@ export default function AutocompleteInput({
     setCargando(false);
     setOpciones([]);
   }
+
+  // Opciones visibles: excluye las que el usuario ocultó con la "X".
+  const visibles = opciones.filter((o) => !ocultas.has(o.value));
 
   return (
     <div className="relative">
@@ -141,16 +147,16 @@ export default function AutocompleteInput({
           </svg>
         </button>
       )}
-      {abierto && opciones.length > 0 && (
+      {abierto && visibles.length > 0 && (
         <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-brand-brown/15 bg-white py-1 shadow-lg">
-          {opciones.map((o, i) => (
-            <li key={`${o.value}-${i}`}>
+          {visibles.map((o, i) => (
+            <li key={`${o.value}-${i}`} className="flex items-stretch">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => elegir(o)}
                 title={`Seleccionar ${o.value}`}
-                className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-brand-cream-soft"
+                className="flex flex-1 items-baseline justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-brand-cream-soft"
               >
                 <span className="text-brand-black">{o.value}</span>
                 {o.hint && (
@@ -158,6 +164,18 @@ export default function AutocompleteInput({
                     {o.hint}
                   </span>
                 )}
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setOcultas((prev) => new Set(prev).add(o.value))}
+                title="Quitar esta sugerencia de la lista (solo temporal)"
+                aria-label="Quitar sugerencia"
+                className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
               </button>
             </li>
           ))}

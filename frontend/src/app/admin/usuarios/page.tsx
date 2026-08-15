@@ -58,6 +58,8 @@ export default function AdminUsuariosPage() {
   // Combobox "Copiar permisos de" (paso de permisos).
   const [buscarCopiar, setBuscarCopiar] = useState("");
   const [copiarAbierto, setCopiarAbierto] = useState(false);
+  // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
+  const [copiarOcultos, setCopiarOcultos] = useState<Set<string>>(() => new Set());
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
@@ -675,23 +677,36 @@ export default function AdminUsuariosPage() {
                                   Sin resultados.
                                 </p>
                               ) : (
-                                candidatosCopiar.map((u) => (
-                                  <button
-                                    key={u.id}
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => {
-                                      setPermisos([...(u.permisos ?? [])]);
-                                      setBuscarCopiar(u.nombre);
-                                      setCopiarAbierto(false);
-                                    }}
-                                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-brand-cream-soft"
-                                  >
-                                    <span className="text-brand-black">{u.nombre}</span>
-                                    <span className="text-xs capitalize text-brand-brown/50">
-                                      {u.rol}
-                                    </span>
-                                  </button>
+                                candidatosCopiar.filter((u) => !copiarOcultos.has(u.id)).map((u) => (
+                                  <div key={u.id} className="flex items-stretch">
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => {
+                                        setPermisos([...(u.permisos ?? [])]);
+                                        setBuscarCopiar(u.nombre);
+                                        setCopiarAbierto(false);
+                                      }}
+                                      className="flex flex-1 items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-brand-cream-soft"
+                                    >
+                                      <span className="text-brand-black">{u.nombre}</span>
+                                      <span className="text-xs capitalize text-brand-brown/50">
+                                        {u.rol}
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setCopiarOcultos((prev) => new Set(prev).add(u.id))}
+                                      title="Quitar esta sugerencia de la lista (solo temporal)"
+                                      aria-label="Quitar sugerencia"
+                                      className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                                    >
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 ))
                               )}
                             </div>

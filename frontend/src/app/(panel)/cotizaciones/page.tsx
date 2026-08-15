@@ -602,12 +602,15 @@ function EditorCotizacion({
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cargandoCli, setCargandoCli] = useState(false);
   const [crearCli, setCrearCli] = useState(false);
+  // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
+  const [cliOcultos, setCliOcultos] = useState<Set<string>>(() => new Set());
 
   // Buscador de productos.
   const [busProd, setBusProd] = useState("");
   const [busProdDeb, setBusProdDeb] = useState("");
   const [productos, setProductos] = useState<ProductoPrecio[]>([]);
   const [cargandoProd, setCargandoProd] = useState(false);
+  const [prodOcultos, setProdOcultos] = useState<Set<string>>(() => new Set());
 
   // Lista de precios (2ª hoja del PDF): productos seleccionados con su precio.
   const [listaPrecios, setListaPrecios] = useState<ProductoPrecio[]>(
@@ -926,19 +929,34 @@ function EditorCotizacion({
                         </button>
                       </div>
                     ) : (
-                      clientes.map((c) => (
-                        <button
+                      clientes.filter((c) => !cliOcultos.has(c.id)).map((c) => (
+                        <div
                           key={c.id}
-                          onClick={() => setCliente(c)}
-                          className="block w-full rounded-lg border border-brand-brown/10 bg-white px-3 py-2 text-left text-sm transition hover:border-brand-amber/40 hover:bg-brand-cream-soft/40"
+                          className="flex items-stretch overflow-hidden rounded-lg border border-brand-brown/10 bg-white transition hover:border-brand-amber/40 hover:bg-brand-cream-soft/40"
                         >
-                          <span className="font-medium text-brand-black">
-                            {c.nombre || c.nit_cedula}
-                          </span>
-                          <span className="ml-1 text-xs text-brand-brown/50">
-                            · {c.nit_cedula}
-                          </span>
-                        </button>
+                          <button
+                            onClick={() => setCliente(c)}
+                            className="block flex-1 px-3 py-2 text-left text-sm"
+                          >
+                            <span className="font-medium text-brand-black">
+                              {c.nombre || c.nit_cedula}
+                            </span>
+                            <span className="ml-1 text-xs text-brand-brown/50">
+                              · {c.nit_cedula}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCliOcultos((prev) => new Set(prev).add(c.id))}
+                            title="Quitar esta sugerencia de la lista (solo temporal)"
+                            aria-label="Quitar sugerencia"
+                            className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       ))
                     )}
                   </div>
@@ -988,7 +1006,7 @@ function EditorCotizacion({
                         Sin productos.
                       </p>
                     ) : (
-                      productos.slice(0, 40).map((p) => (
+                      productos.slice(0, 40).filter((p) => !prodOcultos.has(p.id)).map((p) => (
                         <div
                           key={p.id}
                           className="flex w-full items-center justify-between gap-2 rounded-lg border border-brand-brown/10 bg-white px-3 py-2 text-left text-sm transition hover:border-brand-amber/40 hover:bg-brand-cream-soft/40"
@@ -1016,6 +1034,17 @@ function EditorCotizacion({
                             className="shrink-0 rounded-md border border-brand-wine/30 bg-brand-wine/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-wine transition hover:bg-brand-wine/10"
                           >
                             + Lista
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProdOcultos((prev) => new Set(prev).add(p.id))}
+                            title="Quitar esta sugerencia de la lista (solo temporal)"
+                            aria-label="Quitar sugerencia"
+                            className="flex shrink-0 items-center rounded-md px-1.5 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
                           </button>
                         </div>
                       ))
