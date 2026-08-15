@@ -161,13 +161,28 @@ export default function AdminProductosPage() {
             </option>
           ))}
         </select>
-        <input
-          type="text"
-          value={buscar}
-          onChange={(e) => setBuscar(e.target.value)}
-          placeholder="Buscar por producto o referencia…"
-          className="min-w-64 flex-1 rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-        />
+        <div className="relative min-w-64 flex-1">
+          <input
+            type="text"
+            value={buscar}
+            onChange={(e) => setBuscar(e.target.value)}
+            placeholder="Buscar por producto o referencia…"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+          />
+          {buscar && (
+            <button
+              type="button"
+              onClick={() => setBuscar("")}
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">

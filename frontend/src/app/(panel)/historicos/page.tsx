@@ -7,7 +7,7 @@ import {
   imprimirComanda,
   type Pedido,
 } from "@/app/(panel)/pedidos/page";
-import { cargarEstadoPedidos, descargarExcelDespacho, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
 import { yaDespachado, colorEstado } from "@/lib/despacho";
 import { misPuntosVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
@@ -23,6 +23,7 @@ export default function HistoricosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [tipo, setTipo] = useState<"todos" | "despachado" | "anulado">("todos");
+  const [filtroPunto, setFiltroPunto] = useState("");
 
   // Puntos del usuario (para acceso operativo); los admin ven todos.
   const [filtroIds, setFiltroIds] = useState<Set<string> | null>(null);
@@ -67,6 +68,8 @@ export default function HistoricosPage() {
         // Filtro por tipo.
         if (tipo === "despachado" && !esDespachado) return false;
         if (tipo === "anulado" && !esAnulado) return false;
+        // Filtro por punto de venta (PDV).
+        if (filtroPunto && p.punto?.id !== filtroPunto) return false;
         // Filtro por día.
         if (fechaFiltro) {
           const d = new Date(p.fecha);
@@ -90,7 +93,22 @@ export default function HistoricosPage() {
         return true;
       })
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-  }, [pedidos, busqueda, fechaFiltro, tipo, filtroIds]);
+  }, [pedidos, busqueda, fechaFiltro, tipo, filtroPunto, filtroIds]);
+
+  // Puntos de venta presentes en los históricos visibles (para el filtro PDV).
+  const puntosDisponibles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of pedidos) {
+      const esAnulado = p.anulado || norm(p.estado) === "anulado";
+      const esDespachado = !esAnulado && yaDespachado(p.estado);
+      if (!esAnulado && !esDespachado) continue;
+      if (filtroIds && !(p.punto?.id && filtroIds.has(p.punto.id))) continue;
+      if (p.punto?.id) map.set(p.punto.id, p.punto.nombre ?? p.punto.id);
+    }
+    return Array.from(map, ([id, nombre]) => ({ id, nombre })).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre),
+    );
+  }, [pedidos, filtroIds]);
 
   const totalDespachados = useMemo(
     () =>
@@ -124,12 +142,6 @@ export default function HistoricosPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
-  const reimprimirExcel = (p: Pedido) => {
-    descargarExcelDespacho(p.id).catch(() =>
-      alert("No se pudo generar el Excel de despacho."),
-    );
-  };
-
   return (
     <div>
       <div className="mb-6">
@@ -138,6 +150,30 @@ export default function HistoricosPage() {
           Pedidos ya despachados o anulados. Se retiran de Despacho para dar
           prioridad a los que están en proceso.
         </p>
+        {puntosDisponibles.length > 0 && (
+          <label className="mt-2 inline-flex items-center gap-2">
+            <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+            <div className="relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+              </svg>
+              <select
+                value={filtroPunto}
+                onChange={(e) => setFiltroPunto(e.target.value)}
+                title="Filtrar por punto de venta"
+                className="cursor-pointer appearance-none rounded-full border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-8 text-xs font-semibold text-brand-wine outline-none transition hover:bg-brand-wine/10 focus:border-brand-wine/40"
+              >
+                <option value="">Todos los PDV</option>
+                {puntosDisponibles.map((pv) => (
+                  <option key={pv.id} value={pv.id}>{pv.nombre}</option>
+                ))}
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-brand-wine/70">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            </div>
+          </label>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -151,8 +187,21 @@ export default function HistoricosPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por consecutivo, comanda, nombre o NIT/cédula"
-            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1 rounded-xl border border-brand-brown/15 bg-white p-1">
           {([
@@ -195,9 +244,9 @@ export default function HistoricosPage() {
         <button onClick={() => setFechaFiltro(hoyISO())} title="Ir a la fecha de hoy" className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft">
           Hoy
         </button>
-        {(fechaFiltro || busqueda || tipo !== "todos") && (
+        {(fechaFiltro || busqueda || tipo !== "todos" || filtroPunto) && (
           <button
-            onClick={() => { setFechaFiltro(""); setBusqueda(""); setTipo("todos"); }}
+            onClick={() => { setFechaFiltro(""); setBusqueda(""); setTipo("todos"); setFiltroPunto(""); }}
             title="Limpiar todos los filtros"
             className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft"
           >
@@ -228,7 +277,7 @@ export default function HistoricosPage() {
                   <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Punto</th>
-                  <th className="px-4 py-3">Total / Facturado</th>
+                  <th className="px-4 py-3">Valor Pedido / Valor Facturado</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -241,25 +290,17 @@ export default function HistoricosPage() {
                   return (
                     <tr key={p.id} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
                       <td className="px-4 py-3 align-top">
-                        {m?.facturaNumero ? (
-                          <>
-                            <div className="font-semibold text-brand-wine">Fact. {m.facturaNumero}</div>
-                            <div className="text-[11px] font-semibold text-brand-brown/60">{p.comanda}</div>
-                          </>
-                        ) : (
-                          <div className="font-semibold text-brand-wine">{p.comanda}</div>
+                        <div className="font-semibold text-brand-wine">{p.comanda}</div>
+                        {m?.facturaNumero?.trim() && (
+                          <div className="text-[11px] font-semibold text-green-600">Fact. {m.facturaNumero}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                       <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
-                      <td className="px-4 py-3 align-top">
-                        {typeof m?.facturaValor === "number" && m.facturaValor > 0 ? (
-                          <>
-                            <div className="font-medium">{formatoCOP(m.facturaValor)}</div>
-                            <div className="text-xs text-brand-brown/55">{formatoCOP(p.total)}</div>
-                          </>
-                        ) : (
-                          <div className="font-medium">{formatoCOP(p.total)}</div>
+                      <td className="px-4 py-3 align-top font-medium">
+                        <div>{formatoCOP(p.total)}</div>
+                        {typeof m?.facturaValor === "number" && m.facturaValor > 0 && (
+                          <div className="text-[11px] font-semibold text-green-600">{formatoCOP(m.facturaValor)}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -281,11 +322,6 @@ export default function HistoricosPage() {
                               <button onClick={() => imprimirComanda(p)} aria-label="Reimprimir comanda" title="Reimprimir la comanda" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
-                                </svg>
-                              </button>
-                              <button onClick={() => reimprimirExcel(p)} aria-label="Descargar Excel" title="Descargar el Excel del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
                                 </svg>
                               </button>
                             </>

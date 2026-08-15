@@ -887,12 +887,27 @@ function EditorCotizacion({
                   <div className="mb-1 text-center text-[10px] uppercase tracking-wide text-brand-brown/40">
                     o busca un cliente
                   </div>
-                  <input
-                    value={busCli}
-                    onChange={(e) => setBusCli(e.target.value)}
-                    placeholder="Buscar por nombre, NIT/cédula o teléfono"
-                    className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-                  />
+                  <div className="relative">
+                    <input
+                      value={busCli}
+                      onChange={(e) => setBusCli(e.target.value)}
+                      placeholder="Buscar por nombre, NIT/cédula o teléfono"
+                      className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 pr-9 text-sm outline-none focus:border-brand-amber"
+                    />
+                    {busCli && (
+                      <button
+                        type="button"
+                        onClick={() => setBusCli("")}
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                     {cargandoCli ? (
                       <p className="py-3 text-center text-xs text-brand-brown/50">
@@ -942,12 +957,27 @@ function EditorCotizacion({
                 </p>
               ) : (
                 <>
-                  <input
-                    value={busProd}
-                    onChange={(e) => setBusProd(e.target.value)}
-                    placeholder="Buscar producto por nombre o referencia"
-                    className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-                  />
+                  <div className="relative">
+                    <input
+                      value={busProd}
+                      onChange={(e) => setBusProd(e.target.value)}
+                      placeholder="Buscar producto por nombre o referencia"
+                      className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 pr-9 text-sm outline-none focus:border-brand-amber"
+                    />
+                    {busProd && (
+                      <button
+                        type="button"
+                        onClick={() => setBusProd("")}
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
                     {cargandoProd ? (
                       <p className="py-3 text-center text-xs text-brand-brown/50">

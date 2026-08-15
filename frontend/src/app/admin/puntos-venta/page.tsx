@@ -505,13 +505,28 @@ export default function AdminPuntosVentaPage() {
             ) : (
               <>
                 <div className="mt-4">
-                  <input
-                    type="text"
-                    value={buscarUsuario}
-                    onChange={(e) => setBuscarUsuario(e.target.value)}
-                    placeholder="Buscar por nombre o cédula…"
-                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={buscarUsuario}
+                      onChange={(e) => setBuscarUsuario(e.target.value)}
+                      placeholder="Buscar por nombre o cédula…"
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                    {buscarUsuario && (
+                      <button
+                        type="button"
+                        onClick={() => setBuscarUsuario("")}
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto rounded-xl border border-brand-brown/10 bg-brand-cream-soft/60 p-3">
                   {usuariosFiltrados.length === 0 ? (

@@ -114,11 +114,32 @@ export default function AutocompleteInput({
         placeholder={placeholder}
         autoComplete="off"
         className="campo"
+        style={{ paddingRight: "2.25rem" }}
       />
       {cargando && (
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.7rem] text-brand-brown/40">
           …
         </span>
+      )}
+      {!cargando && value && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (debounce.current) clearTimeout(debounce.current);
+            peticion.current++;
+            onChange("");
+            setOpciones([]);
+            setAbierto(false);
+          }}
+          title="Limpiar"
+          aria-label="Limpiar"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
       )}
       {abierto && opciones.length > 0 && (
         <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-brand-brown/15 bg-white py-1 shadow-lg">

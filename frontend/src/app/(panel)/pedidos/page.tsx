@@ -495,8 +495,21 @@ export default function PedidosPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por consecutivo, comanda, nombre o NIT/cédula"
-            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -574,7 +587,7 @@ export default function PedidosPage() {
                   <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Punto</th>
-                  <th className="px-4 py-3">Total / Facturado</th>
+                  <th className="px-4 py-3">Valor Pedido / Valor Facturado</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -2078,6 +2091,19 @@ function PasoCliente({
             Buscando cliente…
           </span>
         )}
+        {input && !buscando && (
+          <button
+            type="button"
+            onClick={() => setInput("")}
+            title="Limpiar búsqueda"
+            aria-label="Limpiar búsqueda"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {error && (
@@ -2505,8 +2531,21 @@ function PasoProductos({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Buscar carne, corte o referencia…"
-            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-amber"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm outline-none focus:border-brand-amber"
           />
+          {input && (
+            <button
+              type="button"
+              onClick={() => setInput("")}
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Compra presencial: agrega un ítem 0000 y salta al valor del domicilio. */}

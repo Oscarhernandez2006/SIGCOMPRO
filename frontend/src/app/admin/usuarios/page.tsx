@@ -361,8 +361,21 @@ export default function AdminUsuariosPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, cédula o rol"
-            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+            className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <span className="text-xs text-brand-brown/50">
           {usuariosFiltrados.length} de {usuarios.length}
@@ -639,8 +652,22 @@ export default function AdminUsuariosPage() {
                             onFocus={() => setCopiarAbierto(true)}
                             onBlur={() => setTimeout(() => setCopiarAbierto(false), 150)}
                             placeholder="Buscar usuario por nombre, cédula o rol…"
-                            className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm text-brand-black outline-none transition focus:border-brand-amber"
+                            className="w-full rounded-lg border border-brand-brown/15 bg-white px-3 py-2 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber"
                           />
+                          {buscarCopiar && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => { setBuscarCopiar(""); setCopiarAbierto(false); }}
+                              title="Limpiar búsqueda"
+                              aria-label="Limpiar búsqueda"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
                           {copiarAbierto && (
                             <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-brand-brown/15 bg-white shadow-lg">
                               {candidatosCopiar.length === 0 ? (
@@ -742,13 +769,28 @@ export default function AdminUsuariosPage() {
                   <p className="mb-3 text-sm text-brand-brown/70">
                     Selecciona los puntos de venta donde trabajará este usuario.
                   </p>
-                  <input
-                    type="text"
-                    value={buscarPunto}
-                    onChange={(e) => setBuscarPunto(e.target.value)}
-                    placeholder="Buscar por nombre, código o ciudad…"
-                    className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={buscarPunto}
+                      onChange={(e) => setBuscarPunto(e.target.value)}
+                      placeholder="Buscar por nombre, código o ciudad…"
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                    {buscarPunto && (
+                      <button
+                        type="button"
+                        onClick={() => setBuscarPunto("")}
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto rounded-xl border border-brand-brown/10 bg-brand-cream-soft/60 p-3">
                     {puntosFiltrados.length === 0 ? (
                       <p className="py-6 text-center text-sm text-brand-brown/60">
