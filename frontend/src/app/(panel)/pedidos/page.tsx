@@ -2731,8 +2731,17 @@ function ResumenPedido({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
             {cliente ? (
               <div className="rounded-xl border border-brand-brown/10 bg-white px-3 py-2">
-                <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
-                <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
+                    <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
+                  </div>
+                  {cliente.horeca && (
+                    <span className="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200">
+                      HORECA
+                    </span>
+                  )}
+                </div>
                 {(cliente.direccion || cliente.barrio) && (
                   <p className="mt-0.5 text-xs text-brand-brown/60">
                     {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}

@@ -566,6 +566,64 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {/* Hogar vs HORECA */}
+          <section>
+            <Eyebrow>Hogar vs HORECA (Hotel, Restaurante, Café)</Eyebrow>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Panel>
+                <CardHead titulo="Hogar" desc="Clientes residenciales" />
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Pedidos</p>
+                    <p className="font-display text-2xl font-extrabold text-blue-900">{num(m.hogarVsHoreca.hogar.pedidos)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Valor total</p>
+                    <p className="font-display text-2xl font-extrabold text-blue-900">{cop(m.hogarVsHoreca.hogar.valor)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
+                    <p className="font-display text-2xl font-extrabold text-blue-900">{m.hogarVsHoreca.hogar.kilos.toFixed(1)}</p>
+                  </div>
+                </div>
+              </Panel>
+              <Panel>
+                <CardHead titulo="HORECA" desc="Hoteles, restaurantes, cafés" />
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Pedidos</p>
+                    <p className="font-display text-2xl font-extrabold text-orange-900">{num(m.hogarVsHoreca.horeca.pedidos)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Valor total</p>
+                    <p className="font-display text-2xl font-extrabold text-orange-900">{cop(m.hogarVsHoreca.horeca.valor)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
+                    <p className="font-display text-2xl font-extrabold text-orange-900">{m.hogarVsHoreca.horeca.kilos.toFixed(1)}</p>
+                  </div>
+                </div>
+              </Panel>
+              <Panel>
+                <CardHead titulo="Total" desc="Suma de ambos segmentos" />
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Pedidos</p>
+                    <p className="font-display text-2xl font-extrabold text-purple-900">{num(m.hogarVsHoreca.total.pedidos)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Valor total</p>
+                    <p className="font-display text-2xl font-extrabold text-purple-900">{cop(m.hogarVsHoreca.total.valor)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
+                    <p className="font-display text-2xl font-extrabold text-purple-900">{m.hogarVsHoreca.total.kilos.toFixed(1)}</p>
+                  </div>
+                </div>
+              </Panel>
+            </div>
+          </section>
+
           {/* Tendencia y distribución */}
           <section>
             <Eyebrow>Tendencia y distribución</Eyebrow>
@@ -949,6 +1007,14 @@ function métricas(
   }
   const motivos = [...motivoMap.values()].sort((a, b) => b.count - a.count);
 
+  // Hogar vs HORECA
+  const hogar = validos.filter(p => !p.cliente?.horeca);
+  const horeca = validos.filter(p => p.cliente?.horeca);
+  const hogarValor = hogar.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  const horecaValor = horeca.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  const hogarKg = hogar.reduce((s, p) => s + pesoPedidoKg(p), 0);
+  const horecaKg = horeca.reduce((s, p) => s + pesoPedidoKg(p), 0);
+
   return {
     ventas,
     facturado,
@@ -980,6 +1046,11 @@ function métricas(
     topPorcionadores,
     topDomiciliarios,
     motivos,
+    hogarVsHoreca: {
+      hogar: { pedidos: hogar.length, valor: hogarValor, kilos: hogarKg },
+      horeca: { pedidos: horeca.length, valor: horecaValor, kilos: horecaKg },
+      total: { pedidos: validos.length, valor: ventas, kilos: hogarKg + horecaKg },
+    },
   };
 }
 

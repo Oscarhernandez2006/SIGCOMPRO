@@ -65,6 +65,42 @@ function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number 
   );
 }
 
+/** Sección expandible (para televendedores). */
+function ExpandibleSection({
+  titulo,
+  icono,
+  contenido,
+  expanded,
+  onToggle,
+}: {
+  titulo: string;
+  icono: React.ReactNode;
+  contenido: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3 flex items-center gap-3 text-sm font-semibold text-brand-wine hover:bg-brand-cream-soft/30 transition text-left"
+      >
+        <span className="flex-1">{titulo}</span>
+        {icono}
+        <svg
+          className={`w-5 h-5 transition-transform ${expanded ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+        </svg>
+      </button>
+      {expanded && <div className="px-4 py-3 border-t border-brand-brown/10">{contenido}</div>}
+    </div>
+  );
+}
+
 function diaLocal(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -78,6 +114,83 @@ function diaCorto(clave: string): string {
 function esPosteriorFuturo(p: Pedido): boolean {
   const hoy = diaLocal(new Date().toISOString());
   return Boolean(p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoy);
+}
+
+/** Calcula métricas de Hogar vs Horeca para un conjunto de pedidos. */
+function calcularHogarVsHoreca(pedidos: Pedido[], metaMap: Record<string, DespachoMeta>) {
+  const validos = pedidos.filter(p => !p.anulado);
+  
+  const hogar = validos.filter(p => !p.cliente?.horeca);
+  const horeca = validos.filter(p => p.cliente?.horeca);
+  
+  const hogarValor = hogar.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  const horecaValor = horeca.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  
+  const hogarKg = hogar.reduce((s, p) => s + pesoPedidoKg(p), 0);
+  const horecaKg = horeca.reduce((s, p) => s + pesoPedidoKg(p), 0);
+  
+  return {
+    hogar: { pedidos: hogar.length, valor: hogarValor, kilos: hogarKg },
+    horeca: { pedidos: horeca.length, valor: horecaValor, kilos: horecaKg },
+    total: { pedidos: validos.length, valor: hogarValor + horecaValor, kilos: hogarKg + horecaKg },
+  };
+}
+
+/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
+function pesoPedidoKg(p: Pedido): number {
+  return (p.carrito ?? []).reduce((s, i) => {
+    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
+    return s + (esKilo ? Number(i.cantidad) || 0 : 0);
+  }, 0);
+}
+
+/** Ranking de productos más vendidos. */
+function rankingProductos(pedidos: Pedido[], topN = 10) {
+  const mapa = new Map<string, { nombre: string; cantidad: number; valor: number }>();
+  for (const p of pedidos.filter(p => !p.anulado)) {
+    for (const item of p.carrito || []) {
+      const clave = item.producto?.nombre ?? "—";
+      const actual = mapa.get(clave) || { nombre: clave, cantidad: 0, valor: 0 };
+      actual.cantidad += Number(item.cantidad) || 0;
+      actual.valor += Number(item.precioUnitario) * (Number(item.cantidad) || 0);
+      mapa.set(clave, actual);
+    }
+  }
+  return [...mapa.values()].sort((a, b) => b.valor - a.valor).slice(0, topN);
+}
+
+/** Top clientes por valor gastado. */
+function topClientes(pedidos: Pedido[], topN = 10) {
+  const mapa = new Map<string, { nombre: string; pedidos: number; valor: number }>();
+  for (const p of pedidos.filter(p => !p.anulado)) {
+    const nit = p.cliente?.nit_cedula ?? "—";
+    const nombre = p.cliente?.nombre ?? "Cliente sin nombre";
+    const actual = mapa.get(nit) || { nombre, pedidos: 0, valor: 0 };
+    actual.pedidos += 1;
+    actual.valor += Number(p.total) || 0;
+    mapa.set(nit, actual);
+  }
+  return [...mapa.values()].sort((a, b) => b.valor - a.valor).slice(0, topN);
+}
+
+/** Resumen de métodos de pago usados. */
+function resumenMetodoPago(pedidos: Pedido[], metaMap: Record<string, DespachoMeta>) {
+  const mapa = new Map<string, number>();
+  for (const p of pedidos.filter(p => !p.anulado)) {
+    const pago = (p.pago ?? "—").trim();
+    mapa.set(pago, (mapa.get(pago) ?? 0) + 1);
+  }
+  return [...mapa.entries()]
+    .map(([pago, count]) => ({ pago, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** Resumen de tipos de entrega. */
+function resumenTipoEntrega(pedidos: Pedido[]) {
+  const domicilio = pedidos.filter(p => !p.anulado && p.entrega === "domicilio").length;
+  const recoge = pedidos.filter(p => !p.anulado && p.entrega === "recoge").length;
+  const total = pedidos.filter(p => !p.anulado).length;
+  return { domicilio, recoge, total };
 }
 
 export default function MiResumenPage() {
@@ -97,6 +210,8 @@ export default function MiResumenPage() {
   // (vacío = mi propio resumen).
   const [vendedoraSel, setVendedoraSel] = useState("");
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
+  // Para televendedores: mostrar secciones expandibles (ranking, top clientes, etc.)
+  const [seccionesExpand, setSeccionesExpand] = useState<Record<string, boolean>>({});
 
   // "Mi resumen" es un permiso: si el usuario no lo tiene, no puede entrar
   // (ni por URL directa); se le manda a su primer módulo disponible.
@@ -237,6 +352,16 @@ export default function MiResumenPage() {
   const tieneVentas = misVentas.length > 0;
   const tieneDespacho = facture.length + despache.length + aliste.length + domicilios.length > 0;
 
+  // Métricas de Hogar vs Horeca
+  const hogarVsHoreca = useMemo(() => calcularHogarVsHoreca(misVentas, meta), [misVentas, meta]);
+  const ranking = useMemo(() => rankingProductos(misVentas, 15), [misVentas]);
+  const topClient = useMemo(() => topClientes(misVentas, 15), [misVentas]);
+  const resumenPago = useMemo(() => resumenMetodoPago(misVentas, meta), [misVentas, meta]);
+  const resumenEntrega = useMemo(() => resumenTipoEntrega(misVentas), [misVentas]);
+  
+  // ¿Es televendedor? (rol específico que no es admin)
+  const esTelevendedor = usuario?.rol?.trim().toLowerCase() === "televendedor" && !esAdmin;
+
   // Últimos pedidos (para la lista) según la actividad del usuario.
   const ultimos = useMemo(() => {
     const base = tieneVentas ? misVentas : [...facture, ...despache];
@@ -269,7 +394,7 @@ export default function MiResumenPage() {
         </p>
         {/* Fila: televendedora (solo admin) + rango de fechas, lado a lado. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
-          {esAdmin && vendedoras.length > 0 && (
+          {esAdmin && vendedoras.length > 0 && !esTelevendedor && (
             <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
               Ver resumen de
               <select
@@ -367,6 +492,113 @@ export default function MiResumenPage() {
                 <p className="mb-3 text-sm font-semibold text-brand-black">Ventas por día</p>
                 <BarrasPorDia datos={ventas.porDia} formato={cop} />
               </div>
+
+              {/* Desglose Hogar vs Horeca */}
+              <div className="mt-4 rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
+                <p className="mb-3 text-sm font-semibold text-brand-black">Hogar vs HORECA (Hotel, Restaurante, Café)</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg bg-blue-50 p-3 border border-blue-200">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-900">Hogar</p>
+                    <p className="mt-1 text-lg font-bold text-blue-900">{num(hogarVsHoreca.hogar.pedidos)} pedidos</p>
+                    <p className="text-[11px] text-blue-700">{cop(hogarVsHoreca.hogar.valor)} · {hogarVsHoreca.hogar.kilos.toFixed(1)} kg</p>
+                  </div>
+                  <div className="rounded-lg bg-orange-50 p-3 border border-orange-200">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-900">HORECA</p>
+                    <p className="mt-1 text-lg font-bold text-orange-900">{num(hogarVsHoreca.horeca.pedidos)} pedidos</p>
+                    <p className="text-[11px] text-orange-700">{cop(hogarVsHoreca.horeca.valor)} · {hogarVsHoreca.horeca.kilos.toFixed(1)} kg</p>
+                  </div>
+                  <div className="rounded-lg bg-purple-50 p-3 border border-purple-200">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-900">Total</p>
+                    <p className="mt-1 text-lg font-bold text-purple-900">{num(hogarVsHoreca.total.pedidos)} pedidos</p>
+                    <p className="text-[11px] text-purple-700">{cop(hogarVsHoreca.total.valor)} · {hogarVsHoreca.total.kilos.toFixed(1)} kg</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Secciones expandibles para televendedores */}
+              {esTelevendedor && (
+                <div className="mt-4 space-y-3">
+                  {/* Ranking de productos */}
+                  <ExpandibleSection
+                    titulo="📊 Ranking de productos vendidos"
+                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>}
+                    expanded={seccionesExpand["ranking"] || false}
+                    onToggle={() => setSeccionesExpand(s => ({ ...s, ranking: !s.ranking }))}
+                    contenido={
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {ranking.length > 0 ? ranking.map((prod, i) => (
+                          <div key={i} className="flex justify-between items-start text-[12px]">
+                            <div className="flex-1">
+                              <p className="font-semibold text-brand-wine">#{i + 1} {prod.nombre}</p>
+                              <p className="text-brand-brown/60">{prod.cantidad.toLocaleString("es-CO")} unidades</p>
+                            </div>
+                            <p className="font-bold text-brand-wine">{cop(prod.valor)}</p>
+                          </div>
+                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
+                      </div>
+                    }
+                  />
+
+                  {/* Top clientes */}
+                  <ExpandibleSection
+                    titulo="👥 Top 15 clientes"
+                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v12.5A2.25 2.25 0 005.75 18.5h8.5a2.25 2.25 0 002.25-2.25V9M10.5 1.5v4.5a2 2 0 002 2h4.5M10.5 1.5L16.5 7.5" /></svg>}
+                    expanded={seccionesExpand["topClientes"] || false}
+                    onToggle={() => setSeccionesExpand(s => ({ ...s, topClientes: !s.topClientes }))}
+                    contenido={
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {topClient.length > 0 ? topClient.map((c, i) => (
+                          <div key={i} className="flex justify-between items-start text-[12px]">
+                            <div className="flex-1">
+                              <p className="font-semibold text-brand-wine">#{i + 1} {c.nombre}</p>
+                              <p className="text-brand-brown/60">{c.pedidos} pedidos</p>
+                            </div>
+                            <p className="font-bold text-brand-wine">{cop(c.valor)}</p>
+                          </div>
+                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
+                      </div>
+                    }
+                  />
+
+                  {/* Métodos de pago */}
+                  <ExpandibleSection
+                    titulo="💳 Métodos de pago utilizados"
+                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V4zm3.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>}
+                    expanded={seccionesExpand["pago"] || false}
+                    onToggle={() => setSeccionesExpand(s => ({ ...s, pago: !s.pago }))}
+                    contenido={
+                      <div className="space-y-2">
+                        {resumenPago.length > 0 ? resumenPago.map((p, i) => (
+                          <div key={i} className="flex justify-between items-center text-[12px]">
+                            <p className="font-semibold text-brand-wine">{p.pago || "Sin especificar"}</p>
+                            <p className="font-bold text-brand-wine">{num(p.count)} transacciones</p>
+                          </div>
+                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
+                      </div>
+                    }
+                  />
+
+                  {/* Tipo de entrega */}
+                  <ExpandibleSection
+                    titulo="🚚 Tipo de entrega"
+                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" /></svg>}
+                    expanded={seccionesExpand["entrega"] || false}
+                    onToggle={() => setSeccionesExpand(s => ({ ...s, entrega: !s.entrega }))}
+                    contenido={
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-[12px]">
+                          <p className="font-semibold">Domicilio</p>
+                          <p className="font-bold text-brand-wine">{num(resumenEntrega.domicilio)} ({resumenEntrega.total > 0 ? ((resumenEntrega.domicilio / resumenEntrega.total) * 100).toFixed(1) : 0}%)</p>
+                        </div>
+                        <div className="flex justify-between text-[12px]">
+                          <p className="font-semibold">Recoge en punto</p>
+                          <p className="font-bold text-brand-wine">{num(resumenEntrega.recoge)} ({resumenEntrega.total > 0 ? ((resumenEntrega.recoge / resumenEntrega.total) * 100).toFixed(1) : 0}%)</p>
+                        </div>
+                      </div>
+                    }
+                  />
+                </div>
+              )}
             </section>
           )}
 
