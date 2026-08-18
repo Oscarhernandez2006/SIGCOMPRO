@@ -16,6 +16,11 @@ import type { Pedido } from "@/app/(panel)/pedidos/page";
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
 const num = (n: number) => (Number(n) || 0).toLocaleString("es-CO");
 
+function pctOf(value: number, total: number): string {
+  if (!total || total <= 0) return "0.0";
+  return ((value / total) * 100).toFixed(1);
+}
+
 /** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
 function pesoPedidoKg(p: Pedido): number {
   return (p.carrito ?? []).reduce((s, i) => {
@@ -572,52 +577,91 @@ export default function DashboardPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <Panel>
                 <CardHead titulo="Hogar" desc="Clientes residenciales" />
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Pedidos</p>
-                    <p className="font-display text-2xl font-extrabold text-blue-900">{num(m.hogarVsHoreca.hogar.pedidos)}</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
+                      {num(m.hogarVsHoreca.hogar.pedidos)}
+                      <span className="ml-1 text-xs font-semibold text-blue-700">
+                        ({pctOf(m.hogarVsHoreca.hogar.pedidos, m.hogarVsHoreca.total.pedidos)}%)
+                      </span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Valor total</p>
-                    <p className="font-display text-2xl font-extrabold text-blue-900">{cop(m.hogarVsHoreca.hogar.valor)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
+                      {cop(m.hogarVsHoreca.hogar.valor)}
+                      <span className="ml-1 text-xs font-semibold text-blue-700">
+                        ({pctOf(m.hogarVsHoreca.hogar.valor, m.hogarVsHoreca.total.valor)}%)
+                      </span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
-                    <p className="font-display text-2xl font-extrabold text-blue-900">{m.hogarVsHoreca.hogar.kilos.toFixed(1)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
+                      {m.hogarVsHoreca.hogar.kilos.toFixed(1)}
+                      <span className="ml-1 text-xs font-semibold text-blue-700">
+                        ({pctOf(m.hogarVsHoreca.hogar.kilos, m.hogarVsHoreca.total.kilos)}%)
+                      </span>
+                    </span>
                   </div>
                 </div>
               </Panel>
               <Panel>
                 <CardHead titulo="HORECA" desc="Hoteles, restaurantes, cafés" />
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Pedidos</p>
-                    <p className="font-display text-2xl font-extrabold text-orange-900">{num(m.hogarVsHoreca.horeca.pedidos)}</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
+                      {num(m.hogarVsHoreca.horeca.pedidos)}
+                      <span className="ml-1 text-xs font-semibold text-orange-700">
+                        ({pctOf(m.hogarVsHoreca.horeca.pedidos, m.hogarVsHoreca.total.pedidos)}%)
+                      </span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Valor total</p>
-                    <p className="font-display text-2xl font-extrabold text-orange-900">{cop(m.hogarVsHoreca.horeca.valor)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
+                      {cop(m.hogarVsHoreca.horeca.valor)}
+                      <span className="ml-1 text-xs font-semibold text-orange-700">
+                        ({pctOf(m.hogarVsHoreca.horeca.valor, m.hogarVsHoreca.total.valor)}%)
+                      </span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
-                    <p className="font-display text-2xl font-extrabold text-orange-900">{m.hogarVsHoreca.horeca.kilos.toFixed(1)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
+                      {m.hogarVsHoreca.horeca.kilos.toFixed(1)}
+                      <span className="ml-1 text-xs font-semibold text-orange-700">
+                        ({pctOf(m.hogarVsHoreca.horeca.kilos, m.hogarVsHoreca.total.kilos)}%)
+                      </span>
+                    </span>
                   </div>
                 </div>
               </Panel>
               <Panel>
                 <CardHead titulo="Total" desc="Suma de ambos segmentos" />
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Pedidos</p>
-                    <p className="font-display text-2xl font-extrabold text-purple-900">{num(m.hogarVsHoreca.total.pedidos)}</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
+                      {num(m.hogarVsHoreca.total.pedidos)}
+                      <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Valor total</p>
-                    <p className="font-display text-2xl font-extrabold text-purple-900">{cop(m.hogarVsHoreca.total.valor)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
+                      {cop(m.hogarVsHoreca.total.valor)}
+                      <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-brand-brown/60">Kilos vendidos</p>
-                    <p className="font-display text-2xl font-extrabold text-purple-900">{m.hogarVsHoreca.total.kilos.toFixed(1)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
+                      {m.hogarVsHoreca.total.kilos.toFixed(1)}
+                      <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
+                    </span>
                   </div>
                 </div>
               </Panel>
