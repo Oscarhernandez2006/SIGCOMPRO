@@ -649,12 +649,12 @@ export default function DespachoPage() {
 
   // Estado de ENTREGA (POD) de Drivin. Máquina de estados por pedido:
   //   customer_status "approved"    -> estado "Entregado"  (final)
-  //   customer_status "rejected"    -> estado "Cancelado"  (anulado; final)
+  //   customer_status "rejected"    -> estado "Rechazado"  (cliente no atendió; permite réplica del día)
   //   customer_status "in-transit"  -> estado "En tránsito" (sigue consultando)
   //   "pending" / sin POD           -> se deja igual (sigue consultando)
   // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
   // (despachado / en tránsito); los "entregado" solo cada 6 ciclos (~30s), para
-  // AUTO-CORREGIR a Cancelado si Drivin los rechazó, sin inflar la consulta.
+  // AUTO-CORREGIR a Rechazado si Drivin los rechazó, sin inflar la consulta.
   const entregaRef = useRef({ pedidos, meta, idsPuntos });
   entregaRef.current = { pedidos, meta, idsPuntos };
   useEffect(() => {
@@ -669,10 +669,14 @@ export default function DespachoPage() {
       const candidatos = peds.filter((p) => {
         // Incluye recoge en PDV: también tienen POD en Drivin (se aprueban al
         // entregarse/recogerse).
-        if (p.anulado || !p.punto?.id || !ids.has(String(p.punto.id))) return false;
+        if (!p.punto?.id || !ids.has(String(p.punto.id))) return false;
         const e = norm(p.estado);
+        if (p.anulado && e !== "cancelado") return false;
         if (e === "despachado" || e === "en tránsito") return true;
         if (e === "entregado" && revisarEntregados) return true;
+        // Revalida periódicamente cancelados para corregir casos donde Drivin
+        // realmente quedó como "rejected" (cliente no atendió).
+        if (e === "cancelado" && revisarEntregados) return true;
         return false;
       });
       // Códigos Drivin por pedido: si tiene RÉPLICAS son "comanda-N" (cada parte
@@ -734,9 +738,11 @@ export default function DespachoPage() {
             const motivo = (comment || "").trim() || "Rechazado por el cliente (Drivin)";
             setPedidos((prev) => {
               const actual = prev.find((x) => x.id === p.id);
-              if (!actual || (actual.anulado && norm(actual.estado) === "cancelado")) return prev;
+              if (!actual || norm(actual.estado) === "rechazado") return prev;
               const next = prev.map((x) =>
-                x.id === p.id ? { ...x, anulado: true, estado: "Cancelado" as Pedido["estado"], motivo } : x,
+                x.id === p.id
+                  ? { ...x, anulado: false, estado: "Rechazado" as Pedido["estado"], motivo }
+                  : x,
               );
               const upd = next.find((x) => x.id === p.id);
               if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });

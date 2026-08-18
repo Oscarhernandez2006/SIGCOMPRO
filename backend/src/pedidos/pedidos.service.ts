@@ -1842,7 +1842,6 @@ export class PedidosService implements OnModuleInit {
           `SELECT id, data->>'comanda' as comanda, estado
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
-             AND anulado = false
              AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
           [[...comandasRechazadas]],
         );
@@ -1852,6 +1851,7 @@ export class PedidosService implements OnModuleInit {
             const actualizado = await this.guardar(
               {
                 id: ped.id,
+                anulado: false,
                 estado: 'Rechazado',
                 motivo: 'Cliente no atendía (rechazado por Drivin)',
               },
