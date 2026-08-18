@@ -535,12 +535,18 @@ export class PedidosService implements OnModuleInit {
       if (prev.rowCount) {
         // Edición: conserva el consecutivo, la comanda y la fecha originales
         // para no romper la trazabilidad ni reasignar números.
+        // También conserva los demás campos del pedido anterior que NO vinieron
+        // en la edición (para evitar perder información al actualizar solo algunos campos).
         finalPedido.consecutivo =
           (typeof prevData!.consecutivo === 'number'
             ? prevData!.consecutivo
             : prev.rows[0].consecutivo) ?? finalPedido.consecutivo;
         finalPedido.comanda = prevData!.comanda ?? finalPedido.comanda;
         finalPedido.fecha = prevData!.fecha ?? finalPedido.fecha;
+        // Preserva campos que no vinieron en la edición
+        if (!pedido.cliente) finalPedido.cliente = prevData!.cliente;
+        if (!pedido.carrito) finalPedido.carrito = prevData!.carrito;
+        if (!pedido.punto) finalPedido.punto = prevData!.punto;
         // Día al que pertenece el número guardado vs día de entrega ACTUAL.
         const diaAnterior = prevData!.numeroDiaFecha
           ? String(prevData!.numeroDiaFecha)
@@ -1837,7 +1843,7 @@ export class PedidosService implements OnModuleInit {
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
              AND anulado = false
-             AND LOWER(COALESCE(estado, '')) NOT IN ('rechazado', 'cancelado', 'anulado')`,
+             AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
           [[...comandasRechazadas]],
         );
 
@@ -1854,7 +1860,7 @@ export class PedidosService implements OnModuleInit {
             if (actualizado) {
               actualizados++;
               this.logger.log(
-                `Pedido ${ped.id} (${ped.comanda}) marcado como Rechazado en Drivin`,
+                `Pedido ${ped.id} (${ped.comanda}) marcado como Rechazado en Drivin (antes estaba: ${ped.estado})`,
               );
             }
           } catch (e) {
@@ -1867,6 +1873,7 @@ export class PedidosService implements OnModuleInit {
       }
 
       // Actualizar comandas canceladas a estado "Cancelado"
+      // IMPORTANTE: NO sobrescribir si ya está en estado "Rechazado"
       if (comandasCanceladas.size > 0) {
         const resCancelados = await this.pool.query<{
           id: string;
@@ -1877,7 +1884,7 @@ export class PedidosService implements OnModuleInit {
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
              AND anulado = false
-             AND LOWER(COALESCE(estado, '')) NOT IN ('cancelado', 'anulado')`,
+             AND LOWER(COALESCE(estado, '')) NOT IN ('rechazado', 'cancelado', 'anulado')`,
           [[...comandasCanceladas]],
         );
 
