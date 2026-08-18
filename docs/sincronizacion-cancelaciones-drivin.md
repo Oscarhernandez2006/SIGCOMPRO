@@ -71,6 +71,40 @@ Authorization: Bearer <token>
 - Ejecutar por un job programado cada 5-10 minutos durante el día
 - Ejecutar después de cambios manuales en Drivin
 
+## Cómo se Cancela en Drivin
+
+Cuando se marca un pedido como "Cancelado" en SIGCOMPRO, se envía a Drivin:
+
+```http
+PUT /api/external/v2/orders/{comanda}?token={scenario_token}
+Content-Type: application/json
+X-API-Key: {api_key}
+
+{
+  "status": "cancelled"
+}
+```
+
+**Ejemplo:**
+```bash
+curl -X PUT \
+  "https://external.driv.in/api/external/v2/orders/7CS00000123?token=abc123def456" \
+  -H "X-API-Key: tu_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "cancelled"}'
+```
+
+**Respuesta esperada:**
+```http
+HTTP 200 OK
+```
+
+**Ventajas de este enfoque:**
+- ✅ Mantiene auditoría y registro en Drivin
+- ✅ La orden no se elimina, solo se marca como cancelada
+- ✅ Fácil de rastrear y reversar si es necesario
+- ✅ Cumple con estándares de logística
+
 ## Códigos Modificados
 
 ### Backend - `src/pedidos/pedidos.service.ts`
@@ -83,10 +117,9 @@ Authorization: Bearer <token>
   1. Obtener comanda y validar
   2. Resolver schema_code de Drivin por punto
   3. Obtener token del escenario
-  4. Intentar DELETE
-  5. Si falla, intentar PUT con `status: cancelled`
-  6. Limpiar metadata
-  7. Registrar en logs
+  4. Enviar PUT a Drivin con `status: 'cancelled'`
+  5. Limpiar metadata del pedido local (domiciliario, etc)
+  6. Registrar en logs
 
 #### Nuevo Método: `sincronizarCancelacionesDrivin()`
 - **Visibilidad:** Público

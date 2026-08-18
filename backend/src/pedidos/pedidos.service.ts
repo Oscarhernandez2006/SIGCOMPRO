@@ -1877,9 +1877,9 @@ export class PedidosService implements OnModuleInit {
    * Cancela una orden en Drivin. Se ejecuta de forma asíncrona (no-bloqueante)
    * cuando se marca un pedido como "Cancelado" en SIGCOMPRO.
    * 
-   * Intenta eliminar la orden del escenario de Drivin usando DELETE. Si eso
-   * falla (la orden ya fue asignada), intenta marcarla como cancelada. También
-   * limpia la metadata del pedido (domiciliario, etc).
+   * Marca la orden como cancelada en Drivin (status = 'cancelled') manteniendo
+   * el registro para auditoría y trazabilidad. También limpia la metadata del
+   * pedido (domiciliario, etc).
    */
   private async cancelarEnDrivin(
     pedidoId: string,
@@ -1908,7 +1908,7 @@ export class PedidosService implements OnModuleInit {
         const schema = this.schemaDrivinPara(puntoCodigo, puntoNombre);
         const hoy = this.diaBogota();
 
-        // Obtener el token del escenario para eliminar la orden
+        // Obtener el token del escenario
         const token = await this.tokenScenarioPunto(schema, hoy);
         if (!token) {
           this.logger.warn(
@@ -1917,60 +1917,33 @@ export class PedidosService implements OnModuleInit {
           return;
         }
 
-        // Intento 1: Eliminar la orden del escenario con DELETE
-        let eliminada = false;
+        // Marcar la orden como cancelada en Drivin
         try {
+          const body = JSON.stringify({ status: 'cancelled' });
           const path = `/orders/${encodeURIComponent(comandaLimpia)}?token=${encodeURIComponent(
             token,
           )}`;
           const { status } = await this.drivinRequest(
-            'DELETE',
+            'PUT',
             path,
             apiKey,
-            undefined,
+            body,
             'v2',
           );
-          // DELETE puede devolver 200 OK o 404 si no existe
           if (status === 200 || status === 204) {
-            eliminada = true;
             this.logger.log(
-              `Drivin orden ${comandaLimpia} cancelada: DELETE ${path} → ${status}`,
+              `✓ Drivin orden ${comandaLimpia} marcada como cancelada (status: 200)`,
+            );
+          } else {
+            this.logger.warn(
+              `Drivin orden ${comandaLimpia}: respuesta inesperada (status: ${status})`,
             );
           }
         } catch (e) {
-          // Si DELETE falla, intentamos un PUT para marcar como cancelada
           const error = e instanceof Error ? e.message : String(e);
-          this.logger.debug(
-            `DELETE para ${comandaLimpia} falló, intentando PUT: ${error}`,
+          this.logger.warn(
+            `No se pudo cancelar ${comandaLimpia} en Drivin: ${error}`,
           );
-        }
-
-        // Intento 2: Si DELETE no funcionó, enviar PUT para marcar cancelada
-        // (algunos endpoints requieren un cambio de estado en lugar de eliminación)
-        if (!eliminada) {
-          try {
-            const body = JSON.stringify({ status: 'cancelled' });
-            const path = `/orders/${encodeURIComponent(comandaLimpia)}?token=${encodeURIComponent(
-              token,
-            )}`;
-            const { status } = await this.drivinRequest(
-              'PUT',
-              path,
-              apiKey,
-              body,
-              'v2',
-            );
-            if (status === 200 || status === 204) {
-              this.logger.log(
-                `Drivin orden ${comandaLimpia} marcada como cancelada: PUT → ${status}`,
-              );
-            }
-          } catch (e) {
-            const error = e instanceof Error ? e.message : String(e);
-            this.logger.warn(
-              `No se pudo cancelar ${comandaLimpia} en Drivin (PUT): ${error}`,
-            );
-          }
         }
 
         // Limpiar metadatos del pedido en SIGCOMPRO (domiciliario, estado de Drivin, etc)

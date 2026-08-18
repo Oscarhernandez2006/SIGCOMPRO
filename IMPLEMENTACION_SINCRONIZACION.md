@@ -16,7 +16,7 @@
 - Falta de sincronización entre sistemas
 
 **Solución:** Implementar sincronización automática bidireccional:
-1. **SIGCOMPRO → Drivin:** Cancelar automáticamente en Drivin cuando se cancela en SIGCOMPRO
+1. **SIGCOMPRO → Drivin:** Marcar como cancelado en Drivin cuando se cancela en SIGCOMPRO (auditable)
 2. **Drivin → SIGCOMPRO:** Marcar como cancelado en SIGCOMPRO si Drivin lo rechaza
 
 ---
@@ -35,9 +35,10 @@ private async cancelarEnDrivin(
 ): Promise<void>
 ```
 - Ejecuta de forma **asíncrona** (no-bloqueante)
-- Intenta **DELETE** primero, luego **PUT** como fallback
-- Limpia metadatos locales
+- Envía **PUT** a Drivin con `status: 'cancelled'` (marca como cancelada, no elimina)
+- Limpia metadatos locales (domiciliario, etc)
 - Registra en logs
+- Mantiene auditoría y trazabilidad
 - **Ubicación:** Línea ~1770
 
 **2. Nuevo Método Público: `sincronizarCancelacionesDrivin()`**
@@ -94,15 +95,17 @@ sincronizarCancelaciones() {
                     ↓
 5. Backend (ASYNC): cancelarEnDrivin() se ejecuta en background
                     ↓
-6. Intenta DELETE /orders/{comanda}
-   ├─ Si 200/204 → OK ✓
-   └─ Si falla → intenta PUT con status=cancelled
+6. Envía PUT /api/external/v2/orders/{comanda}?token=...
+   Body: { status: 'cancelled' }
                     ↓
-7. Limpia metadata (domiciliario, etc)
+7. Drivin marca la orden como cancelada ✓
+   (mantiene auditoría y registro)
                     ↓
-8. Registra en logs
+8. Limpia metadata local (domiciliario, etc)
                     ↓
-9. ⏱️ Respuesta al usuario INMEDIATA (no espera Drivin)
+9. Registra en logs
+                    ↓
+10. ⏱️ Respuesta al usuario INMEDIATA (no espera Drivin)
 ```
 
 ### Sincronización Drivin → SIGCOMPRO (Bajo Demanda)
@@ -177,10 +180,10 @@ PUT http://localhost:3000/pedidos/{id}
 Body: { "estado": "Cancelado", "anulado": true, "motivo": "Test" }
 
 # 3. Verificar logs
-# Buscar: "Drivin orden ... cancelada"
+# Buscar: "Drivin orden ... marcada como cancelada (status: 200)"
 
 # 4. Verificar en Drivin
-# Comprobar que la orden fue eliminada/rechazada
+# Comprobar que la orden cambió a status = 'cancelled'
 ```
 
 ### ✅ Test 2: Sincronización Inversa
@@ -218,14 +221,15 @@ Body: { "estado": "Cancelado", "anulado": true }
 
 ### Logs Exitosos
 ```
-[Pedidos] Drivin orden 7CS00000123 cancelada: DELETE /orders/7CS00000123 → 200
+[Pedidos] ✓ Drivin orden 7CS00000123 marcada como cancelada (status: 200)
 [Pedidos] Pedido abc123def sincronizado: cancelado por Drivin
 ```
 
 ### Logs de Error (Controlados)
 ```
-[Pedidos] WARN: No se pudo cancelar 7CS00000124 en Drivin (PUT): timeout
+[Pedidos] WARN: No se pudo cancelar 7CS00000124 en Drivin: timeout
 [Pedidos] WARN: Pedido sin comanda, no se cancela en Drivin
+[Pedidos] WARN: Drivin orden 7CS00000123: respuesta inesperada (status: 500)
 ```
 
 ### Búsqueda en Logs
