@@ -126,8 +126,8 @@ export class PedidosService implements OnModuleInit {
   >();
   /** Caché en memoria de vehículos (domiciliarios) de Drivin (TTL corto). */
   private cacheVehiculos: { ts: number; datos: DrivinVehicle[] } | null = null;
-  /** Tiempo de vida de la caché de Drivin (ms). */
-  private readonly DRIVIN_TTL = 5 * 60 * 1000;
+  /** Tiempo de vida de la caché de Drivin (ms). Reducido a 2 minutos para consultas más rápidas. */
+  private readonly DRIVIN_TTL = 2 * 60 * 1000;
   /** IP resuelta de external.driv.in (cache), para saltar el DNS intermitente. */
   private drivinIp: { ip: string; ts: number } | null = null;
   /** Caché del mapa de asignaciones (comanda -> vehículo) de Drivin. */
@@ -1246,7 +1246,8 @@ export class PedidosService implements OnModuleInit {
         // Si falló por DNS, invalidamos la IP cacheada para re-resolver.
         this.drivinIp = null;
         if (intento < INTENTOS) {
-          await new Promise((r) => setTimeout(r, 400 * intento));
+          // Reducido de 400ms a 200ms para acelerar reintentos
+          await new Promise((r) => setTimeout(r, 200 * intento));
         }
       }
     }
@@ -1310,7 +1311,7 @@ export class PedidosService implements OnModuleInit {
                 }
               : {}),
           },
-          timeout: 15000,
+          timeout: 10000, // Reducido de 15s a 10s para consultas más rápidas
         },
         (res) => {
           let data = '';
@@ -1482,6 +1483,58 @@ export class PedidosService implements OnModuleInit {
       );
     }
     return out;
+  }
+
+  /**
+   * Sincroniza desasignaciones de Drivin: si un pedido que tiene domiciliario
+   * asignado fue desasignado en Drivin (vehicle_code = null), lo devuelve a
+   * estado "En proceso" y limpia el domiciliario de la metadata.
+   * Útil para mantener SIGCOMPRO sincronizado con cambios en Drivin.
+   */
+  async sincronizarDesasignacionesDrivin(): Promise<number> {
+    let desasignados = 0;
+    try {
+      const asignaciones = await this.asignacionesDrivin();
+      
+      // Busca pedidos EN PROCESO O FACTURADOS que tengan domiciliario asignado
+      const res = await this.pool.query<{
+        id: string;
+        comanda: string;
+        estado: string | null;
+        meta: Record<string, unknown>;
+      }>(
+        `SELECT id, comanda, estado, meta FROM pedidos
+         WHERE anulado = false
+         AND LOWER(COALESCE(estado, '')) IN ('en proceso', 'en producción', 'alistado', 'facturado')
+         AND meta->>'domiciliario' IS NOT NULL`,
+      );
+
+      for (const ped of res.rows) {
+        const comanda = String(ped.comanda || '').trim();
+        const asign = asignaciones[comanda];
+        
+        // Si la comanda no está en Drivin o está desasignada (null)
+        if (asign === null || (asign === undefined && Object.keys(asignaciones).length > 0)) {
+          // Devuelve a "En proceso" para que pueda ser reasignado
+          await this.actualizarMeta(ped.id, { domiciliario: null });
+          await this.pool.query(
+            `UPDATE pedidos SET estado = $1, actualizado_en = now() WHERE id = $2`,
+            ['En proceso', ped.id],
+          );
+          desasignados++;
+          this.logger.log(
+            `Pedido desasignado en Drivin: ${comanda} (${ped.id}) → "En proceso"`,
+          );
+        }
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Error al sincronizar desasignaciones de Drivin: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+    return desasignados;
   }
 
   /** Caché por comanda del estado de entrega (POD v3). TTL corto. */

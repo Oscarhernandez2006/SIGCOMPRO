@@ -149,10 +149,10 @@ function rankingProductos(pedidos: Pedido[], topN = 10) {
   const mapa = new Map<string, { nombre: string; cantidad: number; valor: number }>();
   for (const p of pedidos.filter(p => !p.anulado)) {
     for (const item of p.carrito || []) {
-      const clave = item.producto?.nombre ?? "—";
+      const clave = item.producto?.producto ?? "—";
       const actual = mapa.get(clave) || { nombre: clave, cantidad: 0, valor: 0 };
       actual.cantidad += Number(item.cantidad) || 0;
-      actual.valor += Number(item.precioUnitario) * (Number(item.cantidad) || 0);
+      actual.valor += Number(item.producto?.precio || 0) * (Number(item.cantidad) || 0);
       mapa.set(clave, actual);
     }
   }

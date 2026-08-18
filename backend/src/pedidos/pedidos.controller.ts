@@ -90,6 +90,13 @@ export class PedidosController {
     return this.pedidos.asignacionesDrivin();
   }
 
+  /** Sincroniza desasignaciones de Drivin: devuelve pedidos a "En proceso" si fueron desasignados. */
+  @Post('drivin/sincronizar-desasignaciones')
+  @Permisos('despacho')
+  sincronizarDesasignaciones() {
+    return this.pedidos.sincronizarDesasignacionesDrivin();
+  }
+
   /**
    * Estado de ENTREGA (POD) de una lista de comandas vía v3 /pods. Devuelve, por
    * comanda, `{ status, entregadoEn }` (status `approved` = entregado).

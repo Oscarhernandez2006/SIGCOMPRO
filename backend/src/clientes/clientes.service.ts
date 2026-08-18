@@ -566,6 +566,9 @@ export class ClientesService implements OnModuleInit {
 
       // Cambió solo el punto de venta: se actualiza en LOTES SIN tocar la
       // ubicación (conserva las coordenadas verificadas).
+      // COMENTADO: El punto de venta NO debe cambiar durante la importación.
+      // Se mantiene el punto actual asignado al cliente.
+      /*
       for (let i = 0; i < soloPunto.length; i += LOTE) {
         const grupo = soloPunto.slice(i, i + LOTE);
         if (grupo.length === 0) continue;
@@ -584,6 +587,7 @@ export class ClientesService implements OnModuleInit {
         );
         actualizados += res.rowCount ?? 0;
       }
+      */
 
       await cliente.query('COMMIT');
     } catch (e) {
