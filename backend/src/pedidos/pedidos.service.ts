@@ -728,6 +728,29 @@ export class PedidosService implements OnModuleInit {
         ],
       );
 
+      // SINCRONIZACIÓN AUTOMÁTICA CON DRIVIN: Si se cancela el pedido,
+      // notificar a Drivin para que actualice el estado allá también.
+      // Se ejecuta de forma asíncrona (no-bloqueante) después de guardar.
+      if (
+        anulado &&
+        !anuladoAnterior &&
+        nuevoEstadoNorm === 'cancelado' &&
+        finalPedido.comanda &&
+        puntoId
+      ) {
+        const puntoNombre = finalPedido.punto?.nombre
+          ? String(finalPedido.punto.nombre)
+          : '';
+        // Ejecutar en background, sin esperar respuesta
+        this.cancelarEnDrivin(id, finalPedido.comanda, puntoId, puntoNombre).catch(
+          (e) => {
+            this.logger.error(
+              `Error no controlado en cancelación async: ${String(e)}`,
+            );
+          },
+        );
+      }
+
       await client.query('COMMIT');
       return finalPedido;
     } catch (e) {
@@ -1744,6 +1767,236 @@ export class PedidosService implements OnModuleInit {
       throw new Error(`Drivin respondió ${status}: ${detalle}`);
     }
     return { status, comanda: d.comanda, respuesta: data };
+  }
+
+  /**
+   * Sincroniza cancelaciones desde Drivin: consulta las órdenes que fueron
+   * canceladas o rechazadas en Drivin (status = rejected/cancelled) y marca
+   * los pedidos correspondientes en SIGCOMPRO como cancelados.
+   * 
+   * Se ejecuta bajo demanda o por un job programado. Recorre todos los escenarios
+   * del día y detecta órdenes con estado final.
+   */
+  async sincronizarCancelacionesDrivin(): Promise<number> {
+    let actualizados = 0;
+    try {
+      const hoy = this.diaBogota();
+      const scenarios = await this.drivinScenarios(hoy);
+      
+      // Procesar todos los escenarios del día en paralelo
+      const grupos = await Promise.all(
+        scenarios
+          .filter((s) => s.token)
+          .map(async (s) => {
+            try {
+              const r = await this.drivinGet<{
+                response?: Array<{
+                  orders?: Array<{
+                    code?: string;
+                    status?: string;
+                  }>;
+                }>;
+              }>(`/orders?token=${encodeURIComponent(s.token as string)}`);
+              return Array.isArray(r?.response) ? r.response : [];
+            } catch {
+              return [];
+            }
+          }),
+      );
+
+      // Procesar órdenes canceladas/rechazadas en Drivin
+      const comandasCanceladas: Set<string> = new Set();
+      for (const arr of grupos) {
+        for (const g of arr) {
+          for (const o of g.orders ?? []) {
+            const code = String(o.code ?? '').trim();
+            const status = String(o.status ?? '').toLowerCase();
+            // Estados finales en Drivin que significan cancelación
+            if (code && (status === 'rejected' || status === 'cancelled')) {
+              comandasCanceladas.add(code);
+            }
+          }
+        }
+      }
+
+      if (comandasCanceladas.size === 0) {
+        return 0;
+      }
+
+      // Buscar pedidos SIGCOMPRO que correspondan a estas comandas
+      // y no estén ya marcados como cancelados
+      const res = await this.pool.query<{
+        id: string;
+        comanda: string;
+        estado: string | null;
+      }>(
+        `SELECT id, data->>'comanda' as comanda, estado
+         FROM pedidos
+         WHERE (data->>'comanda') = ANY($1)
+           AND anulado = false
+           AND LOWER(COALESCE(estado, '')) NOT IN ('cancelado', 'anulado')`,
+        [[...comandasCanceladas]],
+      );
+
+      // Actualizar cada pedido a estado "Cancelado"
+      for (const ped of res.rows) {
+        try {
+          const actualizado = await this.guardar(
+            {
+              id: ped.id,
+              anulado: true,
+              estado: 'Cancelado',
+              motivo: 'Cancelado por Drivin',
+            },
+            undefined, // sin usuario (es sincronización automática)
+          );
+          if (actualizado) {
+            actualizados++;
+            this.logger.log(
+              `Pedido ${ped.id} (${ped.comanda}) sincronizado: ` +
+                `cancelado por Drivin`,
+            );
+          }
+        } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
+          this.logger.warn(
+            `No se pudo sincronizar cancelación del pedido ${ped.id}: ${error}`,
+          );
+        }
+      }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      this.logger.warn(
+        `Error al sincronizar cancelaciones desde Drivin: ${error}`,
+      );
+    }
+    return actualizados;
+  }
+
+  /**
+   * Cancela una orden en Drivin. Se ejecuta de forma asíncrona (no-bloqueante)
+   * cuando se marca un pedido como "Cancelado" en SIGCOMPRO.
+   * 
+   * Intenta eliminar la orden del escenario de Drivin usando DELETE. Si eso
+   * falla (la orden ya fue asignada), intenta marcarla como cancelada. También
+   * limpia la metadata del pedido (domiciliario, etc).
+   */
+  private async cancelarEnDrivin(
+    pedidoId: string,
+    comanda: string,
+    puntoCodigo: string,
+    puntoNombre: string,
+  ): Promise<void> {
+    // Ejecutar de forma asíncrona para no bloquear la respuesta
+    (async () => {
+      try {
+        const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+        if (!apiKey) {
+          this.logger.warn('No se pudo cancelar en Drivin: falta DRIVIN_API_KEY');
+          return;
+        }
+
+        const comandaLimpia = String(comanda ?? '').trim();
+        if (!comandaLimpia) {
+          this.logger.warn(
+            `Pedido ${pedidoId}: sin comanda, no se cancela en Drivin`,
+          );
+          return;
+        }
+
+        // Schema de Drivin para el punto
+        const schema = this.schemaDrivinPara(puntoCodigo, puntoNombre);
+        const hoy = this.diaBogota();
+
+        // Obtener el token del escenario para eliminar la orden
+        const token = await this.tokenScenarioPunto(schema, hoy);
+        if (!token) {
+          this.logger.warn(
+            `Pedido ${pedidoId} (${comandaLimpia}): sin escenario en Drivin`,
+          );
+          return;
+        }
+
+        // Intento 1: Eliminar la orden del escenario con DELETE
+        let eliminada = false;
+        try {
+          const path = `/orders/${encodeURIComponent(comandaLimpia)}?token=${encodeURIComponent(
+            token,
+          )}`;
+          const { status } = await this.drivinRequest(
+            'DELETE',
+            path,
+            apiKey,
+            undefined,
+            'v2',
+          );
+          // DELETE puede devolver 200 OK o 404 si no existe
+          if (status === 200 || status === 204) {
+            eliminada = true;
+            this.logger.log(
+              `Drivin orden ${comandaLimpia} cancelada: DELETE ${path} → ${status}`,
+            );
+          }
+        } catch (e) {
+          // Si DELETE falla, intentamos un PUT para marcar como cancelada
+          const error = e instanceof Error ? e.message : String(e);
+          this.logger.debug(
+            `DELETE para ${comandaLimpia} falló, intentando PUT: ${error}`,
+          );
+        }
+
+        // Intento 2: Si DELETE no funcionó, enviar PUT para marcar cancelada
+        // (algunos endpoints requieren un cambio de estado en lugar de eliminación)
+        if (!eliminada) {
+          try {
+            const body = JSON.stringify({ status: 'cancelled' });
+            const path = `/orders/${encodeURIComponent(comandaLimpia)}?token=${encodeURIComponent(
+              token,
+            )}`;
+            const { status } = await this.drivinRequest(
+              'PUT',
+              path,
+              apiKey,
+              body,
+              'v2',
+            );
+            if (status === 200 || status === 204) {
+              this.logger.log(
+                `Drivin orden ${comandaLimpia} marcada como cancelada: PUT → ${status}`,
+              );
+            }
+          } catch (e) {
+            const error = e instanceof Error ? e.message : String(e);
+            this.logger.warn(
+              `No se pudo cancelar ${comandaLimpia} en Drivin (PUT): ${error}`,
+            );
+          }
+        }
+
+        // Limpiar metadatos del pedido en SIGCOMPRO (domiciliario, estado de Drivin, etc)
+        try {
+          await this.actualizarMeta(pedidoId, {
+            domiciliario: null,
+            drivinEnviado: false,
+            drivinStatus: 'cancelled',
+          });
+        } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
+          this.logger.warn(
+            `No se pudo limpiar metadata del pedido ${pedidoId}: ${error}`,
+          );
+        }
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        this.logger.error(
+          `Error al cancelar orden en Drivin (pedido ${pedidoId}): ${error}`,
+        );
+      }
+    })().catch((e) => {
+      this.logger.error(
+        `Error no capturado en cancelación async de Drivin: ${String(e)}`,
+      );
+    });
   }
 }
 

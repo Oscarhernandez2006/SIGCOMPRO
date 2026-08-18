@@ -97,6 +97,13 @@ export class PedidosController {
     return this.pedidos.sincronizarDesasignacionesDrivin();
   }
 
+  /** Sincroniza cancelaciones desde Drivin: marca pedidos como cancelados si Drivin los rechazó. */
+  @Post('drivin/sincronizar-cancelaciones')
+  @Permisos('despacho')
+  sincronizarCancelaciones() {
+    return this.pedidos.sincronizarCancelacionesDrivin();
+  }
+
   /**
    * Estado de ENTREGA (POD) de una lista de comandas vía v3 /pods. Devuelve, por
    * comanda, `{ status, entregadoEn }` (status `approved` = entregado).
