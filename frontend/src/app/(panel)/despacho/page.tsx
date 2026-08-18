@@ -3274,8 +3274,16 @@ function ModalReplica({
   // ¿Este pedido es "rechazado"? (cuando el cliente no estaba)
   const esRechazado = norm(pedido.estado) === "rechazado";
   
-  // ¿El pedido rechazado es de hoy? (Solo permite réplica si es del mismo día)
+  // ¿Este pedido es "cancelado"?
+  const esCancelado = norm(pedido.estado) === "cancelado";
+  
+  // ¿El pedido rechazado o cancelado es de hoy? (Solo permite réplica si es del mismo día)
   const rechazadoDelDia = esRechazado && esDeHoy(pedido);
+  const canceladoDelDia = esCancelado && esDeHoy(pedido);
+  
+  // Permite réplica si está facturado, o si es rechazado/cancelado del mismo día
+  const permitirReplica = esFacturado || rechazadoDelDia || canceladoDelDia;
+  const requiereClaveParaReplica = rechazadoDelDia || canceladoDelDia;
 
   // Sube la réplica a Drivin (se usa al confirmar y como reintento). SIN
   // domiciliario: Drivin lo asigna y SIGCOMPRO lo baja luego.
@@ -3295,10 +3303,10 @@ function ModalReplica({
 
   // Confirmar (modo crear): crea la réplica SIN domiciliario y la sube a Drivin.
   // El domiciliario lo asigna Drivin (queda "esperando asignación").
-  // Si es pedido rechazado del mismo día, requiere clave dinámica antes.
+  // Si es pedido rechazado/cancelado del mismo día, requiere clave dinámica antes.
   function confirmar() {
-    // Si es rechazado del mismo día y no se ha verificado la clave, mostrar input de clave
-    if (rechazadoDelDia && !requiereClaveReplica) {
+    // Si requiere clave (rechazado o cancelado) y no se ha verificado, mostrar input
+    if (requiereClaveParaReplica && !requiereClaveReplica) {
       setRequiereClaveReplica(true);
       return;
     }
@@ -3310,7 +3318,7 @@ function ModalReplica({
     }
   }
   
-  // Verifica la clave dinámica para réplica de rechazados
+  // Verifica la clave dinámica para réplica de rechazados/cancelados
   const verificarClaveReplicaHandler = async () => {
     if (!codigoClaveReplica || codigoClaveReplica.length < 6) {
       setErrorClaveReplica("Ingresa la clave dinámica de 6 dígitos.");
@@ -3388,10 +3396,10 @@ function ModalReplica({
           </div>
 
           {modo === "crear" ? (
-            esFacturado || rechazadoDelDia ? (
+            permitirReplica ? (
               <>
                 <div className={`rounded-lg border px-3 py-2.5 text-sm ${
-                  esRechazado 
+                  requiereClaveParaReplica 
                     ? "border-orange-200 bg-orange-50 text-orange-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
                 }`}>
@@ -3406,6 +3414,14 @@ function ModalReplica({
                       </span>
                     </>
                   )}
+                  {canceladoDelDia && (
+                    <>
+                      <br />
+                      <span className="text-xs text-orange-700 mt-1 block">
+                        ✓ Este pedido fue cancelado pero se puede intentar entregar nuevamente hoy con nueva asignación de domiciliario.
+                      </span>
+                    </>
+                  )}
                   {esRechazado && !rechazadoDelDia && (
                     <>
                       <br />
@@ -3414,10 +3430,18 @@ function ModalReplica({
                       </span>
                     </>
                   )}
+                  {esCancelado && !canceladoDelDia && (
+                    <>
+                      <br />
+                      <span className="text-xs text-red-600 mt-1 block font-semibold">
+                        ⚠️ Las réplicas de cancelados solo se permiten el mismo día de la cancelación.
+                      </span>
+                    </>
+                  )}
                 </div>
                 
-                {/* Clave dinámica para pedidos rechazados del mismo día */}
-                {rechazadoDelDia && requiereClaveReplica && (
+                {/* Clave dinámica para pedidos rechazados/cancelados del mismo día */}
+                {requiereClaveParaReplica && requiereClaveReplica && (
                   <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 space-y-2">
                     <p className="text-sm font-semibold text-orange-900">
                       🔐 Clave dinámica requerida para réplica
@@ -3456,6 +3480,11 @@ function ModalReplica({
                   <>
                     No se puede hacer réplica de este pedido rechazado porque NO es de hoy. <br/>
                     <span className="text-xs">Las réplicas solo se permiten el mismo día de la entrega original.</span>
+                  </>
+                ) : esCancelado ? (
+                  <>
+                    No se puede hacer réplica de este pedido cancelado porque NO es de hoy. <br/>
+                    <span className="text-xs">Las réplicas solo se permiten el mismo día de la cancelación.</span>
                   </>
                 ) : (
                   <>No se puede realizar réplica si el pedido no está facturado.</>
@@ -3533,10 +3562,10 @@ function ModalReplica({
                 >
                   Reintentar envío
                 </button>
-              ) : esFacturado || rechazadoDelDia ? (
+              ) : esFacturado || permitirReplica ? (
                 <>
                   {/* Si es rechazado y requiere clave, mostrar botón de verificación */}
-                  {rechazadoDelDia && requiereClaveReplica ? (
+                  {requiereClaveParaReplica && requiereClaveReplica ? (
                     <button
                       onClick={verificarClaveReplicaHandler}
                       disabled={verificandoClaveReplica || codigoClaveReplica.length < 6}
@@ -3553,7 +3582,7 @@ function ModalReplica({
                     <button
                       onClick={confirmar}
                       disabled={drivinEstado === "enviando"}
-                      title={rechazadoDelDia ? "Confirmar (se pedirá clave dinámica)" : (esDrivin ? "Confirmar la réplica y subirla a Drivin" : "Confirmar y crear la réplica")}
+                      title={requiereClaveParaReplica ? "Confirmar (se pedirá clave dinámica)" : (esDrivin ? "Confirmar la réplica y subirla a Drivin" : "Confirmar y crear la réplica")}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-60"
                     >
                       {drivinEstado === "enviando" && (
