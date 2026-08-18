@@ -33,18 +33,15 @@ function Stat({
   color?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">{titulo}</p>
-      <p className={`mt-0.5 text-[2rem] font-extrabold leading-none ${color}`}>{valor}</p>
+      <p className={`mt-1 text-2xl font-extrabold leading-tight ${color}`}>{valor}</p>
       {sub && <p className="mt-0.5 text-[11px] text-brand-brown/55">{sub}</p>}
     </div>
   );
 }
 
-function pctOf(value: number, total: number): string {
-  if (!total || total <= 0) return "0.0";
-  return ((value / total) * 100).toFixed(1);
-}
+
 
 /** Barras simples de "por día" (sin dependencias de gráficas). */
 function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number }[]; formato: (n: number) => string }) {
@@ -497,58 +494,58 @@ export default function MiResumenPage() {
                 <BarrasPorDia datos={ventas.porDia} formato={cop} />
               </div>
 
-              {/* Desglose Hogar vs Horeca */}
-              <div className="mt-4 rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
-                <p className="mb-3 text-sm font-semibold text-brand-black">Hogar vs HORECA (Hotel, Restaurante, Café)</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-900">Hogar</p>
-                    <div className="mt-2 space-y-1.5 text-[12px] text-blue-900">
-                      <div className="flex items-center justify-between">
-                        <span className="text-blue-700">Pedidos</span>
-                        <span className="font-bold">{num(hogarVsHoreca.hogar.pedidos)} ({pctOf(hogarVsHoreca.hogar.pedidos, hogarVsHoreca.total.pedidos)}%)</span>
+              {/* Desglose Hogar vs Horeca - AMPLIADO Y PROMINENTE */}
+              <div className="mt-6 rounded-2xl border border-brand-brown/10 bg-white p-6 shadow-sm">
+                <p className="mb-5 font-serif text-lg font-bold text-brand-wine">Hogar vs HORECA (Hotel, Restaurante, Café)</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5">
+                    <p className="text-sm font-bold uppercase tracking-wide text-blue-900">Hogar</p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <p className="text-[11px] text-blue-700">Pedidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{num(hogarVsHoreca.hogar.pedidos)}</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-blue-700">Valor</span>
-                        <span className="font-bold">{cop(hogarVsHoreca.hogar.valor)} ({pctOf(hogarVsHoreca.hogar.valor, hogarVsHoreca.total.valor)}%)</span>
+                      <div>
+                        <p className="text-[11px] text-blue-700">Valor total</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{cop(hogarVsHoreca.hogar.valor)}</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-blue-700">Kilos</span>
-                        <span className="font-bold">{hogarVsHoreca.hogar.kilos.toFixed(1)} kg ({pctOf(hogarVsHoreca.hogar.kilos, hogarVsHoreca.total.kilos)}%)</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-900">HORECA</p>
-                    <div className="mt-2 space-y-1.5 text-[12px] text-orange-900">
-                      <div className="flex items-center justify-between">
-                        <span className="text-orange-700">Pedidos</span>
-                        <span className="font-bold">{num(hogarVsHoreca.horeca.pedidos)} ({pctOf(hogarVsHoreca.horeca.pedidos, hogarVsHoreca.total.pedidos)}%)</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-orange-700">Valor</span>
-                        <span className="font-bold">{cop(hogarVsHoreca.horeca.valor)} ({pctOf(hogarVsHoreca.horeca.valor, hogarVsHoreca.total.valor)}%)</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-orange-700">Kilos</span>
-                        <span className="font-bold">{hogarVsHoreca.horeca.kilos.toFixed(1)} kg ({pctOf(hogarVsHoreca.horeca.kilos, hogarVsHoreca.total.kilos)}%)</span>
+                      <div>
+                        <p className="text-[11px] text-blue-700">Kilos vendidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{hogarVsHoreca.hogar.kilos.toFixed(1)}</p>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-900">Total</p>
-                    <div className="mt-2 space-y-1.5 text-[12px] text-purple-900">
-                      <div className="flex items-center justify-between">
-                        <span className="text-purple-700">Pedidos</span>
-                        <span className="font-bold">{num(hogarVsHoreca.total.pedidos)} (100%)</span>
+                  <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-5">
+                    <p className="text-sm font-bold uppercase tracking-wide text-orange-900">HORECA</p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <p className="text-[11px] text-orange-700">Pedidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{num(hogarVsHoreca.horeca.pedidos)}</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-purple-700">Valor</span>
-                        <span className="font-bold">{cop(hogarVsHoreca.total.valor)} (100%)</span>
+                      <div>
+                        <p className="text-[11px] text-orange-700">Valor total</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{cop(hogarVsHoreca.horeca.valor)}</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-purple-700">Kilos</span>
-                        <span className="font-bold">{hogarVsHoreca.total.kilos.toFixed(1)} kg (100%)</span>
+                      <div>
+                        <p className="text-[11px] text-orange-700">Kilos vendidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{hogarVsHoreca.horeca.kilos.toFixed(1)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-5">
+                    <p className="text-sm font-bold uppercase tracking-wide text-purple-900">Total</p>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <p className="text-[11px] text-purple-700">Pedidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{num(hogarVsHoreca.total.pedidos)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-purple-700">Valor total</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{cop(hogarVsHoreca.total.valor)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-purple-700">Kilos vendidos</p>
+                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{hogarVsHoreca.total.kilos.toFixed(1)}</p>
                       </div>
                     </div>
                   </div>
