@@ -494,58 +494,58 @@ export default function MiResumenPage() {
                 <BarrasPorDia datos={ventas.porDia} formato={cop} />
               </div>
 
-              {/* Desglose Hogar vs Horeca - AMPLIADO Y PROMINENTE */}
-              <div className="mt-6 rounded-2xl border border-brand-brown/10 bg-white p-6 shadow-sm">
-                <p className="mb-5 font-serif text-lg font-bold text-brand-wine">Hogar vs HORECA (Hotel, Restaurante, Café)</p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5">
-                    <p className="text-sm font-bold uppercase tracking-wide text-blue-900">Hogar</p>
-                    <div className="mt-4 space-y-3">
-                      <div>
+              {/* Desglose Hogar vs Horeca - COMPACTO SIN ESPACIOS */}
+              <div className="mt-6 rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
+                <p className="mb-3 font-serif text-lg font-bold text-brand-wine">Hogar vs HORECA (Hotel, Restaurante, Café)</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-900">Hogar</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-blue-700">Pedidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{num(hogarVsHoreca.hogar.pedidos)}</p>
+                        <p className="font-display text-xl font-extrabold text-blue-900">{num(hogarVsHoreca.hogar.pedidos)}</p>
                       </div>
-                      <div>
-                        <p className="text-[11px] text-blue-700">Valor total</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{cop(hogarVsHoreca.hogar.valor)}</p>
-                      </div>
-                      <div>
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-blue-700">Kilos vendidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-blue-900">{hogarVsHoreca.hogar.kilos.toFixed(1)}</p>
+                        <p className="font-display text-xl font-extrabold text-blue-900">{hogarVsHoreca.hogar.kilos.toFixed(1)}</p>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-blue-700">Valor total</p>
+                        <p className="font-display text-xl font-extrabold text-blue-900">{cop(hogarVsHoreca.hogar.valor)}</p>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-5">
-                    <p className="text-sm font-bold uppercase tracking-wide text-orange-900">HORECA</p>
-                    <div className="mt-4 space-y-3">
-                      <div>
+                  <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-orange-900">HORECA</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-orange-700">Pedidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{num(hogarVsHoreca.horeca.pedidos)}</p>
+                        <p className="font-display text-xl font-extrabold text-orange-900">{num(hogarVsHoreca.horeca.pedidos)}</p>
                       </div>
-                      <div>
-                        <p className="text-[11px] text-orange-700">Valor total</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{cop(hogarVsHoreca.horeca.valor)}</p>
-                      </div>
-                      <div>
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-orange-700">Kilos vendidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-orange-900">{hogarVsHoreca.horeca.kilos.toFixed(1)}</p>
+                        <p className="font-display text-xl font-extrabold text-orange-900">{hogarVsHoreca.horeca.kilos.toFixed(1)}</p>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-orange-700">Valor total</p>
+                        <p className="font-display text-xl font-extrabold text-orange-900">{cop(hogarVsHoreca.horeca.valor)}</p>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-5">
-                    <p className="text-sm font-bold uppercase tracking-wide text-purple-900">Total</p>
-                    <div className="mt-4 space-y-3">
-                      <div>
+                  <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-purple-900">Total</p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-purple-700">Pedidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{num(hogarVsHoreca.total.pedidos)}</p>
+                        <p className="font-display text-xl font-extrabold text-purple-900">{num(hogarVsHoreca.total.pedidos)}</p>
                       </div>
-                      <div>
-                        <p className="text-[11px] text-purple-700">Valor total</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{cop(hogarVsHoreca.total.valor)}</p>
-                      </div>
-                      <div>
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] text-purple-700">Kilos vendidos</p>
-                        <p className="mt-0.5 font-display text-2xl font-extrabold text-purple-900">{hogarVsHoreca.total.kilos.toFixed(1)}</p>
+                        <p className="font-display text-xl font-extrabold text-purple-900">{hogarVsHoreca.total.kilos.toFixed(1)}</p>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-purple-700">Valor total</p>
+                        <p className="font-display text-xl font-extrabold text-purple-900">{cop(hogarVsHoreca.total.valor)}</p>
                       </div>
                     </div>
                   </div>

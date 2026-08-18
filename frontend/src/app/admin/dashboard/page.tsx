@@ -588,20 +588,20 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
-                    <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
-                      {cop(m.hogarVsHoreca.hogar.valor)}
-                      <span className="ml-1 text-xs font-semibold text-blue-700">
-                        ({pctOf(m.hogarVsHoreca.hogar.valor, m.hogarVsHoreca.total.valor)}%)
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
                     <span className="text-brand-brown/60">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
                       {m.hogarVsHoreca.hogar.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-blue-700">
                         ({pctOf(m.hogarVsHoreca.hogar.kilos, m.hogarVsHoreca.total.kilos)}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
+                      {cop(m.hogarVsHoreca.hogar.valor)}
+                      <span className="ml-1 text-xs font-semibold text-blue-700">
+                        ({pctOf(m.hogarVsHoreca.hogar.valor, m.hogarVsHoreca.total.valor)}%)
                       </span>
                     </span>
                   </div>
@@ -620,20 +620,20 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
-                    <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
-                      {cop(m.hogarVsHoreca.horeca.valor)}
-                      <span className="ml-1 text-xs font-semibold text-orange-700">
-                        ({pctOf(m.hogarVsHoreca.horeca.valor, m.hogarVsHoreca.total.valor)}%)
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
                     <span className="text-brand-brown/60">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
                       {m.hogarVsHoreca.horeca.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-orange-700">
                         ({pctOf(m.hogarVsHoreca.horeca.kilos, m.hogarVsHoreca.total.kilos)}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
+                      {cop(m.hogarVsHoreca.horeca.valor)}
+                      <span className="ml-1 text-xs font-semibold text-orange-700">
+                        ({pctOf(m.hogarVsHoreca.horeca.valor, m.hogarVsHoreca.total.valor)}%)
                       </span>
                     </span>
                   </div>
@@ -650,16 +650,16 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="text-brand-brown/60">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
-                      {cop(m.hogarVsHoreca.total.valor)}
+                      {m.hogarVsHoreca.total.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="text-brand-brown/60">Valor total</span>
                     <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
-                      {m.hogarVsHoreca.total.kilos.toFixed(1)}
+                      {cop(m.hogarVsHoreca.total.valor)}
                       <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
                     </span>
                   </div>
