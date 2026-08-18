@@ -246,6 +246,15 @@ const ESTADOS: EstadoDef[] = [
     chip: "bg-brand-gold/20 text-brand-amber",
   },
   {
+    key: "rechazados",
+    label: "Rechazados",
+    sub: "Por cliente no atender (Drivin)",
+    icon: Icono.alerta,
+    match: (x) => norm(x.estado) === "rechazado",
+    chip: "bg-orange-100 text-orange-700",
+    alerta: true,
+  },
+  {
     key: "cancelados",
     label: "Cancelados",
     sub: "Anulados",
@@ -322,6 +331,7 @@ const ESTADOS_FLUJO = [
   "Despachado",
   "En tránsito",
   "Entregado",
+  "Rechazado",
 ] as const;
 
 /**
@@ -331,6 +341,7 @@ const ESTADOS_FLUJO = [
 const ETIQUETA_ESTADO_FLUJO: Record<string, string> = {
   "En proceso": "Pendiente",
   "En producción": "Preparado",
+  "Rechazado": "Rechazado (Cliente no atendía)",
 };
 
 /**
@@ -346,6 +357,7 @@ const PERMISO_POR_ESTADO: Record<string, string> = {
   "despachado": "despacho.estado.despachado",
   "en tránsito": "despacho.estado.despachado",
   "entregado": "despacho.estado.despachado",
+  "rechazado": "despacho.estado.despachado",
 };
 
 function fmtFecha(iso: string): string {
@@ -3233,6 +3245,12 @@ function ModalReplica({
     yaEnviado ? "ok" : "idle",
   );
   const [drivinMsg, setDrivinMsg] = useState("");
+  // Clave dinámica para confirmar réplica de pedidos rechazados
+  const [requiereClaveReplica, setRequiereClaveReplica] = useState(false);
+  const [codigoClaveReplica, setCodigoClaveReplica] = useState("");
+  const [verificandoClaveReplica, setVerificandoClaveReplica] = useState(false);
+  const [errorClaveReplica, setErrorClaveReplica] = useState<string | null>(null);
+  
   const codigoReplica = `${pedido.comanda}-${numero}`;
   // Solo se puede REPLICAR un pedido que YA esté facturado. La factura es la del
   // pedido ORIGINAL, así que basta con que el pedido tenga factura registrada,
@@ -3252,6 +3270,9 @@ function ModalReplica({
       nombre.includes("felipe")
     );
   })();
+  
+  // ¿Este pedido es "rechazado"? (cuando el cliente no estaba)
+  const esRechazado = norm(pedido.estado) === "rechazado";
 
   // Sube la réplica a Drivin (se usa al confirmar y como reintento). SIN
   // domiciliario: Drivin lo asigna y SIGCOMPRO lo baja luego.
@@ -3271,7 +3292,13 @@ function ModalReplica({
 
   // Confirmar (modo crear): crea la réplica SIN domiciliario y la sube a Drivin.
   // El domiciliario lo asigna Drivin (queda "esperando asignación").
+  // Si es pedido rechazado, requiere clave dinámica antes.
   function confirmar() {
+    // Si es rechazado y no se ha verificado la clave, mostrar input de clave
+    if (esRechazado && !requiereClaveReplica) {
+      setRequiereClaveReplica(true);
+      return;
+    }
     onCrear("", "");
     if (esDrivin) {
       enviarDrivin();
@@ -3279,6 +3306,34 @@ function ModalReplica({
       onCerrar();
     }
   }
+  
+  // Verifica la clave dinámica para réplica de rechazados
+  const verificarClaveReplicaHandler = async () => {
+    if (!codigoClaveReplica || codigoClaveReplica.length < 6) {
+      setErrorClaveReplica("Ingresa la clave dinámica de 6 dígitos.");
+      return;
+    }
+    setVerificandoClaveReplica(true);
+    setErrorClaveReplica(null);
+    try {
+      const { valido } = await verificarClaveDinamica(codigoClaveReplica);
+      if (!valido) {
+        setErrorClaveReplica("Clave incorrecta o vencida.");
+        return;
+      }
+      // Clave válida: proceder con la réplica
+      onCrear("", "");
+      if (esDrivin) {
+        enviarDrivin();
+      } else {
+        onCerrar();
+      }
+    } catch {
+      setErrorClaveReplica("No se pudo verificar la clave. Inténtalo de nuevo.");
+    } finally {
+      setVerificandoClaveReplica(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
@@ -3331,11 +3386,41 @@ function ModalReplica({
 
           {modo === "crear" ? (
             esFacturado ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
-                Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
-                <b> esperará que Drivin le asigne el domiciliario</b> (no se
-                selecciona aquí).
-              </div>
+              <>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                  Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
+                  <b> esperará que Drivin le asigne el domiciliario</b> (no se
+                  selecciona aquí).
+                </div>
+                
+                {/* Clave dinámica para pedidos rechazados */}
+                {esRechazado && requiereClaveReplica && (
+                  <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 space-y-2">
+                    <p className="text-sm font-semibold text-orange-900">
+                      Clave dinámica requerida para réplica
+                    </p>
+                    <p className="text-xs text-orange-700">
+                      Ingresa la clave de 6 dígitos para confirmar la réplica de este pedido rechazado.
+                    </p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={codigoClaveReplica}
+                      onChange={(e) => {
+                        setCodigoClaveReplica(e.target.value.replace(/\D/g, ""));
+                        setErrorClaveReplica(null);
+                      }}
+                      placeholder="000000"
+                      disabled={verificandoClaveReplica}
+                      className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-center font-mono text-lg font-bold tracking-widest disabled:opacity-50"
+                    />
+                    {errorClaveReplica && (
+                      <p className="text-xs font-semibold text-red-600">{errorClaveReplica}</p>
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
                 No se puede realizar réplica si el pedido no está facturado.
@@ -3413,21 +3498,39 @@ function ModalReplica({
                   Reintentar envío
                 </button>
               ) : esFacturado ? (
-                <button
-                  onClick={confirmar}
-                  disabled={drivinEstado === "enviando"}
-                  title={esDrivin ? "Confirmar la réplica y subirla a Drivin" : "Confirmar y crear la réplica"}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-60"
-                >
-                  {drivinEstado === "enviando" && (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <>
+                  {/* Si es rechazado y requiere clave, mostrar botón de verificación */}
+                  {esRechazado && requiereClaveReplica ? (
+                    <button
+                      onClick={verificarClaveReplicaHandler}
+                      disabled={verificandoClaveReplica || codigoClaveReplica.length < 6}
+                      title="Verificar clave dinámica"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+                    >
+                      {verificandoClaveReplica && (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      )}
+                      {verificandoClaveReplica ? "Verificando…" : "Verificar clave"}
+                    </button>
+                  ) : (
+                    /* Botón normal de confirmar */
+                    <button
+                      onClick={confirmar}
+                      disabled={drivinEstado === "enviando"}
+                      title={esRechazado ? "Confirmar (se pedirá clave dinámica)" : (esDrivin ? "Confirmar la réplica y subirla a Drivin" : "Confirmar y crear la réplica")}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-60"
+                    >
+                      {drivinEstado === "enviando" && (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      )}
+                      {drivinEstado === "enviando"
+                        ? "Enviando…"
+                        : esDrivin
+                          ? "Confirmar y subir"
+                          : "Confirmar"}
+                    </button>
                   )}
-                  {drivinEstado === "enviando"
-                    ? "Enviando…"
-                    : esDrivin
-                      ? "Confirmar y subir"
-                      : "Confirmar"}
-                </button>
+                </>
               ) : null
             ) : esDrivin ? (
               <>

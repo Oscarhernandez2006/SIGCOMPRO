@@ -1805,64 +1805,110 @@ export class PedidosService implements OnModuleInit {
       );
 
       // Procesar órdenes canceladas/rechazadas en Drivin
+      // Separar por tipo para manejar diferente:
+      // - rejected: cliente no atendió → estado "Rechazado" (permite réplica)
+      // - cancelled: cancelación → estado "Cancelado" (anulado)
+      const comandasRechazadas: Set<string> = new Set();
       const comandasCanceladas: Set<string> = new Set();
       for (const arr of grupos) {
         for (const g of arr) {
           for (const o of g.orders ?? []) {
             const code = String(o.code ?? '').trim();
             const status = String(o.status ?? '').toLowerCase();
-            // Estados finales en Drivin que significan cancelación
-            if (code && (status === 'rejected' || status === 'cancelled')) {
-              comandasCanceladas.add(code);
+            if (code) {
+              if (status === 'rejected') {
+                comandasRechazadas.add(code);
+              } else if (status === 'cancelled') {
+                comandasCanceladas.add(code);
+              }
             }
           }
         }
       }
 
-      if (comandasCanceladas.size === 0) {
-        return 0;
-      }
+      // Actualizar comandas rechazadas a estado "Rechazado"
+      if (comandasRechazadas.size > 0) {
+        const resRechazados = await this.pool.query<{
+          id: string;
+          comanda: string;
+          estado: string | null;
+        }>(
+          `SELECT id, data->>'comanda' as comanda, estado
+           FROM pedidos
+           WHERE (data->>'comanda') = ANY($1)
+             AND anulado = false
+             AND LOWER(COALESCE(estado, '')) NOT IN ('rechazado', 'cancelado', 'anulado')`,
+          [[...comandasRechazadas]],
+        );
 
-      // Buscar pedidos SIGCOMPRO que correspondan a estas comandas
-      // y no estén ya marcados como cancelados
-      const res = await this.pool.query<{
-        id: string;
-        comanda: string;
-        estado: string | null;
-      }>(
-        `SELECT id, data->>'comanda' as comanda, estado
-         FROM pedidos
-         WHERE (data->>'comanda') = ANY($1)
-           AND anulado = false
-           AND LOWER(COALESCE(estado, '')) NOT IN ('cancelado', 'anulado')`,
-        [[...comandasCanceladas]],
-      );
-
-      // Actualizar cada pedido a estado "Cancelado"
-      for (const ped of res.rows) {
-        try {
-          const actualizado = await this.guardar(
-            {
-              id: ped.id,
-              anulado: true,
-              estado: 'Cancelado',
-              motivo: 'Cancelado por Drivin',
-            },
-            undefined, // sin usuario (es sincronización automática)
-          );
-          if (actualizado) {
-            actualizados++;
-            this.logger.log(
-              `Pedido ${ped.id} (${ped.comanda}) sincronizado: ` +
-                `cancelado por Drivin`,
+        for (const ped of resRechazados.rows) {
+          try {
+            const actualizado = await this.guardar(
+              {
+                id: ped.id,
+                estado: 'Rechazado',
+                motivo: 'Cliente no atendía (rechazado por Drivin)',
+              },
+              undefined,
+            );
+            if (actualizado) {
+              actualizados++;
+              this.logger.log(
+                `Pedido ${ped.id} (${ped.comanda}) marcado como Rechazado en Drivin`,
+              );
+            }
+          } catch (e) {
+            const error = e instanceof Error ? e.message : String(e);
+            this.logger.warn(
+              `No se pudo marcar como rechazado el pedido ${ped.id}: ${error}`,
             );
           }
-        } catch (e) {
-          const error = e instanceof Error ? e.message : String(e);
-          this.logger.warn(
-            `No se pudo sincronizar cancelación del pedido ${ped.id}: ${error}`,
-          );
         }
+      }
+
+      // Actualizar comandas canceladas a estado "Cancelado"
+      if (comandasCanceladas.size > 0) {
+        const resCancelados = await this.pool.query<{
+          id: string;
+          comanda: string;
+          estado: string | null;
+        }>(
+          `SELECT id, data->>'comanda' as comanda, estado
+           FROM pedidos
+           WHERE (data->>'comanda') = ANY($1)
+             AND anulado = false
+             AND LOWER(COALESCE(estado, '')) NOT IN ('cancelado', 'anulado')`,
+          [[...comandasCanceladas]],
+        );
+
+        for (const ped of resCancelados.rows) {
+          try {
+            const actualizado = await this.guardar(
+              {
+                id: ped.id,
+                anulado: true,
+                estado: 'Cancelado',
+                motivo: 'Cancelado por Drivin',
+              },
+              undefined,
+            );
+            if (actualizado) {
+              actualizados++;
+              this.logger.log(
+                `Pedido ${ped.id} (${ped.comanda}) sincronizado: cancelado por Drivin`,
+              );
+            }
+          } catch (e) {
+            const error = e instanceof Error ? e.message : String(e);
+            this.logger.warn(
+              `No se pudo sincronizar cancelación del pedido ${ped.id}: ${error}`,
+            );
+          }
+        }
+      }
+
+      if (comandasRechazadas.size === 0 && comandasCanceladas.size === 0) {
+        return 0;
       }
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
