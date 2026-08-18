@@ -740,7 +740,7 @@ export class PedidosService implements OnModuleInit {
       if (
         anulado &&
         !anuladoAnterior &&
-        nuevoEstadoNorm === 'cancelado' &&
+        (nuevoEstadoNorm === 'cancelado' || nuevoEstadoNorm === 'anulado') &&
         finalPedido.comanda &&
         puntoId
       ) {
@@ -1778,7 +1778,7 @@ export class PedidosService implements OnModuleInit {
   /**
    * Sincroniza cancelaciones desde Drivin: consulta las órdenes que fueron
    * canceladas o rechazadas en Drivin (status = rejected/cancelled) y marca
-   * los pedidos correspondientes en SIGCOMPRO como cancelados.
+    * los pedidos correspondientes en SIGCOMPRO según la regla de negocio.
    * 
    * Se ejecuta bajo demanda o por un job programado. Recorre todos los escenarios
    * del día y detecta órdenes con estado final.
@@ -1810,10 +1810,10 @@ export class PedidosService implements OnModuleInit {
           }),
       );
 
-      // Procesar órdenes canceladas/rechazadas en Drivin
-      // Separar por tipo para manejar diferente:
-      // - rejected: cliente no atendió → estado "Rechazado" (permite réplica)
-      // - cancelled: cancelación → estado "Cancelado" (anulado)
+      // Procesar órdenes canceladas/rechazadas en Drivin.
+      // Reglas acordadas:
+      // - rejected  -> estado "Entregado" (con motivo de rechazo)
+      // - cancelled -> estado "Anulado"   (anulado=true)
       const comandasRechazadas: Set<string> = new Set();
       const comandasCanceladas: Set<string> = new Set();
       for (const arr of grupos) {
@@ -1832,7 +1832,7 @@ export class PedidosService implements OnModuleInit {
         }
       }
 
-      // Actualizar comandas rechazadas a estado "Rechazado"
+      // Actualizar comandas rejected a estado "Entregado"
       if (comandasRechazadas.size > 0) {
         const resRechazados = await this.pool.query<{
           id: string;
@@ -1842,7 +1842,7 @@ export class PedidosService implements OnModuleInit {
           `SELECT id, data->>'comanda' as comanda, estado
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
-             AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
+             AND LOWER(COALESCE(estado, '')) != 'entregado'`,
           [[...comandasRechazadas]],
         );
 
@@ -1852,7 +1852,7 @@ export class PedidosService implements OnModuleInit {
               {
                 id: ped.id,
                 anulado: false,
-                estado: 'Rechazado',
+                estado: 'Entregado',
                 motivo: 'Cliente no atendía (rechazado por Drivin)',
               },
               undefined,
@@ -1860,20 +1860,19 @@ export class PedidosService implements OnModuleInit {
             if (actualizado) {
               actualizados++;
               this.logger.log(
-                `Pedido ${ped.id} (${ped.comanda}) marcado como Rechazado en Drivin (antes estaba: ${ped.estado})`,
+                `Pedido ${ped.id} (${ped.comanda}) sincronizado como Entregado por Drivin rejected (antes: ${ped.estado})`,
               );
             }
           } catch (e) {
             const error = e instanceof Error ? e.message : String(e);
             this.logger.warn(
-              `No se pudo marcar como rechazado el pedido ${ped.id}: ${error}`,
+              `No se pudo sincronizar rejected del pedido ${ped.id}: ${error}`,
             );
           }
         }
       }
 
-      // Actualizar comandas canceladas a estado "Cancelado"
-      // IMPORTANTE: NO sobrescribir si ya está en estado "Rechazado"
+      // Actualizar comandas cancelled a estado "Anulado"
       if (comandasCanceladas.size > 0) {
         const resCancelados = await this.pool.query<{
           id: string;
@@ -1884,7 +1883,7 @@ export class PedidosService implements OnModuleInit {
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
              AND anulado = false
-             AND LOWER(COALESCE(estado, '')) NOT IN ('rechazado', 'cancelado', 'anulado')`,
+             AND LOWER(COALESCE(estado, '')) != 'anulado'`,
           [[...comandasCanceladas]],
         );
 
@@ -1894,7 +1893,7 @@ export class PedidosService implements OnModuleInit {
               {
                 id: ped.id,
                 anulado: true,
-                estado: 'Cancelado',
+                estado: 'Anulado',
                 motivo: 'Cancelado por Drivin',
               },
               undefined,
@@ -1902,7 +1901,7 @@ export class PedidosService implements OnModuleInit {
             if (actualizado) {
               actualizados++;
               this.logger.log(
-                `Pedido ${ped.id} (${ped.comanda}) sincronizado: cancelado por Drivin`,
+                `Pedido ${ped.id} (${ped.comanda}) sincronizado: anulado por Drivin`,
               );
             }
           } catch (e) {

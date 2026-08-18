@@ -246,15 +246,6 @@ const ESTADOS: EstadoDef[] = [
     chip: "bg-brand-gold/20 text-brand-amber",
   },
   {
-    key: "rechazados",
-    label: "Rechazados",
-    sub: "Por cliente no atender (Drivin)",
-    icon: Icono.alerta,
-    match: (x) => norm(x.estado) === "rechazado",
-    chip: "bg-orange-100 text-orange-700",
-    alerta: true,
-  },
-  {
     key: "cancelados",
     label: "Cancelados",
     sub: "Anulados",
@@ -331,7 +322,6 @@ const ESTADOS_FLUJO = [
   "Despachado",
   "En tránsito",
   "Entregado",
-  "Rechazado",
 ] as const;
 
 /**
@@ -341,7 +331,6 @@ const ESTADOS_FLUJO = [
 const ETIQUETA_ESTADO_FLUJO: Record<string, string> = {
   "En proceso": "Pendiente",
   "En producción": "Preparado",
-  "Rechazado": "Rechazado (Cliente no atendía)",
 };
 
 /**
@@ -357,7 +346,6 @@ const PERMISO_POR_ESTADO: Record<string, string> = {
   "despachado": "despacho.estado.despachado",
   "en tránsito": "despacho.estado.despachado",
   "entregado": "despacho.estado.despachado",
-  "rechazado": "despacho.estado.despachado",
 };
 
 function fmtFecha(iso: string): string {
@@ -649,12 +637,12 @@ export default function DespachoPage() {
 
   // Estado de ENTREGA (POD) de Drivin. Máquina de estados por pedido:
   //   customer_status "approved"    -> estado "Entregado"  (final)
-  //   customer_status "rejected"    -> estado "Rechazado"  (cliente no atendió; permite réplica del día)
+  //   customer_status "rejected"    -> estado "Entregado"  (incidencia por cliente; permite réplica del día)
   //   customer_status "in-transit"  -> estado "En tránsito" (sigue consultando)
   //   "pending" / sin POD           -> se deja igual (sigue consultando)
   // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
-  // (despachado / en tránsito); los "entregado" solo cada 6 ciclos (~30s), para
-  // AUTO-CORREGIR a Rechazado si Drivin los rechazó, sin inflar la consulta.
+  // (despachado / en tránsito); los "entregado" y anulados finales cada 6 ciclos
+  // (~30s), para autocorregir incidencias de Drivin sin inflar la consulta.
   const entregaRef = useRef({ pedidos, meta, idsPuntos });
   entregaRef.current = { pedidos, meta, idsPuntos };
   useEffect(() => {
@@ -671,12 +659,11 @@ export default function DespachoPage() {
         // entregarse/recogerse).
         if (!p.punto?.id || !ids.has(String(p.punto.id))) return false;
         const e = norm(p.estado);
-        if (p.anulado && e !== "cancelado") return false;
+        if (p.anulado && e !== "anulado" && e !== "cancelado") return false;
         if (e === "despachado" || e === "en tránsito") return true;
         if (e === "entregado" && revisarEntregados) return true;
-        // Revalida periódicamente cancelados para corregir casos donde Drivin
-        // realmente quedó como "rejected" (cliente no atendió).
-        if (e === "cancelado" && revisarEntregados) return true;
+        // Revalida anulados/cancelados para corregir casos heredados.
+        if ((e === "anulado" || e === "cancelado") && revisarEntregados) return true;
         return false;
       });
       // Códigos Drivin por pedido: si tiene RÉPLICAS son "comanda-N" (cada parte
@@ -738,10 +725,15 @@ export default function DespachoPage() {
             const motivo = (comment || "").trim() || "Rechazado por el cliente (Drivin)";
             setPedidos((prev) => {
               const actual = prev.find((x) => x.id === p.id);
-              if (!actual || norm(actual.estado) === "rechazado") return prev;
+              const yaMarcado =
+                !!actual &&
+                !actual.anulado &&
+                norm(actual.estado) === "entregado" &&
+                norm(actual.motivo ?? "").includes("rechazado por el cliente");
+              if (!actual || yaMarcado) return prev;
               const next = prev.map((x) =>
                 x.id === p.id
-                  ? { ...x, anulado: false, estado: "Rechazado" as Pedido["estado"], motivo }
+                  ? { ...x, anulado: false, estado: "Entregado" as Pedido["estado"], motivo }
                   : x,
               );
               const upd = next.find((x) => x.id === p.id);
@@ -1808,7 +1800,7 @@ export default function DespachoPage() {
             <tbody className="divide-y-4 divide-double divide-brand-brown/20">
               {pedidosFiltrados.map((p) => {
                 const anulado = p.anulado;
-                const estado = anulado ? (p.estado === "Cancelado" ? "Cancelado" : "Anulado") : p.estado || "En proceso";
+                const estado = anulado ? "Anulado" : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
                 const porcSel = porcBorrador[p.id] ?? m.porcionador ?? "";
                 // Porcionadores y domiciliarios del punto de venta de este pedido.
@@ -3251,7 +3243,7 @@ function ModalReplica({
     yaEnviado ? "ok" : "idle",
   );
   const [drivinMsg, setDrivinMsg] = useState("");
-  // Clave dinámica para confirmar réplica de pedidos rechazados
+  // Clave dinámica para confirmar réplica de incidencias Drivin
   const [requiereClaveReplica, setRequiereClaveReplica] = useState(false);
   const [codigoClaveReplica, setCodigoClaveReplica] = useState("");
   const [verificandoClaveReplica, setVerificandoClaveReplica] = useState(false);
@@ -3277,19 +3269,29 @@ function ModalReplica({
     );
   })();
   
-  // ¿Este pedido es "rechazado"? (cuando el cliente no estaba)
-  const esRechazado = norm(pedido.estado) === "rechazado";
-  
-  // ¿Este pedido es "cancelado"?
-  const esCancelado = norm(pedido.estado) === "cancelado";
-  
-  // ¿El pedido rechazado o cancelado es de hoy? (Solo permite réplica si es del mismo día)
-  const rechazadoDelDia = esRechazado && esDeHoy(pedido);
-  const canceladoDelDia = esCancelado && esDeHoy(pedido);
-  
-  // Permite réplica si está facturado, o si es rechazado/cancelado del mismo día
-  const permitirReplica = esFacturado || rechazadoDelDia || canceladoDelDia;
-  const requiereClaveParaReplica = rechazadoDelDia || canceladoDelDia;
+  const estadoNorm = norm(pedido.estado);
+  const motivoNorm = norm(pedido.motivo ?? "");
+  // Compatibilidad: pedidos viejos en estado "rechazado" y nuevos mapeados a
+  // "entregado" con motivo de rechazo en Drivin.
+  const esRechazoDrivin =
+    estadoNorm === "rechazado" ||
+    (estadoNorm === "entregado" &&
+      (motivoNorm.includes("rechazado por el cliente") ||
+        motivoNorm.includes("cliente no atend")));
+  // Compatibilidad: pedidos viejos "cancelado" y nuevos como "anulado".
+  const esCancelacionDrivin =
+    estadoNorm === "cancelado" ||
+    ((pedido.anulado || estadoNorm === "anulado") &&
+      motivoNorm.includes("cancelado por drivin"));
+  // Solo permite réplica de incidencias Drivin si el pedido es del día.
+  const rechazoDrivinDelDia = esRechazoDrivin && esDeHoy(pedido);
+  const cancelacionDrivinDelDia = esCancelacionDrivin && esDeHoy(pedido);
+
+  // Permite réplica si está facturado o si es una incidencia Drivin del día.
+  const permitirReplica =
+    esFacturado || rechazoDrivinDelDia || cancelacionDrivinDelDia;
+  const requiereClaveParaReplica =
+    rechazoDrivinDelDia || cancelacionDrivinDelDia;
 
   // Sube la réplica a Drivin (se usa al confirmar y como reintento). SIN
   // domiciliario: Drivin lo asigna y SIGCOMPRO lo baja luego.
@@ -3309,9 +3311,9 @@ function ModalReplica({
 
   // Confirmar (modo crear): crea la réplica SIN domiciliario y la sube a Drivin.
   // El domiciliario lo asigna Drivin (queda "esperando asignación").
-  // Si es pedido rechazado/cancelado del mismo día, requiere clave dinámica antes.
+  // Si es incidencia Drivin del mismo día, requiere clave dinámica antes.
   function confirmar() {
-    // Si requiere clave (rechazado o cancelado) y no se ha verificado, mostrar input
+    // Si requiere clave y no se ha verificado, mostrar input.
     if (requiereClaveParaReplica && !requiereClaveReplica) {
       setRequiereClaveReplica(true);
       return;
@@ -3324,7 +3326,7 @@ function ModalReplica({
     }
   }
   
-  // Verifica la clave dinámica para réplica de rechazados/cancelados
+  // Verifica la clave dinámica para réplica de incidencias Drivin
   const verificarClaveReplicaHandler = async () => {
     if (!codigoClaveReplica || codigoClaveReplica.length < 6) {
       setErrorClaveReplica("Ingresa la clave dinámica de 6 dígitos.");
@@ -3412,48 +3414,48 @@ function ModalReplica({
                   Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
                   <b> esperará que Drivin le asigne el domiciliario</b> (no se
                   selecciona aquí).
-                  {rechazadoDelDia && (
+                  {rechazoDrivinDelDia && (
                     <>
                       <br />
                       <span className="text-xs text-orange-700 mt-1 block">
-                        ✓ Este pedido fue rechazado porque el cliente no estaba. Se intentará entregar nuevamente hoy con nueva asignación de domiciliario.
+                        ✓ Este pedido fue rechazado en Drivin (cliente no estaba). Se intentará entregar nuevamente hoy con nueva asignación de domiciliario.
                       </span>
                     </>
                   )}
-                  {canceladoDelDia && (
+                  {cancelacionDrivinDelDia && (
                     <>
                       <br />
                       <span className="text-xs text-orange-700 mt-1 block">
-                        ✓ Este pedido fue cancelado pero se puede intentar entregar nuevamente hoy con nueva asignación de domiciliario.
+                        ✓ Este pedido fue cancelado en Drivin. Se puede intentar entregar nuevamente hoy con nueva asignación de domiciliario.
                       </span>
                     </>
                   )}
-                  {esRechazado && !rechazadoDelDia && (
+                  {esRechazoDrivin && !rechazoDrivinDelDia && (
                     <>
                       <br />
                       <span className="text-xs text-red-600 mt-1 block font-semibold">
-                        ⚠️ Las réplicas de rechazados solo se permiten el mismo día de la entrega.
+                        ⚠️ Las réplicas de pedidos rechazados en Drivin solo se permiten el mismo día.
                       </span>
                     </>
                   )}
-                  {esCancelado && !canceladoDelDia && (
+                  {esCancelacionDrivin && !cancelacionDrivinDelDia && (
                     <>
                       <br />
                       <span className="text-xs text-red-600 mt-1 block font-semibold">
-                        ⚠️ Las réplicas de cancelados solo se permiten el mismo día de la cancelación.
+                        ⚠️ Las réplicas de pedidos cancelados en Drivin solo se permiten el mismo día.
                       </span>
                     </>
                   )}
                 </div>
                 
-                {/* Clave dinámica para pedidos rechazados/cancelados del mismo día */}
+                {/* Clave dinámica para incidencias Drivin del mismo día */}
                 {requiereClaveParaReplica && requiereClaveReplica && (
                   <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 space-y-2">
                     <p className="text-sm font-semibold text-orange-900">
                       🔐 Clave dinámica requerida para réplica
                     </p>
                     <p className="text-xs text-orange-700">
-                      Ingresa la clave de 6 dígitos para autorizar la réplica de este pedido rechazado.
+                      Ingresa la clave de 6 dígitos para autorizar la réplica de esta incidencia.
                     </p>
                     <input
                       type="text"
@@ -3482,14 +3484,14 @@ function ModalReplica({
               </>
             ) : (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
-                {esRechazado ? (
+                {esRechazoDrivin ? (
                   <>
-                    No se puede hacer réplica de este pedido rechazado porque NO es de hoy. <br/>
+                    No se puede hacer réplica de este pedido rechazado en Drivin porque NO es de hoy. <br/>
                     <span className="text-xs">Las réplicas solo se permiten el mismo día de la entrega original.</span>
                   </>
-                ) : esCancelado ? (
+                ) : esCancelacionDrivin ? (
                   <>
-                    No se puede hacer réplica de este pedido cancelado porque NO es de hoy. <br/>
+                    No se puede hacer réplica de este pedido cancelado en Drivin porque NO es de hoy. <br/>
                     <span className="text-xs">Las réplicas solo se permiten el mismo día de la cancelación.</span>
                   </>
                 ) : (
@@ -3568,9 +3570,9 @@ function ModalReplica({
                 >
                   Reintentar envío
                 </button>
-              ) : esFacturado || permitirReplica ? (
+              ) : permitirReplica ? (
                 <>
-                  {/* Si es rechazado y requiere clave, mostrar botón de verificación */}
+                  {/* Si es incidencia Drivin y requiere clave, mostrar verificación. */}
                   {requiereClaveParaReplica && requiereClaveReplica ? (
                     <button
                       onClick={verificarClaveReplicaHandler}
