@@ -432,13 +432,13 @@ export default function AdminUsuariosPage() {
             <table className="w-full min-w-[720px] table-fixed text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
-                  <th className="w-[22%] whitespace-nowrap px-4 py-3 font-semibold">Nombre</th>
+                  <th className="w-[20%] whitespace-nowrap px-4 py-3 font-semibold">Nombre</th>
                   <th className="w-[12%] whitespace-nowrap px-4 py-3 font-semibold">Cédula</th>
                   <th className="w-[14%] whitespace-nowrap px-4 py-3 font-semibold">Rol</th>
-                  <th className="w-[24%] whitespace-nowrap px-4 py-3 font-semibold">Punto asignado</th>
-                  <th className="w-[10%] whitespace-nowrap px-4 py-3 font-semibold">Estado</th>
+                  <th className="w-[22%] whitespace-nowrap px-4 py-3 font-semibold">Punto asignado</th>
+                  <th className="w-[11%] whitespace-nowrap px-4 py-3 font-semibold">Estado</th>
                   <th className="w-[12%] whitespace-nowrap px-4 py-3 font-semibold">Creado</th>
-                  <th className="w-[6%] whitespace-nowrap px-4 py-3 text-right font-semibold">Acciones</th>
+                  <th className="w-[9%] whitespace-nowrap px-4 py-3 text-center font-semibold">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-brown/5">
@@ -488,7 +488,7 @@ export default function AdminUsuariosPage() {
                       {formatearFecha(u.creado_en)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => abrirEditar(u)}
                           className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
