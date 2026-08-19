@@ -342,24 +342,10 @@ export default function MiResumenPage() {
 
   // Métricas de Hogar vs Horeca
   const hogarVsHoreca = useMemo(() => calcularHogarVsHoreca(analizar, meta), [analizar, meta]);
-  const ranking = useMemo(() => rankingProductos(analizar, 15), [analizar]);
-  const topClient = useMemo(() => topClientes(analizar, 15), [analizar]);
+  const ranking = useMemo(() => rankingProductos(analizar, 10), [analizar]);
+  const topClient = useMemo(() => topClientes(analizar, 10), [analizar]);
   const resumenPago = useMemo(() => resumenMetodoPago(analizar, meta), [analizar, meta]);
   const resumenEntrega = useMemo(() => resumenTipoEntrega(analizar), [analizar]);
-
-  // Ranking de televendedoras (solo en vista global de administradores).
-  const rankingVendedoras = useMemo(() => {
-    if (!esVistaGlobal) return [];
-    const m = new Map<string, { nombre: string; valor: number; pedidos: number }>();
-    for (const p of analizar.filter((p) => !p.anulado)) {
-      const v = (p.vendedorNombre ?? "").trim() || "Sin vendedor";
-      const cur = m.get(v) || { nombre: v, valor: 0, pedidos: 0 };
-      cur.valor += Number(p.total) || 0;
-      cur.pedidos += 1;
-      m.set(v, cur);
-    }
-    return [...m.values()].sort((a, b) => b.valor - a.valor);
-  }, [esVistaGlobal, analizar]);
 
   // ¿Es televendedor? (rol específico que no es admin)
   const esTelevendedor = usuario?.rol?.trim().toLowerCase() === "televendedor" && !esAdmin;
@@ -504,7 +490,25 @@ export default function MiResumenPage() {
           {/* SECCIÓN VENTAS */}
           {tieneVentas && (
             <section>
-              <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">{esVistaGlobal ? "Ventas" : "Mis ventas"}</h2>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="font-serif text-lg font-bold text-brand-wine">{esVistaGlobal ? "Ventas" : "Mis ventas"}</h2>
+                {/* Botón "Ver estadísticas" en la esquina superior derecha (vista personal). */}
+                {!esVistaGlobal && (
+                  <button
+                    onClick={() => setMostrarEstadisticas((v) => !v)}
+                    title={mostrarEstadisticas ? "Ocultar las gráficas de estadísticas" : "Ver las gráficas de estadísticas"}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2 text-sm font-semibold text-brand-wine shadow-sm transition hover:bg-brand-cream-soft"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                    </svg>
+                    <span className="hidden sm:inline">{mostrarEstadisticas ? "Ocultar estadísticas" : "Ver estadísticas"}</span>
+                    <svg className={`h-4 w-4 transition-transform ${mostrarEstadisticas ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 <Stat titulo={esVistaGlobal ? "Pedidos" : "Mis pedidos"} valor={num(ventas.pedidos)} sub="No anulados" />
                 <Stat titulo={esVistaGlobal ? "Ventas" : "Mis ventas"} valor={cop(ventas.total)} color="text-brand-wine" />
@@ -575,68 +579,37 @@ export default function MiResumenPage() {
                 </div>
               </div>
 
-              {/* Estadísticas detalladas (gráficas minimalistas) */}
-              <div className="mt-6">
-                {/* Botón "Ver estadísticas" en la vista personal (no global). */}
-                {!esVistaGlobal && (
-                  <button
-                    onClick={() => setMostrarEstadisticas((v) => !v)}
-                    title={mostrarEstadisticas ? "Ocultar las gráficas de estadísticas" : "Ver las gráficas de estadísticas"}
-                    className="mb-4 inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm font-semibold text-brand-wine shadow-sm transition hover:bg-brand-cream-soft"
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                    </svg>
-                    {mostrarEstadisticas ? "Ocultar estadísticas" : "Ver estadísticas"}
-                    <svg className={`h-4 w-4 transition-transform ${mostrarEstadisticas ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                    </svg>
-                  </button>
-                )}
-
-                {(esVistaGlobal || mostrarEstadisticas) && (
-                  <div className="space-y-6">
-                    {/* Ranking de televendedoras (solo vista global de admin). */}
-                    {esVistaGlobal && rankingVendedoras.length > 0 && (
-                      <Panel>
-                        <CardHead titulo="Ranking de televendedoras" desc="Por valor vendido en el periodo" />
-                        <TablaTopBarras
-                          filas={rankingVendedoras.slice(0, 15).map((v) => ({ nombre: v.nombre, valor: v.valor, sub: `${num(v.pedidos)} pedidos` }))}
-                          col1="Vendedora"
-                          colValor="Total"
-                        />
-                      </Panel>
-                    )}
-
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <Panel>
-                        <CardHead titulo="Ranking de productos vendidos" desc="Por valor vendido en el periodo" />
-                        <TablaTopBarras
-                          filas={ranking.map((p) => ({ nombre: p.nombre, valor: p.valor, sub: `${num(p.cantidad)} und` }))}
-                          col1="Producto"
-                          colValor="Total"
-                        />
-                      </Panel>
-                      <Panel>
-                        <CardHead titulo="Top clientes" desc="Por valor comprado en el periodo" />
-                        <TablaTopBarras
-                          filas={topClient.map((c) => ({ nombre: c.nombre, valor: c.valor, sub: `${num(c.pedidos)} pedidos` }))}
-                          col1="Cliente"
-                          colValor="Total"
-                        />
-                      </Panel>
-                      <Panel>
-                        <CardHead titulo="Métodos de pago" desc="Por número de pedidos válidos" />
-                        <DonutLeyenda data={pagoDonut} totalLabel="Pedidos" />
-                      </Panel>
-                      <Panel>
-                        <CardHead titulo="Tipo de entrega" desc="Por número de pedidos válidos" />
-                        <DonutLeyenda data={entregaDonut} totalLabel="Pedidos" />
-                      </Panel>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Estadísticas detalladas (gráficas minimalistas). Solo en la
+                  vista personal; en la vista global del admin se omiten porque
+                  ya están en el Dashboard. */}
+              {!esVistaGlobal && mostrarEstadisticas && (
+                <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Panel>
+                    <CardHead titulo="Ranking de productos vendidos" desc="Top 10 por valor vendido en el periodo" />
+                    <TablaTopBarras
+                      filas={ranking.map((p) => ({ nombre: p.nombre, valor: p.valor, sub: `${num(p.cantidad)} und` }))}
+                      col1="Producto"
+                      colValor="Total"
+                    />
+                  </Panel>
+                  <Panel>
+                    <CardHead titulo="Top clientes" desc="Top 10 por valor comprado en el periodo" />
+                    <TablaTopBarras
+                      filas={topClient.map((c) => ({ nombre: c.nombre, valor: c.valor, sub: `${num(c.pedidos)} pedidos` }))}
+                      col1="Cliente"
+                      colValor="Total"
+                    />
+                  </Panel>
+                  <Panel>
+                    <CardHead titulo="Métodos de pago" desc="Por número de pedidos válidos" />
+                    <DonutLeyenda data={pagoDonut} totalLabel="Pedidos" />
+                  </Panel>
+                  <Panel>
+                    <CardHead titulo="Tipo de entrega" desc="Por número de pedidos válidos" />
+                    <DonutLeyenda data={entregaDonut} totalLabel="Pedidos" />
+                  </Panel>
+                </div>
+              )}
             </section>
           )}
 
