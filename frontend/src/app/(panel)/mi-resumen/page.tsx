@@ -590,7 +590,12 @@ export default function MiResumenPage() {
                   <Panel>
                     <CardHead titulo="Ranking de productos vendidos" desc="Top 10 por valor vendido en el periodo" />
                     <TablaTopBarras
-                      filas={ranking.map((p) => ({ nombre: p.nombre, valor: p.valor, sub: `${num(p.cantidad)} und` }))}
+                      filas={ranking.map((p) => ({
+                        nombre: p.nombre,
+                        valor: p.valor,
+                        sub: `${num(p.cantidad)} kg`,
+                        pct: ventas.total ? (p.valor / ventas.total) * 100 : 0,
+                      }))}
                       col1="Producto"
                       colValor="Total"
                     />
@@ -598,7 +603,12 @@ export default function MiResumenPage() {
                   <Panel>
                     <CardHead titulo="Top clientes" desc="Top 10 por valor comprado en el periodo" />
                     <TablaTopBarras
-                      filas={topClient.map((c) => ({ nombre: c.nombre, valor: c.valor, sub: `${num(c.pedidos)} pedidos` }))}
+                      filas={topClient.map((c) => ({
+                        nombre: c.nombre,
+                        valor: c.valor,
+                        sub: `${num(c.pedidos)} ped`,
+                        pct: ventas.total ? (c.valor / ventas.total) * 100 : 0,
+                      }))}
                       col1="Cliente"
                       colValor="Total"
                     />

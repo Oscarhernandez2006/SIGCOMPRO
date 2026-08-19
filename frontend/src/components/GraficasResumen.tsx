@@ -180,6 +180,8 @@ export interface FilaBarra {
   valor: number;
   /** Métrica secundaria opcional (ej: kilos, pedidos). */
   sub?: string;
+  /** Porcentaje que representa del total (se muestra en la misma línea). */
+  pct?: number;
 }
 
 /** Tabla-ranking con barra de progreso ámbar (productos, clientes, etc.). */
@@ -225,9 +227,12 @@ export function TablaTopBarras({
                 />
               </div>
             </td>
-            <td className="py-2 pl-3 text-right align-top">
-              <div className="font-display font-bold tabular-nums text-brand-black">{formatoValor(f.valor)}</div>
-              {f.sub && <div className="text-[11px] tabular-nums text-brand-brown/50">{f.sub}</div>}
+            <td className="whitespace-nowrap py-2 pl-3 text-right">
+              <span className="font-display font-bold tabular-nums text-brand-black">{formatoValor(f.valor)}</span>
+              {f.sub && <span className="ml-2 text-[11px] tabular-nums text-brand-brown/50">{f.sub}</span>}
+              {typeof f.pct === "number" && (
+                <span className="ml-2 text-[11px] font-semibold tabular-nums text-brand-amber">{f.pct.toFixed(0)}%</span>
+              )}
             </td>
           </tr>
         ))}

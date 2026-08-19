@@ -17,6 +17,7 @@ import {
   listarPuntosVenta,
   puntosDeUsuarioIds,
   asignarPuntosAUsuario,
+  usuariosDePunto,
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 
@@ -94,6 +95,34 @@ export default function AdminUsuariosPage() {
       .then(setPuntos)
       .catch(() => {});
   }, []);
+
+  // Mapa usuarioId -> nombres de sus puntos de venta (para la columna de la
+  // tabla). Se arma consultando los usuarios de cada punto (pocos puntos).
+  const [puntosPorUsuario, setPuntosPorUsuario] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (puntos.length === 0) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const entradas = await Promise.all(
+          puntos.map(async (p) => ({ punto: p, usuarios: await usuariosDePunto(p.id) })),
+        );
+        if (cancel) return;
+        const mapa: Record<string, string[]> = {};
+        for (const { punto, usuarios } of entradas) {
+          for (const uid of usuarios) {
+            (mapa[uid] ??= []).push(punto.nombre);
+          }
+        }
+        setPuntosPorUsuario(mapa);
+      } catch {
+        // Silencioso: la columna simplemente quedará vacía.
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [puntos]);
 
   const accesoTotal = usuarioActual
     ? tieneAccesoAdministrativo(usuarioActual.rol)
@@ -400,12 +429,13 @@ export default function AdminUsuariosPage() {
           </div>
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
                   <th className="px-4 py-3 font-semibold">Cédula</th>
                   <th className="px-4 py-3 font-semibold">Rol</th>
+                  <th className="px-4 py-3 font-semibold">Punto asignado</th>
                   <th className="px-4 py-3 font-semibold">Estado</th>
                   <th className="px-4 py-3 font-semibold">Creado</th>
                   <th className="px-4 py-3 text-right font-semibold">Acciones</th>
@@ -422,6 +452,24 @@ export default function AdminUsuariosPage() {
                       <span className="inline-block rounded-full bg-brand-wine/10 px-2.5 py-0.5 text-xs font-medium capitalize text-brand-wine">
                         {u.rol}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {tieneAccesoAdministrativo(u.rol) ? (
+                        <span className="text-xs font-medium text-brand-brown/50">Todos</span>
+                      ) : (puntosPorUsuario[u.id]?.length ?? 0) > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {puntosPorUsuario[u.id].map((nombre) => (
+                            <span
+                              key={nombre}
+                              className="inline-block rounded-full bg-brand-amber/10 px-2 py-0.5 text-xs font-medium text-brand-amber"
+                            >
+                              {nombre}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-brand-brown/40">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {u.activo ? (
