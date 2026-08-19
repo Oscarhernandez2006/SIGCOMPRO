@@ -429,22 +429,22 @@ export default function AdminUsuariosPage() {
           </div>
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[720px] table-fixed text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
                 <tr>
-                  <th className="w-full whitespace-nowrap px-4 py-3 font-semibold">Nombre</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Cédula</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Rol</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Punto asignado</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Estado</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Creado</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-right font-semibold">Acciones</th>
+                  <th className="w-[22%] whitespace-nowrap px-4 py-3 font-semibold">Nombre</th>
+                  <th className="w-[12%] whitespace-nowrap px-4 py-3 font-semibold">Cédula</th>
+                  <th className="w-[14%] whitespace-nowrap px-4 py-3 font-semibold">Rol</th>
+                  <th className="w-[24%] whitespace-nowrap px-4 py-3 font-semibold">Punto asignado</th>
+                  <th className="w-[10%] whitespace-nowrap px-4 py-3 font-semibold">Estado</th>
+                  <th className="w-[12%] whitespace-nowrap px-4 py-3 font-semibold">Creado</th>
+                  <th className="w-[6%] whitespace-nowrap px-4 py-3 text-right font-semibold">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-brown/5">
                 {usuariosFiltrados.map((u) => (
                   <tr key={u.id} className="transition hover:bg-brand-cream-soft/60">
-                    <td className="w-full whitespace-nowrap px-4 py-3 font-medium text-brand-black">
+                    <td className="truncate whitespace-nowrap px-4 py-3 font-medium text-brand-black">
                       {u.nombre}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-brand-brown/80">{u.cedula}</td>
@@ -453,15 +453,15 @@ export default function AdminUsuariosPage() {
                         {u.rol}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="px-4 py-3">
                       {tieneAccesoAdministrativo(u.rol) ? (
                         <span className="text-xs font-medium text-brand-brown/50">Todos</span>
                       ) : (puntosPorUsuario[u.id]?.length ?? 0) > 0 ? (
-                        <div className="flex flex-nowrap gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {puntosPorUsuario[u.id].map((nombre) => (
                             <span
                               key={nombre}
-                              className="inline-block whitespace-nowrap rounded-full bg-brand-amber/10 px-2 py-0.5 text-xs font-medium text-brand-amber"
+                              className="inline-block max-w-full truncate whitespace-nowrap rounded-full bg-brand-amber/10 px-2 py-0.5 text-xs font-medium text-brand-amber"
                             >
                               {nombre}
                             </span>
