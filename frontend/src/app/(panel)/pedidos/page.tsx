@@ -2730,17 +2730,24 @@ function ResumenPedido({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
             {cliente ? (
-              <div className="rounded-xl border border-brand-brown/10 bg-white px-3 py-2">
+              <div className={`rounded-xl border bg-white px-3 py-2 ${cliente.horeca ? "border-orange-300 ring-1 ring-orange-200" : "border-brand-brown/10"}`}>
+                {/* Aviso prominente cuando el cliente es HORECA. */}
+                {cliente.horeca && (
+                  <div className="-mx-3 -mt-2 mb-2 flex items-center gap-2 rounded-t-xl border-b border-orange-200 bg-orange-100 px-3 py-1.5">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-orange-700">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <span className="text-[11px] font-extrabold uppercase tracking-wide text-orange-800">
+                      Cliente HORECA
+                    </span>
+                    <span className="text-[10px] font-medium text-orange-700/80">Hotel · Restaurante · Café</span>
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
                     <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
                   </div>
-                  {cliente.horeca && (
-                    <span className="shrink-0 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200">
-                      HORECA
-                    </span>
-                  )}
                 </div>
                 {(cliente.direccion || cliente.barrio) && (
                   <p className="mt-0.5 text-xs text-brand-brown/60">

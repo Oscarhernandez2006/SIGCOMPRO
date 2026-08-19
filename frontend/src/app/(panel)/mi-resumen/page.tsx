@@ -7,6 +7,15 @@ import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
 import { objetivoDespacho, colorEstado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
+import {
+  Panel,
+  CardHead,
+  DonutLeyenda,
+  AnilloCumplimiento,
+  TablaTopBarras,
+  PALETA,
+  COLOR_PAGO,
+} from "@/components/GraficasResumen";
 
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
 const num = (n: number) => (Number(n) || 0).toLocaleString("es-CO");
@@ -63,42 +72,6 @@ function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number 
           <span className="w-24 shrink-0 text-right text-[11px] font-semibold text-brand-black">{formato(d.valor)}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-/** Sección expandible (para televendedores). */
-function ExpandibleSection({
-  titulo,
-  icono,
-  contenido,
-  expanded,
-  onToggle,
-}: {
-  titulo: string;
-  icono: React.ReactNode;
-  contenido: React.ReactNode;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 text-sm font-semibold text-brand-wine hover:bg-brand-cream-soft/30 transition text-left"
-      >
-        <span className="flex-1">{titulo}</span>
-        {icono}
-        <svg
-          className={`w-5 h-5 transition-transform ${expanded ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
-      </button>
-      {expanded && <div className="px-4 py-3 border-t border-brand-brown/10">{contenido}</div>}
     </div>
   );
 }
@@ -212,8 +185,8 @@ export default function MiResumenPage() {
   // (vacío = mi propio resumen).
   const [vendedoraSel, setVendedoraSel] = useState("");
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
-  // Para televendedores: mostrar secciones expandibles (ranking, top clientes, etc.)
-  const [seccionesExpand, setSeccionesExpand] = useState<Record<string, boolean>>({});
+  // Toggle "Ver estadísticas" (gráficas detalladas) para no-administradores.
+  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false);
 
   // "Mi resumen" es un permiso: si el usuario no lo tiene, no puede entrar
   // (ni por URL directa); se le manda a su primer módulo disponible.
@@ -290,11 +263,21 @@ export default function MiResumenPage() {
     () => enPeriodo.filter((p) => norm(p.vendedorNombre) === nombre),
     [enPeriodo, nombre],
   );
+
+  // Vista GLOBAL: solo administradores y cuando NO se filtra por una vendedora
+  // concreta. Muestra el resumen agregado de todos los televendedores/despacho.
+  const esVistaGlobal = esAdmin && !vendedoraSel;
+  // Conjunto base a analizar para gráficas y KPIs de ventas.
+  const analizar = useMemo(
+    () => (esVistaGlobal ? enPeriodo : misVentas),
+    [esVistaGlobal, enPeriodo, misVentas],
+  );
+
   const ventas = useMemo(() => {
-    const validos = misVentas.filter((p) => !p.anulado);
+    const validos = analizar.filter((p) => !p.anulado);
     const total = validos.reduce((s, p) => s + (Number(p.total) || 0), 0);
     const facturado = validos.reduce((s, p) => s + (Number(meta[p.id]?.facturaValor) || 0), 0);
-    const anulados = misVentas.filter((p) => p.anulado || norm(p.estado) === "anulado" || norm(p.estado) === "cancelado").length;
+    const anulados = analizar.filter((p) => p.anulado || norm(p.estado) === "anulado" || norm(p.estado) === "cancelado").length;
     const porDiaMap = new Map<string, number>();
     for (const p of validos) {
       const k = diaLocal(p.fecha);
@@ -307,27 +290,28 @@ export default function MiResumenPage() {
       facturado,
       ticket: validos.length ? total / validos.length : 0,
       anulados,
-      pctBaja: misVentas.length ? (anulados / misVentas.length) * 100 : 0,
+      pctBaja: analizar.length ? (anulados / analizar.length) * 100 : 0,
       porDia,
     };
-  }, [misVentas, meta]);
+  }, [analizar, meta]);
 
   // --- DESPACHO: pedidos donde YO participé (facturé/despaché/alisté/entregué) ---
+  // En vista global (admin) se agregan todos los usuarios de despacho.
   const facture = useMemo(
-    () => enPeriodo.filter((p) => norm(meta[p.id]?.facturadoPor) === nombre),
-    [enPeriodo, meta, nombre],
+    () => enPeriodo.filter((p) => (esVistaGlobal ? norm(meta[p.id]?.facturadoPor) !== "" : norm(meta[p.id]?.facturadoPor) === nombre)),
+    [enPeriodo, meta, nombre, esVistaGlobal],
   );
   const despache = useMemo(
-    () => enPeriodo.filter((p) => norm(meta[p.id]?.despachadoPor) === nombre),
-    [enPeriodo, meta, nombre],
+    () => enPeriodo.filter((p) => (esVistaGlobal ? norm(meta[p.id]?.despachadoPor) !== "" : norm(meta[p.id]?.despachadoPor) === nombre)),
+    [enPeriodo, meta, nombre, esVistaGlobal],
   );
   const aliste = useMemo(
-    () => enPeriodo.filter((p) => norm(meta[p.id]?.porcionador) === nombre),
-    [enPeriodo, meta, nombre],
+    () => enPeriodo.filter((p) => (esVistaGlobal ? norm(meta[p.id]?.porcionador) !== "" : norm(meta[p.id]?.porcionador) === nombre)),
+    [enPeriodo, meta, nombre, esVistaGlobal],
   );
   const domicilios = useMemo(
-    () => enPeriodo.filter((p) => norm(meta[p.id]?.domiciliario) === nombre),
-    [enPeriodo, meta, nombre],
+    () => enPeriodo.filter((p) => (esVistaGlobal ? norm(meta[p.id]?.domiciliario) !== "" : norm(meta[p.id]?.domiciliario) === nombre)),
+    [enPeriodo, meta, nombre, esVistaGlobal],
   );
 
   const despacho = useMemo(() => {
@@ -348,30 +332,64 @@ export default function MiResumenPage() {
       alistados: aliste.length,
       domicilios: domicilios.length,
       pctEntrega: conDato ? (aTiempo / conDato) * 100 : 0,
+      entregasATiempo: aTiempo,
+      entregasConDato: conDato,
     };
   }, [facture, despache, aliste, domicilios, meta]);
 
-  const tieneVentas = misVentas.length > 0;
+  const tieneVentas = analizar.filter((p) => !p.anulado).length > 0;
   const tieneDespacho = facture.length + despache.length + aliste.length + domicilios.length > 0;
 
   // Métricas de Hogar vs Horeca
-  const hogarVsHoreca = useMemo(() => calcularHogarVsHoreca(misVentas, meta), [misVentas, meta]);
-  const ranking = useMemo(() => rankingProductos(misVentas, 15), [misVentas]);
-  const topClient = useMemo(() => topClientes(misVentas, 15), [misVentas]);
-  const resumenPago = useMemo(() => resumenMetodoPago(misVentas, meta), [misVentas, meta]);
-  const resumenEntrega = useMemo(() => resumenTipoEntrega(misVentas), [misVentas]);
-  
+  const hogarVsHoreca = useMemo(() => calcularHogarVsHoreca(analizar, meta), [analizar, meta]);
+  const ranking = useMemo(() => rankingProductos(analizar, 15), [analizar]);
+  const topClient = useMemo(() => topClientes(analizar, 15), [analizar]);
+  const resumenPago = useMemo(() => resumenMetodoPago(analizar, meta), [analizar, meta]);
+  const resumenEntrega = useMemo(() => resumenTipoEntrega(analizar), [analizar]);
+
+  // Ranking de televendedoras (solo en vista global de administradores).
+  const rankingVendedoras = useMemo(() => {
+    if (!esVistaGlobal) return [];
+    const m = new Map<string, { nombre: string; valor: number; pedidos: number }>();
+    for (const p of analizar.filter((p) => !p.anulado)) {
+      const v = (p.vendedorNombre ?? "").trim() || "Sin vendedor";
+      const cur = m.get(v) || { nombre: v, valor: 0, pedidos: 0 };
+      cur.valor += Number(p.total) || 0;
+      cur.pedidos += 1;
+      m.set(v, cur);
+    }
+    return [...m.values()].sort((a, b) => b.valor - a.valor);
+  }, [esVistaGlobal, analizar]);
+
   // ¿Es televendedor? (rol específico que no es admin)
   const esTelevendedor = usuario?.rol?.trim().toLowerCase() === "televendedor" && !esAdmin;
 
   // Últimos pedidos (para la lista) según la actividad del usuario.
   const ultimos = useMemo(() => {
-    const base = tieneVentas ? misVentas : [...facture, ...despache];
+    const base = tieneVentas ? analizar : [...facture, ...despache];
     const vistos = new Set<string>();
     return base
       .filter((p) => (vistos.has(p.id) ? false : (vistos.add(p.id), true)))
       .sort((a, b) => tsPedido(b) - tsPedido(a));
-  }, [tieneVentas, misVentas, facture, despache]);
+  }, [tieneVentas, analizar, facture, despache]);
+
+  // Datos para las gráficas de dona (métodos de pago y tipo de entrega).
+  const pagoDonut = useMemo(
+    () =>
+      resumenPago.map((p, i) => ({
+        label: p.pago || "Sin especificar",
+        value: p.count,
+        color: COLOR_PAGO[norm(p.pago)] ?? PALETA[i % PALETA.length],
+      })),
+    [resumenPago],
+  );
+  const entregaDonut = useMemo(
+    () => [
+      { label: "Domicilio", value: resumenEntrega.domicilio, color: "#d98c2b" },
+      { label: "Recoge en punto", value: resumenEntrega.recoge, color: "#7b1e3b" },
+    ],
+    [resumenEntrega],
+  );
 
   const periodoLabel = usaRango
     ? `${rangoDesde || "el inicio"} a ${rangoHasta || "hoy"}`
@@ -387,11 +405,14 @@ export default function MiResumenPage() {
       <div className="mb-6 overflow-hidden rounded-3xl border border-brand-brown/10 bg-gradient-to-br from-brand-wine to-brand-wine-dark p-6 text-white shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-gold">Mi resumen</p>
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">
-          {esAdmin && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}
+          {esVistaGlobal ? "Resumen general" : esAdmin && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}
         </h1>
         <p className="mt-1 text-sm text-white/70">
-          {esAdmin && vendedoraSel ? "Resumen" : "Tu información personal"} de {periodoLabel}
-          {esAdmin && vendedoraSel ? "" : usuario?.rol ? ` · ${usuario.rol}` : ""}
+          {esVistaGlobal
+            ? `Todos los televendedores y despacho · ${periodoLabel}`
+            : `${esAdmin && vendedoraSel ? "Resumen" : "Tu información personal"} de ${periodoLabel}${
+                esAdmin && vendedoraSel ? "" : usuario?.rol ? ` · ${usuario.rol}` : ""
+              }`}
         </p>
         {/* Fila: televendedora (solo admin) + rango de fechas, lado a lado. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -403,7 +424,7 @@ export default function MiResumenPage() {
                 onChange={(e) => setVendedoraSel(e.target.value)}
                 className="mt-0.5 w-full max-w-xs rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none backdrop-blur focus:border-white/50 sm:w-auto"
               >
-                <option className="text-brand-black" value="">Yo ({usuario?.nombre ?? ""})</option>
+                <option className="text-brand-black" value="">Todos (resumen general)</option>
                 {vendedoras.map((v) => (
                   <option className="text-brand-black" key={v} value={v}>{v}</option>
                 ))}
@@ -472,19 +493,21 @@ export default function MiResumenPage() {
         <div className="rounded-2xl border border-red-200 bg-red-50 py-10 text-center text-sm text-red-600">{error}</div>
       ) : !tieneVentas && !tieneDespacho ? (
         <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
-          {esAdmin && vendedoraSel
-            ? `${nombreMostrado} no tiene actividad registrada en ${periodoLabel}.`
-            : `No tienes actividad registrada en ${periodoLabel}.`}
+          {esVistaGlobal
+            ? `No hay actividad registrada en ${periodoLabel}.`
+            : esAdmin && vendedoraSel
+              ? `${nombreMostrado} no tiene actividad registrada en ${periodoLabel}.`
+              : `No tienes actividad registrada en ${periodoLabel}.`}
         </div>
       ) : (
         <div className="space-y-8">
           {/* SECCIÓN VENTAS */}
           {tieneVentas && (
             <section>
-              <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">Mis ventas</h2>
+              <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">{esVistaGlobal ? "Ventas" : "Mis ventas"}</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                <Stat titulo="Mis pedidos" valor={num(ventas.pedidos)} sub="No anulados" />
-                <Stat titulo="Mis ventas" valor={cop(ventas.total)} color="text-brand-wine" />
+                <Stat titulo={esVistaGlobal ? "Pedidos" : "Mis pedidos"} valor={num(ventas.pedidos)} sub="No anulados" />
+                <Stat titulo={esVistaGlobal ? "Ventas" : "Mis ventas"} valor={cop(ventas.total)} color="text-brand-wine" />
                 <Stat titulo="Total facturado" valor={cop(ventas.facturado)} sub="Según factura" color="text-emerald-600" />
                 <Stat titulo="Ticket promedio" valor={cop(ventas.ticket)} />
                 <Stat titulo="Anulados / Cancelados" valor={num(ventas.anulados)} sub={`${ventas.pctBaja.toFixed(1)}% de bajas`} color="text-red-600" />
@@ -552,104 +575,92 @@ export default function MiResumenPage() {
                 </div>
               </div>
 
-              {/* Secciones expandibles para televendedores */}
-              {esTelevendedor && (
-                <div className="mt-4 space-y-3">
-                  {/* Ranking de productos */}
-                  <ExpandibleSection
-                    titulo="📊 Ranking de productos vendidos"
-                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>}
-                    expanded={seccionesExpand["ranking"] || false}
-                    onToggle={() => setSeccionesExpand(s => ({ ...s, ranking: !s.ranking }))}
-                    contenido={
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {ranking.length > 0 ? ranking.map((prod, i) => (
-                          <div key={i} className="flex justify-between items-start text-[12px]">
-                            <div className="flex-1">
-                              <p className="font-semibold text-brand-wine">#{i + 1} {prod.nombre}</p>
-                              <p className="text-brand-brown/60">{prod.cantidad.toLocaleString("es-CO")} unidades</p>
-                            </div>
-                            <p className="font-bold text-brand-wine">{cop(prod.valor)}</p>
-                          </div>
-                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
-                      </div>
-                    }
-                  />
+              {/* Estadísticas detalladas (gráficas minimalistas) */}
+              <div className="mt-6">
+                {/* Botón "Ver estadísticas" en la vista personal (no global). */}
+                {!esVistaGlobal && (
+                  <button
+                    onClick={() => setMostrarEstadisticas((v) => !v)}
+                    title={mostrarEstadisticas ? "Ocultar las gráficas de estadísticas" : "Ver las gráficas de estadísticas"}
+                    className="mb-4 inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm font-semibold text-brand-wine shadow-sm transition hover:bg-brand-cream-soft"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                    </svg>
+                    {mostrarEstadisticas ? "Ocultar estadísticas" : "Ver estadísticas"}
+                    <svg className={`h-4 w-4 transition-transform ${mostrarEstadisticas ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+                )}
 
-                  {/* Top clientes */}
-                  <ExpandibleSection
-                    titulo="👥 Top 15 clientes"
-                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v12.5A2.25 2.25 0 005.75 18.5h8.5a2.25 2.25 0 002.25-2.25V9M10.5 1.5v4.5a2 2 0 002 2h4.5M10.5 1.5L16.5 7.5" /></svg>}
-                    expanded={seccionesExpand["topClientes"] || false}
-                    onToggle={() => setSeccionesExpand(s => ({ ...s, topClientes: !s.topClientes }))}
-                    contenido={
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {topClient.length > 0 ? topClient.map((c, i) => (
-                          <div key={i} className="flex justify-between items-start text-[12px]">
-                            <div className="flex-1">
-                              <p className="font-semibold text-brand-wine">#{i + 1} {c.nombre}</p>
-                              <p className="text-brand-brown/60">{c.pedidos} pedidos</p>
-                            </div>
-                            <p className="font-bold text-brand-wine">{cop(c.valor)}</p>
-                          </div>
-                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
-                      </div>
-                    }
-                  />
+                {(esVistaGlobal || mostrarEstadisticas) && (
+                  <div className="space-y-6">
+                    {/* Ranking de televendedoras (solo vista global de admin). */}
+                    {esVistaGlobal && rankingVendedoras.length > 0 && (
+                      <Panel>
+                        <CardHead titulo="Ranking de televendedoras" desc="Por valor vendido en el periodo" />
+                        <TablaTopBarras
+                          filas={rankingVendedoras.slice(0, 15).map((v) => ({ nombre: v.nombre, valor: v.valor, sub: `${num(v.pedidos)} pedidos` }))}
+                          col1="Vendedora"
+                          colValor="Total"
+                        />
+                      </Panel>
+                    )}
 
-                  {/* Métodos de pago */}
-                  <ExpandibleSection
-                    titulo="💳 Métodos de pago utilizados"
-                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V4zm3.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>}
-                    expanded={seccionesExpand["pago"] || false}
-                    onToggle={() => setSeccionesExpand(s => ({ ...s, pago: !s.pago }))}
-                    contenido={
-                      <div className="space-y-2">
-                        {resumenPago.length > 0 ? resumenPago.map((p, i) => (
-                          <div key={i} className="flex justify-between items-center text-[12px]">
-                            <p className="font-semibold text-brand-wine">{p.pago || "Sin especificar"}</p>
-                            <p className="font-bold text-brand-wine">{num(p.count)} transacciones</p>
-                          </div>
-                        )) : <p className="text-sm text-brand-brown/50">Sin datos</p>}
-                      </div>
-                    }
-                  />
-
-                  {/* Tipo de entrega */}
-                  <ExpandibleSection
-                    titulo="🚚 Tipo de entrega"
-                    icono={<svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" /></svg>}
-                    expanded={seccionesExpand["entrega"] || false}
-                    onToggle={() => setSeccionesExpand(s => ({ ...s, entrega: !s.entrega }))}
-                    contenido={
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-[12px]">
-                          <p className="font-semibold">Domicilio</p>
-                          <p className="font-bold text-brand-wine">{num(resumenEntrega.domicilio)} ({resumenEntrega.total > 0 ? ((resumenEntrega.domicilio / resumenEntrega.total) * 100).toFixed(1) : 0}%)</p>
-                        </div>
-                        <div className="flex justify-between text-[12px]">
-                          <p className="font-semibold">Recoge en punto</p>
-                          <p className="font-bold text-brand-wine">{num(resumenEntrega.recoge)} ({resumenEntrega.total > 0 ? ((resumenEntrega.recoge / resumenEntrega.total) * 100).toFixed(1) : 0}%)</p>
-                        </div>
-                      </div>
-                    }
-                  />
-                </div>
-              )}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <Panel>
+                        <CardHead titulo="Ranking de productos vendidos" desc="Por valor vendido en el periodo" />
+                        <TablaTopBarras
+                          filas={ranking.map((p) => ({ nombre: p.nombre, valor: p.valor, sub: `${num(p.cantidad)} und` }))}
+                          col1="Producto"
+                          colValor="Total"
+                        />
+                      </Panel>
+                      <Panel>
+                        <CardHead titulo="Top clientes" desc="Por valor comprado en el periodo" />
+                        <TablaTopBarras
+                          filas={topClient.map((c) => ({ nombre: c.nombre, valor: c.valor, sub: `${num(c.pedidos)} pedidos` }))}
+                          col1="Cliente"
+                          colValor="Total"
+                        />
+                      </Panel>
+                      <Panel>
+                        <CardHead titulo="Métodos de pago" desc="Por número de pedidos válidos" />
+                        <DonutLeyenda data={pagoDonut} totalLabel="Pedidos" />
+                      </Panel>
+                      <Panel>
+                        <CardHead titulo="Tipo de entrega" desc="Por número de pedidos válidos" />
+                        <DonutLeyenda data={entregaDonut} totalLabel="Pedidos" />
+                      </Panel>
+                    </div>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
           {/* SECCIÓN DESPACHO */}
           {tieneDespacho && (
             <section>
-              <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">Mi despacho</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                <Stat titulo="Facturados por mí" valor={num(despacho.facturados)} sub={cop(despacho.valorFacturado)} color="text-emerald-600" />
-                <Stat titulo="Despachados por mí" valor={num(despacho.despachados)} color="text-teal-600" />
-                <Stat titulo="Alistados por mí" valor={num(despacho.alistados)} color="text-violet-600" />
+              <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">{esVistaGlobal ? "Despacho" : "Mi despacho"}</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <Stat titulo={esVistaGlobal ? "Facturados" : "Facturados por mí"} valor={num(despacho.facturados)} sub={cop(despacho.valorFacturado)} color="text-emerald-600" />
+                <Stat titulo={esVistaGlobal ? "Despachados" : "Despachados por mí"} valor={num(despacho.despachados)} color="text-teal-600" />
+                <Stat titulo={esVistaGlobal ? "Alistados" : "Alistados por mí"} valor={num(despacho.alistados)} color="text-violet-600" />
                 <Stat titulo="Domicilios" valor={num(despacho.domicilios)} color="text-sky-600" />
-                <Stat titulo="Entregas a tiempo" valor={`${despacho.pctEntrega.toFixed(0)}%`} sub="De lo que despaché" color="text-green-600" />
               </div>
+              {despacho.entregasConDato > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <AnilloCumplimiento
+                    titulo="Entregas a tiempo"
+                    desc={esVistaGlobal ? "Despachos dentro del tiempo objetivo" : "De lo que despaché, dentro del tiempo"}
+                    pct={despacho.pctEntrega}
+                    aTiempo={despacho.entregasATiempo}
+                    total={despacho.entregasConDato}
+                  />
+                </div>
+              )}
             </section>
           )}
 
