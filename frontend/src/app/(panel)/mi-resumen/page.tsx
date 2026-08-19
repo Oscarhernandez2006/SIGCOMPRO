@@ -11,7 +11,6 @@ import {
   Panel,
   CardHead,
   DonutLeyenda,
-  AnilloCumplimiento,
   TablaTopBarras,
   PALETA,
   COLOR_PAGO,
@@ -325,12 +324,16 @@ export default function MiResumenPage() {
       conDato += 1;
       if (new Date(dm.despachoFin).getTime() <= objetivoDespacho(p, dm.pagoConfirmado)) aTiempo += 1;
     }
+    // Domicilios efectivamente entregados (Drivin marcó la ruta finalizada).
+    const entregados = domicilios.reduce((s, p) => s + (meta[p.id]?.entregado ? 1 : 0), 0);
     return {
       facturados: facture.length,
       valorFacturado,
+      ticketFactura: facture.length ? valorFacturado / facture.length : 0,
       despachados: despache.length,
       alistados: aliste.length,
       domicilios: domicilios.length,
+      entregados,
       pctEntrega: conDato ? (aTiempo / conDato) * 100 : 0,
       entregasATiempo: aTiempo,
       entregasConDato: conDato,
@@ -617,23 +620,50 @@ export default function MiResumenPage() {
           {tieneDespacho && (
             <section>
               <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">{esVistaGlobal ? "Despacho" : "Mi despacho"}</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                <Stat titulo={esVistaGlobal ? "Facturados" : "Facturados por mí"} valor={num(despacho.facturados)} sub={cop(despacho.valorFacturado)} color="text-emerald-600" />
-                <Stat titulo={esVistaGlobal ? "Despachados" : "Despachados por mí"} valor={num(despacho.despachados)} color="text-teal-600" />
-                <Stat titulo={esVistaGlobal ? "Alistados" : "Alistados por mí"} valor={num(despacho.alistados)} color="text-violet-600" />
-                <Stat titulo="Domicilios" valor={num(despacho.domicilios)} color="text-sky-600" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <Stat
+                  titulo={esVistaGlobal ? "Facturados" : "Facturados por mí"}
+                  valor={num(despacho.facturados)}
+                  sub={`${cop(despacho.valorFacturado)} facturado`}
+                  color="text-emerald-600"
+                />
+                <Stat
+                  titulo={esVistaGlobal ? "Despachados" : "Despachados por mí"}
+                  valor={num(despacho.despachados)}
+                  sub={despacho.entregasConDato > 0 ? `${despacho.pctEntrega.toFixed(0)}% a tiempo` : "Sin registro de tiempo"}
+                  color="text-teal-600"
+                />
+                <Stat
+                  titulo={esVistaGlobal ? "Alistados" : "Alistados por mí"}
+                  valor={num(despacho.alistados)}
+                  sub="Pedidos porcionados"
+                  color="text-violet-600"
+                />
+                <Stat
+                  titulo="Domicilios"
+                  valor={num(despacho.domicilios)}
+                  sub={`${num(despacho.entregados)} entregados`}
+                  color="text-sky-600"
+                />
+                <Stat
+                  titulo="Entregas a tiempo"
+                  valor={despacho.entregasConDato > 0 ? `${despacho.pctEntrega.toFixed(0)}%` : "—"}
+                  sub={
+                    despacho.entregasConDato > 0
+                      ? `${num(despacho.entregasATiempo)} de ${num(despacho.entregasConDato)} a tiempo`
+                      : "Sin datos"
+                  }
+                  color={
+                    despacho.entregasConDato === 0
+                      ? "text-brand-brown/50"
+                      : despacho.pctEntrega >= 90
+                        ? "text-emerald-600"
+                        : despacho.pctEntrega >= 70
+                          ? "text-amber-600"
+                          : "text-red-600"
+                  }
+                />
               </div>
-              {despacho.entregasConDato > 0 && (
-                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <AnilloCumplimiento
-                    titulo="Entregas a tiempo"
-                    desc={esVistaGlobal ? "Despachos dentro del tiempo objetivo" : "De lo que despaché, dentro del tiempo"}
-                    pct={despacho.pctEntrega}
-                    aTiempo={despacho.entregasATiempo}
-                    total={despacho.entregasConDato}
-                  />
-                </div>
-              )}
             </section>
           )}
 

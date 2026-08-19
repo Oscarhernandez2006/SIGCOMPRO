@@ -2737,10 +2737,21 @@ function ResumenPedido({
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-orange-700">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                     </svg>
-                    <span className="text-[11px] font-extrabold uppercase tracking-wide text-orange-800">
+                    <span className="shrink-0 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wide text-orange-800">
                       Cliente HORECA
                     </span>
-                    <span className="text-[10px] font-medium text-orange-700/80">Hotel · Restaurante · Café</span>
+                    {(cliente.dias_despacho?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap items-center gap-1">
+                        {ORDEN_DIAS_DESPACHO.filter((d) => cliente.dias_despacho?.includes(d)).map((d) => (
+                          <span
+                            key={d}
+                            className="rounded-full bg-orange-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-orange-800"
+                          >
+                            {DIAS_DESPACHO_LABEL[d] ?? d}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="flex items-start justify-between gap-2">
@@ -2753,25 +2764,6 @@ function ResumenPedido({
                   <p className="mt-0.5 text-xs text-brand-brown/60">
                     {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}
                   </p>
-                )}
-                {cliente.horeca && (cliente.dias_despacho?.length ?? 0) > 0 && (
-                  <div className="mt-1.5 border-t border-brand-brown/10 pt-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-wine/70">
-                      Días de despacho
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {ORDEN_DIAS_DESPACHO.filter((d) =>
-                        cliente.dias_despacho?.includes(d),
-                      ).map((d) => (
-                        <span
-                          key={d}
-                          className="rounded-full bg-brand-wine/10 px-2 py-0.5 text-[10px] font-semibold text-brand-wine"
-                        >
-                          {DIAS_DESPACHO_LABEL[d] ?? d}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
                 )}
               </div>
             ) : (
