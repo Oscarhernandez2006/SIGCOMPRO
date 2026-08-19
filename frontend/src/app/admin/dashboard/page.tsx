@@ -1324,6 +1324,8 @@ function MiniStat({ titulo, valor, sub, icon }: { titulo: string; valor: string;
 }
 
 function LineChart({ data }: { data: { dia: string; valor: number }[] }) {
+  // Muestra el valor de cada día siempre visible (útil para reportes/capturas).
+  const [mostrarValores, setMostrarValores] = useState(false);
   if (data.length === 0) {
     return (
       <div className="flex h-56 items-center justify-center text-sm text-brand-brown/40">
@@ -1344,6 +1346,19 @@ function LineChart({ data }: { data: { dia: string; valor: number }[] }) {
   const mostrarCada = Math.ceil(n / 12);
   return (
     <div className="w-full">
+      <div className="mb-1 flex justify-end">
+        <button
+          onClick={() => setMostrarValores((v) => !v)}
+          title={mostrarValores ? "Ocultar los valores de cada día" : "Mostrar el valor de cada día (para reportes/capturas)"}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-brown/70 transition hover:bg-brand-cream-soft"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          {mostrarValores ? "Ocultar valores" : "Ver valores"}
+        </button>
+      </div>
       <div className="relative h-56 w-full">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
           <defs>
@@ -1368,9 +1383,15 @@ function LineChart({ data }: { data: { dia: string; valor: number }[] }) {
               style={{ left: `${p.x}%`, top: `${p.y}%` }}
             >
               <div className="h-2.5 w-2.5 rounded-full border-2 border-brand-amber bg-white transition group-hover:h-3.5 group-hover:w-3.5 group-hover:bg-brand-amber" />
-              <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-brand-black px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block">
-                {etiqueta}: {cop(p.valor)}
-              </div>
+              {mostrarValores ? (
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-white/95 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-brand-black shadow-sm ring-1 ring-brand-brown/10">
+                  {cop(p.valor)}
+                </div>
+              ) : (
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-brand-black px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block">
+                  {etiqueta}: {cop(p.valor)}
+                </div>
+              )}
             </div>
           );
         })}

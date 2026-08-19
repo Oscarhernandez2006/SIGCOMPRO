@@ -228,11 +228,19 @@ export function TablaTopBarras({
               </div>
             </td>
             <td className="whitespace-nowrap py-2 pl-3 text-right">
-              <span className="font-display font-bold tabular-nums text-brand-black">{formatoValor(f.valor)}</span>
-              {f.sub && <span className="ml-2 text-[11px] tabular-nums text-brand-brown/50">{f.sub}</span>}
-              {typeof f.pct === "number" && (
-                <span className="ml-2 text-[11px] font-semibold tabular-nums text-brand-amber">{f.pct.toFixed(0)}%</span>
-              )}
+              <span className="inline-flex items-baseline justify-end gap-3">
+                {f.sub && (
+                  <span className="w-16 text-right text-[11px] tabular-nums text-brand-brown/50">{f.sub}</span>
+                )}
+                <span className="w-28 text-right font-display font-bold tabular-nums text-brand-black">
+                  {formatoValor(f.valor)}
+                </span>
+                {typeof f.pct === "number" && (
+                  <span className="w-9 text-right text-[11px] font-semibold tabular-nums text-brand-amber">
+                    {f.pct.toFixed(0)}%
+                  </span>
+                )}
+              </span>
             </td>
           </tr>
         ))}
