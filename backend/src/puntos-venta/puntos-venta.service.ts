@@ -31,6 +31,12 @@ export interface PuntoVentaRow {
   dom_gratis_desde: number;
   /** Margen de error hacia abajo para aplicar el domicilio gratis. */
   dom_gratis_margen: number;
+  /** ¿El punto sube/baja pedidos a Drivin? Si es false, flujo manual. */
+  drivin: boolean;
+  /** Schema del gestor de órdenes de Drivin al que SUBE este punto (ej. "01"). */
+  drivin_schema_code: string | null;
+  /** Localidad/flota de Drivin ("Domiciliarios PDV <localidad>") para BAJAR domiciliarios. */
+  drivin_localidad: string | null;
   activo: boolean;
   creado_en: string;
 }
@@ -40,7 +46,7 @@ export interface PuntoVentaConUsuarios extends PuntoVentaRow {
 }
 
 const COLUMNS =
-  'id, nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, activo, creado_en';
+  'id, nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, activo, creado_en';
 
 @Injectable()
 export class PuntosVentaService implements OnModuleInit {
@@ -81,6 +87,35 @@ export class PuntosVentaService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS dom_gratis_margen int NOT NULL DEFAULT 3000`,
     );
+    // Integración con Drivin por punto (mapeo configurable desde la UI): si
+    // `drivin` = true, este punto SUBE pedidos al schema `drivin_schema_code` y
+    // BAJA sus domiciliarios por la flota `drivin_localidad`. Si es false, el
+    // punto sigue un flujo manual (no toca Drivin).
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS drivin boolean NOT NULL DEFAULT false`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS drivin_schema_code text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS drivin_localidad text`,
+    );
+    // Semilla ÚNICA de los puntos que YA estaban integrados con Drivin (1..7),
+    // para no romper el flujo existente. Solo aplica si aún no se ha configurado
+    // (drivin_schema_code NULL). Los puntos nuevos quedan con drivin = false.
+    await this.pool.query(
+      `UPDATE puntos_venta SET
+         drivin = true,
+         drivin_schema_code = CASE substring(codigo from '^[0-9]+')
+           WHEN '1' THEN '01' WHEN '2' THEN '03' WHEN '3' THEN '02'
+           WHEN '4' THEN '04' WHEN '5' THEN '05' WHEN '6' THEN '06' WHEN '7' THEN '07' END,
+         drivin_localidad = CASE substring(codigo from '^[0-9]+')
+           WHEN '1' THEN 'La 93' WHEN '2' THEN 'La 70' WHEN '3' THEN 'La 43'
+           WHEN '4' THEN 'Alameda I' WHEN '5' THEN 'Alameda II'
+           WHEN '6' THEN 'Olaya' WHEN '7' THEN 'San Felipe' END
+       WHERE drivin_schema_code IS NULL
+         AND substring(codigo from '^[0-9]+') IN ('1','2','3','4','5','6','7')`,
+    );
   }
 
   /** Lista todos los puntos de venta con su número de usuarios asignados. */
@@ -89,6 +124,7 @@ export class PuntosVentaService implements OnModuleInit {
       `SELECT p.id, p.nombre, p.codigo, p.direccion, p.telefono, p.lista_precio,
               p.barrio, p.ciudad, p.lat, p.lng, p.dom_km_base, p.dom_valor_base, p.dom_valor_km,
               p.dom_gratis_desde, p.dom_gratis_margen,
+              p.drivin, p.drivin_schema_code, p.drivin_localidad,
               p.activo, p.creado_en,
               COUNT(upv.usuario_id)::int AS usuarios
        FROM puntos_venta p
@@ -151,8 +187,8 @@ export class PuntosVentaService implements OnModuleInit {
       }
     }
     const res = await this.pool.query<PuntoVentaRow>(
-      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, activo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, activo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING ${COLUMNS}`,
       [
         dto.nombre.trim(),
@@ -169,6 +205,9 @@ export class PuntosVentaService implements OnModuleInit {
         dto.dom_valor_km ?? 1000,
         dto.dom_gratis_desde ?? 225000,
         dto.dom_gratis_margen ?? 3000,
+        dto.drivin ?? false,
+        dto.drivin_schema_code?.trim() || null,
+        dto.drivin_localidad?.trim() || null,
         dto.activo ?? true,
       ],
     );
@@ -247,6 +286,18 @@ export class PuntosVentaService implements OnModuleInit {
     if (dto.dom_gratis_margen !== undefined) {
       sets.push(`dom_gratis_margen = $${i++}`);
       valores.push(dto.dom_gratis_margen);
+    }
+    if (dto.drivin !== undefined) {
+      sets.push(`drivin = $${i++}`);
+      valores.push(dto.drivin);
+    }
+    if (dto.drivin_schema_code !== undefined) {
+      sets.push(`drivin_schema_code = $${i++}`);
+      valores.push(dto.drivin_schema_code.trim() || null);
+    }
+    if (dto.drivin_localidad !== undefined) {
+      sets.push(`drivin_localidad = $${i++}`);
+      valores.push(dto.drivin_localidad.trim() || null);
     }
     if (dto.activo !== undefined) {
       sets.push(`activo = $${i++}`);

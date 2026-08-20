@@ -86,5 +86,19 @@ export class UpdatePuntoVentaDto {
 
   @IsOptional()
   @IsBoolean()
+  drivin?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  drivin_schema_code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  drivin_localidad?: string;
+
+  @IsOptional()
+  @IsBoolean()
   activo?: boolean;
 }

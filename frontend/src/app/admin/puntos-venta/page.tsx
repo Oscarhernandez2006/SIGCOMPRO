@@ -25,6 +25,9 @@ interface FormState {
   ciudad: string;
   lat: number | null;
   lng: number | null;
+  drivin: boolean;
+  drivin_schema_code: string;
+  drivin_localidad: string;
   activo: boolean;
 }
 
@@ -38,6 +41,9 @@ const FORM_VACIO: FormState = {
   ciudad: "",
   lat: null,
   lng: null,
+  drivin: false,
+  drivin_schema_code: "",
+  drivin_localidad: "",
   activo: true,
 };
 
@@ -112,6 +118,9 @@ export default function AdminPuntosVentaPage() {
       ciudad: p.ciudad ?? "",
       lat: p.lat ?? null,
       lng: p.lng ?? null,
+      drivin: p.drivin ?? false,
+      drivin_schema_code: p.drivin_schema_code ?? "",
+      drivin_localidad: p.drivin_localidad ?? "",
       activo: p.activo,
     });
     setErrorForm(null);
@@ -142,6 +151,9 @@ export default function AdminPuntosVentaPage() {
         ciudad: form.ciudad.trim(),
         lat: form.lat,
         lng: form.lng,
+        drivin: form.drivin,
+        drivin_schema_code: form.drivin ? form.drivin_schema_code.trim() : "",
+        drivin_localidad: form.drivin ? form.drivin_localidad.trim() : "",
         activo: form.activo,
       };
       if (editando) {
@@ -435,6 +447,52 @@ export default function AdminPuntosVentaPage() {
                     <p className="mt-1 text-xs text-brand-brown/50">
                       Define los productos y precios que ve este punto en pedidos.
                     </p>
+                  </div>
+                  {/* Integración con Drivin (mapeo por punto). */}
+                  <div className="col-span-2 rounded-xl border border-brand-brown/15 bg-brand-cream-soft/40 p-3">
+                    <label className="flex items-center gap-2.5 text-sm font-semibold text-brand-brown">
+                      <input
+                        type="checkbox"
+                        checked={form.drivin}
+                        onChange={(e) => setForm({ ...form, drivin: e.target.checked })}
+                        className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
+                      />
+                      Integrar con Drivin
+                    </label>
+                    <p className="mt-1 text-xs text-brand-brown/50">
+                      Si está activo, este punto sube los pedidos a Drivin y baja los
+                      domiciliarios/entregas. Si no, sigue un flujo manual.
+                    </p>
+                    {form.drivin && (
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium text-brand-brown">
+                            Schema code (subir)
+                          </label>
+                          <input
+                            type="text"
+                            value={form.drivin_schema_code}
+                            onChange={(e) => setForm({ ...form, drivin_schema_code: e.target.value })}
+                            placeholder="Ej: 01"
+                            className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                          />
+                          <p className="mt-1 text-xs text-brand-brown/50">Gestor de órdenes al que se suben los pedidos.</p>
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium text-brand-brown">
+                            Localidad / flota (bajar)
+                          </label>
+                          <input
+                            type="text"
+                            value={form.drivin_localidad}
+                            onChange={(e) => setForm({ ...form, drivin_localidad: e.target.value })}
+                            placeholder="Ej: La 93"
+                            className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                          />
+                          <p className="mt-1 text-xs text-brand-brown/50">Flota &quot;Domiciliarios PDV &lt;localidad&gt;&quot; para bajar domiciliarios.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <label className="col-span-2 flex items-center gap-2.5 text-sm font-medium text-brand-brown">
                     <input

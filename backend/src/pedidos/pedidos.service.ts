@@ -1103,6 +1103,7 @@ export class PedidosService implements OnModuleInit {
       tipo,
       proveedor,
       codigoProveedor,
+      puntoId: String(punto.id ?? ''),
       puntoNombre: String(punto.nombre ?? ''),
       puntoCodigo: String(punto.codigo ?? ''),
       direccion: String(cliente.direccion ?? ''),
@@ -1183,6 +1184,54 @@ export class PedidosService implements OnModuleInit {
     const consecutivo = d.comanda || String(id);
     const filename = `${consecutivo}_${fechaGen}_${horaGen}.xlsx`;
     return { filename, buffer };
+  }
+
+  /**
+   * Configuración de Drivin del punto (mapeo configurable desde la UI, guardado
+   * en puntos_venta): si `drivin` es true, este punto SUBE al schema y BAJA por
+   * la localidad indicados. Si la BD no tiene valores, cae al mapeo histórico
+   * por número/nombre. Busca por id y, si no, por código del punto.
+   */
+  private async puntoDrivinCfg(
+    puntoId: string | undefined,
+    puntoCodigo: string,
+    puntoNombre: string,
+  ): Promise<{ drivin: boolean; schema: string; localidad: string }> {
+    type CfgRow = {
+      drivin: boolean;
+      drivin_schema_code: string | null;
+      drivin_localidad: string | null;
+    };
+    let row: CfgRow | null = null;
+    try {
+      if (puntoId) {
+        const r = await this.pool.query<CfgRow>(
+          `SELECT drivin, drivin_schema_code, drivin_localidad
+             FROM puntos_venta WHERE id = $1::bigint LIMIT 1`,
+          [puntoId],
+        );
+        if (r.rowCount) row = r.rows[0];
+      }
+      if (!row && puntoCodigo) {
+        const r = await this.pool.query<CfgRow>(
+          `SELECT drivin, drivin_schema_code, drivin_localidad
+             FROM puntos_venta WHERE codigo = $1 LIMIT 1`,
+          [puntoCodigo],
+        );
+        if (r.rowCount) row = r.rows[0];
+      }
+    } catch {
+      /* si falla la consulta, se usa el mapeo por nombre/número */
+    }
+    return {
+      drivin: row ? row.drivin === true : false,
+      schema:
+        (row?.drivin_schema_code && row.drivin_schema_code.trim()) ||
+        this.schemaDrivinPara(puntoCodigo, puntoNombre),
+      localidad:
+        (row?.drivin_localidad && row.drivin_localidad.trim()) ||
+        this.localidadDrivin(puntoCodigo, puntoNombre),
+    };
   }
 
   /**
@@ -1423,7 +1472,8 @@ export class PedidosService implements OnModuleInit {
     puntoCodigo: string,
     puntoNombre: string,
   ): Promise<DomiciliarioDrivin[]> {
-    const localidad = this.localidadDrivin(puntoCodigo, puntoNombre);
+    const cfg = await this.puntoDrivinCfg(undefined, puntoCodigo, puntoNombre);
+    const localidad = cfg.localidad;
     const flota = localidad ? `Domiciliarios PDV ${localidad}` : '';
     const vehiculos = await this.drivinVehicles();
     const out: DomiciliarioDrivin[] = [];
@@ -1681,10 +1731,15 @@ export class PedidosService implements OnModuleInit {
 
     const d = await this.construirDespacho(id, replica);
 
-    // El schema de Drivin depende del punto de venta:
-    //  - La 93 -> 01 | Alameda I -> 04 | Alameda II -> 05
-    //  - Otros -> DRIVIN_SCHEMA_CODE del .env (por defecto 01)
-    const schema = this.schemaDrivinPara(d.puntoCodigo, d.puntoNombre);
+    // Config Drivin del punto (interruptor + schema). Si el punto NO está
+    // integrado con Drivin, no se sube (flujo manual).
+    const cfg = await this.puntoDrivinCfg(d.puntoId, d.puntoCodigo, d.puntoNombre);
+    if (!cfg.drivin) {
+      throw new BadRequestException(
+        'Este punto de venta no está integrado con Drivin.',
+      );
+    }
+    const schema = cfg.schema;
     // La orden se sube al GESTOR DE ÓRDENES del schema (solo `schema_code`, sin
     // `token` ni `autoassign`). El planeador de Drivin la asigna a un vehículo y
     // SIGCOMPRO baja esa asignación después (ver asignacionesDrivin()).
@@ -1956,10 +2011,10 @@ export class PedidosService implements OnModuleInit {
           return;
         }
 
-        // Schema de Drivin para el punto
-        const schema = this.schemaDrivinPara(puntoCodigo, puntoNombre);
+        // Schema de Drivin para el punto (config del punto, con fallback).
+        const cfg = await this.puntoDrivinCfg(undefined, puntoCodigo, puntoNombre);
+        const schema = cfg.schema;
         const hoy = this.diaBogota();
-
         // Obtener el token del escenario
         const token = await this.tokenScenarioPunto(schema, hoy);
         if (!token) {

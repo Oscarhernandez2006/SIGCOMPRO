@@ -21,6 +21,12 @@ export interface PuntoVenta {
   dom_gratis_desde: number;
   /** Margen de error hacia abajo para aplicar el domicilio gratis. */
   dom_gratis_margen: number;
+  /** ¿El punto sube/baja pedidos a Drivin? Si es false, flujo manual. */
+  drivin: boolean;
+  /** Schema del gestor de órdenes de Drivin al que SUBE (ej. "01"). */
+  drivin_schema_code: string | null;
+  /** Localidad/flota de Drivin ("Domiciliarios PDV <localidad>") para BAJAR. */
+  drivin_localidad: string | null;
   activo: boolean;
   creado_en: string;
   /** Número de usuarios asignados (solo en el listado admin). */
@@ -42,6 +48,9 @@ export interface PuntoVentaInput {
   dom_valor_km?: number;
   dom_gratis_desde?: number;
   dom_gratis_margen?: number;
+  drivin?: boolean;
+  drivin_schema_code?: string;
+  drivin_localidad?: string;
   activo?: boolean;
 }
 

@@ -508,6 +508,13 @@ export default function DespachoPage() {
     return new Set(puntosAsignados.map((p) => String(p.id)));
   }, [esSelector, puntoActivoId, puntosAsignados]);
 
+  // IDs de los puntos del usuario integrados con Drivin (config por punto). Los
+  // que NO están aquí siguen el flujo MANUAL (no suben ni bajan de Drivin).
+  const idsDrivin = useMemo(
+    () => new Set(puntosAsignados.filter((p) => p.drivin).map((p) => String(p.id))),
+    [puntosAsignados],
+  );
+
   // Carga inicial + auto-actualización (polling). Cada 7 s (y al volver a la
   // pestaña) agrega los pedidos NUEVOS y su metadata, sin reemplazar los
   // existentes, para no pisar lo que se está editando (factura, estado, etc.).
@@ -643,21 +650,22 @@ export default function DespachoPage() {
   // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
   // (despachado / en tránsito); los "entregado" y anulados finales cada 6 ciclos
   // (~30s), para autocorregir incidencias de Drivin sin inflar la consulta.
-  const entregaRef = useRef({ pedidos, meta, idsPuntos });
-  entregaRef.current = { pedidos, meta, idsPuntos };
+  const entregaRef = useRef({ pedidos, meta, idsPuntos, idsDrivin });
+  entregaRef.current = { pedidos, meta, idsPuntos, idsDrivin };
   useEffect(() => {
     let vivo = true;
     let enVuelo = false; // evita encaballar consultas (una a la vez)
     let ciclo = 0;
     const revisar = async () => {
       if (enVuelo) return;
-      const { pedidos: peds, meta: mts, idsPuntos: ids } = entregaRef.current;
+      const { pedidos: peds, meta: mts, idsPuntos: ids, idsDrivin: idsDr } = entregaRef.current;
       ciclo += 1;
       const revisarEntregados = ciclo % 6 === 0;
       const candidatos = peds.filter((p) => {
         // Incluye recoge en PDV: también tienen POD en Drivin (se aprueban al
-        // entregarse/recogerse).
+        // entregarse/recogerse). Solo puntos integrados con Drivin.
         if (!p.punto?.id || !ids.has(String(p.punto.id))) return false;
+        if (!idsDr.has(String(p.punto.id))) return false; // punto manual: sin POD
         const e = norm(p.estado);
         if (p.anulado && e !== "anulado" && e !== "cancelado") return false;
         if (e === "despachado" || e === "en tránsito") return true;
@@ -824,6 +832,7 @@ export default function DespachoPage() {
     for (const p of pedidos) {
       if (p.anulado) continue;
       if (!p.punto?.id || !idsPuntos.has(String(p.punto.id))) continue;
+      if (!idsDrivin.has(String(p.punto.id))) continue; // punto manual: no toca Drivin
       const m = meta[p.id] ?? {};
       const est = norm(p.estado);
       if (est !== "facturado" && est !== "despachado") continue;
@@ -906,7 +915,7 @@ export default function DespachoPage() {
         }
       }
     }
-  }, [pedidos, asignacionesDrivin, idsPuntos, meta, usuarioDesp]);
+  }, [pedidos, asignacionesDrivin, idsPuntos, idsDrivin, meta, usuarioDesp]);
 
   /** Marca un pedido como impreso y lo persiste. */
   const marcarImpreso = (id: string) => {
@@ -1012,6 +1021,16 @@ export default function DespachoPage() {
         return { ...prev, [id]: { ...prev[id], despachoFin, despachadoPor } };
       });
     }
+    // Al marcar "Entregado" MANUAL (punto sin Drivin), se registra la entrega
+    // igual que lo haría el POD de Drivin (para el tiempo y el sello verde).
+    if (norm(estado) === "entregado") {
+      setMeta((prev) => {
+        if (prev[id]?.entregado) return prev;
+        const entregadoEn = new Date().toISOString();
+        actualizarMetaApi(id, { entregado: true, entregadoEn }).catch(() => { /* ignore */ });
+        return { ...prev, [id]: { ...prev[id], entregado: true, entregadoEn } };
+      });
+    }
     // Al pasar a "Facturado" se registra el facturador y se SUBE el pedido a
     // Drivin SIN domiciliario: Drivin asigna el vehículo y SIGCOMPRO lo baja
     // luego (poll de asignaciones) para despachar automáticamente.
@@ -1023,7 +1042,13 @@ export default function DespachoPage() {
       // vuelven a facturar por corregir la factura/un valor). La bandera
       // `drivinEnviado` queda PERSISTIDA en la meta.
       const sinReplicas = (mm.replicas ?? []).length === 0;
+      // Solo los puntos integrados con Drivin suben el pedido (los demás son
+      // flujo MANUAL: el domiciliario se asigna a mano en el despacho).
+      const puntoDrivin = idsDrivin.has(
+        String(pedidos.find((x) => x.id === id)?.punto?.id),
+      );
       if (
+        puntoDrivin &&
         sinReplicas &&
         !mm.drivinEnviado &&
         !drivinDespachoRef.current.has(id)
@@ -1833,6 +1858,12 @@ export default function DespachoPage() {
                 const comprobantePendiente = Boolean(comp?.tiene) && !compConfirmado;
                 // El cliente recoge en el punto de venta (no lleva domiciliario).
                 const esRecoge = p.entrega === "recoge";
+                // ¿El punto del pedido está integrado con Drivin? Si no, el
+                // domiciliario se asigna a MANO (flujo manual).
+                const pedidoEsDrivin = idsDrivin.has(String(p.punto?.id));
+                const domiciliarios = [...personal.domiciliarios].sort((a, b) =>
+                  a.localeCompare(b, "es", { sensitivity: "base" }),
+                );
                 // Pedido pequeño (≤10 kg): alistado de 40 min (rojo a los 20 min).
                 const esPequeno = esPedidoPequeno(p);
                 // Límite de DURACIÓN del alistamiento (producción): pequeño 40 min,
@@ -2346,7 +2377,7 @@ export default function DespachoPage() {
                         {m.domiciliario ? (
                           <div className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5">
                             <p className="text-[9px] font-bold uppercase tracking-wide text-green-700/70">
-                              Domiciliario (Drivin)
+                              {pedidoEsDrivin ? "Domiciliario (Drivin)" : "Domiciliario"}
                             </p>
                             <p className="text-xs font-semibold text-green-800">{m.domiciliario}</p>
                             {m.entregado && (
@@ -2355,6 +2386,39 @@ export default function DespachoPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                                 </svg>
                                 Entregado{m.entregadoEn ? ` · ${fmtHora(m.entregadoEn)}` : ""}
+                              </p>
+                            )}
+                            {!pedidoEsDrivin && !despachado && (
+                              <button
+                                onClick={() => actualizarMeta(p.id, { domiciliario: "", domiciliarioCodigo: "" })}
+                                className="mt-1 text-[10px] font-semibold text-brand-brown/50 underline hover:text-brand-brown"
+                              >
+                                Cambiar
+                              </button>
+                            )}
+                          </div>
+                        ) : !pedidoEsDrivin ? (
+                          // Punto MANUAL (sin Drivin): el domiciliario se asigna a mano.
+                          <div className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold uppercase tracking-wide text-brand-brown/50">
+                              Domiciliario (manual)
+                            </p>
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value)
+                                  actualizarMeta(p.id, { domiciliario: e.target.value, domiciliarioCodigo: "" });
+                              }}
+                              className="mt-1 w-full rounded-md border border-brand-brown/20 bg-white px-2 py-1 text-[11px] font-semibold text-brand-brown outline-none transition focus:border-brand-wine"
+                            >
+                              <option value="">Seleccionar domiciliario…</option>
+                              {domiciliarios.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
+                            {domiciliarios.length === 0 && (
+                              <p className="mt-1 text-[10px] text-brand-brown/50">
+                                Sin domiciliarios en Gestión de recursos.
                               </p>
                             )}
                           </div>
@@ -2420,20 +2484,53 @@ export default function DespachoPage() {
                         </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
-                        <button
-                          onClick={() => cambiarEstado(p.id, "Despachado")}
-                          disabled={anulado || despachado || !facturado || !puedeEstado("Despachado")}
-                          title={
-                            !facturado && !despachado
-                              ? "Debes facturar el pedido antes de despachar"
-                              : !m.domiciliario?.trim()
-                                ? "Asigna un domiciliario para despachar"
-                                : "Marcar el pedido como despachado"
-                          }
-                          className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${puedeEstado("Despachado") ? "" : "opacity-50"}`}
-                        >
-                          Despachado
-                        </button>
+                        {!pedidoEsDrivin && norm(estado) === "entregado" ? (
+                          <div className="flex w-full items-center justify-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3.5 w-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            Entregado
+                          </div>
+                        ) : !pedidoEsDrivin && norm(estado) === "en tránsito" ? (
+                          <button
+                            onClick={() => cambiarEstado(p.id, "Entregado")}
+                            disabled={anulado || !puedeEstado("Entregado")}
+                            title="Marcar el pedido como entregado"
+                            className={`w-full whitespace-nowrap rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700 disabled:opacity-40 ${puedeEstado("Entregado") ? "" : "opacity-50"}`}
+                          >
+                            Marcar entregado
+                          </button>
+                        ) : !pedidoEsDrivin && norm(estado) === "despachado" ? (
+                          <button
+                            onClick={() => cambiarEstado(p.id, "En tránsito")}
+                            disabled={anulado || !puedeEstado("En tránsito")}
+                            title="Marcar el pedido en tránsito (va en camino)"
+                            className={`w-full whitespace-nowrap rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-40 ${puedeEstado("En tránsito") ? "" : "opacity-50"}`}
+                          >
+                            En tránsito
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => cambiarEstado(p.id, "Despachado")}
+                            disabled={
+                              anulado ||
+                              despachado ||
+                              !facturado ||
+                              (!pedidoEsDrivin && !m.domiciliario?.trim()) ||
+                              !puedeEstado("Despachado")
+                            }
+                            title={
+                              !facturado && !despachado
+                                ? "Debes facturar el pedido antes de despachar"
+                                : !m.domiciliario?.trim()
+                                  ? "Asigna un domiciliario para despachar"
+                                  : "Marcar el pedido como despachado"
+                            }
+                            className={`w-full whitespace-nowrap rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40 ${puedeEstado("Despachado") ? "" : "opacity-50"}`}
+                          >
+                            Despachado
+                          </button>
+                        )}
                       </div>
                     </td>
 
@@ -2767,6 +2864,7 @@ export default function DespachoPage() {
           pedido={modalReplica.pedido}
           numero={modalReplica.numero}
           modo={modalReplica.modo}
+          puntoDrivin={idsDrivin.has(String(modalReplica.pedido.punto?.id))}
           facturado={
             ["facturado", "despachado", "en tránsito", "en transito", "entregado"].includes(
               norm(modalReplica.pedido.estado),
@@ -3214,6 +3312,7 @@ function ModalReplica({
   pedido,
   numero,
   modo,
+  puntoDrivin,
   facturado,
   domiciliarioAsignado,
   esUltima,
@@ -3228,6 +3327,7 @@ function ModalReplica({
   pedido: Pedido;
   numero: number;
   modo: "crear" | "ver";
+  puntoDrivin: boolean;
   facturado: boolean;
   domiciliarioAsignado: string;
   esUltima: boolean;
@@ -3254,20 +3354,9 @@ function ModalReplica({
   // pedido ORIGINAL, así que basta con que el pedido tenga factura registrada,
   // aunque ya haya avanzado a Despachado/En tránsito/Entregado.
   const esFacturado = facturado;
-  // Puntos integrados con Drivin (suben directo): La 93, La 70, La 43, Alameda,
-  // Olaya y San Felipe. Cada uno usa su schema en el backend (93->01, 70->03,
-  // 43->02, Alameda I->04, Alameda II->05, Olaya->06, San Felipe->07). El resto va por Excel.
-  const esDrivin = (() => {
-    const nombre = String(pedido.punto?.nombre ?? "").toLowerCase();
-    return (
-      /\b93\b/.test(nombre) ||
-      /\b70\b/.test(nombre) ||
-      /\b43\b/.test(nombre) ||
-      nombre.includes("alameda") ||
-      nombre.includes("olaya") ||
-      nombre.includes("felipe")
-    );
-  })();
+  // ¿El punto del pedido está integrado con Drivin? (config por punto). Si no,
+  // la réplica es manual (no sube a Drivin).
+  const esDrivin = puntoDrivin;
   
   const estadoNorm = norm(pedido.estado);
   const motivoNorm = norm(pedido.motivo ?? "");
