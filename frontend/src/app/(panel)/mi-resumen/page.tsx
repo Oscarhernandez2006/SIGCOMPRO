@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
-import { objetivoDespacho, colorEstado } from "@/lib/despacho";
+import { objetivoDespacho, colorEstado, yaDespachado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 import {
   Panel,
@@ -25,6 +25,13 @@ const DIA = 86400000;
 
 function tsPedido(p: Pedido): number {
   const t = new Date(p.fecha).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Timestamp de DESPACHO (cuándo entró a caja): despachoFin, o la fecha del pedido. */
+function tsDespacho(p: Pedido, meta: Record<string, DespachoMeta>): number {
+  const iso = (meta[p.id]?.despachoFin as string | undefined) || p.fecha;
+  const t = new Date(iso).getTime();
   return Number.isFinite(t) ? t : 0;
 }
 
@@ -257,6 +264,21 @@ export default function MiResumenPage() {
     return pedidos.filter((p) => tsPedido(p) >= desde);
   }, [pedidos, desde, usaRango, rangoDesde, rangoHasta]);
 
+  // ¿Un instante cae dentro del periodo elegido? (misma ventana que enPeriodo,
+  // pero aplicable a cualquier fecha, p. ej. la de DESPACHO).
+  const enPeriodoTs = useCallback(
+    (t: number) => {
+      if (usaRango) {
+        const min = rangoDesde ? new Date(`${rangoDesde}T00:00:00`).getTime() : -Infinity;
+        const max = rangoHasta ? new Date(`${rangoHasta}T23:59:59.999`).getTime() : Infinity;
+        return t >= min && t <= max;
+      }
+      if (desde == null) return true;
+      return t >= desde;
+    },
+    [usaRango, rangoDesde, rangoHasta, desde],
+  );
+
   // --- VENTAS: pedidos que YO creé (vendedorNombre === mi nombre) ---
   const misVentas = useMemo(
     () => enPeriodo.filter((p) => norm(p.vendedorNombre) === nombre),
@@ -272,10 +294,29 @@ export default function MiResumenPage() {
     [esVistaGlobal, enPeriodo, misVentas],
   );
 
+  // FACTURADO alineado con la CAJA (Cuadre): cuenta solo pedidos DESPACHADOS,
+  // por su fecha de DESPACHO (cuándo entró la plata), con `facturaValor ?? total`.
+  // Así el facturado de esta vista cuadra con el Cuadre de caja del punto.
+  const facturadoCaja = useMemo(() => {
+    const scope = esVistaGlobal
+      ? pedidos
+      : pedidos.filter((p) => norm(p.vendedorNombre) === nombre);
+    const validos = scope.filter(
+      (p) =>
+        !p.anulado &&
+        yaDespachado(p.estado) &&
+        enPeriodoTs(tsDespacho(p, meta)),
+    );
+    const valor = validos.reduce(
+      (s, p) => s + (Number(meta[p.id]?.facturaValor ?? p.total ?? 0) || 0),
+      0,
+    );
+    return { pedidos: validos.length, valor };
+  }, [esVistaGlobal, pedidos, nombre, meta, enPeriodoTs]);
+
   const ventas = useMemo(() => {
     const validos = analizar.filter((p) => !p.anulado);
     const total = validos.reduce((s, p) => s + (Number(p.total) || 0), 0);
-    const facturado = validos.reduce((s, p) => s + (Number(meta[p.id]?.facturaValor) || 0), 0);
     const anulados = analizar.filter((p) => p.anulado || norm(p.estado) === "anulado" || norm(p.estado) === "cancelado").length;
     const porDiaMap = new Map<string, number>();
     for (const p of validos) {
@@ -286,13 +327,12 @@ export default function MiResumenPage() {
     return {
       pedidos: validos.length,
       total,
-      facturado,
       ticket: validos.length ? total / validos.length : 0,
       anulados,
       pctBaja: analizar.length ? (anulados / analizar.length) * 100 : 0,
       porDia,
     };
-  }, [analizar, meta]);
+  }, [analizar]);
 
   // --- DESPACHO: pedidos donde YO participé (facturé/despaché/alisté/entregué) ---
   // En vista global (admin) se agregan todos los usuarios de despacho.
@@ -515,7 +555,7 @@ export default function MiResumenPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 <Stat titulo={esVistaGlobal ? "Pedidos" : "Mis pedidos"} valor={num(ventas.pedidos)} sub="No anulados" />
                 <Stat titulo={esVistaGlobal ? "Ventas" : "Mis ventas"} valor={cop(ventas.total)} color="text-brand-wine" />
-                <Stat titulo="Total facturado" valor={cop(ventas.facturado)} sub="Según factura" color="text-emerald-600" />
+                <Stat titulo="Total facturado" valor={cop(facturadoCaja.valor)} sub={`Despachado · ${num(facturadoCaja.pedidos)} ped.`} color="text-emerald-600" />
                 <Stat titulo="Ticket promedio" valor={cop(ventas.ticket)} />
                 <Stat titulo="Anulados / Cancelados" valor={num(ventas.anulados)} sub={`${ventas.pctBaja.toFixed(1)}% de bajas`} color="text-red-600" />
               </div>
