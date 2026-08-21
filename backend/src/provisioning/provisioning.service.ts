@@ -61,12 +61,18 @@ export class ProvisioningService implements OnModuleInit {
     );
   }
 
-  /** Catálogo de roles sugeridos y módulos/permisos para la UI de la suite. */
-  catalogo() {
+  /** Catálogo de roles (reales + sugeridos) y módulos/permisos para la UI de la suite. */
+  async catalogo() {
+    const res = await this.pool.query<{ rol: string }>(
+      `SELECT DISTINCT rol FROM usuarios WHERE rol IS NOT NULL AND rol <> '' ORDER BY rol`,
+    );
+    const reales = res.rows.map((r) => r.rol);
     return {
-      roles: ROLES_SUGERIDOS,
+      roles: Array.from(new Set([...reales, ...ROLES_SUGERIDOS])),
       rolesAccesoTotal: ROLES_ACCESO_TOTAL,
       permisos: CATALOGO_PERMISOS,
+      // Sigcompro es de una sola compañía: sin pestañas de compañía en la suite.
+      companies: [] as { id: string; name: string }[],
     };
   }
 
@@ -104,6 +110,7 @@ export class ProvisioningService implements OnModuleInit {
       activo: u.activo,
       bloqueadoSuite: u.bloqueado_suite,
       permisos: u.permisos ?? [],
+      companies: [] as { companyId: string; name: string; permisos: string[] }[],
     }));
   }
 
