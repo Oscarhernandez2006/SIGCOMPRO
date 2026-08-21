@@ -13,6 +13,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 import { CongeladosModule } from './congelados/congelados.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
 import { MotivosModule } from './motivos/motivos.module';
+import { ProvisioningModule } from './provisioning/provisioning.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MotivosModule } from './motivos/motivos.module';
     CongeladosModule,
     ConfiguracionModule,
     MotivosModule,
+    ProvisioningModule,
   ],
   controllers: [AppController],
 })

@@ -26,6 +26,12 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    if (usuario.bloqueado_suite) {
+      throw new UnauthorizedException(
+        'Usuario bloqueado desde la suite. Contacte al administrador.',
+      );
+    }
+
     const passwordOk = bcrypt.compareSync(dto.password, usuario.password_hash);
     if (!passwordOk) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -101,6 +107,12 @@ export class AuthService {
     if (!usuario || !usuario.activo) {
       throw new UnauthorizedException(
         'El usuario no está registrado en esta aplicación',
+      );
+    }
+
+    if (usuario.bloqueado_suite) {
+      throw new UnauthorizedException(
+        'Usuario bloqueado desde la suite. Contacte al administrador.',
       );
     }
 

@@ -18,6 +18,7 @@ export interface UsuarioRow {
   password_hash: string;
   rol: string;
   activo: boolean;
+  bloqueado_suite: boolean;
   creado_en: string;
   permisos: string[];
 }
@@ -46,7 +47,8 @@ export class UsersService {
 
   async findByCedula(cedula: string): Promise<UsuarioRow | null> {
     const res = await this.pool.query<UsuarioRow>(
-      `SELECT id, cedula, nombre, password_hash, rol, activo, creado_en, permisos
+      `SELECT id, cedula, nombre, password_hash, rol, activo,
+              COALESCE(bloqueado_suite, false) AS bloqueado_suite, creado_en, permisos
        FROM usuarios
        WHERE cedula = $1
        LIMIT 1`,
