@@ -33,6 +33,12 @@ export class ProvisioningController {
     return this.provisioning.catalogo();
   }
 
+  /** Lista todos los usuarios (para importarlos/reflejarlos en la suite). */
+  @Get('usuarios')
+  listar() {
+    return this.provisioning.listarUsuarios();
+  }
+
   @Get('usuarios/:cedula')
   obtener(@Param('cedula') cedula: string) {
     return this.provisioning.obtenerPorCedula(cedula);

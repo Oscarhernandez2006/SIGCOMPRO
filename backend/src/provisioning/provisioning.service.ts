@@ -88,6 +88,25 @@ export class ProvisioningService implements OnModuleInit {
     return usuario;
   }
 
+  /**
+   * Lista todos los usuarios (para que la suite los importe y refleje su rol y
+   * permisos actuales). Forma normalizada común con las demás apps.
+   */
+  async listarUsuarios() {
+    const res = await this.pool.query<UsuarioProvisionado>(
+      `SELECT ${COLUMNS_PUBLICAS} FROM usuarios ORDER BY nombre ASC`,
+    );
+    return res.rows.map((u) => ({
+      cedula: u.cedula,
+      nombre: u.nombre,
+      email: null as string | null,
+      rol: u.rol,
+      activo: u.activo,
+      bloqueadoSuite: u.bloqueado_suite,
+      permisos: u.permisos ?? [],
+    }));
+  }
+
   /** Crea o actualiza (upsert por cédula) un usuario. */
   async upsertUsuario(dto: ProvisionUsuarioDto): Promise<UsuarioProvisionado> {
     const cedula = dto.cedula.trim();
