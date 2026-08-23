@@ -7,7 +7,7 @@ import {
   imprimirComanda,
   type Pedido,
 } from "@/app/(panel)/pedidos/page";
-import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, buscarPedidos, type DespachoMeta } from "@/lib/pedidos";
 import { yaDespachado, colorEstado } from "@/lib/despacho";
 import { misPuntosVenta } from "@/lib/puntos-venta";
 import { getUsuario, tieneAccesoAdministrativo } from "@/lib/auth";
@@ -24,6 +24,15 @@ export default function HistoricosPage() {
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [tipo, setTipo] = useState<"todos" | "despachado" | "anulado">("todos");
   const [filtroPunto, setFiltroPunto] = useState("");
+
+  // Resultados traídos del backend bajo demanda: búsqueda en TODO el historial
+  // y carga de un día concreto (ambos fuera de la ventana de días recientes que
+  // trae el listado por defecto). Se fusionan con `pedidos` para el filtrado.
+  const [busqPedidos, setBusqPedidos] = useState<Pedido[]>([]);
+  const [busqMeta, setBusqMeta] = useState<Record<string, DespachoMeta>>({});
+  const [buscando, setBuscando] = useState(false);
+  const [diaPedidos, setDiaPedidos] = useState<Pedido[]>([]);
+  const [diaMeta, setDiaMeta] = useState<Record<string, DespachoMeta>>({});
 
   // Puntos del usuario (para acceso operativo); los admin ven todos.
   const [filtroIds, setFiltroIds] = useState<Set<string> | null>(null);
@@ -55,9 +64,77 @@ export default function HistoricosPage() {
       .finally(() => setCargando(false));
   }, []);
 
+  // Búsqueda en TODO el historial (comanda, consecutivo, nombre o NIT), con
+  // debounce. Sin esto la búsqueda solo miraría los pedidos de los últimos días
+  // que trae el listado por defecto y las comandas antiguas no aparecerían.
+  useEffect(() => {
+    const q = busqueda.trim();
+    if (q.length < 2) {
+      setBusqPedidos([]);
+      setBusqMeta({});
+      setBuscando(false);
+      return;
+    }
+    setBuscando(true);
+    const t = setTimeout(() => {
+      buscarPedidos(q)
+        .then((e) => {
+          setBusqPedidos(e.pedidos);
+          setBusqMeta(e.meta ?? {});
+        })
+        .catch(() => {
+          setBusqPedidos([]);
+          setBusqMeta({});
+        })
+        .finally(() => setBuscando(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  // Carga bajo demanda de un día concreto (fuera de la ventana de días
+  // recientes), para que el filtro de fecha muestre históricos antiguos.
+  useEffect(() => {
+    if (!fechaFiltro) {
+      setDiaPedidos([]);
+      setDiaMeta({});
+      return;
+    }
+    let vigente = true;
+    cargarEstadoPedidos({ rango: "fecha", fecha: fechaFiltro })
+      .then((e) => {
+        if (!vigente) return;
+        setDiaPedidos(e.pedidos);
+        setDiaMeta(e.meta ?? {});
+      })
+      .catch(() => {
+        if (!vigente) return;
+        setDiaPedidos([]);
+        setDiaMeta({});
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [fechaFiltro]);
+
+  // Conjunto de trabajo: pedidos recientes + resultados de búsqueda + día
+  // cargado, sin duplicados (por id).
+  const pool = useMemo(() => {
+    if (busqPedidos.length === 0 && diaPedidos.length === 0) return pedidos;
+    const map = new Map<string, Pedido>();
+    for (const p of pedidos) map.set(p.id, p);
+    for (const p of diaPedidos) map.set(p.id, p);
+    for (const p of busqPedidos) map.set(p.id, p);
+    return Array.from(map.values());
+  }, [pedidos, busqPedidos, diaPedidos]);
+
+  const metaTotal = useMemo(
+    () => ({ ...meta, ...diaMeta, ...busqMeta }),
+    [meta, diaMeta, busqMeta],
+  );
+
   const historicos = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return pedidos
+    return pool
       .filter((p) => {
         // Solo despachados (incluye en tránsito/entregado) o anulados.
         const esAnulado = p.anulado || norm(p.estado) === "anulado";
@@ -93,7 +170,7 @@ export default function HistoricosPage() {
         return true;
       })
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-  }, [pedidos, busqueda, fechaFiltro, tipo, filtroPunto, filtroIds]);
+  }, [pool, busqueda, fechaFiltro, tipo, filtroPunto, filtroIds]);
 
   // Puntos de venta presentes en los históricos visibles (para el filtro PDV).
   const puntosDisponibles = useMemo(() => {
@@ -261,6 +338,8 @@ export default function HistoricosPage() {
       {/* Tabla */}
       {cargando || !filtroListo ? (
         <p className="text-sm text-brand-brown/60">Cargando…</p>
+      ) : buscando && historicos.length === 0 ? (
+        <p className="text-sm text-brand-brown/60">Buscando en el historial…</p>
       ) : historicos.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center">
           <p className="font-medium text-brand-black">Sin resultados</p>
@@ -286,7 +365,7 @@ export default function HistoricosPage() {
               <tbody>
                 {historicos.map((p) => {
                   const anulado = p.anulado || norm(p.estado) === "anulado";
-                  const m = meta[p.id];
+                  const m = metaTotal[p.id];
                   return (
                     <tr key={p.id} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
                       <td className="px-4 py-3 align-top">
@@ -337,7 +416,7 @@ export default function HistoricosPage() {
         </div>
       )}
 
-      {detalle && <DetallePedido pedido={detalle} meta={meta[detalle.id]} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} meta={metaTotal[detalle.id]} onCerrar={() => setDetalle(null)} />}
     </div>
   );
 }

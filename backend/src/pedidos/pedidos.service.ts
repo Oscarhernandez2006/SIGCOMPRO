@@ -306,6 +306,51 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
+   * Búsqueda de pedidos en TODO el historial (sin la ventana de días recientes
+   * de estado()). Se usa en Históricos para encontrar comandas/consecutivos o
+   * clientes antiguos por texto libre. Coincide por comanda, consecutivo,
+   * nombre o NIT/cédula del cliente. Limitada para no traer todo el historial.
+   */
+  async buscar(q?: string): Promise<EstadoPedidos> {
+    const term = String(q ?? '').trim();
+    const ahora = new Date().toISOString();
+    if (term.length < 2) {
+      return { pedidos: [], meta: {}, impresos: [], ahora };
+    }
+    const like = `%${term.toLowerCase()}%`;
+    const res = await this.pool.query<{
+      id: string;
+      impreso: boolean;
+      data: PedidoData;
+      meta: DespachoMeta;
+    }>(
+      `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
+         FROM pedidos
+        WHERE lower(coalesce(data->>'comanda', '')) LIKE $1
+           OR lower(coalesce(consecutivo::text, '')) LIKE $1
+           OR lower(coalesce(data->>'consecutivo', '')) LIKE $1
+           OR lower(coalesce(data->'cliente'->>'nombre', '')) LIKE $1
+           OR lower(coalesce(data->'cliente'->>'nit_cedula', '')) LIKE $1
+        ORDER BY fecha DESC NULLS LAST, creado_en DESC
+        LIMIT 300`,
+      [like],
+    );
+
+    const pedidos: PedidoData[] = [];
+    const meta: Record<string, DespachoMeta> = {};
+    const impresos: string[] = [];
+    for (const row of res.rows) {
+      pedidos.push(row.data);
+      if (row.meta && Object.keys(row.meta).length > 0) {
+        meta[row.id] = row.meta;
+      }
+      if (row.impreso) impresos.push(row.id);
+    }
+    await this.refrescarClientes(pedidos);
+    return { pedidos, meta, impresos, ahora };
+  }
+
+  /**
    * Trazabilidad (historial) de un pedido puntual. Se consulta BAJO DEMANDA al
    * abrir el modal, porque el listado (estado()) omite este arreglo para no
    * inflar el payload que se refresca por polling cada pocos segundos.

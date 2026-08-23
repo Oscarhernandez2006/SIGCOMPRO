@@ -38,6 +38,12 @@ export class PedidosController {
     return this.pedidos.estado(desde, rango, fecha);
   }
 
+  /** Búsqueda de pedidos en TODO el historial (comanda, consecutivo, nombre o NIT). */
+  @Get('buscar')
+  buscar(@Query('q') q?: string) {
+    return this.pedidos.buscar(q ?? '');
+  }
+
   /** Trazabilidad (historial) de un pedido, bajo demanda (no viaja en el listado). */
   @Get(':id/trazabilidad')
   trazabilidad(@Param('id') id: string) {

@@ -99,6 +99,14 @@ export function cargarEstadoPedidos(
 }
 
 /**
+ * Busca pedidos en TODO el historial (Históricos) por comanda, consecutivo,
+ * nombre o NIT/cédula, sin la ventana de días recientes del listado normal.
+ */
+export function buscarPedidos(q: string): Promise<EstadoPedidos> {
+  return apiFetch<EstadoPedidos>(`/pedidos/buscar?q=${encodeURIComponent(q)}`);
+}
+
+/**
  * Trazabilidad (historial) de un pedido, BAJO DEMANDA. El listado no la trae
  * para aligerar el payload que se refresca por polling; se consulta al abrir
  * el modal de trazabilidad de un pedido puntual.

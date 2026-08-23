@@ -242,7 +242,12 @@ export default function CrearClienteModal({
                 <Campo label="Teléfono">
                   <input
                     value={form.telefono ?? ""}
-                    onChange={(e) => cambiar("telefono", e.target.value)}
+                    onChange={(e) =>
+                      cambiar("telefono", e.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="3001234567"
                     className="campo max-w-[10rem]"
                   />
                 </Campo>
