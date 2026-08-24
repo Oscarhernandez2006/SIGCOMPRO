@@ -10,6 +10,13 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, type ProductoPrecio } from "@/lib/productos";
+import { obtenerMenuConfig, guardarMenuConfig } from "@/lib/menu";
+import {
+  PORTADA_IMG,
+  paginarItems,
+  precioMenu,
+  umMenu,
+} from "@/lib/menu-plantillas";
 
 /* -------------------------------------------------------------- */
 /*  Utilidades                                                     */
@@ -39,6 +46,18 @@ function umLabel(um?: string | null): string {
   return (um ?? "").trim().toUpperCase();
 }
 
+/** Slug público de una tienda (mismo criterio que el backend: código o nombre). */
+function slugTienda(p: PuntoVenta | null): string {
+  const base = p?.codigo?.trim() ? p.codigo : p?.nombre;
+  return (base ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 /** Convierte una fila de catálogo en un ítem de lista. */
 function aItem(p: ProductoPrecio): ItemLista {
   return {
@@ -51,113 +70,105 @@ function aItem(p: ProductoPrecio): ItemLista {
 }
 
 /* -------------------------------------------------------------- */
-/*  PDF presentable (estilo Carnes Santacruz)                      */
+/*  PDF con los fondos reales de marca (una hoja por bloque)        */
 /* -------------------------------------------------------------- */
 
-function generarPdfLista(
-  items: ItemLista[],
-  punto: PuntoVenta | null,
-) {
+const PAGINA_ALTO_MM = 315;
+
+function generarPdfLista(items: ItemLista[], punto: PuntoVenta | null) {
   const esc = (s: unknown) =>
     String(s ?? "").replace(/[&<>"]/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
     );
-  const logo = `${window.location.origin}/LOGOCARNESSANTACRUZ.png`;
-  const fecha = new Date().toLocaleDateString("es-CO", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const origin = window.location.origin;
+  const paginas = paginarItems(items);
 
-  // Agrupa por categoría conservando el orden de aparición.
-  const grupos = new Map<string, ItemLista[]>();
-  for (const it of items) {
-    const cat = it.categoria || SIN_CATEGORIA;
-    if (!grupos.has(cat)) grupos.set(cat, []);
-    grupos.get(cat)!.push(it);
-  }
-
-  const secciones = Array.from(grupos, ([categoria, lista]) => {
+  const seccion = ({ plantilla, items: lista }: (typeof paginas)[number]) => {
+    const { area, filasPorPagina } = plantilla;
+    const areaAltoMm = (PAGINA_ALTO_MM * (100 - area.top - area.bottom)) / 100;
+    const filaMm = areaAltoMm / filasPorPagina;
+    const fuenteMm = Math.min(filaMm * 0.42, 5.4);
     const filas = lista
-      .map(
-        (it) => `<tr>
-          <td class="prod">${esc((it.producto || it.referencia).toUpperCase())}</td>
-          <td class="precio">${esc(precioCOP(it.precio))}${
-            umLabel(it.um) ? ` <span class="um">${esc(umLabel(it.um))}</span>` : ""
-          }</td>
-        </tr>`,
-      )
+      .map((it) => {
+        const nombre = esc((it.producto || it.referencia).toUpperCase());
+        const um = umMenu(it.um);
+        const precio =
+          it.precio > 0
+            ? `${esc(precioMenu(it.precio))}${
+                um ? ` <span class="um" style="font-size:${(fuenteMm * 0.72).toFixed(2)}mm">${esc(um)}</span>` : ""
+              }`
+            : "—";
+        return `<tr>
+            <td class="prod" style="height:${filaMm.toFixed(2)}mm;font-size:${fuenteMm.toFixed(2)}mm">${nombre}</td>
+            <td class="precio" style="height:${filaMm.toFixed(2)}mm;font-size:${fuenteMm.toFixed(2)}mm">${precio}</td>
+          </tr>`;
+      })
       .join("");
-    return `<section class="cat">
-        <h2>${esc(categoria.toUpperCase())}</h2>
-        <table>
-          <thead><tr><th class="prod">Producto</th><th class="precio">Precio</th></tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
+    const pos = `top:${area.top}%;left:${area.left}%;right:${area.right}%;bottom:${area.bottom}%`;
+    return `<section class="pagina">
+        <img class="fondo" src="${origin}${plantilla.imagen}" alt="">
+        <div class="lista" style="${pos}">
+          <table><colgroup><col><col style="width:40mm"></colgroup><tbody>${filas}</tbody></table>
+        </div>
       </section>`;
-  }).join("");
+  };
 
-  const html = `<!doctype html><html><head><meta charset="utf-8">
+  const portada = `<section class="pagina">
+      <img class="fondo" src="${origin}${PORTADA_IMG}" alt="Carnes Santacruz">
+      ${punto?.nombre ? `<div class="portada-nombre">${esc(punto.nombre.toUpperCase())}</div>` : ""}
+    </section>`;
+
+  const cuerpo = paginas.map(seccion).join("");
+
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
   <title>Lista de precios${punto?.nombre ? " · " + esc(punto.nombre) : ""}</title>
   <style>
-    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    @page{size:letter;margin:12mm}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0d0d0d;color:#f5f0e6;font-size:12px}
-    .hoja{background:#0d0d0d;padding:6mm 4mm}
-    .head{display:flex;align-items:center;gap:18px;border-bottom:2px solid #c8a24a;padding-bottom:14px;margin-bottom:18px}
-    .head img{height:78px;width:auto;object-fit:contain}
-    .head .t{flex:1}
-    .head h1{margin:0;font-size:26px;font-weight:800;letter-spacing:1.5px;color:#f5f0e6;text-transform:uppercase}
-    .head .sub{margin-top:4px;font-size:13px;color:#c8a24a;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
-    .head .meta{margin-top:2px;font-size:11px;color:#b9b0a0}
-    .grid{column-count:2;column-gap:20px}
-    .cat{break-inside:avoid;margin:0 0 16px}
-    .cat h2{margin:0 0 6px;font-size:15px;font-weight:800;letter-spacing:1px;color:#c8a24a;text-transform:uppercase;border-bottom:1px solid #3a3a3a;padding-bottom:4px}
-    table{width:100%;border-collapse:collapse}
-    thead th{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#8a8378;text-align:left;padding:0 0 4px;font-weight:700}
-    thead th.precio{text-align:right}
-    tbody td{padding:3px 0;font-size:12px;vertical-align:bottom;border-bottom:1px dotted #333}
-    td.prod{color:#f0ebe0;padding-right:8px}
-    td.precio{color:#f5d98a;text-align:right;white-space:nowrap;font-weight:700}
-    td.precio .um{color:#9a9384;font-weight:400;font-size:10px}
-    .pie{margin-top:18px;border-top:2px solid #c8a24a;padding-top:12px;text-align:center}
-    .pie .lema{font-size:17px;font-weight:800;letter-spacing:1px;color:#f5f0e6;text-transform:uppercase}
-    .pie .lema span{color:#c8a24a}
-    .pie .web{margin-top:3px;font-size:11px;letter-spacing:3px;color:#b9b0a0;text-transform:uppercase}
-  </style></head><body>
-    <div class="hoja">
-      <div class="head">
-        <img src="${logo}" alt="Carnes Santacruz" onerror="this.style.display='none'">
-        <div class="t">
-          <h1>Listado de Precios</h1>
-          <div class="sub">${esc(punto?.nombre ?? "Punto de venta")}</div>
-          <div class="meta">${
-            punto?.direccion ? esc(punto.direccion) + " · " : ""
-          }${fecha}</div>
-        </div>
-      </div>
-      <div class="grid">
-        ${secciones || `<p style="color:#b9b0a0">Sin productos seleccionados.</p>`}
-      </div>
-      <div class="pie">
-        <div class="lema">¡Calidad <span>Superior!</span></div>
-        <div class="web">www.carnessantacruz.co</div>
-      </div>
-    </div>
-  </body></html>`;
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{size:210mm 315mm;margin:0}
+    html,body{background:#000}
+    body{font-family:Arial,Helvetica,sans-serif}
+    .pagina{position:relative;width:210mm;height:315mm;overflow:hidden;page-break-after:always;break-after:page}
+    .pagina:last-child{page-break-after:auto;break-after:auto}
+    .fondo{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
+    .lista{position:absolute}
+    .lista table{width:100%;border-collapse:collapse;table-layout:fixed}
+    td.prod{color:#fff;text-transform:uppercase;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:3mm;vertical-align:middle}
+    td.precio{color:#fff;text-align:right;white-space:nowrap;vertical-align:middle;font-variant-numeric:tabular-nums}
+    td.precio .um{color:#e9e2d4}
+    .portada-nombre{position:absolute;top:53.2%;left:0;right:0;text-align:center;color:#e5b24b;font-weight:bold;letter-spacing:2px;font-size:4mm;text-transform:uppercase}
+  </style></head><body>${portada}${cuerpo}</body></html>`;
 
-  const w = window.open("", "_blank", "width=980,height=800");
+  const w = window.open("", "_blank", "width=760,height=1120");
   if (!w) return;
   w.document.write(html);
   w.document.close();
   w.focus();
-  const img = w.document.querySelector("img");
-  if (img && !img.complete) {
-    img.onload = () => w.print();
-    img.onerror = () => w.print();
+
+  // Imprime cuando TODOS los fondos hayan cargado (con respaldo por tiempo).
+  let listo = false;
+  const disparar = () => {
+    if (listo) return;
+    listo = true;
+    try {
+      w.focus();
+      w.print();
+    } catch {
+      /* ventana cerrada por el usuario */
+    }
+  };
+  const imgs = Array.from(w.document.images);
+  const pendientes = imgs.filter((i) => !i.complete);
+  if (pendientes.length === 0) {
+    disparar();
   } else {
-    w.print();
+    let faltan = pendientes.length;
+    pendientes.forEach((i) => {
+      i.addEventListener("load", () => --faltan === 0 && disparar());
+      i.addEventListener("error", () => --faltan === 0 && disparar());
+    });
   }
+  // Respaldo: los fondos pesan varios MB; si algo no dispara, imprime igual.
+  setTimeout(disparar, 6000);
 }
 
 /* -------------------------------------------------------------- */
@@ -176,6 +187,9 @@ export default function ListaPreciosPage() {
   const [cargando, setCargando] = useState(true);
   const [cargandoCat, setCargandoCat] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado] = useState(false);
 
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
@@ -211,22 +225,42 @@ export default function ListaPreciosPage() {
     [puntos, puntoId],
   );
 
-  // Carga el catálogo de la lista de precios del punto seleccionado.
+  // Carga el catálogo de la lista de precios y la configuración guardada del
+  // punto seleccionado (los productos/precios que verá el cliente en el menú).
   useEffect(() => {
+    const pid = punto?.id;
     const lista = punto?.lista_precio?.trim();
-    setSeleccion([]);
     setBusqueda("");
     setCategoria("");
-    if (!lista) {
+    setGuardado(false);
+    if (!pid) {
       setCatalogo([]);
+      setSeleccion([]);
       return;
     }
-    setCargandoCat(true);
-    listarProductos(lista)
-      .then((prods) => setCatalogo(prods))
-      .catch(() => setCatalogo([]))
-      .finally(() => setCargandoCat(false));
-  }, [punto?.lista_precio]);
+    if (lista) {
+      setCargandoCat(true);
+      listarProductos(lista)
+        .then((prods) => setCatalogo(prods))
+        .catch(() => setCatalogo([]))
+        .finally(() => setCargandoCat(false));
+    } else {
+      setCatalogo([]);
+    }
+    obtenerMenuConfig(pid)
+      .then((items) =>
+        setSeleccion(
+          items.map((it) => ({
+            referencia: it.referencia,
+            producto: it.producto,
+            categoria: (it.categoria || "").trim() || SIN_CATEGORIA,
+            um: it.um,
+            precio: Number(it.precio) || 0,
+          })),
+        ),
+      )
+      .catch(() => setSeleccion([]));
+  }, [punto?.id, punto?.lista_precio]);
 
   const categorias = useMemo(() => {
     const set = new Set<string>();
@@ -286,6 +320,7 @@ export default function ListaPreciosPage() {
         ? prev
         : [...prev, aItem(p)],
     );
+    setGuardado(false);
   }, []);
 
   const agregarCategoria = useCallback(
@@ -301,6 +336,7 @@ export default function ListaPreciosPage() {
           .map(aItem);
         return [...prev, ...nuevos];
       });
+      setGuardado(false);
     },
     [catalogo],
   );
@@ -313,21 +349,43 @@ export default function ListaPreciosPage() {
         .map(aItem);
       return [...prev, ...nuevos];
     });
+    setGuardado(false);
   }, [catalogoFiltrado]);
 
   const quitar = useCallback((ref: string) => {
     setSeleccion((prev) => prev.filter((s) => s.referencia !== ref));
+    setGuardado(false);
   }, []);
 
   const cambiarPrecio = useCallback((ref: string, precio: number) => {
     setSeleccion((prev) =>
       prev.map((s) => (s.referencia === ref ? { ...s, precio } : s)),
     );
+    setGuardado(false);
   }, []);
+
+  const guardar = useCallback(async () => {
+    if (!punto) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      await guardarMenuConfig(punto.id, seleccion);
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 2500);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo guardar la configuración",
+      );
+    } finally {
+      setGuardando(false);
+    }
+  }, [punto, seleccion]);
 
   if (cargando) {
     return <p className="text-sm text-brand-brown/60">Cargando…</p>;
   }
+
+  const origen = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
     <div>
@@ -336,9 +394,10 @@ export default function ListaPreciosPage() {
           Lista de Precios
         </h1>
         <p className="mt-1 text-sm text-brand-brown/70">
-          Arma la lista de precios del punto de venta: busca artículos por
-          código o categoría, ajusta el precio y descarga un PDF presentable
-          para los clientes.
+          Arma la lista de precios del punto: busca artículos por código o
+          categoría y ajusta el precio. Con <b>Guardar menú</b> se publica lo que
+          verá el cliente en el link público; con <b>Descargar PDF</b> obtienes
+          la versión imprimible.
         </p>
       </div>
 
@@ -378,6 +437,18 @@ export default function ListaPreciosPage() {
         </span>
         <button
           type="button"
+          onClick={guardar}
+          disabled={guardando || !punto}
+          className="inline-flex items-center gap-2 rounded-xl border border-brand-wine/25 bg-white px-4 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Guardar la configuración que verá el cliente en el menú"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 21v-7.5A2.25 2.25 0 0 0 17.25 11.25h-10.5A2.25 2.25 0 0 0 4.5 13.5V21m15 0H4.5m15 0h1.5M4.5 21H3M16.5 6.75V3.75A.75.75 0 0 0 15.75 3H8.25a.75.75 0 0 0-.75.75v3m9 0h.008M7.5 6.75h9" />
+          </svg>
+          {guardado ? "¡Guardado!" : guardando ? "Guardando…" : "Guardar menú"}
+        </button>
+        <button
+          type="button"
           onClick={() => generarPdfLista(seleccion, punto)}
           disabled={seleccion.length === 0}
           className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-40"
@@ -388,6 +459,45 @@ export default function ListaPreciosPage() {
           Descargar PDF
         </button>
       </div>
+
+      {/* Link público del menú (para compartir con clientes) */}
+      {punto?.lista_precio && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-brown/15 bg-brand-cream-soft/40 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-brand-brown/60">
+              Menú público de esta tienda
+            </div>
+            <div className="truncate text-sm text-brand-wine">
+              {`${origen}/tienda/${slugTienda(punto)}`}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(
+                  `${origen}/tienda/${slugTienda(punto)}`,
+                );
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              } catch {
+                /* portapapeles no disponible */
+              }
+            }}
+            className="rounded-lg border border-brand-wine/20 px-3 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
+          >
+            {copiado ? "¡Copiado!" : "Copiar link"}
+          </button>
+          <a
+            href={`${origen}/tienda/${slugTienda(punto)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-white"
+          >
+            Abrir
+          </a>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Catálogo */}

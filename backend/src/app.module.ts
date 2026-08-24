@@ -14,6 +14,7 @@ import { CongeladosModule } from './congelados/congelados.module';
 import { ConfiguracionModule } from './configuracion/configuracion.module';
 import { MotivosModule } from './motivos/motivos.module';
 import { ProvisioningModule } from './provisioning/provisioning.module';
+import { MenuModule } from './menu/menu.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ProvisioningModule } from './provisioning/provisioning.module';
     ConfiguracionModule,
     MotivosModule,
     ProvisioningModule,
+    MenuModule,
   ],
   controllers: [AppController],
 })

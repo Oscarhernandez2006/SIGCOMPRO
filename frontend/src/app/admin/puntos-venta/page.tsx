@@ -15,6 +15,18 @@ import {
 } from "@/lib/puntos-venta";
 import MapaDireccion from "@/components/MapaDireccion";
 
+/** Slug público del menú de un punto (mismo criterio que el backend). */
+function slugTienda(p: { codigo?: string | null; nombre: string }): string {
+  const base = p.codigo?.trim() ? p.codigo : p.nombre;
+  return (base ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 interface FormState {
   nombre: string;
   codigo: string;
@@ -52,6 +64,7 @@ export default function AdminPuntosVentaPage() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [listas, setListas] = useState<ListaPrecio[]>([]);
+  const [copiadoId, setCopiadoId] = useState<string | null>(null);
 
   // Modal crear/editar
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -322,6 +335,43 @@ export default function AdminPuntosVentaPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={async () => {
+                            const url = `${window.location.origin}/tienda/${slugTienda(p)}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              setCopiadoId(p.id);
+                              setTimeout(() => setCopiadoId(null), 2000);
+                            } catch {
+                              /* portapapeles no disponible */
+                            }
+                          }}
+                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-wine/10 hover:text-brand-wine"
+                          aria-label={`Copiar link del menú de ${p.nombre}`}
+                          title={copiadoId === p.id ? "¡Link copiado!" : "Copiar link del menú público"}
+                        >
+                          {copiadoId === p.id ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 text-green-600">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+                            </svg>
+                          )}
+                        </button>
+                        <a
+                          href={`/tienda/${slugTienda(p)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
+                          aria-label={`Abrir menú de ${p.nombre}`}
+                          title="Abrir menú público"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                          </svg>
+                        </a>
                         <button
                           onClick={() => abrirEditar(p)}
                           className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
