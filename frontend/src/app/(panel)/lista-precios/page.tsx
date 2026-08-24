@@ -46,10 +46,9 @@ function umLabel(um?: string | null): string {
   return (um ?? "").trim().toUpperCase();
 }
 
-/** Slug público de una tienda (mismo criterio que el backend: código o nombre). */
+/** Slug público de una tienda (mismo criterio que el backend: nombre). */
 function slugTienda(p: PuntoVenta | null): string {
-  const base = p?.codigo?.trim() ? p.codigo : p?.nombre;
-  return (base ?? "")
+  return (p?.nombre ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -115,7 +114,10 @@ function generarPdfLista(items: ItemLista[], punto: PuntoVenta | null) {
 
   const portada = `<section class="pagina">
       <img class="fondo" src="${origin}${PORTADA_IMG}" alt="Carnes Santacruz">
-      ${punto?.nombre ? `<div class="portada-nombre">${esc(punto.nombre.toUpperCase())}</div>` : ""}
+      <div class="portada-top">
+        <img class="portada-logo" src="${origin}/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz">
+        ${punto?.nombre ? `<div class="portada-nombre">${esc(punto.nombre.toUpperCase())}</div>` : ""}
+      </div>
     </section>`;
 
   const cuerpo = paginas.map(seccion).join("");
@@ -135,7 +137,9 @@ function generarPdfLista(items: ItemLista[], punto: PuntoVenta | null) {
     td.prod{color:#fff;text-transform:uppercase;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:3mm;vertical-align:middle}
     td.precio{color:#fff;text-align:right;white-space:nowrap;vertical-align:middle;font-variant-numeric:tabular-nums}
     td.precio .um{color:#e9e2d4}
-    .portada-nombre{position:absolute;top:53.2%;left:0;right:0;text-align:center;color:#e5b24b;font-weight:bold;letter-spacing:2px;font-size:4mm;text-transform:uppercase}
+    .portada-top{position:absolute;top:9mm;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2.6mm;padding:2.8mm 4mm 2.4mm;background:rgba(0,0,0,.45);border:0.4mm solid rgba(229,178,75,.45);border-radius:4mm;box-shadow:0 2mm 8mm rgba(0,0,0,.35)}
+    .portada-logo{height:17mm;width:auto;object-fit:contain}
+    .portada-nombre{text-align:center;color:#f4bf56;font-weight:800;letter-spacing:1px;font-size:3.8mm;text-transform:uppercase;text-shadow:0 0.8mm 2mm rgba(0,0,0,.55)}
   </style></head><body>${portada}${cuerpo}</body></html>`;
 
   const w = window.open("", "_blank", "width=760,height=1120");

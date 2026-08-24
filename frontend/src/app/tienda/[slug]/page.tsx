@@ -100,14 +100,25 @@ function HojaPortada({ nombre }: { nombre: string }) {
         sizes="(max-width: 560px) 100vw, 560px"
         className="object-fill"
       />
-      {nombre && (
-        <div
-          className="absolute left-0 right-0 text-center font-bold uppercase tracking-[0.15em] text-[#e5b24b]"
-          style={{ top: "53.2%", fontSize: "2.4cqh" }}
-        >
-          {nombre}
+      <div className="absolute left-0 right-0 top-[3.2%] flex justify-center px-[2cqw]">
+        <div className="flex min-w-[58%] max-w-[90%] flex-col items-center gap-[0.55cqh] rounded-[1.1cqh] border border-[#e5b24b]/45 bg-black/45 px-[2.2cqw] py-[1.3cqh] shadow-[0_1.5cqh_3.5cqh_rgba(0,0,0,0.35)] backdrop-blur-[2px]">
+          <Image
+            src="/LOGOCARNESSANTACRUZ.png"
+            alt="Carnes Santacruz"
+            width={170}
+            height={170}
+            className="h-[11cqh] w-auto object-contain"
+          />
+          {nombre && (
+            <div
+              className="w-full text-center font-extrabold uppercase tracking-[0.08em] text-[#f4bf56]"
+              style={{ fontSize: "2.1cqh", textShadow: "0 0.7cqh 1.8cqh rgba(0,0,0,.55)" }}
+            >
+              {nombre}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

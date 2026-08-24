@@ -15,10 +15,9 @@ import {
 } from "@/lib/puntos-venta";
 import MapaDireccion from "@/components/MapaDireccion";
 
-/** Slug público del menú de un punto (mismo criterio que el backend). */
+/** Slug público del menú de un punto (mismo criterio que el backend: nombre). */
 function slugTienda(p: { codigo?: string | null; nombre: string }): string {
-  const base = p.codigo?.trim() ? p.codigo : p.nombre;
-  return (base ?? "")
+  return (p.nombre ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()

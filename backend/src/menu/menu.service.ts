@@ -148,10 +148,9 @@ export class MenuService implements OnModuleInit {
     return res.rows;
   }
 
-  /** Slug estable de un punto: su código si lo tiene; si no, su nombre. */
+  /** Slug público del punto: basado en nombre comercial. */
   private slugDe(p: PuntoRow): string {
-    const base = p.codigo?.trim() ? p.codigo : p.nombre;
-    return slugify(base) || String(p.id);
+    return slugify(p.nombre) || String(p.id);
   }
 
   /** Tiendas públicas disponibles (activas y con lista de precios). */
