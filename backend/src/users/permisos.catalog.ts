@@ -112,6 +112,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         ],
       },
       {
+        key: 'lista_precios',
+        label: 'Lista de precios',
+      },
+      {
         key: 'mi_resumen',
         label: 'Mi resumen',
       },

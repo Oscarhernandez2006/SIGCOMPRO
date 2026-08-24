@@ -26,6 +26,7 @@ export const RUTA_MODULO: Record<string, string> = {
   dashboard: "/dashboard",
   cuadre_caja: "/cuadre-caja",
   cotizaciones: "/cotizaciones",
+  lista_precios: "/lista-precios",
   mi_resumen: "/mi-resumen",
 };
 
