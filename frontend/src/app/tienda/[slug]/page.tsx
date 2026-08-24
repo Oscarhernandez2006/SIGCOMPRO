@@ -171,6 +171,11 @@ export default function TiendaMenuPage({
     return lista;
   }, [paginas]);
 
+  const inicioBloque = useMemo(
+    () => new Map(bloques.map((b) => [b.indice, b.clave])),
+    [bloques],
+  );
+
   if (estado === "cargando") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-[#cfc7b8]">
@@ -194,11 +199,6 @@ export default function TiendaMenuPage({
       </main>
     );
   }
-
-  const inicioBloque = useMemo(
-    () => new Map(bloques.map((b) => [b.indice, b.clave])),
-    [bloques],
-  );
 
   return (
     <main className="min-h-screen bg-black">
