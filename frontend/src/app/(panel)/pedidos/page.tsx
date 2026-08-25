@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -295,8 +295,10 @@ export default function PedidosPage() {
   }, [fechaFiltro]);
 
   const guardarPedido = (p: Pedido) => {
+    let anterior: Pedido | null = null;
     setPedidos((prev) => {
-      const existe = prev.some((x) => x.id === p.id);
+      anterior = prev.find((x) => x.id === p.id) ?? null;
+      const existe = anterior !== null;
       return existe ? prev.map((x) => (x.id === p.id ? p : x)) : [p, ...prev];
     });
     // Persistimos en la base de datos y actualizamos con la versión del backend,
@@ -309,7 +311,17 @@ export default function PedidosPage() {
           );
         }
       })
-      .catch(() => { /* ignore */ });
+      .catch((e) => {
+        // Revierte el optimista para no dejar la UI en un estado inválido.
+        setPedidos((prev) => {
+          if (anterior) {
+            return prev.map((x) => (x.id === p.id ? anterior! : x));
+          }
+          return prev.filter((x) => x.id !== p.id);
+        });
+        const msg = e instanceof Error ? e.message : "No se pudo guardar el pedido.";
+        alert(msg);
+      });
   };
 
   const abrirNuevo = () => { setEditando(null); setClonando(null); setBorrador(null); setWizardAbierto(true); };
@@ -361,12 +373,22 @@ export default function PedidosPage() {
   // Anula un pedido (marca anulado + estado) y lo persiste.
   // Anular = motivo INTERNO (error de la televendedora).
   const anularPedido = (p: Pedido) => {
+    const replicas = meta[p.id]?.replicas ?? [];
+    if (replicas.length > 0) {
+      alert("Este pedido tiene réplicas. Primero quítalas para poder anular.");
+      return;
+    }
     setMotivoModal({ pedido: p, tipo: "anular" });
   };
 
   // Cancela un pedido (motivo EXTERNO: el cliente no lo recibió / devolución).
   // También sale del flujo activo (anulado=true) pero con estado "Cancelado".
   const cancelarPedido = (p: Pedido) => {
+    const replicas = meta[p.id]?.replicas ?? [];
+    if (replicas.length > 0) {
+      alert("Este pedido tiene réplicas. Primero quítalas para poder cancelar.");
+      return;
+    }
     setMotivoModal({ pedido: p, tipo: "cancelar" });
   };
 
@@ -374,6 +396,12 @@ export default function PedidosPage() {
   const confirmarMotivo = (motivo: string) => {
     if (!motivoModal) return;
     const { pedido, tipo } = motivoModal;
+    const replicas = meta[pedido.id]?.replicas ?? [];
+    if (replicas.length > 0) {
+      alert("Este pedido tiene réplicas. Primero quítalas para poder continuar.");
+      setMotivoModal(null);
+      return;
+    }
     guardarPedido({
       ...pedido,
       anulado: true,
@@ -648,6 +676,12 @@ export default function PedidosPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {(() => {
+                      const bloqueadoPorReplicas =
+                        (meta[p.id]?.replicas?.length ?? 0) > 0;
+                      const tituloBloqueoReplicas =
+                        "Este pedido tiene réplicas. Primero quítalas para anular o cancelar.";
+                      return (
                     <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
@@ -675,12 +709,42 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
                             </svg>
                           </button>
-                          <button onClick={permite.anular ? () => anularPedido(p) : sinPermiso.mostrar} aria-label="Anular pedido" title="Anular el pedido (error interno de la televendedora)" className={`rounded-lg border border-red-200 p-1.5 text-red-600 transition hover:bg-red-50 ${permite.anular ? "" : "opacity-50"}`}>
+                          <button
+                            onClick={
+                              bloqueadoPorReplicas
+                                ? () => alert(tituloBloqueoReplicas)
+                                : permite.anular
+                                  ? () => anularPedido(p)
+                                  : sinPermiso.mostrar
+                            }
+                            aria-label="Anular pedido"
+                            title={
+                              bloqueadoPorReplicas
+                                ? tituloBloqueoReplicas
+                                : "Anular el pedido (error interno de la televendedora)"
+                            }
+                            className={`rounded-lg border border-red-200 p-1.5 text-red-600 transition hover:bg-red-50 ${permite.anular && !bloqueadoPorReplicas ? "" : "opacity-50"}`}
+                          >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
                             </svg>
                           </button>
-                          <button onClick={permite.cancelar ? () => cancelarPedido(p) : sinPermiso.mostrar} aria-label="Cancelar pedido" title="Cancelar el pedido (motivo externo: el cliente no lo recibió / devolución)" className={`rounded-lg border border-orange-200 p-1.5 text-orange-600 transition hover:bg-orange-50 ${permite.cancelar ? "" : "opacity-50"}`}>
+                          <button
+                            onClick={
+                              bloqueadoPorReplicas
+                                ? () => alert(tituloBloqueoReplicas)
+                                : permite.cancelar
+                                  ? () => cancelarPedido(p)
+                                  : sinPermiso.mostrar
+                            }
+                            aria-label="Cancelar pedido"
+                            title={
+                              bloqueadoPorReplicas
+                                ? tituloBloqueoReplicas
+                                : "Cancelar el pedido (motivo externo: el cliente no lo recibió / devolución)"
+                            }
+                            className={`rounded-lg border border-orange-200 p-1.5 text-orange-600 transition hover:bg-orange-50 ${permite.cancelar && !bloqueadoPorReplicas ? "" : "opacity-50"}`}
+                          >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                             </svg>
@@ -701,6 +765,8 @@ export default function PedidosPage() {
                         </button>
                       )}
                     </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
@@ -1450,6 +1516,22 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
       alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
       return;
     }
+
+    // Si el pedido original estaba anulado y se clona, se heredan SOLAMENTE
+    // los datos de preparación/alistamiento; los de facturación y despacho NO.
+    if (clon?.anulado && meta?.[clon.id]) {
+      const origen = meta[clon.id];
+      const preparar: Partial<DespachoMeta> = {};
+      if (origen.porcionador) preparar.porcionador = origen.porcionador;
+      if (origen.inicio) preparar.inicio = origen.inicio;
+      if (origen.fin) preparar.fin = origen.fin;
+      if (Object.keys(preparar).length > 0) {
+        await actualizarMetaApi(finalPedido.id, preparar).catch(() => {
+          /* si falla, el pedido igual queda creado */
+        });
+      }
+    }
+
     onCrear(finalPedido);
     setPedidoCreado(finalPedido);
     // El envío a Drivin ya NO ocurre al crear/clonar el pedido: se hace cuando

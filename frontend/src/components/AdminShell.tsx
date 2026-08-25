@@ -13,13 +13,15 @@ import {
   puedeVerClaveDinamica,
   type Usuario,
 } from "@/lib/auth";
-import { panelesAccesibles } from "@/lib/permisos";
+import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import ClaveDinamica from "./ClaveDinamica";
 
 interface NavItem {
   label: string;
   href: string;
   icon: ReactNode;
+  /** Clave del módulo en permisos para visibilidad del ítem. */
+  modulo?: string;
   /** Si es true, solo lo ven administrador app / desarrollador. */
   soloDashboard?: boolean;
   /** Sub-opciones desplegables (menú anidado). Si existen, el ítem es un grupo. */
@@ -79,6 +81,17 @@ const navItems: NavItem[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 3.75h3M9 8.25h6m3.75-3.75H5.25A1.5 1.5 0 0 0 3.75 6v13.5A1.5 1.5 0 0 0 5.25 21h13.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5Z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Lista de precios",
+    href: "/admin/lista-precios",
+    modulo: "lista_precios",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
       </svg>
     ),
   },
@@ -228,7 +241,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
     const items = navItems.filter(
-      (item) => !item.soloDashboard || puedeVerDashboard(usuario?.rol),
+      (item) =>
+        (!item.soloDashboard || puedeVerDashboard(usuario?.rol)) &&
+        (!item.modulo || puedeVerModulo(usuario, item.modulo)),
     );
     const esActivo = (href: string) => pathname.startsWith(href);
     return (

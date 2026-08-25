@@ -671,15 +671,29 @@ export class PedidosService implements OnModuleInit {
       // Integridad de flujo: no se puede marcar un pedido como "Facturado" o
       // "Despachado" sin número y valor de factura. La factura vive en la
       // metadata de despacho (columna meta), guardada antes de facturar.
+      const metaActual: DespachoMeta = prev.rowCount
+        ? (prev.rows[0].meta ?? {})
+        : {};
       const normEstado = (s: unknown) => String(s ?? '').trim().toLowerCase();
       const nuevoEstadoNorm = normEstado(estado);
       const entraAFacturadoODespachado =
         (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado') &&
         nuevoEstadoNorm !== normEstado(estadoAnterior);
+      const replicasActuales = Array.isArray(
+        (metaActual as { replicas?: unknown }).replicas,
+      )
+        ? ((metaActual as { replicas?: unknown[] }).replicas ?? [])
+        : [];
+      const estaAnulandoAhora =
+        anulado &&
+        !anuladoAnterior &&
+        (nuevoEstadoNorm === 'cancelado' || nuevoEstadoNorm === 'anulado');
+      if (estaAnulandoAhora && replicasActuales.length > 0) {
+        throw new BadRequestException(
+          'Este pedido tiene réplicas. Primero quítalas para poder anular o cancelar.',
+        );
+      }
       if (!anulado && entraAFacturadoODespachado) {
-        const metaActual: DespachoMeta = prev.rowCount
-          ? (prev.rows[0].meta ?? {})
-          : {};
         const numFactura = String(metaActual.facturaNumero ?? '').trim();
         const valFactura = Number(metaActual.facturaValor);
         if (!numFactura || !Number.isFinite(valFactura) || valFactura <= 0) {
@@ -688,6 +702,7 @@ export class PedidosService implements OnModuleInit {
           );
         }
       }
+      const metaDestino: DespachoMeta = estaAnulandoAhora ? {} : metaActual;
 
       // Contenido comparable del pedido para detectar EDICIONES (campos que el
       // usuario puede cambiar). Orden fijo para no depender del orden de llaves.
@@ -758,8 +773,8 @@ export class PedidosService implements OnModuleInit {
 
       await client.query(
         `INSERT INTO pedidos
-           (id, consecutivo, punto_id, estado, anulado, fecha, data)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+           (id, consecutivo, punto_id, estado, anulado, fecha, data, meta)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
          ON CONFLICT (id) DO UPDATE SET
            consecutivo = EXCLUDED.consecutivo,
            punto_id = EXCLUDED.punto_id,
@@ -767,6 +782,7 @@ export class PedidosService implements OnModuleInit {
            anulado = EXCLUDED.anulado,
            fecha = EXCLUDED.fecha,
            data = EXCLUDED.data,
+           meta = EXCLUDED.meta,
            actualizado_en = now()`,
         [
           id,
@@ -776,8 +792,16 @@ export class PedidosService implements OnModuleInit {
           anulado,
           fecha,
           JSON.stringify(finalPedido),
+          JSON.stringify(metaDestino ?? {}),
         ],
       );
+
+      if (estaAnulandoAhora) {
+        await client.query(
+          `DELETE FROM comprobantes_pago WHERE pedido_id = $1`,
+          [id],
+        );
+      }
 
       // SINCRONIZACIÓN AUTOMÁTICA CON DRIVIN: Si se cancela el pedido,
       // notificar a Drivin para que actualice el estado allá también.
