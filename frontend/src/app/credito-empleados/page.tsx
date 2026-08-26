@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
@@ -24,14 +24,14 @@ function fechaCorta(v: string) {
 
 const ESTADO_BADGE: Record<string, string> = {
   pendiente: "border-amber-200 bg-amber-50 text-amber-700",
-  facturado: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  facturado: "border-brand-wine/25 bg-brand-wine/5 text-brand-wine",
   anulado:   "border-neutral-200 bg-neutral-100 text-neutral-500",
 };
 const ESTADO_LABEL: Record<string, string> = { pendiente: "Pendiente", facturado: "Facturado", anulado: "Anulado" };
 
 function EstadoBadge({ estado }: { estado: string }) {
   const dot: Record<string, string> = {
-    pendiente: "bg-amber-400", facturado: "bg-emerald-500", anulado: "bg-neutral-400",
+    pendiente: "bg-amber-400", facturado: "bg-brand-wine", anulado: "bg-neutral-400",
   };
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ESTADO_BADGE[estado] ?? "border-brand-brown/20 bg-brand-brown/5 text-brand-brown"}`}>
@@ -120,11 +120,11 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
 
         {/* Header del modal */}
         <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
             <Icon d={Ico.wallet} cls="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <h2 className="font-serif text-lg font-bold text-emerald-900">Nueva compra a crédito</h2>
+            <h2 className="font-serif text-lg font-bold text-brand-wine">Nueva compra a crédito</h2>
             <p className="text-xs text-brand-brown/55">Busca el colaborador y registra el valor</p>
           </div>
           <button type="button" onClick={onClose} disabled={guardando} aria-label="Cerrar"
@@ -138,7 +138,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
           {/* Paso 1 */}
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">1</span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-wine text-[10px] font-bold text-white">1</span>
               <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Buscar colaborador</p>
             </div>
             <form onSubmit={buscar} className="flex gap-2">
@@ -147,10 +147,10 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                 <input ref={inputRef} value={cedula}
                   onChange={(e) => { setCedula(e.target.value.replace(/\D/g, "")); setTrabajador(null); setErrorBuscar(null); }}
                   placeholder="Número de cédula"
-                  className="h-11 w-full rounded-xl border border-brand-brown/25 pl-9 pr-3 text-sm outline-none transition focus:border-emerald-600" />
+                  className="h-11 w-full rounded-xl border border-brand-brown/25 pl-9 pr-3 text-sm outline-none transition focus:border-brand-wine" />
               </div>
               <button type="submit" disabled={buscando}
-                className="flex h-11 items-center gap-1.5 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">
+                className="flex h-11 items-center gap-1.5 rounded-xl bg-brand-wine px-4 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50">
                 {buscando
                   ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   : <Icon d={Ico.search} cls="h-4 w-4" />}
@@ -169,9 +169,9 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
 
           {/* Tarjeta del trabajador */}
           {trabajador && (
-            <div className={`overflow-hidden rounded-xl border ${trabajador.activo ? "border-emerald-200" : "border-rose-200"}`}>
+            <div className={`overflow-hidden rounded-xl border ${trabajador.activo ? "border-brand-wine/25" : "border-rose-200"}`}>
               {/* Banner */}
-              <div className={`flex items-center gap-3 px-4 py-3 ${trabajador.activo ? "bg-emerald-700" : "bg-rose-600"}`}>
+              <div className={`flex items-center gap-3 px-4 py-3 ${trabajador.activo ? "bg-brand-wine" : "bg-rose-600"}`}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-white">
                   <Icon d={Ico.user} cls="h-5 w-5" />
                 </div>
@@ -193,7 +193,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                 {[
                   { label: "Cupo total",  val: money(Number(trabajador.cupo_asignado)),  color: "text-brand-black" },
                   { label: "Deuda actual", val: money(Number(trabajador.deuda_vigente)), color: "text-amber-700" },
-                  { label: "Disponible",  val: money(disponible), color: disponible > 0 ? "text-emerald-700" : "text-rose-600" },
+                  { label: "Disponible",  val: money(disponible), color: disponible > 0 ? "text-brand-wine" : "text-rose-600" },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="px-3 py-2.5 text-center">
                     <p className="text-[10px] uppercase tracking-wide text-brand-brown/50">{label}</p>
@@ -207,7 +207,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
                   </svg>
                   <span className="text-[11px] text-brand-brown/55">Saldo en Siesa (cartera ERP)</span>
-                  <span className={`ml-auto text-xs font-bold ${trabajador.siesa_saldo > 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                  <span className={`ml-auto text-xs font-bold ${trabajador.siesa_saldo > 0 ? "text-rose-600" : "text-brand-wine"}`}>
                     {money(trabajador.siesa_saldo)}
                   </span>
                 </div>
@@ -219,7 +219,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
           {trabajador?.activo && (
             <div>
               <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">2</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-wine text-[10px] font-bold text-white">2</span>
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Detalle de la compra</p>
               </div>
               <form onSubmit={registrar} className="space-y-3">
@@ -229,7 +229,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                     <Icon d={Ico.store} cls="h-3.5 w-3.5" />Punto de venta
                   </label>
                   <select value={puntoSel} onChange={(e) => setPuntoSel(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-brand-brown/25 bg-white px-3 text-sm outline-none transition focus:border-emerald-600">
+                    className="h-11 w-full rounded-xl border border-brand-brown/25 bg-white px-3 text-sm outline-none transition focus:border-brand-wine">
                     <option value="">Selecciona un punto</option>
                     {puntos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
@@ -241,10 +241,10 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                   </label>
                   <input value={total} onChange={(e) => setTotal(e.target.value.replace(/[^\d]/g, ""))}
                     placeholder="Ej: 185000"
-                    className={`h-11 w-full rounded-xl border px-3 text-sm outline-none transition focus:border-emerald-600 ${superaCupo ? "border-rose-300 bg-rose-50" : "border-brand-brown/25"}`} />
+                    className={`h-11 w-full rounded-xl border px-3 text-sm outline-none transition focus:border-brand-wine ${superaCupo ? "border-rose-300 bg-rose-50" : "border-brand-brown/25"}`} />
                   {superaCupo && <p className="mt-1 text-xs font-medium text-rose-600">Supera el cupo disponible ({money(disponible)})</p>}
                   {total && !superaCupo && Number(total) > 0 && (
-                    <p className="mt-1 text-xs font-semibold text-emerald-700">{money(Number(total))}</p>
+                    <p className="mt-1 text-xs font-semibold text-brand-wine">{money(Number(total))}</p>
                   )}
                 </div>
                 {/* Observación */}
@@ -255,7 +255,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                   </label>
                   <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)}
                     rows={2} placeholder="Detalle o notas de cartera…"
-                    className="w-full resize-none rounded-xl border border-brand-brown/25 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-600" />
+                    className="w-full resize-none rounded-xl border border-brand-brown/25 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine" />
                 </div>
                 {errorGuardar && (
                   <p className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -271,7 +271,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                     Cancelar
                   </button>
                   <button type="submit" disabled={guardando || !!superaCupo || !puntoSel || !total}
-                    className="flex h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    className="flex h-10 items-center gap-1.5 rounded-xl bg-brand-wine px-5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-50">
                     {guardando ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Icon d={Ico.check} cls="h-4 w-4" />}
                     {guardando ? "Registrando…" : "Registrar compra"}
                   </button>
@@ -297,7 +297,7 @@ function ModalConfirm({ pedido, nuevoEstado, onClose, onConfirmar }: {
   const [error, setError]           = useState<string | null>(null);
 
   const cfg = {
-    facturado: { titulo: "Facturar compra",     desc: "Se marcará como facturada en cartera.",         btn: "Sí, facturar",  color: "bg-emerald-700 hover:bg-emerald-800", icon: Ico.check },
+    facturado: { titulo: "Facturar compra",     desc: "Se marcará como facturada en cartera.",         btn: "Sí, facturar",  color: "bg-brand-wine hover:bg-brand-wine/90", icon: Ico.check },
     anulado:   { titulo: "Anular compra",        desc: "El cupo se liberará. Difícil de revertir.",     btn: "Sí, anular",    color: "bg-rose-600 hover:bg-rose-700",     icon: Ico.xmark },
     pendiente: { titulo: "Volver a pendiente",   desc: "El estado quedará pendiente de facturación.",   btn: "Sí, revertir",  color: "bg-amber-600 hover:bg-amber-700",   icon: Ico.clock },
   }[nuevoEstado];
@@ -389,7 +389,7 @@ export default function CreditoEmpleadosPage() {
     { label: "Total pedidos",  val: String(pedidos.length),  color: "text-brand-black",   bg: "bg-brand-brown/8",  ico: Ico.wallet  },
     { label: "Pendientes",     val: String(nPendiente),       color: "text-amber-700",     bg: "bg-amber-50",       ico: Ico.clock   },
     { label: "Por cobrar",     val: money(totalPendiente),    color: "text-amber-700",     bg: "bg-amber-50",       ico: Ico.arrowUp },
-    { label: "Facturado",      val: money(totalFacturado),    color: "text-emerald-700",   bg: "bg-emerald-50",     ico: Ico.check   },
+    { label: "Facturado",      val: money(totalFacturado),    color: "text-brand-wine",   bg: "bg-brand-wine/5",     ico: Ico.check   },
   ];
 
   return (
@@ -397,12 +397,12 @@ export default function CreditoEmpleadosPage() {
       {/* Encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-emerald-900">Compras a crédito</h1>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">Compras a crédito</h1>
           <p className="mt-0.5 text-sm text-brand-brown/60">Registro de compras de colaboradores contra su cupo asignado.</p>
         </div>
         {puedeCrear && (
           <button type="button" onClick={() => setModalNueva(true)}
-            className="flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
+            className="flex h-10 items-center gap-2 rounded-xl bg-brand-wine px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90">
             <Icon d={Ico.plus} cls="h-4 w-4" />
             Nueva compra
           </button>
@@ -440,14 +440,14 @@ export default function CreditoEmpleadosPage() {
               <Icon d={Ico.user} cls="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35" />
               <input value={filtroCedula} onChange={(e) => setFiltroCedula(e.target.value.replace(/\D/g, ""))}
                 placeholder="Filtrar por cédula"
-                className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-emerald-600" />
+                className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
             </div>
           </div>
           {/* Estado */}
           <div className="min-w-[110px]">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Estado</label>
             <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
-              className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-emerald-600">
+              className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
               <option value="pendiente">Pendiente</option>
               <option value="facturado">Facturado</option>
@@ -460,7 +460,7 @@ export default function CreditoEmpleadosPage() {
               <Icon d={Ico.calendar} cls="h-3 w-3" />Desde
             </label>
             <input type="date" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)}
-              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-emerald-600 [color-scheme:light]" />
+              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           {/* Hasta */}
           <div>
@@ -468,7 +468,7 @@ export default function CreditoEmpleadosPage() {
               <Icon d={Ico.calendar} cls="h-3 w-3" />Hasta
             </label>
             <input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)}
-              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-emerald-600 [color-scheme:light]" />
+              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           {/* Punto */}
           {puntos.length > 1 && (
@@ -477,14 +477,14 @@ export default function CreditoEmpleadosPage() {
                 <Icon d={Ico.store} cls="h-3 w-3" />Punto
               </label>
               <select value={filtroPunto} onChange={(e) => setFiltroPunto(e.target.value)}
-                className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-emerald-600">
+                className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
                 <option value="">Todos</option>
                 {puntos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
             </div>
           )}
           <button type="button" onClick={() => void cargarPedidos()}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-700 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5">
             <Icon d={Ico.search} cls="h-3.5 w-3.5" />Filtrar
           </button>
           {(filtroCedula || filtroEstado || filtroDesde || filtroHasta || filtroPunto) && (
@@ -523,7 +523,7 @@ export default function CreditoEmpleadosPage() {
               {cargando ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-brand-brown/50">
-                    <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent align-middle" />
+                    <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Cargando…</span>
                   </td>
                 </tr>
@@ -543,7 +543,7 @@ export default function CreditoEmpleadosPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">{fechaCorta(p.creado_en)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-[10px] font-bold text-brand-wine">
                           {(p.trabajador_nombre ?? "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
                         </div>
                         <div>
@@ -565,7 +565,7 @@ export default function CreditoEmpleadosPage() {
                         <div className="flex items-center gap-1">
                           {p.estado !== "facturado" && (
                             <button onClick={() => setConfirmacion({ pedido: p, nuevoEstado: "facturado" })}
-                              className="flex items-center gap-1 rounded-lg border border-emerald-200 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                              className="flex items-center gap-1 rounded-lg border border-brand-wine/25 px-2 py-1 text-[11px] font-semibold text-brand-wine transition hover:bg-brand-wine/5">
                               <Icon d={Ico.check} cls="h-3 w-3" />Facturar
                             </button>
                           )}

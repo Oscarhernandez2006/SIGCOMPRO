@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
@@ -52,7 +52,7 @@ function iniciales(nombre: string) {
 }
 
 const AVATAR_COLORS = [
-  "bg-emerald-100 text-emerald-700",
+  "bg-brand-wine/10 text-brand-wine",
   "bg-sky-100 text-sky-700",
   "bg-violet-100 text-violet-700",
   "bg-amber-100 text-amber-700",
@@ -99,11 +99,11 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
 
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${esEdicion ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${esEdicion ? "bg-amber-100 text-amber-700" : "bg-brand-wine/10 text-brand-wine"}`}>
             <Icon d={esEdicion ? Ico.pencil : Ico.plus} cls="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <h2 className="font-serif text-lg font-bold text-emerald-900">
+            <h2 className="font-serif text-lg font-bold text-brand-wine">
               {esEdicion ? "Editar trabajador" : "Nuevo trabajador"}
             </h2>
             <p className="text-xs text-brand-brown/55">
@@ -127,7 +127,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               {form.cedula && <p className="text-xs text-brand-brown/55">CC {form.cedula}</p>}
             </div>
             {form.cupo_asignado && Number(form.cupo_asignado) > 0 && (
-              <span className="ml-auto rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+              <span className="ml-auto rounded-full bg-brand-wine/10 px-2.5 py-0.5 text-xs font-bold text-brand-wine">
                 {money(Number(form.cupo_asignado))}
               </span>
             )}
@@ -147,7 +147,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               onChange={(e) => setForm((f) => ({ ...f, cedula: e.target.value.replace(/\D/g, "") }))}
               disabled={esEdicion}
               placeholder="Número de documento"
-              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-emerald-600 disabled:bg-neutral-50 disabled:text-brand-brown/50"
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine disabled:bg-neutral-50 disabled:text-brand-brown/50"
             />
             {esEdicion && <p className="mt-1 text-xs text-brand-brown/35">La cédula no puede modificarse.</p>}
           </div>
@@ -161,7 +161,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               value={form.nombre}
               onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
               placeholder="Ej: Juan Pérez Gómez"
-              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-emerald-600"
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine"
             />
           </div>
 
@@ -174,26 +174,26 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               value={form.cupo_asignado}
               onChange={(e) => setForm((f) => ({ ...f, cupo_asignado: e.target.value.replace(/[^\d]/g, "") }))}
               placeholder="Ej: 500000"
-              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-emerald-600"
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine"
             />
             {form.cupo_asignado && Number(form.cupo_asignado) > 0 && (
-              <p className="mt-1 text-xs font-semibold text-emerald-700">{money(Number(form.cupo_asignado))}</p>
+              <p className="mt-1 text-xs font-semibold text-brand-wine">{money(Number(form.cupo_asignado))}</p>
             )}
           </div>
 
           {/* Activo */}
-          <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${form.activo ? "border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50" : "border-brand-brown/15 hover:bg-brand-cream-soft/50"}`}>
+          <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${form.activo ? "border-brand-wine/25 bg-brand-wine/5 hover:bg-brand-wine/5" : "border-brand-brown/15 hover:bg-brand-cream-soft/50"}`}>
             <input
               type="checkbox"
               checked={form.activo}
               onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))}
-              className="h-4 w-4 cursor-pointer rounded border-brand-brown/30 accent-emerald-700"
+              className="h-4 w-4 cursor-pointer rounded border-brand-brown/30 accent-brand-wine"
             />
             <div className="flex-1">
               <p className="text-sm font-medium text-brand-black">Trabajador activo</p>
               <p className="text-xs text-brand-brown/55">Solo los activos pueden realizar compras a crédito</p>
             </div>
-            <div className={`h-2.5 w-2.5 rounded-full ${form.activo ? "bg-emerald-500" : "bg-neutral-300"}`} />
+            <div className={`h-2.5 w-2.5 rounded-full ${form.activo ? "bg-brand-wine" : "bg-neutral-300"}`} />
           </label>
 
           {error && (
@@ -211,7 +211,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               Cancelar
             </button>
             <button type="submit" disabled={guardando}
-              className="flex h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-brand-wine px-5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-50">
               {guardando
                 ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 : <Icon d={esEdicion ? Ico.check : Ico.plus} cls="h-4 w-4" />}
@@ -261,7 +261,7 @@ export default function TrabajadoresCreditoPage() {
 
   const kpis = [
     { label: "Total",     val: String(trabajadores.length), color: "text-brand-black",   bg: "bg-brand-brown/8",  ico: Ico.users     },
-    { label: "Activos",   val: String(activos),              color: "text-emerald-700",   bg: "bg-emerald-50",     ico: Ico.userCheck },
+    { label: "Activos",   val: String(activos),              color: "text-brand-wine",   bg: "bg-brand-wine/5",     ico: Ico.userCheck },
     { label: "Inactivos", val: String(inactivos),            color: "text-brand-brown/60", bg: "bg-neutral-100",   ico: Ico.userX     },
   ];
 
@@ -270,12 +270,12 @@ export default function TrabajadoresCreditoPage() {
       {/* Encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-emerald-900">Trabajadores y cupos</h1>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">Trabajadores y cupos</h1>
           <p className="mt-0.5 text-sm text-brand-brown/60">Gestiona los colaboradores habilitados para compras a crédito.</p>
         </div>
         {puedeGestionar && (
           <button type="button" onClick={abrirNuevo}
-            className="flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
+            className="flex h-10 items-center gap-2 rounded-xl bg-brand-wine px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90">
             <Icon d={Ico.plus} cls="h-4 w-4" />
             Nuevo trabajador
           </button>
@@ -307,11 +307,11 @@ export default function TrabajadoresCreditoPage() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por cédula o nombre…"
-            className="h-9 w-full rounded-lg border border-brand-brown/20 pl-9 pr-3 text-sm outline-none transition focus:border-emerald-600"
+            className="h-9 w-full rounded-lg border border-brand-brown/20 pl-9 pr-3 text-sm outline-none transition focus:border-brand-wine"
           />
         </div>
         <button type="button" onClick={() => void cargar()}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-700 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5">
           <Icon d={Ico.search} cls="h-3.5 w-3.5" />Buscar
         </button>
         {busqueda && (
@@ -348,7 +348,7 @@ export default function TrabajadoresCreditoPage() {
               {cargando ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-brand-brown/50">
-                    <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent align-middle" />
+                    <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Cargando…</span>
                   </td>
                 </tr>
@@ -365,7 +365,7 @@ export default function TrabajadoresCreditoPage() {
                     </p>
                     {!busqueda && puedeGestionar && (
                       <button type="button" onClick={abrirNuevo}
-                        className="mt-3 flex items-center gap-1.5 mx-auto rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800">
+                        className="mt-3 flex items-center gap-1.5 mx-auto rounded-xl bg-brand-wine px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-wine/90">
                         <Icon d={Ico.plus} cls="h-3.5 w-3.5" />Registrar el primero
                       </button>
                     )}
@@ -389,19 +389,19 @@ export default function TrabajadoresCreditoPage() {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-brand-brown/75">{money(Number(t.cupo_asignado) || 0)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-amber-700">{money(Number(t.deuda_vigente) || 0)}</td>
-                      <td className={`px-4 py-3 text-right font-semibold tabular-nums ${disponible > 0 ? "text-emerald-700" : "text-rose-600"}`}>
+                      <td className={`px-4 py-3 text-right font-semibold tabular-nums ${disponible > 0 ? "text-brand-wine" : "text-rose-600"}`}>
                         {money(disponible)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${t.activo ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-neutral-200 bg-neutral-100 text-neutral-500"}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${t.activo ? "bg-emerald-500" : "bg-neutral-400"}`} />
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${t.activo ? "border-brand-wine/25 bg-brand-wine/5 text-brand-wine" : "border-neutral-200 bg-neutral-100 text-neutral-500"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${t.activo ? "bg-brand-wine" : "bg-neutral-400"}`} />
                           {t.activo ? "Activo" : "Inactivo"}
                         </span>
                       </td>
                       {puedeGestionar && (
                         <td className="px-4 py-3">
                           <button type="button" onClick={() => abrirEditar(t)}
-                            className="flex items-center gap-1 rounded-lg border border-brand-brown/20 px-2.5 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft hover:border-emerald-300 hover:text-emerald-700">
+                            className="flex items-center gap-1 rounded-lg border border-brand-brown/20 px-2.5 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft hover:border-brand-wine/30 hover:text-brand-wine">
                             <Icon d={Ico.pencil} cls="h-3.5 w-3.5" />Editar
                           </button>
                         </td>
