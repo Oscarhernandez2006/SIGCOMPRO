@@ -693,12 +693,14 @@ export class PedidosService implements OnModuleInit {
           'Este pedido tiene réplicas. Primero quítalas para poder anular o cancelar.',
         );
       }
-      const itemsCarrito = Array.isArray(finalPedido.carrito)
-        ? finalPedido.carrito.length
-        : (Array.isArray(prevData?.carrito) ? prevData!.carrito!.length : 0);
-      if (estaAnulandoAhora && itemsCarrito > 0) {
+      // Solo bloquear anulación si el pedido ya fue facturado o despachado al ERP.
+      const yaFacturadoODespachado =
+        ['facturado', 'despachado', 'en tránsito', 'en transito', 'entregado'].includes(
+          normEstado(estadoAnterior),
+        );
+      if (estaAnulandoAhora && yaFacturadoODespachado) {
         throw new BadRequestException(
-          'Este pedido tiene registros y no puede anularse ni cancelarse.',
+          'No se puede anular o cancelar un pedido que ya fue facturado o despachado.',
         );
       }
       if (!anulado && entraAFacturadoODespachado) {
