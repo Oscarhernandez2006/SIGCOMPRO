@@ -41,9 +41,9 @@ const PRESENTACION: Record<
   },
   credito_empleados: {
     descripcion: "Compras de colaboradores con cupo de crédito y control de cartera interna.",
-    acento: "bg-emerald-100 text-emerald-700",
-    hover: "hover:border-emerald-600",
-    link: "text-emerald-700",
+    acento: "bg-brand-brown/15 text-brand-brown",
+    hover: "hover:border-brand-brown/60",
+    link: "text-brand-brown",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />

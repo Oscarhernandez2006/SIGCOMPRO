@@ -60,7 +60,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-brand-cream-soft">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
       </div>
     );
   }
@@ -73,7 +73,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <nav className="flex flex-1 flex-col gap-0.5 px-3">
-        <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-emerald-200/50">
+        <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-brand-cream/40">
           Menú
         </p>
         {navItems.map((item) => {
@@ -87,8 +87,8 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? "bg-emerald-700 text-white shadow-sm"
-                  : "text-emerald-100/75 hover:bg-emerald-700/50 hover:text-white"
+                  ? "bg-brand-wine-dark text-white shadow-sm"
+                  : "text-brand-cream/75 hover:bg-brand-cream/10 hover:text-white"
               }`}
             >
               {item.icon}
@@ -106,37 +106,37 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-brand-cream-soft text-brand-black">
       {/* Sidebar desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-emerald-900 text-emerald-50 lg:flex">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-5">
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold text-white">Carnes Santacruz</p>
-            <p className="text-[11px] text-emerald-200/70">Panel Crédito</p>
+            <p className="text-[11px] text-brand-cream/70">Panel Crédito</p>
           </div>
         </div>
 
-        <div className="mx-4 mb-3 border-t border-emerald-700/60" />
+        <div className="mx-4 mb-3 border-t border-brand-cream/15" />
 
         {/* User badge */}
-        <div className="mx-3 mb-3 flex items-center gap-3 rounded-xl bg-emerald-800/60 px-3 py-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+        <div className="mx-3 mb-3 flex items-center gap-3 rounded-xl bg-brand-wine-dark/60 px-3 py-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-wine-dark text-xs font-bold text-white">
             {iniciales}
           </div>
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold text-white">{usuario?.nombre ?? "Usuario"}</p>
-            <p className="text-[10px] text-emerald-300/70">{usuario?.rol ?? ""}</p>
+            <p className="text-[10px] text-brand-cream/70">{usuario?.rol ?? ""}</p>
           </div>
         </div>
 
         <NavList />
 
         {/* Footer */}
-        <div className="space-y-0.5 border-t border-emerald-700/60 p-3">
+        <div className="space-y-0.5 border-t border-brand-cream/15 p-3">
           {puedeCambiarPanel && (
             <Link
               href="/seleccionar-panel"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100/70 transition hover:bg-emerald-700/50 hover:text-white"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-brand-cream/10 hover:text-white"
             >
               {IcoSwitch}
               <span>Cambiar de panel</span>
@@ -144,7 +144,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           )}
           <button
             onClick={cerrarSesion}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100/70 transition hover:bg-rose-700/30 hover:text-rose-200"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-rose-700/30 hover:text-rose-200"
           >
             {IcoLogout}
             <span>Cerrar sesión</span>
@@ -165,14 +165,18 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-wine/15 text-brand-wine">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
+            </svg>
+          </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 0 0-2.25-2.25H15a3 3 0 1 1-6 0H5.25A2.25 2.25 0 0 0 3 12m18 0v6a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 9m18 0V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v3" />
             </svg>
           </div>
-          <p className="font-serif text-lg font-bold text-emerald-800">Crédito Empleados</p>
+          <p className="font-serif text-lg font-bold text-brand-wine">Crédito Empleados</p>
         </div>
-        <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
+        <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-brand-wine/10 text-xs font-bold text-brand-wine">
           {iniciales}
         </div>
       </header>
@@ -181,7 +185,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-brand-black/50 lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside
-            className="absolute left-0 top-0 h-full w-72 bg-emerald-900 text-emerald-50"
+          className="absolute inset-y-0 left-0 h-full w-72 bg-brand-wine text-brand-cream"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-4">
@@ -189,7 +193,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-1.5 text-emerald-200/70 transition hover:bg-emerald-700"
+                className="rounded-lg p-1.5 text-brand-cream/70 transition hover:bg-brand-cream/10"
                 aria-label="Cerrar menú"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -197,19 +201,19 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
                 </svg>
               </button>
             </div>
-            <div className="mx-3 mb-2 flex items-center gap-3 rounded-xl bg-emerald-800/60 px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+            <div className="mx-3 mb-2 flex items-center gap-3 rounded-xl bg-brand-wine-dark/60 px-3 py-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-wine-dark text-xs font-bold text-white">
                 {iniciales}
               </div>
               <p className="truncate text-xs font-semibold text-white">{usuario?.nombre ?? "Usuario"}</p>
             </div>
             <NavList onNavigate={() => setMobileOpen(false)} />
-            <div className="space-y-0.5 border-t border-emerald-700/60 p-3">
+            <div className="space-y-0.5 border-t border-brand-cream/15 p-3">
               {puedeCambiarPanel && (
                 <Link
                   href="/seleccionar-panel"
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100/70 transition hover:bg-emerald-700/50 hover:text-white"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-brand-cream/10 hover:text-white"
                 >
                   {IcoSwitch}
                   <span>Cambiar de panel</span>
@@ -217,7 +221,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               )}
               <button
                 onClick={cerrarSesion}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100/70 transition hover:bg-rose-700/30 hover:text-rose-200"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-rose-700/30 hover:text-rose-200"
               >
                 {IcoLogout}
                 <span>Cerrar sesión</span>

@@ -97,6 +97,15 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
     });
   }
 
+  // Panel administrativo: exclusivo de los roles con acceso total.
+  if (tieneAccesoAdministrativo(usuario?.rol)) {
+    paneles.push({
+      key: "administrativo",
+      label: "Panel Administrativo",
+      href: "/admin",
+    });
+  }
+
   // Panel de crédito empleados: separado del operativo.
   const inicioCredito = puedeAccederApartado(usuario, APARTADO_CREDITO_EMPLEADOS)
     ? RUTA_MODULO.credito_empleados
@@ -106,15 +115,6 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
       key: "credito_empleados",
       label: "Panel Crédito Empleados",
       href: inicioCredito,
-    });
-  }
-
-  // Panel administrativo: exclusivo de los roles con acceso total.
-  if (tieneAccesoAdministrativo(usuario?.rol)) {
-    paneles.push({
-      key: "administrativo",
-      label: "Panel Administrativo",
-      href: "/admin",
     });
   }
 
