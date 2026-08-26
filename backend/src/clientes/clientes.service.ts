@@ -54,6 +54,12 @@ export interface ImportacionResumen {
 const COLUMNS =
   'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, creado_en';
 
+/** Solo guarda el teléfono si tiene exactamente 10 dígitos (celular colombiano). */
+function soloMovil(tel: string | null | undefined): string | null {
+  const solo = String(tel ?? '').replace(/\D/g, '');
+  return solo.length === 10 ? solo : null;
+}
+
 @Injectable()
 export class ClientesService implements OnModuleInit {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
@@ -230,7 +236,7 @@ export class ClientesService implements OnModuleInit {
         dto.referencia?.trim() ?? null,
         dto.barrio?.trim() ?? null,
         dto.ciudad?.trim() ?? null,
-        dto.telefono?.trim() ?? null,
+        soloMovil(dto.telefono),
         dto.correo?.trim() ?? null,
         dto.punto_venta?.trim() ?? null,
         dto.lat ?? null,
@@ -277,7 +283,10 @@ export class ClientesService implements OnModuleInit {
       const valor = dto[campo];
       if (valor !== undefined) {
         sets.push(`${columna} = $${i++}`);
-        valores.push(typeof valor === 'string' ? valor.trim() : valor);
+        const v = campo === 'telefono'
+          ? soloMovil(typeof valor === 'string' ? valor : null)
+          : (typeof valor === 'string' ? valor.trim() : valor);
+        valores.push(v);
       }
     }
 
@@ -430,7 +439,7 @@ export class ClientesService implements OnModuleInit {
         referencia: valorCol(fila, col.referencia),
         barrio: valorCol(fila, col.barrio),
         ciudad: valorCol(fila, col.ciudad),
-        telefono: valorCol(fila, col.telefono),
+        telefono: soloMovil(valorCol(fila, col.telefono)),
         puntoVenta: valorCol(fila, col.puntoVenta),
       });
     }

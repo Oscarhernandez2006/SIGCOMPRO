@@ -693,6 +693,14 @@ export class PedidosService implements OnModuleInit {
           'Este pedido tiene réplicas. Primero quítalas para poder anular o cancelar.',
         );
       }
+      const itemsCarrito = Array.isArray(finalPedido.carrito)
+        ? finalPedido.carrito.length
+        : (Array.isArray(prevData?.carrito) ? prevData!.carrito!.length : 0);
+      if (estaAnulandoAhora && itemsCarrito > 0) {
+        throw new BadRequestException(
+          'Este pedido tiene registros y no puede anularse ni cancelarse.',
+        );
+      }
       if (!anulado && entraAFacturadoODespachado) {
         const numFactura = String(metaActual.facturaNumero ?? '').trim();
         const valFactura = Number(metaActual.facturaValor);

@@ -2865,6 +2865,7 @@ export default function DespachoPage() {
           numero={modalReplica.numero}
           modo={modalReplica.modo}
           puntoDrivin={idsDrivin.has(String(modalReplica.pedido.punto?.id))}
+          pesoKg={pesoPedidoKg(modalReplica.pedido)}
           facturado={
             ["facturado", "despachado", "en tránsito", "en transito", "entregado"].includes(
               norm(modalReplica.pedido.estado),
@@ -3313,6 +3314,7 @@ function ModalReplica({
   numero,
   modo,
   puntoDrivin,
+  pesoKg,
   facturado,
   domiciliarioAsignado,
   esUltima,
@@ -3328,6 +3330,8 @@ function ModalReplica({
   numero: number;
   modo: "crear" | "ver";
   puntoDrivin: boolean;
+  /** Kilos KG del pedido; 0 si no tiene ítems por KG. */
+  pesoKg: number;
   facturado: boolean;
   domiciliarioAsignado: string;
   esUltima: boolean;
@@ -3348,6 +3352,14 @@ function ModalReplica({
   const [codigoClaveReplica, setCodigoClaveReplica] = useState("");
   const [verificandoClaveReplica, setVerificandoClaveReplica] = useState(false);
   const [errorClaveReplica, setErrorClaveReplica] = useState<string | null>(null);
+
+  // Estado para el bloqueo por peso < 60 kg
+  const [claveParaPesoValida, setClaveParaPesoValida] = useState(false);
+  const [expandeFormPeso, setExpandeFormPeso] = useState(false);
+  const [clavePeso, setClavePeso] = useState("");
+  const [motivoPeso, setMotivoPeso] = useState("");
+  const [verificandoClavePeso, setVerificandoClavePeso] = useState(false);
+  const [errorClavePeso, setErrorClavePeso] = useState<string | null>(null);
   
   const codigoReplica = `${pedido.comanda}-${numero}`;
   // Solo se puede REPLICAR un pedido que YA esté facturado. La factura es la del
@@ -3376,9 +3388,13 @@ function ModalReplica({
   const rechazoDrivinDelDia = esRechazoDrivin && esDeHoy(pedido);
   const cancelacionDrivinDelDia = esCancelacionDrivin && esDeHoy(pedido);
 
-  // Permite réplica si está facturado o si es una incidencia Drivin del día.
+  // Pedidos < 60 kg no pueden replicarse sin autorización (excepto rechazados en Drivin).
+  const pesoBloqueado = pesoKg > 0 && pesoKg < 60 && !esRechazoDrivin && !esCancelacionDrivin;
+
+  // Permite réplica si está facturado o si es una incidencia Drivin del día Y el peso es ≥60 kg (o tiene autorización).
   const permitirReplica =
-    esFacturado || rechazoDrivinDelDia || cancelacionDrivinDelDia;
+    (esFacturado || rechazoDrivinDelDia || cancelacionDrivinDelDia) &&
+    (!pesoBloqueado || claveParaPesoValida);
   const requiereClaveParaReplica =
     rechazoDrivinDelDia || cancelacionDrivinDelDia;
 
@@ -3415,6 +3431,33 @@ function ModalReplica({
     }
   }
   
+  // Autoriza la réplica de un pedido < 60 kg mediante clave dinámica + motivo
+  const verificarClavePesoHandler = async () => {
+    if (!motivoPeso.trim()) {
+      setErrorClavePeso("Ingresa el motivo de la réplica.");
+      return;
+    }
+    if (clavePeso.replace(/\D/g, "").length < 6) {
+      setErrorClavePeso("Ingresa la clave dinámica de 6 dígitos.");
+      return;
+    }
+    setVerificandoClavePeso(true);
+    setErrorClavePeso(null);
+    try {
+      const { valido } = await verificarClaveDinamica(clavePeso.replace(/\D/g, ""));
+      if (!valido) {
+        setErrorClavePeso("Clave incorrecta o vencida.");
+        return;
+      }
+      setClaveParaPesoValida(true);
+      setExpandeFormPeso(false);
+    } catch {
+      setErrorClavePeso("No se pudo verificar la clave. Inténtalo de nuevo.");
+    } finally {
+      setVerificandoClavePeso(false);
+    }
+  };
+
   // Verifica la clave dinámica para réplica de incidencias Drivin
   const verificarClaveReplicaHandler = async () => {
     if (!codigoClaveReplica || codigoClaveReplica.length < 6) {
@@ -3491,6 +3534,79 @@ function ModalReplica({
               <p className="font-bold text-brand-black">{codigoReplica}</p>
             </div>
           </div>
+
+          {/* Bloqueo visual para pedidos < 60 kg sin autorización */}
+          {modo === "crear" && pesoBloqueado && !claveParaPesoValida && esFacturado && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm space-y-2">
+              <p className="font-semibold text-amber-900">
+                ⚠️ Réplica no permitida — pedido menor a 60 kg
+              </p>
+              <p className="text-xs text-amber-800">
+                Este pedido pesa <b>{pesoKg % 1 === 0 ? pesoKg : pesoKg.toFixed(1)} kg</b>. Las réplicas no están permitidas para pedidos menores a 60 kg.
+              </p>
+              <p className="text-xs text-amber-800">
+                Si necesitas hacerla, solicita una <b>clave dinámica</b> al supervisor y justifica el motivo.
+              </p>
+              {!expandeFormPeso ? (
+                <button
+                  type="button"
+                  onClick={() => setExpandeFormPeso(true)}
+                  className="text-xs font-semibold text-amber-700 underline hover:text-amber-900"
+                >
+                  Tengo autorización — ingresar clave dinámica
+                </button>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-800">Motivo de la réplica *</label>
+                    <textarea
+                      value={motivoPeso}
+                      onChange={(e) => { setMotivoPeso(e.target.value); setErrorClavePeso(null); }}
+                      rows={2}
+                      placeholder="Describe el motivo por el que se autoriza esta réplica…"
+                      className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs outline-none focus:border-amber-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-800">Clave dinámica *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={clavePeso}
+                      onChange={(e) => { setClavePeso(e.target.value.replace(/\D/g, "")); setErrorClavePeso(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") verificarClavePesoHandler(); }}
+                      placeholder="000000"
+                      disabled={verificandoClavePeso}
+                      autoFocus
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-center font-mono text-lg font-bold tracking-widest outline-none focus:border-amber-600 disabled:opacity-50"
+                    />
+                  </div>
+                  {errorClavePeso && (
+                    <p className="text-xs font-semibold text-red-600">❌ {errorClavePeso}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={verificarClavePesoHandler}
+                    disabled={verificandoClavePeso || !motivoPeso.trim() || clavePeso.length < 6}
+                    className="w-full rounded-lg bg-amber-600 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {verificandoClavePeso ? "Verificando…" : "Verificar y autorizar"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Autorización concedida por peso */}
+          {modo === "crear" && pesoBloqueado && claveParaPesoValida && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              Autorización concedida · motivo registrado
+            </div>
+          )}
 
           {modo === "crear" ? (
             permitirReplica ? (
