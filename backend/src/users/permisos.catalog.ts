@@ -121,6 +121,30 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
       },
     ],
   },
+  {
+    key: 'credito_empleados',
+    label: 'Panel crédito empleados',
+    modulos: [
+      {
+        key: 'credito_empleados',
+        label: 'Crédito empleados',
+        acciones: [
+          {
+            key: 'credito_empleados.cupos',
+            label: 'Gestionar trabajadores y cupos',
+          },
+          {
+            key: 'credito_empleados.pedidos',
+            label: 'Registrar compras a crédito',
+          },
+          {
+            key: 'credito_empleados.estado',
+            label: 'Cambiar estado de compras crédito',
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 /** Conjunto de claves de módulo válidas (controlan navegación/visibilidad). */

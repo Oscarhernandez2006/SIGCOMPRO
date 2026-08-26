@@ -28,10 +28,12 @@ export const RUTA_MODULO: Record<string, string> = {
   cotizaciones: "/cotizaciones",
   lista_precios: "/lista-precios",
   mi_resumen: "/mi-resumen",
+  credito_empleados: "/credito-empleados",
 };
 
 /** Apartado del catálogo que agrupa los módulos de negocio. */
 const APARTADO_OPERATIVO = "operativo";
+const APARTADO_CREDITO_EMPLEADOS = "credito_empleados";
 
 /** ¿El usuario puede ver un módulo concreto? */
 export function puedeVerModulo(
@@ -92,6 +94,18 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
       key: "operativo",
       label: "Panel Operativo",
       href: inicioOperativo,
+    });
+  }
+
+  // Panel de crédito empleados: separado del operativo.
+  const inicioCredito = puedeAccederApartado(usuario, APARTADO_CREDITO_EMPLEADOS)
+    ? RUTA_MODULO.credito_empleados
+    : null;
+  if (inicioCredito) {
+    paneles.push({
+      key: "credito_empleados",
+      label: "Panel Crédito Empleados",
+      href: inicioCredito,
     });
   }
 

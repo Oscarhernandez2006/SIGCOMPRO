@@ -15,6 +15,7 @@ import { ConfiguracionModule } from './configuracion/configuracion.module';
 import { MotivosModule } from './motivos/motivos.module';
 import { ProvisioningModule } from './provisioning/provisioning.module';
 import { MenuModule } from './menu/menu.module';
+import { CreditoEmpleadosModule } from './credito-empleados/credito-empleados.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { MenuModule } from './menu/menu.module';
     MotivosModule,
     ProvisioningModule,
     MenuModule,
+    CreditoEmpleadosModule,
   ],
   controllers: [AppController],
 })
