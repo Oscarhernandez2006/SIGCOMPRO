@@ -38,8 +38,8 @@ const IcoSearch = (
 );
 
 const navItems = [
-  { label: "Compras crédito",     href: "/credito-empleados",             icon: IcoCart   },
-  { label: "Consultar crédito",  href: "/credito-empleados/consulta",    icon: IcoSearch },
+  { label: "Mi crédito",           href: "/credito-empleados/consulta",    icon: IcoSearch },
+  { label: "Compras crédito",      href: "/credito-empleados",             icon: IcoCart   },
   { label: "Trabajadores y cupos", href: "/credito-empleados/trabajadores", icon: IcoUsers  },
 ];
 
