@@ -18,8 +18,9 @@ interface FormTrabajador {
   nombre: string;
   cupo_asignado: string;
   activo: boolean;
+  fecha_proximo_descuento: string;
 }
-const FORM_VACIO: FormTrabajador = { cedula: "", nombre: "", cupo_asignado: "", activo: true };
+const FORM_VACIO: FormTrabajador = { cedula: "", nombre: "", cupo_asignado: "", activo: true, fecha_proximo_descuento: "" };
 
 // ── Íconos ────────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
     if (!Number.isFinite(cupo) || cupo < 0) { setError("El cupo debe ser un número válido ≥ 0."); return; }
     setGuardando(true); setError(null);
     try {
-      const t = await guardarTrabajadorCredito({ cedula: form.cedula.trim(), nombre: form.nombre.trim(), cupo_asignado: cupo, activo: form.activo });
+      const t = await guardarTrabajadorCredito({ cedula: form.cedula.trim(), nombre: form.nombre.trim(), cupo_asignado: cupo, activo: form.activo, fecha_proximo_descuento: form.fecha_proximo_descuento.trim() || null });
       onGuardado(t); onClose();
     } catch (err) { setError(err instanceof ApiError ? err.message : "No se pudo guardar el trabajador."); }
     finally { setGuardando(false); }
@@ -182,6 +183,22 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
           </div>
 
           {/* Activo */}
+          {/* Fecha próximo descuento */}
+          <div>
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+              Próximo descuento <span className="font-normal normal-case text-brand-brown/35">(opcional)</span>
+            </label>
+            <input
+              type="date"
+              value={form.fecha_proximo_descuento}
+              onChange={(e) => setForm((f) => ({ ...f, fecha_proximo_descuento: e.target.value }))}
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]"
+            />
+            <p className="mt-1 text-xs text-brand-brown/40">Fecha en que se descontará de nómina</p>
+          </div>
+
+          {/* Activo */}
           <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${form.activo ? "border-brand-wine/25 bg-brand-wine/5 hover:bg-brand-wine/5" : "border-brand-brown/15 hover:bg-brand-cream-soft/50"}`}>
             <input
               type="checkbox"
@@ -247,7 +264,7 @@ export default function TrabajadoresCreditoPage() {
 
   function abrirNuevo() { setModal({ form: FORM_VACIO, esEdicion: false }); }
   function abrirEditar(t: TrabajadorCredito) {
-    setModal({ form: { cedula: t.cedula, nombre: t.nombre, cupo_asignado: String(Number(t.cupo_asignado) || 0), activo: t.activo }, esEdicion: true });
+    setModal({ form: { cedula: t.cedula, nombre: t.nombre, cupo_asignado: String(Number(t.cupo_asignado) || 0), activo: t.activo, fecha_proximo_descuento: t.fecha_proximo_descuento ?? "" }, esEdicion: true });
   }
   function onGuardado(t: TrabajadorCredito) {
     setTrabajadores((prev) => {

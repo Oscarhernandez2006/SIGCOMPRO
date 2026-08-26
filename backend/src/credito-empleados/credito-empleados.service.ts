@@ -16,6 +16,8 @@ export interface TrabajadorCredito {
   nombre: string;
   cupo_asignado: number;
   activo: boolean;
+  /** Fecha del próximo descuento de nómina (YYYY-MM-DD). */
+  fecha_proximo_descuento: string | null;
   creado_en: string;
   actualizado_en: string;
 }
@@ -64,6 +66,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await this.pool.query(
+      `ALTER TABLE credito_empleados_trabajadores ADD COLUMN IF NOT EXISTS fecha_proximo_descuento date NULL`,
+    );
 
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS credito_empleados_pedidos (
@@ -93,6 +98,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
       nombre: String(r.nombre ?? ''),
       cupo_asignado: cupo,
       activo: r.activo === true,
+      fecha_proximo_descuento: r.fecha_proximo_descuento ? String(r.fecha_proximo_descuento).split('T')[0] : null,
       creado_en: String(r.creado_en ?? ''),
       actualizado_en: String(r.actualizado_en ?? ''),
       deuda_vigente: deuda,
@@ -161,10 +167,12 @@ export class CreditoEmpleadosService implements OnModuleInit {
     nombre: string;
     cupo_asignado: number;
     activo?: boolean;
+    fecha_proximo_descuento?: string | null;
   }): Promise<TrabajadorCreditoResumen> {
     const cedula = String(input.cedula ?? '').trim();
     const nombre = String(input.nombre ?? '').trim();
     const cupo = Number(input.cupo_asignado) || 0;
+    const fechaDesc = input.fecha_proximo_descuento?.trim() || null;
     if (!cedula || !nombre) {
       throw new BadRequestException('La cédula y el nombre son obligatorios');
     }
@@ -174,14 +182,15 @@ export class CreditoEmpleadosService implements OnModuleInit {
 
     await this.pool.query(
       `INSERT INTO credito_empleados_trabajadores
-         (cedula, nombre, cupo_asignado, activo, actualizado_en)
-       VALUES ($1, $2, $3, COALESCE($4, true), now())
+         (cedula, nombre, cupo_asignado, activo, fecha_proximo_descuento, actualizado_en)
+       VALUES ($1, $2, $3, COALESCE($4, true), $5::date, now())
        ON CONFLICT (cedula) DO UPDATE
          SET nombre = EXCLUDED.nombre,
              cupo_asignado = EXCLUDED.cupo_asignado,
              activo = EXCLUDED.activo,
+             fecha_proximo_descuento = EXCLUDED.fecha_proximo_descuento,
              actualizado_en = now()`,
-      [cedula, nombre, cupo, input.activo ?? true],
+      [cedula, nombre, cupo, input.activo ?? true, fechaDesc],
     );
 
     return this.obtenerTrabajador(cedula);

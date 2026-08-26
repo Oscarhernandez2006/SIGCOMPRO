@@ -16,22 +16,33 @@ import { PermisosGuard } from '../auth/guards/permisos.guard';
 import { CreditoEmpleadosService } from './credito-empleados.service';
 
 @Controller('credito-empleados')
-@UseGuards(JwtAuthGuard, PermisosGuard)
-@Permisos('credito_empleados')
 export class CreditoEmpleadosController {
   constructor(private readonly credito: CreditoEmpleadosService) {}
 
+  /** Consulta pública del estado de crédito de un colaborador (solo requiere sesión). */
+  @Get('consulta/:cedula')
+  @UseGuards(JwtAuthGuard)
+  consulta(@Param('cedula') cedula: string) {
+    return this.credito.obtenerTrabajador(cedula);
+  }
+
   @Get('trabajadores')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   trabajadores(@Query('q') q?: string) {
     return this.credito.buscarTrabajadores(q ?? '');
   }
 
   @Get('trabajadores/:cedula')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   trabajador(@Param('cedula') cedula: string) {
     return this.credito.obtenerTrabajador(cedula);
   }
 
   @Post('trabajadores')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   guardarTrabajador(
     @Body()
     body: {
@@ -39,12 +50,15 @@ export class CreditoEmpleadosController {
       nombre: string;
       cupo_asignado: number;
       activo?: boolean;
+      fecha_proximo_descuento?: string | null;
     },
   ) {
     return this.credito.guardarTrabajador(body);
   }
 
   @Get('pedidos')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   pedidos(
     @Query('cedula') cedula?: string,
     @Query('estado') estado?: string,
@@ -52,16 +66,12 @@ export class CreditoEmpleadosController {
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
   ) {
-    return this.credito.listarPedidos({
-      cedula,
-      estado,
-      punto_id,
-      desde,
-      hasta,
-    });
+    return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta });
   }
 
   @Post('pedidos')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   crearPedido(
     @Body()
     body: {
@@ -81,6 +91,8 @@ export class CreditoEmpleadosController {
   }
 
   @Patch('pedidos/:id/estado')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
   estado(
     @Param('id') id: string,
     @Body() body: { estado: 'pendiente' | 'facturado' | 'anulado' },

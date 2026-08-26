@@ -5,6 +5,8 @@ export interface TrabajadorCredito {
   nombre: string;
   cupo_asignado: number;
   activo: boolean;
+  /** Fecha del próximo descuento de nómina (YYYY-MM-DD). */
+  fecha_proximo_descuento: string | null;
   creado_en: string;
   actualizado_en: string;
   deuda_vigente: number;
@@ -46,11 +48,17 @@ export function guardarTrabajadorCredito(input: {
   nombre: string;
   cupo_asignado: number;
   activo?: boolean;
+  fecha_proximo_descuento?: string | null;
 }): Promise<TrabajadorCredito> {
   return apiFetch<TrabajadorCredito>("/credito-empleados/trabajadores", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+/** Consulta el estado de crédito de un colaborador (no requiere permiso credito_empleados). */
+export function consultarCreditoPorCedula(cedula: string): Promise<TrabajadorCredito> {
+  return apiFetch<TrabajadorCredito>(`/credito-empleados/consulta/${encodeURIComponent(cedula)}`);
 }
 
 export function listarPedidosCredito(filtros: {
