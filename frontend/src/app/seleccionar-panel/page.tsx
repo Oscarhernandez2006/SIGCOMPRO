@@ -96,7 +96,7 @@ export default function SeleccionarPanelPage() {
       <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_50%_0%,_var(--color-brand-amber)_0%,_var(--color-brand-amber)_18%,_var(--color-brand-wine)_60%,_var(--color-brand-wine-dark)_100%)]" />
       <div className="absolute inset-0 opacity-[0.07] [background-image:repeating-linear-gradient(45deg,#000_0_2px,transparent_2px_14px)]" />
 
-      <div className="relative z-10 w-full max-w-3xl">
+      <div className="relative z-10 w-full max-w-4xl">
         {/* Encabezado */}
         <div className="mb-8 flex flex-col items-center text-center">
           <Image
@@ -116,7 +116,7 @@ export default function SeleccionarPanelPage() {
         </div>
 
         {/* Tarjetas de selección (solo paneles accesibles) */}
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="flex flex-wrap justify-center gap-5">
           {paneles.map((panel) => {
             const p = PRESENTACION[panel.key];
             if (!p) return null;
@@ -125,7 +125,7 @@ export default function SeleccionarPanelPage() {
                 key={panel.key}
                 onClick={() => router.push(panel.href)}
                 title={`Ingresar al panel ${panel.label}`}
-                className={`group flex flex-col items-start rounded-3xl border border-white/30 bg-brand-cream/95 p-6 text-left shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md transition hover:-translate-y-1 ${p.hover}`}
+                className={`group flex w-72 flex-col items-start rounded-3xl border border-white/30 bg-brand-cream/95 p-6 text-left shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md transition hover:-translate-y-1 ${p.hover}`}
               >
                 <span
                   className={`flex h-12 w-12 items-center justify-center rounded-2xl ${p.acento}`}
