@@ -101,37 +101,35 @@ export default function ClientesPage() {
   const [importando, setImportando] = useState(false);
   const [descargando, setDescargando] = useState(false);
 
-  async function descargarCSV() {
+  async function descargarExcel() {
     setDescargando(true);
     try {
+      const { utils, writeFile } = await import("xlsx");
       const { items: todos } = await listarClientes("", 99999, 0);
-      const cabecera = [
-        "NIT/Cédula", "Nombre", "Apellidos", "Dirección", "Referencia",
-        "Barrio", "Ciudad", "Teléfono", "Correo", "Punto Venta",
-        "Activo", "HORECA", "Días Despacho", "Lat", "Lng", "Creado",
-      ];
-      const esc = (v: unknown) => {
-        const s = String(v ?? "").replace(/"/g, '""');
-        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
-      };
-      const filas = todos.map((c) => [
-        esc(c.nit_cedula), esc(c.nombre), esc(c.apellidos),
-        esc(c.direccion), esc(c.referencia), esc(c.barrio),
-        esc(c.ciudad), esc(c.telefono), esc(c.correo),
-        esc(c.punto_venta), esc(c.activo ? "Sí" : "No"),
-        esc(c.horeca ? "Sí" : "No"),
-        esc((c.dias_despacho ?? []).join("/")),
-        esc(c.lat), esc(c.lng),
-        esc(c.creado_en ? new Date(c.creado_en).toLocaleDateString("es-CO") : ""),
-      ].join(","));
-      const csv = [cabecera.join(","), ...filas].join("\n");
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `clientes_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filas = todos.map((c) => ({
+        "NIT/Cédula": c.nit_cedula,
+        Nombre: c.nombre ?? "",
+        Apellidos: c.apellidos ?? "",
+        Dirección: c.direccion ?? "",
+        Referencia: c.referencia ?? "",
+        Barrio: c.barrio ?? "",
+        Ciudad: c.ciudad ?? "",
+        Teléfono: c.telefono ?? "",
+        Correo: c.correo ?? "",
+        "Punto Venta": c.punto_venta ?? "",
+        Activo: c.activo ? "Sí" : "No",
+        HORECA: c.horeca ? "Sí" : "No",
+        "Días Despacho": (c.dias_despacho ?? []).join("/"),
+        Lat: c.lat ?? "",
+        Lng: c.lng ?? "",
+        "Creado en": c.creado_en
+          ? new Date(c.creado_en).toLocaleDateString("es-CO")
+          : "",
+      }));
+      const hoja = utils.json_to_sheet(filas);
+      const libro = utils.book_new();
+      utils.book_append_sheet(libro, hoja, "Clientes");
+      writeFile(libro, `clientes_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } finally {
       setDescargando(false);
     }
@@ -410,15 +408,15 @@ export default function ClientesPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={descargarCSV}
+            onClick={descargarExcel}
             disabled={descargando}
-            title="Descargar todos los clientes como CSV"
+            title="Descargar todos los clientes como Excel (.xlsx)"
             className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown shadow-sm transition hover:bg-brand-cream-soft disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5 5-5M12 15V3" />
             </svg>
-            {descargando ? "Descargando…" : "Descargar CSV"}
+            {descargando ? "Descargando…" : "Descargar Excel"}
           </button>
           <button
             onClick={permite.crear ? abrirCrear : sinPermiso.mostrar}
