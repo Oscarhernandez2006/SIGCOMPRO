@@ -12,7 +12,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, listarListasPrecio, sincronizarProductos, type ProductoPrecio } from "@/lib/productos";
-import { getUsuario, puedeMultiPunto } from "@/lib/auth";
+import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
@@ -57,6 +57,8 @@ interface PedidoCongelado {
   totalParcial: number;
   /** Nombre de la persona que congeló el pedido (para saber de quién es). */
   congeladoPor: string;
+  /** Cédula del creador del congelado (para control de acceso). */
+  congeladoPorCedula?: string;
 }
 
 export default function PedidosPage() {
@@ -332,7 +334,8 @@ export default function PedidosPage() {
   // Congela (guarda en espera) el borrador actual del wizard.
   const congelarBorrador = async (b: PedidoCongelado) => {
     try {
-      const guardado = await guardarCongeladoApi<PedidoCongelado>(b.id, b);
+      const conCedula: PedidoCongelado = { ...b, congeladoPorCedula: usuario?.cedula ?? '' };
+      const guardado = await guardarCongeladoApi<PedidoCongelado>(b.id, conCedula);
       setCongelados((prev) => {
         const sinEste = prev.filter((x) => x.id !== guardado.id);
         return [...sinEste, guardado];
@@ -791,6 +794,7 @@ export default function PedidosPage() {
       {modalCongelados && (
         <ModalCongelados
           congelados={congelados}
+          usuario={usuario}
           onDescongelar={descongelar}
           onEliminar={eliminarCongelado}
           onCerrar={() => setModalCongelados(false)}
@@ -913,16 +917,24 @@ function ModalMotivo({
 /* ---------------------------------------------------------------- */
 function ModalCongelados({
   congelados,
+  usuario,
   onDescongelar,
   onEliminar,
   onCerrar,
 }: {
   congelados: PedidoCongelado[];
+  usuario: ReturnType<typeof getUsuario>;
   onDescongelar: (b: PedidoCongelado) => void;
   onEliminar: (id: string) => void;
   onCerrar: () => void;
 }) {
   const [verCong, setVerCong] = useState<PedidoCongelado | null>(null);
+  const esPropietario = (c: PedidoCongelado) => {
+    if (!usuario) return false;
+    if (tieneAccesoAdministrativo(usuario.rol)) return true;
+    if (c.congeladoPorCedula) return c.congeladoPorCedula === usuario.cedula;
+    return c.congeladoPor === usuario.nombre;
+  };
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4">
       <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -995,22 +1007,26 @@ function ModalCongelados({
                         >
                           Ver
                         </button>
-                        <button
-                          onClick={() => onDescongelar(c)}
-                          title="Descongelar y retomar el pedido"
-                          className="rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/20"
-                        >
-                          Descongelar
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
-                          }}
-                          title="Eliminar el pedido congelado"
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                        >
-                          Eliminar
-                        </button>
+                        {esPropietario(c) && (
+                          <button
+                            onClick={() => onDescongelar(c)}
+                            title="Descongelar y retomar el pedido"
+                            className="rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-1.5 text-xs font-semibold text-brand-amber transition hover:bg-brand-amber/20"
+                          >
+                            Descongelar
+                          </button>
+                        )}
+                        {esPropietario(c) && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
+                            }}
+                            title="Eliminar el pedido congelado"
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1034,6 +1050,7 @@ function ModalCongelados({
       {verCong && (
         <DetalleCongelado
           congelado={verCong}
+          esDueno={esPropietario(verCong)}
           onCerrar={() => setVerCong(null)}
           onDescongelar={(c) => {
             setVerCong(null);
@@ -1054,11 +1071,13 @@ function ModalCongelados({
 /* ---------------------------------------------------------------- */
 function DetalleCongelado({
   congelado,
+  esDueno,
   onCerrar,
   onDescongelar,
   onEliminar,
 }: {
   congelado: PedidoCongelado;
+  esDueno: boolean;
   onCerrar: () => void;
   onDescongelar: (c: PedidoCongelado) => void;
   onEliminar: (id: string) => void;
@@ -1182,22 +1201,26 @@ function DetalleCongelado({
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
-          <button
-            onClick={() => {
-              if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
-            }}
-            title="Eliminar el pedido congelado"
-            className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
-          >
-            Eliminar
-          </button>
-          <button
-            onClick={() => onDescongelar(c)}
-            title="Descongelar y continuar el pedido"
-            className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white hover:bg-brand-amber/90"
-          >
-            Descongelar y continuar
-          </button>
+          {esDueno && (
+            <button
+              onClick={() => {
+                if (confirm(`¿Eliminar el congelado CONG-${c.tempConsecutivo}?`)) onEliminar(c.id);
+              }}
+              title="Eliminar el pedido congelado"
+              className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              Eliminar
+            </button>
+          )}
+          {esDueno && (
+            <button
+              onClick={() => onDescongelar(c)}
+              title="Descongelar y continuar el pedido"
+              className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white hover:bg-brand-amber/90"
+            >
+              Descongelar y continuar
+            </button>
+          )}
           <button onClick={onCerrar} title="Cerrar" className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">Cerrar</button>
         </div>
       </div>

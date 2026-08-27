@@ -1056,8 +1056,10 @@ export class PedidosService implements OnModuleInit {
     }, 0);
 
     // Fechas y ventanas (zona horaria America/Bogota).
-    // Para una RÉPLICA se usa la fecha/hora del DÍA ACTUAL (no la del pedido
-    // original), porque la réplica se despacha el día en que se sube a Drivin.
+    // Para una RÉPLICA la fecha de entrega es HOY (la réplica se despacha el
+    // día en que se sube a Drivin), pero la VENTANA HORARIA se hereda del
+    // pedido original: se usa la misma horaDespacho para que el compromiso de
+    // hora no cambie de una réplica a otra.
     const creado =
       esReplica || !pedido.fecha ? new Date() : new Date(String(pedido.fecha));
     const programado = !esReplica && pedido.entregaProgramada === true;
@@ -1078,11 +1080,12 @@ export class PedidosService implements OnModuleInit {
 
     // Hora de despacho elegida en el pedido (HH:MM). Si viene, es la HORA FIN de
     // la ventana (compromiso máximo). El inicio se calcula restando 2 horas, así
-    // "8" -> ventana 06:00–08:00. Para réplicas se ignora (usan la hora actual).
+    // "8" -> ventana 06:00–08:00. Las réplicas HEREDAN esta hora del pedido
+    // original para mantener el mismo compromiso horario que el pedido base.
     const horaDespacho = String(
       (pedido as { horaDespacho?: string }).horaDespacho ?? '',
     ).trim();
-    const tieneHora = !esReplica && /^\d{1,2}:\d{2}$/.test(horaDespacho);
+    const tieneHora = /^\d{1,2}:\d{2}$/.test(horaDespacho);
     const normalizarHora = (hhmm: string) => {
       const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10) || 0);
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;

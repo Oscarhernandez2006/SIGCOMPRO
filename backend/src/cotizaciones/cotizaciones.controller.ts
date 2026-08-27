@@ -32,8 +32,9 @@ export class CotizacionesController {
   guardar(
     @Param('id') _id: string,
     @Body() cotizacion: Record<string, unknown>,
+    @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.cotizaciones.guardar(cotizacion);
+    return this.cotizaciones.guardar(cotizacion, req.user);
   }
 
   /** Elimina una cotización. */

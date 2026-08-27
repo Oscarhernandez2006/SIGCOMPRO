@@ -295,6 +295,13 @@ export default function CotizacionesPage() {
   const puedeEliminar = puedeAccion(usuario, "cotizaciones.eliminar");
   const puedeConvertir = puedeAccion(usuario, "cotizaciones.convertir");
 
+  /** Puede editar una cotización concreta: tiene permiso de rol Y es el creador (o admin). */
+  const puedeEditarCot = (cot: Cotizacion) =>
+    puedeEditar &&
+    (esAdmin ||
+      !cot.vendedorCedula ||
+      cot.vendedorCedula === usuario?.cedula);
+
   useEffect(() => {
     const u = getUsuario();
     if (!puedeVerModulo(u, "cotizaciones")) {
@@ -361,8 +368,8 @@ export default function CotizacionesPage() {
   }
 
   return (
-    <div className="pb-6">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="mb-4 flex flex-shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Cotizaciones
@@ -408,9 +415,9 @@ export default function CotizacionesPage() {
           Aún no hay cotizaciones. Crea la primera con “Nueva cotización”.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+        <div className="max-h-[calc(100vh-260px)] overflow-y-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[11px] font-bold uppercase tracking-wide text-brand-brown/60">
                 <th className="px-4 py-3">N°</th>
                 <th className="px-4 py-3">Fecha</th>
@@ -471,7 +478,7 @@ export default function CotizacionesPage() {
                         >
                           Ver PDF
                         </button>
-                        {!confirmada && puedeEditar && (
+                        {!confirmada && puedeEditarCot(cot) && (
                           <button
                             onClick={() => setEditor({ inicial: cot })}
                             title="Editar la cotización"

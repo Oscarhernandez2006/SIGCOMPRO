@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
@@ -64,10 +65,11 @@ export class CotizacionesService implements OnModuleInit {
   }
 
   /**
-   * Crea o actualiza una cotización (upsert por id). El número consecutivo se
+   * Crea o actualiza una cotiización (upsert por id). El número consecutivo se
    * asigna en el servidor de forma atómica al crearla y se conserva al editar.
+   * Solo el vendedor que creó la cotización puede editarla (a menos que sea admin).
    */
-  async guardar(cot: CotizacionData): Promise<CotizacionData> {
+  async guardar(cot: CotizacionData, user?: JwtPayload): Promise<CotizacionData> {
     const id = String(cot.id ?? '').trim();
     if (!id) throw new Error('La cotización no tiene id.');
     const puntoId = cot.punto?.id ? String(cot.punto.id) : null;
@@ -86,6 +88,21 @@ export class CotizacionesService implements OnModuleInit {
         // Edición: conserva número, fecha y —si ya fue confirmada— su estado
         // y el pedido generado.
         const prevData = prev.rows[0].data ?? {};
+        // Solo el creador original puede editar (a menos que sea admin/gerente).
+        const cedulaCreador = String(prevData.vendedorCedula ?? '').trim();
+        const esAdmin = user?.rol
+          ? ['admin', 'gerente', 'superadmin'].includes(
+              String(user.rol).toLowerCase(),
+            )
+          : false;
+        if (cedulaCreador && user?.cedula && !esAdmin) {
+          const cedulaEditor = String(user.cedula).trim();
+          if (cedulaCreador !== cedulaEditor) {
+            throw new BadRequestException(
+              'Solo el vendedor que creó la cotización puede editarla.',
+            );
+          }
+        }
         finalCot.numero =
           (typeof prevData.numero === 'number'
             ? prevData.numero
