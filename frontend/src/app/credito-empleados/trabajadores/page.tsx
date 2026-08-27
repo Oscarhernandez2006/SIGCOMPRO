@@ -6,6 +6,8 @@ import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import {
   buscarTrabajadoresCredito,
+  buscarEnSiesa,
+  importarTrabajadores,
   guardarTrabajadorCredito,
   type TrabajadorCredito,
 } from "@/lib/credito-empleados";
@@ -76,8 +78,26 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
   const [form, setForm]         = useState<FormTrabajador>(inicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [buscandoSiesa, setBuscandoSiesa] = useState(false);
+  const [siesaMsg, setSiesaMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Autocompletar nombre desde Siesa al ingresar la cédula (si está vacío el nombre)
+  async function autocompletarSiesa(cedula: string) {
+    if (esEdicion || cedula.length < 6 || form.nombre.trim()) return;
+    setBuscandoSiesa(true); setSiesaMsg(null);
+    try {
+      const r = await buscarEnSiesa(cedula);
+      if (r.encontrado && r.nombre) {
+        setForm((f) => ({ ...f, nombre: r.nombre! }));
+        setSiesaMsg(`✓ Nombre encontrado en Siesa`);
+      } else {
+        setSiesaMsg("No encontrado en Siesa — ingresa el nombre manualmente");
+      }
+    } catch { /* silencioso */ }
+    finally { setBuscandoSiesa(false); }
+  }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -145,12 +165,29 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
             <input
               ref={inputRef}
               value={form.cedula}
-              onChange={(e) => setForm((f) => ({ ...f, cedula: e.target.value.replace(/\D/g, "") }))}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, "");
+                setForm((f) => ({ ...f, cedula: v }));
+                setSiesaMsg(null);
+                if (v.length >= 6) autocompletarSiesa(v);
+              }}
+              onBlur={(e) => { if (e.target.value.length >= 6) autocompletarSiesa(e.target.value); }}
               disabled={esEdicion}
               placeholder="Número de documento"
               className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine disabled:bg-neutral-50 disabled:text-brand-brown/50"
             />
             {esEdicion && <p className="mt-1 text-xs text-brand-brown/35">La cédula no puede modificarse.</p>}
+            {!esEdicion && buscandoSiesa && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-brand-brown/50">
+                <span className="h-3 w-3 animate-spin rounded-full border border-brand-wine/30 border-t-brand-wine" />
+                Buscando en Siesa…
+              </p>
+            )}
+            {!esEdicion && siesaMsg && !buscandoSiesa && (
+              <p className={`mt-1 text-xs ${siesaMsg.startsWith("✓") ? "text-brand-wine font-medium" : "text-brand-brown/40 italic"}`}>
+                {siesaMsg}
+              </p>
+            )}
           </div>
 
           {/* Nombre */}
@@ -252,6 +289,10 @@ export default function TrabajadoresCreditoPage() {
   const [cargando, setCargando]         = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [modal, setModal]               = useState<{ form: FormTrabajador; esEdicion: boolean } | null>(null);
+  const [modalImportar, setModalImportar] = useState(false);
+  const [csvTexto, setCsvTexto]           = useState("");
+  const [importando, setImportando]       = useState(false);
+  const [importResult, setImportResult]   = useState<{ importados: number; errores: Array<{ cedula: string; error: string }> } | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true); setError(null);
@@ -263,6 +304,21 @@ export default function TrabajadoresCreditoPage() {
   useEffect(() => { void cargar(); }, [cargar]);
 
   function abrirNuevo() { setModal({ form: FORM_VACIO, esEdicion: false }); }
+
+  async function procesarImportacion() {
+    setImportando(true); setImportResult(null);
+    const filas = csvTexto.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+    const lista = filas.map((fila) => {
+      const cols = fila.split(/[,;\t]+/).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+      return { cedula: cols[0] ?? "", nombre: cols[1] ?? "", cupo_asignado: Number(cols[2]) || 0 };
+    }).filter((r) => r.cedula && r.nombre);
+    try {
+      const r = await importarTrabajadores(lista);
+      setImportResult(r);
+      if (r.importados > 0) { void cargar(); }
+    } catch { setImportResult({ importados: 0, errores: [{ cedula: "—", error: "No se pudo conectar con el servidor." }] }); }
+    finally { setImportando(false); }
+  }
   function abrirEditar(t: TrabajadorCredito) {
     setModal({ form: { cedula: t.cedula, nombre: t.nombre, cupo_asignado: String(Number(t.cupo_asignado) || 0), activo: t.activo, fecha_proximo_descuento: t.fecha_proximo_descuento ?? "" }, esEdicion: true });
   }
@@ -291,11 +347,20 @@ export default function TrabajadoresCreditoPage() {
           <p className="mt-0.5 text-sm text-brand-brown/60">Gestiona los colaboradores habilitados para compras a crédito.</p>
         </div>
         {puedeGestionar && (
-          <button type="button" onClick={abrirNuevo}
-            className="flex h-10 items-center gap-2 rounded-xl bg-brand-wine px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90">
-            <Icon d={Ico.plus} cls="h-4 w-4" />
-            Nuevo trabajador
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setModalImportar(true); setCsvTexto(""); setImportResult(null); }}
+              className="flex h-10 items-center gap-2 rounded-xl border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+              </svg>
+              Importar CSV
+            </button>
+            <button type="button" onClick={abrirNuevo}
+              className="flex h-10 items-center gap-2 rounded-xl bg-brand-wine px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90">
+              <Icon d={Ico.plus} cls="h-4 w-4" />
+              Nuevo trabajador
+            </button>
+          </div>
         )}
       </div>
 
@@ -439,6 +504,69 @@ export default function TrabajadoresCreditoPage() {
           onClose={() => setModal(null)}
           onGuardado={onGuardado}
         />
+      )}
+
+      {/* ── Modal importar CSV ── */}
+      {modalImportar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !importando && setModalImportar(false)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="font-serif text-lg font-bold text-brand-wine">Importar trabajadores</h2>
+                <p className="text-xs text-brand-brown/55">Pega aquí una lista: cédula, nombre, cupo (opcional)</p>
+              </div>
+              <button onClick={() => setModalImportar(false)} disabled={importando}
+                className="rounded-lg p-1.5 text-brand-brown/40 hover:bg-brand-cream-soft disabled:opacity-40">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/50 p-3 text-xs text-brand-brown/60 space-y-1">
+                <p className="font-semibold">Formato aceptado (una fila por trabajador):</p>
+                <p className="font-mono">cédula, nombre completo, cupo_asignado</p>
+                <p className="font-mono text-brand-brown/40">1234567890, Juan Pérez Gómez, 500000</p>
+                <p>Separador: coma (,) punto y coma (;) o tabulador. El cupo es opcional.</p>
+              </div>
+              <textarea
+                value={csvTexto}
+                onChange={(e) => { setCsvTexto(e.target.value); setImportResult(null); }}
+                rows={8}
+                placeholder={"1234567890, Juan Pérez, 500000\n0987654321, María López, 300000"}
+                disabled={importando}
+                className="w-full resize-none rounded-xl border border-brand-brown/25 px-3 py-2.5 font-mono text-xs outline-none transition focus:border-brand-wine disabled:opacity-50"
+              />
+              {importResult && (
+                <div className={`rounded-xl border px-4 py-3 text-sm ${importResult.errores.length === 0 ? "border-brand-wine/25 bg-brand-wine/5" : "border-amber-200 bg-amber-50"}`}>
+                  <p className="font-semibold text-brand-black">
+                    ✓ {importResult.importados} importados
+                    {importResult.errores.length > 0 && ` · ${importResult.errores.length} errores`}
+                  </p>
+                  {importResult.errores.map((e, i) => (
+                    <p key={i} className="mt-0.5 text-xs text-rose-600">CC {e.cedula}: {e.error}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
+              <button onClick={() => setModalImportar(false)} disabled={importando}
+                className="h-10 rounded-xl border border-brand-brown/25 px-4 text-sm font-medium text-brand-brown hover:bg-brand-cream-soft disabled:opacity-50">
+                Cerrar
+              </button>
+              <button onClick={procesarImportacion} disabled={importando || !csvTexto.trim()}
+                className="flex h-10 items-center gap-1.5 rounded-xl bg-brand-wine px-5 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-50">
+                {importando ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Importando…</> : "Importar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

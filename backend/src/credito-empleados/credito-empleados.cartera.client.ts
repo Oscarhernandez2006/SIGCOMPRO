@@ -37,6 +37,32 @@ export class CreditoEmpleadosCarteraClient {
   constructor(private readonly config: ConfigService) {}
 
   /**
+   * Busca el nombre de un tercero en Siesa consultando su cartera.
+   * Retorna el RAZON_SOCIAL si existe, o null si no se encuentra.
+   */
+  async buscarNombreEnSiesa(cedula: string): Promise<string | null> {
+    const baseUrl = this.config.get<string>('PRICE_LISTS_BASE_URL', '').trim();
+    const token   = this.config.get<string>('PRICE_LISTS_TOKEN', '').trim();
+    const cia     = this.config.get<string>('SIESA_CIA_EMPLEADOS', '').trim();
+
+    if (!baseUrl || !token || !cia) return null;
+
+    const url = `${baseUrl}/cartera?cia=${encodeURIComponent(cia)}&nit=${encodeURIComponent(cedula)}&token=${encodeURIComponent(token)}`;
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: Array<{ RAZON_SOCIAL?: string }> };
+      const razon = body?.data?.[0]?.RAZON_SOCIAL;
+      return razon ? String(razon).trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Devuelve el saldo total de cartera del trabajador en Siesa.
    * Retorna `null` si la integración no está configurada o falla.
    */

@@ -345,5 +345,47 @@ export class CreditoEmpleadosService implements OnModuleInit {
 
     return res.rows.map((r) => ({ ...r, total: Number(r.total) || 0 }));
   }
+
+  /** Busca el nombre de un tercero directamente en Siesa por cédula. */
+  async buscarEnSiesa(cedula: string): Promise<{ cedula: string; nombre: string | null; encontrado: boolean }> {
+    const c = String(cedula).trim();
+    const nombre = await this.carteraClient.buscarNombreEnSiesa(c);
+    return { cedula: c, nombre, encontrado: nombre !== null };
+  }
+
+  /** Importa trabajadores en masa; crea los nuevos y actualiza los existentes (upsert). */
+  async importarTrabajadores(
+    lista: Array<{ cedula: string; nombre: string; cupo_asignado?: number }>,
+  ): Promise<{ importados: number; errores: Array<{ cedula: string; error: string }> }> {
+    let importados = 0;
+    const errores: Array<{ cedula: string; error: string }> = [];
+
+    for (const item of lista) {
+      const cedula = String(item.cedula ?? '').trim();
+      const nombre = String(item.nombre ?? '').trim();
+      if (!cedula || !nombre) {
+        errores.push({ cedula: cedula || '?', error: 'Cédula o nombre vacíos' });
+        continue;
+      }
+      try {
+        await this.pool.query(
+          `INSERT INTO credito_empleados_trabajadores
+             (cedula, nombre, cupo_asignado, activo, actualizado_en)
+           VALUES ($1, $2, $3, true, now())
+           ON CONFLICT (cedula) DO UPDATE
+             SET nombre = EXCLUDED.nombre,
+                 cupo_asignado = CASE WHEN $3 > 0 THEN EXCLUDED.cupo_asignado ELSE credito_empleados_trabajadores.cupo_asignado END,
+                 actualizado_en = now()`,
+          [cedula, nombre, Number(item.cupo_asignado) || 0],
+        );
+        importados++;
+      } catch (err) {
+        errores.push({ cedula, error: err instanceof Error ? err.message : 'Error desconocido' });
+      }
+    }
+
+    this.logger.log(`Importación masiva: ${importados} OK, ${errores.length} errores`);
+    return { importados, errores };
+  }
 }
 

@@ -89,6 +89,21 @@ export function crearPedidoCredito(input: {
   });
 }
 
+/** Busca el nombre de un tercero directamente en Siesa por cédula (para autocompletar). */
+export function buscarEnSiesa(cedula: string): Promise<{ cedula: string; nombre: string | null; encontrado: boolean }> {
+  return apiFetch(`/credito-empleados/buscar-en-siesa/${encodeURIComponent(cedula)}`);
+}
+
+/** Importa trabajadores en masa. */
+export function importarTrabajadores(
+  trabajadores: Array<{ cedula: string; nombre: string; cupo_asignado?: number }>,
+): Promise<{ importados: number; errores: Array<{ cedula: string; error: string }> }> {
+  return apiFetch("/credito-empleados/importar", {
+    method: "POST",
+    body: JSON.stringify({ trabajadores }),
+  });
+}
+
 export function actualizarEstadoPedidoCredito(
   id: string,
   estado: "pendiente" | "facturado" | "anulado",

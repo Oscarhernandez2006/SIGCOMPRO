@@ -19,6 +19,25 @@ import { CreditoEmpleadosService } from './credito-empleados.service';
 export class CreditoEmpleadosController {
   constructor(private readonly credito: CreditoEmpleadosService) {}
 
+  /** Busca el nombre de un tercero en Siesa por cédula (autocompletar). */
+  @Get('buscar-en-siesa/:cedula')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  buscarEnSiesa(@Param('cedula') cedula: string) {
+    return this.credito.buscarEnSiesa(cedula);
+  }
+
+  /** Importa trabajadores en masa desde un arreglo [{cedula,nombre,cupo_asignado?}]. */
+  @Post('importar')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  importar(
+    @Body()
+    body: { trabajadores: Array<{ cedula: string; nombre: string; cupo_asignado?: number }> },
+  ) {
+    return this.credito.importarTrabajadores(body.trabajadores ?? []);
+  }
+
   /** Consulta pública del estado de crédito de un colaborador (solo requiere sesión). */
   @Get('consulta/:cedula')
   @UseGuards(JwtAuthGuard)
