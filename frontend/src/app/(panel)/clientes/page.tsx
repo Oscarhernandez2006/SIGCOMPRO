@@ -99,6 +99,43 @@ export default function ClientesPage() {
   const puedeImportar = permite.importar;
   const inputArchivoRef = useRef<HTMLInputElement>(null);
   const [importando, setImportando] = useState(false);
+  const [descargando, setDescargando] = useState(false);
+
+  async function descargarCSV() {
+    setDescargando(true);
+    try {
+      const { items: todos } = await listarClientes("", 99999, 0);
+      const cabecera = [
+        "NIT/Cédula", "Nombre", "Apellidos", "Dirección", "Referencia",
+        "Barrio", "Ciudad", "Teléfono", "Correo", "Punto Venta",
+        "Activo", "HORECA", "Días Despacho", "Lat", "Lng", "Creado",
+      ];
+      const esc = (v: unknown) => {
+        const s = String(v ?? "").replace(/"/g, '""');
+        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
+      };
+      const filas = todos.map((c) => [
+        esc(c.nit_cedula), esc(c.nombre), esc(c.apellidos),
+        esc(c.direccion), esc(c.referencia), esc(c.barrio),
+        esc(c.ciudad), esc(c.telefono), esc(c.correo),
+        esc(c.punto_venta), esc(c.activo ? "Sí" : "No"),
+        esc(c.horeca ? "Sí" : "No"),
+        esc((c.dias_despacho ?? []).join("/")),
+        esc(c.lat), esc(c.lng),
+        esc(c.creado_en ? new Date(c.creado_en).toLocaleDateString("es-CO") : ""),
+      ].join(","));
+      const csv = [cabecera.join(","), ...filas].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `clientes_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDescargando(false);
+    }
+  }
   // Progreso de la importación (para el modal).
   const [faseImport, setFaseImport] = useState<"subiendo" | "procesando" | null>(null);
   const [pctSubida, setPctSubida] = useState(0);
@@ -371,18 +408,31 @@ export default function ClientesPage() {
             Directorio de clientes del negocio.
           </p>
         </div>
-        <button
-          onClick={permite.crear ? abrirCrear : sinPermiso.mostrar}
-          title="Crear un nuevo cliente"
-          className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
-            permite.crear ? "" : "opacity-50"
-          }`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-          </svg>
-          Nuevo cliente
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={descargarCSV}
+            disabled={descargando}
+            title="Descargar todos los clientes como CSV"
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-brown shadow-sm transition hover:bg-brand-cream-soft disabled:opacity-60"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            {descargando ? "Descargando…" : "Descargar CSV"}
+          </button>
+          <button
+            onClick={permite.crear ? abrirCrear : sinPermiso.mostrar}
+            title="Crear un nuevo cliente"
+            className={`inline-flex items-center gap-2 rounded-xl bg-brand-amber px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 ${
+              permite.crear ? "" : "opacity-50"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            Nuevo cliente
+          </button>
+        </div>
       </div>
 
       {/* Importar DB: solo administrador / desarrollador */}
