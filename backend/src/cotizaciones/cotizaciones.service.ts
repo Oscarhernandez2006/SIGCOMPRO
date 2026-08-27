@@ -65,9 +65,8 @@ export class CotizacionesService implements OnModuleInit {
   }
 
   /**
-   * Crea o actualiza una cotiización (upsert por id). El número consecutivo se
-   * asigna en el servidor de forma atómica al crearla y se conserva al editar.
-   * Solo el vendedor que creó la cotización puede editarla (a menos que sea admin).
+   * Crea o actualiza una cotización (upsert por id). Cualquier usuario con
+   * permiso puede editar; el número se asigna atómicamente al crear.
    */
   async guardar(cot: CotizacionData, user?: JwtPayload): Promise<CotizacionData> {
     const id = String(cot.id ?? '').trim();
@@ -88,21 +87,6 @@ export class CotizacionesService implements OnModuleInit {
         // Edición: conserva número, fecha y —si ya fue confirmada— su estado
         // y el pedido generado.
         const prevData = prev.rows[0].data ?? {};
-        // Solo el creador original puede editar (a menos que sea admin/gerente).
-        const cedulaCreador = String(prevData.vendedorCedula ?? '').trim();
-        const esAdmin = user?.rol
-          ? ['admin', 'gerente', 'superadmin'].includes(
-              String(user.rol).toLowerCase(),
-            )
-          : false;
-        if (cedulaCreador && user?.cedula && !esAdmin) {
-          const cedulaEditor = String(user.cedula).trim();
-          if (cedulaCreador !== cedulaEditor) {
-            throw new BadRequestException(
-              'Solo el vendedor que creó la cotización puede editarla.',
-            );
-          }
-        }
         finalCot.numero =
           (typeof prevData.numero === 'number'
             ? prevData.numero
@@ -159,8 +143,28 @@ export class CotizacionesService implements OnModuleInit {
     }
   }
 
-  /** Elimina una cotización. */
-  async eliminar(id: string): Promise<{ id: string }> {
+  /** Elimina una cotización. Solo el creador (o admin) puede hacerlo. */
+  async eliminar(id: string, user?: JwtPayload): Promise<{ id: string }> {
+    const res = await this.pool.query<{ data: CotizacionData }>(
+      `SELECT data FROM cotizaciones WHERE id = $1`,
+      [id],
+    );
+    if (res.rowCount) {
+      const cot = res.rows[0].data ?? {};
+      const cedulaCreador = String(cot.vendedorCedula ?? '').trim();
+      if (cedulaCreador && user?.cedula) {
+        const esAdmin = user?.rol
+          ? ['admin', 'gerente', 'superadmin'].includes(
+              String(user.rol).toLowerCase(),
+            )
+          : false;
+        if (!esAdmin && String(user.cedula).trim() !== cedulaCreador) {
+          throw new BadRequestException(
+            'Solo el vendedor que creó la cotización puede eliminarla.',
+          );
+        }
+      }
+    }
     await this.pool.query(`DELETE FROM cotizaciones WHERE id = $1`, [id]);
     return { id };
   }

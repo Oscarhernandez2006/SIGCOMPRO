@@ -39,8 +39,11 @@ export class CotizacionesController {
 
   /** Elimina una cotización. */
   @Delete(':id')
-  eliminar(@Param('id') id: string) {
-    return this.cotizaciones.eliminar(id);
+  eliminar(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: JwtPayload },
+  ) {
+    return this.cotizaciones.eliminar(id, req.user);
   }
 
   /** Convierte la cotización en un pedido (conservando los precios fijados). */

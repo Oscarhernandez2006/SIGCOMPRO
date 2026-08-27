@@ -295,12 +295,10 @@ export default function CotizacionesPage() {
   const puedeEliminar = puedeAccion(usuario, "cotizaciones.eliminar");
   const puedeConvertir = puedeAccion(usuario, "cotizaciones.convertir");
 
-  /** Puede editar una cotización concreta: tiene permiso de rol Y es el creador (o admin). */
-  const puedeEditarCot = (cot: Cotizacion) =>
-    puedeEditar &&
-    (esAdmin ||
-      !cot.vendedorCedula ||
-      cot.vendedorCedula === usuario?.cedula);
+  /** Sólo el creador (o admin) puede eliminar una cotización. */
+  const puedeEliminarCot = (cot: Cotizacion) =>
+    puedeEliminar &&
+    (esAdmin || !cot.vendedorCedula || cot.vendedorCedula === usuario?.cedula);
 
   useEffect(() => {
     const u = getUsuario();
@@ -319,7 +317,11 @@ export default function CotizacionesPage() {
       const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
       const [ps, cots] = await Promise.all([cargaPuntos, listarCotizaciones()]);
       setPuntos(ps);
-      setCotizaciones(cots);
+      // No-admins ven solo las cotizaciones de sus propios puntos de venta.
+      const cotsFiltradas = esAdmin
+        ? cots
+        : cots.filter((c) => ps.some((p) => p.id === c.punto?.id));
+      setCotizaciones(cotsFiltradas);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudieron cargar las cotizaciones",
@@ -478,7 +480,7 @@ export default function CotizacionesPage() {
                         >
                           Ver PDF
                         </button>
-                        {!confirmada && puedeEditarCot(cot) && (
+                        {!confirmada && puedeEditar && (
                           <button
                             onClick={() => setEditor({ inicial: cot })}
                             title="Editar la cotización"
@@ -497,7 +499,7 @@ export default function CotizacionesPage() {
                             {convirtiendo === cot.id ? "Convirtiendo…" : "Confirmar"}
                           </button>
                         )}
-                        {puedeEliminar && (
+                        {puedeEliminarCot(cot) && (
                           <button
                             onClick={() => setABorrar(cot)}
                             title="Borrar la cotización"
