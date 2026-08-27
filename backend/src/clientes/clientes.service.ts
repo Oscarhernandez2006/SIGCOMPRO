@@ -87,6 +87,14 @@ export class ClientesService implements OnModuleInit {
     );
   }
 
+  /** Todos los clientes sin límite de paginación (solo para exportación). */
+  async exportar(): Promise<ClienteRow[]> {
+    const res = await this.pool.query<ClienteRow>(
+      `SELECT ${COLUMNS} FROM clientes ORDER BY nombre ASC NULLS LAST`,
+    );
+    return res.rows;
+  }
+
   async listar(
     q?: string,
     limit = 50,

@@ -10,6 +10,7 @@ import {
   importarClientesDB,
   estadisticasClientes,
   estadoUbicacion,
+  exportarClientes,
   type Cliente,
   type ClienteInput,
   type ImportacionResumen,
@@ -105,7 +106,7 @@ export default function ClientesPage() {
     setDescargando(true);
     try {
       const { utils, writeFile } = await import("xlsx");
-      const { items: todos } = await listarClientes("", 99999, 0);
+      const todos = await exportarClientes();
       const filas = todos.map((c) => ({
         "NIT/Cédula": c.nit_cedula,
         Nombre: c.nombre ?? "",

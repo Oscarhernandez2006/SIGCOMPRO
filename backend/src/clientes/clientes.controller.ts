@@ -46,6 +46,12 @@ export class ClientesController {
     return this.clientes.listarBarrios(q, ciudad);
   }
 
+  /** Exporta todos los clientes sin límite (para descarga Excel/CSV). */
+  @Get('exportar')
+  exportar() {
+    return this.clientes.exportar();
+  }
+
   /** Estadísticas: total y cuántos tienen ubicación válida (bien creados). */
   @Get('estadisticas')
   estadisticas() {

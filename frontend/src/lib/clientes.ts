@@ -59,6 +59,11 @@ export function listarClientes(
   return apiFetch<ListarClientesResp>(`/clientes?${params.toString()}`);
 }
 
+/** Exporta todos los clientes sin límite de paginación. */
+export function exportarClientes(): Promise<Cliente[]> {
+  return apiFetch<Cliente[]>("/clientes/exportar");
+}
+
 /** Estadísticas de clientes según la calidad de su ubicación. */
 export interface EstadisticasClientes {
   total: number;
