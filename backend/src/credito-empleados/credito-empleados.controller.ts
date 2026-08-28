@@ -114,6 +114,7 @@ export class CreditoEmpleadosController {
       total: number;
       observacion?: string;
       factura_imagen?: string | null;
+      factura_numero?: string | null;
     },
     @Req() req: Request & { user?: JwtPayload },
   ) {

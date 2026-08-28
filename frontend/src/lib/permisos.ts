@@ -113,7 +113,7 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
   if (inicioCredito) {
     paneles.push({
       key: "credito_empleados",
-      label: "Panel Crédito Empleados",
+      label: "Compras Empleados",
       href: inicioCredito,
     });
   }

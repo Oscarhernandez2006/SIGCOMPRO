@@ -71,7 +71,7 @@ function Icon({ d, cls = "h-5 w-5" }: { d: React.ReactNode; cls?: string }) {
 
 // ── Modal "Nueva compra" ─────────────────────────────────────────────────────
 
-function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[]; onClose: () => void; onCreado: () => void }) {
+function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: PuntoVenta[]; usuario: ReturnType<typeof getUsuario>; onClose: () => void; onCreado: () => void }) {
   const [cedula, setCedula]         = useState("");
   const [trabajador, setTrabajador] = useState<TrabajadorCredito | null>(null);
   const [buscando, setBuscando]     = useState(false);
@@ -83,6 +83,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
   const [guardando, setGuardando]   = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
   const [facturaImagen, setFacturaImagen] = useState<string | null>(null);
+  const [numFactura, setNumFactura] = useState("");
   const facturaInputRef = useRef<HTMLInputElement>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +111,7 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
       await crearPedidoCredito({
         trabajador_cedula: trabajador.cedula, punto_id: punto.id, punto_nombre: punto.nombre,
         total: valor, observacion, factura_imagen: facturaImagen,
+        factura_numero: numFactura.trim() || null,
       });
       onCreado(); onClose();
     } catch (err) { setErrorGuardar(err instanceof ApiError ? err.message : "No se pudo registrar la compra."); }
@@ -186,9 +188,15 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                   <p className="font-semibold text-white leading-tight truncate">{trabajador.nombre}</p>
                   <p className="text-[11px] text-white/70">CC {trabajador.cedula}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${trabajador.activo ? "bg-white/20 text-white" : "bg-white/20 text-white"}`}>
-                  {trabajador.activo ? "Activo" : "Inactivo"}
-                </span>
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${trabajador.activo ? "bg-white/20 text-white" : "bg-white/20 text-white"}`}>
+                    {trabajador.activo ? "Activo" : "Inactivo"}
+                  </span>
+                  {/* PDV del usuario de sesión */}
+                  <span className="text-[10px] text-white/60 truncate max-w-[120px]" title="Punto de venta del usuario en sesión">
+                    {puntos[0]?.nombre ?? "Sin PDV asignado"}
+                  </span>
+                </div>
               </div>
               {!trabajador.activo && (
                 <div className="bg-rose-50 px-4 py-2 text-xs font-medium text-rose-700">
@@ -240,6 +248,21 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                     <option value="">Selecciona un punto</option>
                     {puntos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
+                </div>
+                {/* Número de factura */}
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                    </svg>
+                    N° de factura <span className="font-normal normal-case text-brand-brown/35">(opcional)</span>
+                  </label>
+                  <input
+                    value={numFactura}
+                    onChange={(e) => setNumFactura(e.target.value)}
+                    placeholder="Ej: CE1C11433"
+                    className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine"
+                  />
                 </div>
                 {/* Valor */}
                 <div>
@@ -706,7 +729,7 @@ export default function CreditoEmpleadosPage() {
       </div>
 
       {modalNueva && (
-        <ModalNuevaCompra puntos={puntos} onClose={() => setModalNueva(false)} onCreado={() => {
+        <ModalNuevaCompra puntos={puntos} usuario={usuario} onClose={() => setModalNueva(false)} onCreado={() => {
           void cargarPedidos();
           resumenNomina().then(setResumen).catch(() => {});
         }} />

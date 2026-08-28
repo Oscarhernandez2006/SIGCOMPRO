@@ -41,6 +41,7 @@ export interface PedidoCredito {
   creado_en: string;
   actualizado_en: string;
   nomina_fecha: string | null;
+  factura_numero: string | null;
   factura_total_leido: number | null;
   factura_validada: boolean;
   factura_productos: ProductoFactura[];
@@ -104,6 +105,7 @@ export function crearPedidoCredito(input: {
   total: number;
   observacion?: string;
   factura_imagen?: string | null;
+  factura_numero?: string | null;
 }): Promise<PedidoCredito> {
   return apiFetch<PedidoCredito>("/credito-empleados/pedidos", {
     method: "POST",

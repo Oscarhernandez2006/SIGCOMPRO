@@ -126,7 +126,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold text-white">Carnes Santacruz</p>
-            <p className="text-[11px] text-brand-cream/70">Compras Clientes</p>
+            <p className="text-[11px] text-brand-cream/70">Compras Empleados</p>
           </div>
         </div>
 
@@ -184,7 +184,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
             </svg>
           </div>
-          <p className="font-serif text-lg font-bold text-brand-wine">Compras Clientes</p>
+          <p className="font-serif text-lg font-bold text-brand-wine">Compras Empleados</p>
         </div>
         <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-brand-wine/10 text-xs font-bold text-brand-wine">
           {iniciales}
@@ -199,7 +199,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-4">
-              <p className="font-serif text-lg font-bold text-white">Compras Clientes</p>
+              <p className="font-serif text-lg font-bold text-white">Compras Empleados</p>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}

@@ -61,6 +61,8 @@ export interface PedidoCredito {
   actualizado_en: string;
   /** Fecha de nómina en que se cobrará (13 o 27 del mes, YYYY-MM-DD). */
   nomina_fecha: string | null;
+  /** Número de la factura física del tiquete. */
+  factura_numero: string | null;
   /** Total extraído por OCR de la foto de factura. */
   factura_total_leido: number | null;
   /** true si el OCR confirmó que el total coincide. */
@@ -116,6 +118,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
     // Columnas de nómina y factura OCR.
     for (const sql of [
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS nomina_fecha date NULL`,
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_numero text NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_imagen text NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_total_leido numeric NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_validada boolean NOT NULL DEFAULT false`,
@@ -390,6 +393,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
     creado_por_id?: string | null;
     creado_por_nombre?: string | null;
     factura_imagen?: string | null;
+    factura_numero?: string | null;
   }): Promise<PedidoCredito> {
     const cedula = String(input.trabajador_cedula ?? '').trim();
     const puntoId = String(input.punto_id ?? '').trim();
@@ -397,6 +401,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
     const total = Number(input.total) || 0;
     const observacion = String(input.observacion ?? '').trim() || null;
     const facturaImagen = input.factura_imagen ?? null;
+    const facturaNumero = String(input.factura_numero ?? '').trim() || null;
 
     if (!cedula || !puntoId || !puntoNombre) {
       throw new BadRequestException('Faltan datos del trabajador o del punto de venta');
@@ -426,10 +431,10 @@ export class CreditoEmpleadosService implements OnModuleInit {
       `INSERT INTO credito_empleados_pedidos
          (id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
           observacion, estado, cartera_estado, creado_por_id, creado_por_nombre,
-          nomina_fecha, factura_imagen, factura_total_leido, factura_validada,
-          factura_productos, actualizado_en)
+          nomina_fecha, factura_numero, factura_imagen, factura_total_leido,
+          factura_validada, factura_productos, actualizado_en)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9,
-               $10::date, $11, $12, $13, $14::jsonb, now())`,
+               $10::date, $11, $12, $13, $14, $15::jsonb, now())`,
       [
         id,
         trabajador.cedula,
@@ -441,6 +446,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
         input.creado_por_id ?? null,
         input.creado_por_nombre ?? null,
         nominaFecha,
+        facturaNumero,
         facturaImagen,
         facturaTotal,
         facturaValidada,
@@ -488,7 +494,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
               total, observacion, estado, cartera_referencia, cartera_estado,
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
-              factura_total_leido, factura_validada, factura_imagen,
+              factura_numero, factura_total_leido, factura_validada, factura_imagen,
               COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
         WHERE id = $1
@@ -541,7 +547,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
               total, observacion, estado, cartera_referencia, cartera_estado,
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
-              factura_total_leido, factura_validada,
+              factura_numero, factura_total_leido, factura_validada,
               COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
          ${where}
