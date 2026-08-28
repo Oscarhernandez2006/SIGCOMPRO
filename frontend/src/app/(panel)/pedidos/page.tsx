@@ -816,6 +816,97 @@ export default function PedidosPage() {
 }
 
 /* ---------------------------------------------------------------- */
+/* Modal para editar notas de productos y nota general              */
+/* ---------------------------------------------------------------- */
+
+function ModalEditarNotas({
+  carrito,
+  observacion,
+  onGuardar,
+  onCerrar,
+}: {
+  carrito: ItemCarrito[];
+  observacion: string;
+  onGuardar: (carrito: ItemCarrito[], observacion: string) => void;
+  onCerrar: () => void;
+}) {
+  const [items, setItems] = useState<ItemCarrito[]>(() => carrito.map((i) => ({ ...i })));
+  const [obs, setObs] = useState(observacion);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={onCerrar} />
+      <div className="relative z-10 flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h3 className="font-serif text-lg font-bold text-brand-wine">Editar notas</h3>
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/40 hover:bg-brand-cream-soft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {items.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+              Notas por producto
+            </p>
+            <div className={`space-y-2 ${items.length > 3 ? "max-h-64 overflow-y-auto pr-1" : ""}`}>
+              {items.map((item, idx) => (
+                <div key={idx} className="rounded-xl border border-brand-brown/15 px-3 py-2">
+                  <p className="mb-1 text-xs font-medium text-brand-black">
+                    {item.producto?.producto || item.producto?.referencia || "Producto"}{" "}
+                    <span className="text-brand-brown/50">({item.cantidad} {item.producto?.um ?? ""})</span>
+                  </p>
+                  <textarea
+                    rows={1}
+                    value={item.notas ?? ""}
+                    onChange={(e) =>
+                      setItems((prev) =>
+                        prev.map((it, i) => i === idx ? { ...it, notas: e.target.value } : it)
+                      )
+                    }
+                    placeholder="Nota del producto (opcional)"
+                    className="w-full resize-none rounded-lg border border-brand-brown/20 px-2.5 py-1.5 text-sm outline-none transition focus:border-brand-wine"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+            Nota general del pedido
+          </label>
+          <textarea
+            rows={2}
+            value={obs}
+            onChange={(e) => setObs(e.target.value)}
+            placeholder="Indicaciones para despacho, cocina o el cliente (opcional)"
+            className="w-full resize-none rounded-xl border border-brand-brown/20 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCerrar}
+            className="rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft">
+            Cancelar
+          </button>
+          <button onClick={() => onGuardar(items, obs)}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90">
+            Guardar notas
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Modal para elegir el motivo al anular o cancelar un pedido       */
 /* ---------------------------------------------------------------- */
 
@@ -1238,6 +1329,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
   // corregir cliente o productos hay que anular y clonar el pedido.
   const modoEdicion = !!inicial;
   const [paso, setPaso] = useState(modoEdicion ? 2 : borrador?.paso ?? 0);
+  const [modalNotasAbierto, setModalNotasAbierto] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(borrador ? borrador.cliente : base?.cliente ?? null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>(() => {
     if (borrador) return borrador.carrito;
@@ -1788,6 +1880,19 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
           </>
         ) : modoEdicion ? (
           <>
+            {/* Modal secundario para editar notas */}
+            {modalNotasAbierto && (
+              <ModalEditarNotas
+                carrito={carrito}
+                observacion={observacion}
+                onGuardar={(nuevoCarrito, nuevaObs) => {
+                  setCarrito(nuevoCarrito);
+                  setObservacion(nuevaObs);
+                  setModalNotasAbierto(false);
+                }}
+                onCerrar={() => setModalNotasAbierto(false)}
+              />
+            )}
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <div className="mb-4 flex items-start gap-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 px-4 py-3 text-sm text-brand-brown">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-0.5 h-4 w-4 shrink-0 text-brand-amber">
@@ -1811,50 +1916,6 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
                   hora={horaDespacho}
                   onHora={setHoraDespacho}
                 />
-
-                {/* Notas por producto */}
-                {carrito.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
-                      Notas por producto
-                    </p>
-                    <div className="space-y-2">
-                      {carrito.map((item, idx) => (
-                        <div key={idx} className="rounded-xl border border-brand-brown/15 px-3 py-2">
-                          <p className="mb-1 text-xs font-medium text-brand-black">
-                            {item.producto?.producto || item.producto?.referencia || "Producto"}{" "}
-                            <span className="text-brand-brown/50">({item.cantidad} {item.producto?.um ?? ""})</span>
-                          </p>
-                          <textarea
-                            rows={1}
-                            value={item.notas ?? ""}
-                            onChange={(e) =>
-                              setCarrito((prev) =>
-                                prev.map((it, i) => i === idx ? { ...it, notas: e.target.value } : it)
-                              )
-                            }
-                            placeholder="Nota del producto (opcional)"
-                            className="w-full resize-none rounded-lg border border-brand-brown/20 px-2.5 py-1.5 text-sm outline-none transition focus:border-brand-wine"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Nota general del pedido */}
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
-                    Nota general del pedido
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={observacion}
-                    onChange={(e) => setObservacion(e.target.value)}
-                    placeholder="Indicaciones para despacho, cocina o el cliente (opcional)"
-                    className="w-full resize-none rounded-xl border border-brand-brown/20 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine"
-                  />
-                </div>
               </div>
             </div>
             <div className="flex items-center justify-between border-t border-brand-brown/10 px-6 py-4">
@@ -1865,17 +1926,30 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
               >
                 Cancelar
               </button>
-              <button
-                onClick={finalizarPedido}
-                disabled={!entrega || !pago}
-                title="Guardar los cambios del pedido"
-                className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Guardar cambios
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalNotasAbierto(true)}
+                  title="Editar notas de productos y nota general"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                  </svg>
+                  Editar notas
+                </button>
+                <button
+                  onClick={finalizarPedido}
+                  disabled={!entrega || !pago}
+                  title="Guardar los cambios del pedido"
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Guardar cambios
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </>
         ) : (
