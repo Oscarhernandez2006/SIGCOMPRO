@@ -11,6 +11,21 @@ import { randomUUID } from 'node:crypto';
 import { PG_POOL } from '../database/database.module';
 import { CreditoEmpleadosCarteraClient } from './credito-empleados.cartera.client';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const tesseract = require('node-tesseract-ocr') as {
+  recognize: (src: Buffer | string, config: Record<string, unknown>) => Promise<string>;
+};
+
+export interface ProductoFactura {
+  numero: number;
+  descripcion: string;
+  referencia: string;
+  cantidad: number;
+  um: string;
+  precio_unitario: number;
+  total: number;
+}
+
 export interface TrabajadorCredito {
   cedula: string;
   nombre: string;
@@ -50,6 +65,8 @@ export interface PedidoCredito {
   factura_total_leido: number | null;
   /** true si el OCR confirmó que el total coincide. */
   factura_validada: boolean;
+  /** Productos extraídos del tiquete por OCR (SIESA POS). */
+  factura_productos: ProductoFactura[];
   /** Imagen base64 de la factura (solo en obtenerPedido, no en listado). */
   factura_imagen?: string | null;
 }
@@ -102,6 +119,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_imagen text NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_total_leido numeric NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_validada boolean NOT NULL DEFAULT false`,
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_productos jsonb NOT NULL DEFAULT '[]'::jsonb`,
     ]) {
       await this.pool.query(sql);
     }
@@ -142,40 +160,95 @@ export class CreditoEmpleadosService implements OnModuleInit {
     return fmt(proxima);
   }
 
-  /** Llama a Google Vision API para extraer el total de una imagen de factura. */
-  private async procesarOCR(imagen: string): Promise<number | null> {
-    const apiKey = process.env.GOOGLE_VISION_API_KEY;
-    if (!apiKey || !imagen) return null;
+  /**
+   * Procesa la imagen con Tesseract OCR (open-source, sin API key).
+   * Preprocesa con sharp (escala de grises + contraste) para mejor precisión.
+   * Parsea formato SIESA POS extrayendo total y lista de productos.
+   */
+  private async procesarOCR(
+    imagen: string,
+  ): Promise<{ total: number | null; productos: ProductoFactura[] }> {
     try {
       const base64 = imagen.includes(',') ? imagen.split(',')[1] : imagen;
-      const resp = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            requests: [{ image: { content: base64 }, features: [{ type: 'TEXT_DETECTION', maxResults: 1 }] }],
-          }),
-        },
-      );
-      const data = await (resp.json() as Promise<{ responses?: Array<{ fullTextAnnotation?: { text?: string } }> }>);
-      const texto = data.responses?.[0]?.fullTextAnnotation?.text ?? '';
-      for (const p of [
-        /TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
-        /VALOR\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
-        /A\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
-        /IMPORTE\s*:?\s*\$?\s*([\d.,]+)/i,
-      ]) {
-        const match = texto.match(p);
-        if (match) {
-          const n = Number(match[1].replace(/\./g, '').replace(/,/g, ''));
-          if (Number.isFinite(n) && n > 0) return n;
-        }
+      let buffer = Buffer.from(base64, 'base64');
+
+      // Preprocesamiento: escala de grises + normalización para mejor OCR.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const sharp = require('sharp') as typeof import('sharp');
+        buffer = await sharp(buffer).grayscale().normalise().sharpen().toBuffer();
+      } catch {
+        /* sharp falla silenciosamente; usa imagen original */
       }
-    } catch {
-      /* OCR falla silenciosamente */
+
+      const texto = await tesseract.recognize(buffer, {
+        lang: 'spa',
+        oem: 1, // LSTM engine (mejor precisión)
+        psm: 6, // bloque uniforme de texto
+      });
+
+      this.logger.debug(`OCR extraído (${texto.length} chars)`);
+      return this.parsearFacturaSiesaPos(texto);
+    } catch (e) {
+      this.logger.warn(`OCR falló: ${String(e)}`);
+      return { total: null, productos: [] };
     }
-    return null;
+  }
+
+  /** Parsea texto OCR de factura SIESA POS → total y líneas de producto. */
+  private parsearFacturaSiesaPos(texto: string): { total: number | null; productos: ProductoFactura[] } {
+    const lineas = texto.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    // Total: "T O T A L .......... $10,086"
+    let total: number | null = null;
+    for (const l of lineas) {
+      const m = l.match(/T\s*O\s*T\s*A\s*L[\s.]*\$?\s*([\d,]+)/i);
+      if (m && !/ITEMS/i.test(l)) { total = this.parsearNumero(m[1]); break; }
+    }
+
+    // Productos: sección entre "# Descripcion de Item" y "TOTAL ITEMS"
+    const productos: ProductoFactura[] = [];
+    let ini = -1, fin = -1;
+    for (let i = 0; i < lineas.length; i++) {
+      if (ini < 0 && /descripcion de item|# desc/i.test(lineas[i])) ini = i + 2;
+      if (ini >= 0 && /TOTAL ITEMS/i.test(lineas[i])) { fin = i; break; }
+    }
+
+    if (ini >= 0 && fin > ini) {
+      let i = ini;
+      while (i < fin) {
+        const l1 = lineas[i];
+        const l2 = i + 1 < fin ? lineas[i + 1] : '';
+        // Línea 1: "{num} {descripcion}"
+        const m1 = l1.match(/^(\d+)\s+(.+)$/);
+        if (m1) {
+          // Línea 2: "{ref} {cant} {UM} {precio_unit} {total}[**]"
+          const m2 = l2.match(/^(\d+)\s+([\d.]+)\s+([A-Z]+)\s+([\d,]+)\s+([\d,]+)/i);
+          if (m2) {
+            productos.push({
+              numero: Number(m1[1]),
+              descripcion: m1[2].trim(),
+              referencia: m2[1],
+              cantidad: this.parsearNumero(m2[2]),
+              um: m2[3].toUpperCase(),
+              precio_unitario: this.parsearNumero(m2[4]),
+              total: this.parsearNumero(m2[5]),
+            });
+            i += 2; continue;
+          }
+        }
+        i++;
+      }
+    }
+    return { total, productos };
+  }
+
+  /** "20,999" → 20999 · "0.48" → 0.48 (formato SIESA POS). */
+  private parsearNumero(s: string): number {
+    const c = s.replace(/[*$\s]/g, '');
+    if (/^\d{1,3}(,\d{3})+$/.test(c)) return Number(c.replace(/,/g, ''));
+    if (/^\d+\.\d+$/.test(c)) return Number(c);
+    return Number(c.replace(/,/g, '')) || 0;
   }
 
   /** Totales por fecha de nómina para el panel de cobros. */
@@ -343,7 +416,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
     }
 
     const nominaFecha = this.calcularFechaNomina(new Date());
-    const facturaTotal = facturaImagen ? await this.procesarOCR(facturaImagen) : null;
+    const ocrResult = facturaImagen ? await this.procesarOCR(facturaImagen) : { total: null, productos: [] };
+    const facturaTotal = ocrResult.total;
+    const facturaProductos = ocrResult.productos;
     const facturaValidada = facturaTotal !== null && Math.abs(facturaTotal - total) <= total * 0.02;
 
     const id = randomUUID();
@@ -351,8 +426,10 @@ export class CreditoEmpleadosService implements OnModuleInit {
       `INSERT INTO credito_empleados_pedidos
          (id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
           observacion, estado, cartera_estado, creado_por_id, creado_por_nombre,
-          nomina_fecha, factura_imagen, factura_total_leido, factura_validada, actualizado_en)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9, $10::date, $11, $12, $13, now())`,
+          nomina_fecha, factura_imagen, factura_total_leido, factura_validada,
+          factura_productos, actualizado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9,
+               $10::date, $11, $12, $13, $14::jsonb, now())`,
       [
         id,
         trabajador.cedula,
@@ -367,6 +444,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
         facturaImagen,
         facturaTotal,
         facturaValidada,
+        JSON.stringify(facturaProductos),
       ],
     );
 
@@ -410,7 +488,8 @@ export class CreditoEmpleadosService implements OnModuleInit {
               total, observacion, estado, cartera_referencia, cartera_estado,
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
-              factura_total_leido, factura_validada, factura_imagen
+              factura_total_leido, factura_validada, factura_imagen,
+              COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
         WHERE id = $1
         LIMIT 1`,
@@ -462,7 +541,8 @@ export class CreditoEmpleadosService implements OnModuleInit {
               total, observacion, estado, cartera_referencia, cartera_estado,
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
-              factura_total_leido, factura_validada
+              factura_total_leido, factura_validada,
+              COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
          ${where}
         ORDER BY creado_en DESC

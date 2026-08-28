@@ -661,10 +661,12 @@ export default function CreditoEmpleadosPage() {
                         ? new Date(p.nomina_fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
                         : <span className="italic text-brand-brown/25">—</span>}
                       {p.factura_total_leido != null && (
-                        <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                          p.factura_validada ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {p.factura_validada ? '✓ OCR' : '⚠ OCR'}
+                        <span title={`OCR leyó: ${money(p.factura_total_leido)}${p.factura_productos?.length ? ` · ${p.factura_productos.length} producto(s)` : ''}`}
+                          className={`ml-1.5 cursor-help rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                            p.factura_validada ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                          {p.factura_validada ? '✓' : '⚠'} OCR
+                          {p.factura_productos?.length > 0 && ` · ${p.factura_productos.length}p`}
                         </span>
                       )}
                     </td>

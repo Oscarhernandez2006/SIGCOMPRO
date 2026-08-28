@@ -15,6 +15,16 @@ export interface TrabajadorCredito {
   siesa_saldo: number | null;
 }
 
+export interface ProductoFactura {
+  numero: number;
+  descripcion: string;
+  referencia: string;
+  cantidad: number;
+  um: string;
+  precio_unitario: number;
+  total: number;
+}
+
 export interface PedidoCredito {
   id: string;
   trabajador_cedula: string;
@@ -33,6 +43,7 @@ export interface PedidoCredito {
   nomina_fecha: string | null;
   factura_total_leido: number | null;
   factura_validada: boolean;
+  factura_productos: ProductoFactura[];
 }
 
 export interface ResumenNomina {
