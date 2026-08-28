@@ -1822,7 +1822,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
                       {carrito.map((item, idx) => (
                         <div key={idx} className="rounded-xl border border-brand-brown/15 px-3 py-2">
                           <p className="mb-1 text-xs font-medium text-brand-black">
-                            {item.producto?.nombre ?? "Producto"}{" "}
+                            {item.producto?.producto || item.producto?.referencia || "Producto"}{" "}
                             <span className="text-brand-brown/50">({item.cantidad} {item.producto?.um ?? ""})</span>
                           </p>
                           <textarea
