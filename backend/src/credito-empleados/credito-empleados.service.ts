@@ -594,5 +594,82 @@ export class CreditoEmpleadosService implements OnModuleInit {
     this.logger.log(`Importación masiva: ${importados} OK, ${errores.length} errores`);
     return { importados, errores };
   }
-}
 
+  /** Métricas completas para el dashboard de compras clientes. */
+  async dashboardMetrics() {
+    const [kpisRes, topRes, puntoRes, estadoRes, mesRes, productosRes] =
+      await Promise.all([
+        this.pool.query<{
+          total_pedidos: string; total_monto: string; total_pendiente: string;
+          total_facturado: string; promedio: string; total_trabajadores: string;
+        }>(`
+          SELECT
+            COUNT(*)          FILTER (WHERE estado <> 'anulado')  AS total_pedidos,
+            COALESCE(SUM(total) FILTER (WHERE estado <> 'anulado'), 0)  AS total_monto,
+            COALESCE(SUM(total) FILTER (WHERE estado = 'pendiente'), 0) AS total_pendiente,
+            COALESCE(SUM(total) FILTER (WHERE estado = 'facturado'), 0) AS total_facturado,
+            COALESCE(AVG(total) FILTER (WHERE estado <> 'anulado'), 0)  AS promedio,
+            COUNT(DISTINCT trabajador_cedula) FILTER (WHERE estado <> 'anulado') AS total_trabajadores
+          FROM credito_empleados_pedidos`),
+
+        this.pool.query<{ cedula: string; nombre: string; total: string; n: string }>(`
+          SELECT trabajador_cedula AS cedula, trabajador_nombre AS nombre,
+                 SUM(total)::text AS total, COUNT(*)::text AS n
+          FROM credito_empleados_pedidos WHERE estado <> 'anulado'
+          GROUP BY trabajador_cedula, trabajador_nombre
+          ORDER BY SUM(total) DESC LIMIT 10`),
+
+        this.pool.query<{ punto: string; total: string; n: string }>(`
+          SELECT punto_nombre AS punto,
+                 SUM(total)::text AS total, COUNT(*)::text AS n
+          FROM credito_empleados_pedidos WHERE estado <> 'anulado'
+          GROUP BY punto_nombre ORDER BY SUM(total) DESC`),
+
+        this.pool.query<{ estado: string; n: string; total: string }>(`
+          SELECT estado, COUNT(*)::text AS n, COALESCE(SUM(total), 0)::text AS total
+          FROM credito_empleados_pedidos GROUP BY estado`),
+
+        this.pool.query<{ mes: string; total: string; n: string }>(`
+          SELECT to_char(date_trunc('month', creado_en AT TIME ZONE 'America/Bogota'), 'YYYY-MM') AS mes,
+                 SUM(total)::text AS total, COUNT(*)::text AS n
+          FROM credito_empleados_pedidos
+          WHERE estado <> 'anulado' AND creado_en >= now() - interval '6 months'
+          GROUP BY mes ORDER BY mes ASC`),
+
+        this.pool.query<{ descripcion: string; n_pedidos: string; cantidad_total: string; monto_total: string }>(`
+          SELECT p->>'descripcion'         AS descripcion,
+                 COUNT(*)::text            AS n_pedidos,
+                 SUM((p->>'cantidad')::numeric)::text AS cantidad_total,
+                 SUM((p->>'total')::numeric)::text    AS monto_total
+          FROM credito_empleados_pedidos,
+               jsonb_array_elements(COALESCE(factura_productos, '[]'::jsonb)) AS p
+          WHERE estado <> 'anulado'
+            AND jsonb_array_length(COALESCE(factura_productos, '[]'::jsonb)) > 0
+            AND (p->>'descripcion') IS NOT NULL AND (p->>'descripcion') <> ''
+          GROUP BY descripcion ORDER BY COUNT(*) DESC, SUM((p->>'total')::numeric) DESC
+          LIMIT 15`),
+      ]);
+
+    const r = kpisRes.rows[0];
+    return {
+      kpis: {
+        total_pedidos:      Number(r.total_pedidos) || 0,
+        total_monto:        Number(r.total_monto) || 0,
+        total_pendiente:    Number(r.total_pendiente) || 0,
+        total_facturado:    Number(r.total_facturado) || 0,
+        promedio:           Number(r.promedio) || 0,
+        total_trabajadores: Number(r.total_trabajadores) || 0,
+      },
+      top_compradores: topRes.rows.map((x) => ({ cedula: x.cedula, nombre: x.nombre, total: Number(x.total), n: Number(x.n) })),
+      por_punto:       puntoRes.rows.map((x) => ({ punto: x.punto, total: Number(x.total), n: Number(x.n) })),
+      por_estado:      estadoRes.rows.map((x) => ({ estado: x.estado, n: Number(x.n), total: Number(x.total) })),
+      por_mes:         mesRes.rows.map((x) => ({ mes: x.mes, total: Number(x.total), n: Number(x.n) })),
+      top_productos:   productosRes.rows.map((x) => ({
+        descripcion:     x.descripcion,
+        n_pedidos:       Number(x.n_pedidos),
+        cantidad_total:  Number(x.cantidad_total),
+        monto_total:     Number(x.monto_total),
+      })),
+    };
+  }
+}

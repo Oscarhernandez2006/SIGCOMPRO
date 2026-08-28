@@ -115,6 +115,19 @@ export function resumenNomina(): Promise<ResumenNomina[]> {
   return apiFetch<ResumenNomina[]>("/credito-empleados/resumen-nomina");
 }
 
+export interface DashboardMetrics {
+  kpis: { total_pedidos: number; total_monto: number; total_pendiente: number; total_facturado: number; promedio: number; total_trabajadores: number };
+  top_compradores: Array<{ cedula: string; nombre: string; total: number; n: number }>;
+  por_punto: Array<{ punto: string; total: number; n: number }>;
+  por_estado: Array<{ estado: string; n: number; total: number }>;
+  por_mes: Array<{ mes: string; total: number; n: number }>;
+  top_productos: Array<{ descripcion: string; n_pedidos: number; cantidad_total: number; monto_total: number }>;
+}
+
+export function dashboardMetrics(): Promise<DashboardMetrics> {
+  return apiFetch<DashboardMetrics>("/credito-empleados/dashboard");
+}
+
 /** Busca el nombre de un tercero directamente en Siesa por cédula (para autocompletar). */
 export function buscarEnSiesa(cedula: string): Promise<{ cedula: string; nombre: string | null; encontrado: boolean }> {
   return apiFetch(`/credito-empleados/buscar-en-siesa/${encodeURIComponent(cedula)}`);

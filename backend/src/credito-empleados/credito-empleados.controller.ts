@@ -82,6 +82,13 @@ export class CreditoEmpleadosController {
     return this.credito.resumenNomina();
   }
 
+  @Get('dashboard')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  dashboard() {
+    return this.credito.dashboardMetrics();
+  }
+
   @Get('pedidos')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
