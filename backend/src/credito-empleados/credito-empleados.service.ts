@@ -174,9 +174,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
 
       // Preprocesamiento: escala de grises + normalización para mejor OCR.
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const sharp = require('sharp') as typeof import('sharp');
-        buffer = await sharp(buffer).grayscale().normalise().sharpen().toBuffer();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const sharpMod = require('sharp') as any;
+        buffer = await sharpMod(buffer).grayscale().normalise().sharpen().toBuffer();
       } catch {
         /* sharp falla silenciosamente; usa imagen original */
       }

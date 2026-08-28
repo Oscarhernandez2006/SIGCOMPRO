@@ -110,7 +110,7 @@ export class ClientesService implements OnModuleInit {
       valores.push(`%${q.trim()}%`);
       const p = `$${valores.length}`;
       filtros.push(
-        `(nombre ILIKE ${p} OR nit_cedula ILIKE ${p} OR telefono ILIKE ${p} OR barrio ILIKE ${p})`,
+        `(nombre ILIKE ${p} OR nit_cedula ILIKE ${p} OR telefono ILIKE ${p} OR barrio ILIKE ${p} OR punto_venta ILIKE ${p})`,
       );
     }
 

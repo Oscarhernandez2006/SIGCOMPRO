@@ -1811,6 +1811,50 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
                   hora={horaDespacho}
                   onHora={setHoraDespacho}
                 />
+
+                {/* Notas por producto */}
+                {carrito.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+                      Notas por producto
+                    </p>
+                    <div className="space-y-2">
+                      {carrito.map((item, idx) => (
+                        <div key={idx} className="rounded-xl border border-brand-brown/15 px-3 py-2">
+                          <p className="mb-1 text-xs font-medium text-brand-black">
+                            {item.producto?.nombre ?? "Producto"}{" "}
+                            <span className="text-brand-brown/50">({item.cantidad} {item.producto?.um ?? ""})</span>
+                          </p>
+                          <textarea
+                            rows={1}
+                            value={item.notas ?? ""}
+                            onChange={(e) =>
+                              setCarrito((prev) =>
+                                prev.map((it, i) => i === idx ? { ...it, notas: e.target.value } : it)
+                              )
+                            }
+                            placeholder="Nota del producto (opcional)"
+                            className="w-full resize-none rounded-lg border border-brand-brown/20 px-2.5 py-1.5 text-sm outline-none transition focus:border-brand-wine"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nota general del pedido */}
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+                    Nota general del pedido
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={observacion}
+                    onChange={(e) => setObservacion(e.target.value)}
+                    placeholder="Indicaciones para despacho, cocina o el cliente (opcional)"
+                    className="w-full resize-none rounded-xl border border-brand-brown/20 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex items-center justify-between border-t border-brand-brown/10 px-6 py-4">

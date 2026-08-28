@@ -579,6 +579,7 @@ export default function ClientesPage() {
                 <th className="px-4 py-3 font-semibold">Teléfono</th>
                 <th className="px-4 py-3 font-semibold">Barrio</th>
                 <th className="px-4 py-3 font-semibold">Ciudad</th>
+                <th className="px-4 py-3 font-semibold">Punto venta</th>
                 <th className="px-4 py-3 text-center font-semibold">Dirección</th>
                 <th className="px-4 py-3 text-right font-semibold">Acciones</th>
               </tr>
@@ -586,13 +587,13 @@ export default function ClientesPage() {
             <tbody className="divide-y divide-brand-brown/5">
               {cargando ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-10 text-center text-brand-brown/50">
                     Cargando clientes…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-10 text-center text-brand-brown/50">
                     No se encontraron clientes.
                   </td>
                 </tr>
@@ -613,6 +614,7 @@ export default function ClientesPage() {
                     <td className="px-4 py-3 text-brand-brown/80">{c.telefono || "—"}</td>
                     <td className="px-4 py-3 text-brand-brown/80">{c.barrio || "—"}</td>
                     <td className="px-4 py-3 text-brand-brown/80">{c.ciudad || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-brand-brown/80">{c.punto_venta || "—"}</td>
                     <td className="px-4 py-3">
                       {(() => {
                         const estado = estadoUbicacion(c);
