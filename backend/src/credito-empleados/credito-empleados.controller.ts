@@ -75,6 +75,13 @@ export class CreditoEmpleadosController {
     return this.credito.guardarTrabajador(body);
   }
 
+  @Get('resumen-nomina')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  resumenNomina() {
+    return this.credito.resumenNomina();
+  }
+
   @Get('pedidos')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
@@ -99,6 +106,7 @@ export class CreditoEmpleadosController {
       punto_nombre: string;
       total: number;
       observacion?: string;
+      factura_imagen?: string | null;
     },
     @Req() req: Request & { user?: JwtPayload },
   ) {

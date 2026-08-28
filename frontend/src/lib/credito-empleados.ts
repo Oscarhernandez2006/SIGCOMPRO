@@ -30,6 +30,16 @@ export interface PedidoCredito {
   creado_por_nombre: string | null;
   creado_en: string;
   actualizado_en: string;
+  nomina_fecha: string | null;
+  factura_total_leido: number | null;
+  factura_validada: boolean;
+}
+
+export interface ResumenNomina {
+  nomina_fecha: string;
+  total: number;
+  n_pedidos: number;
+  trabajadores: number;
 }
 
 export function buscarTrabajadoresCredito(q: string): Promise<TrabajadorCredito[]> {
@@ -82,11 +92,16 @@ export function crearPedidoCredito(input: {
   punto_nombre: string;
   total: number;
   observacion?: string;
+  factura_imagen?: string | null;
 }): Promise<PedidoCredito> {
   return apiFetch<PedidoCredito>("/credito-empleados/pedidos", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function resumenNomina(): Promise<ResumenNomina[]> {
+  return apiFetch<ResumenNomina[]>("/credito-empleados/resumen-nomina");
 }
 
 /** Busca el nombre de un tercero directamente en Siesa por cédula (para autocompletar). */

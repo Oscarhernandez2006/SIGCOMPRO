@@ -27,6 +27,8 @@ const ROLES_SUGERIDOS = [
   'despachador',
   'operador',
   'televentas',
+  'nomina',
+  'cartera',
 ];
 
 const COLUMNS_PUBLICAS =

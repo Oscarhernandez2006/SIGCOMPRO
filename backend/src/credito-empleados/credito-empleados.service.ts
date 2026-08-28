@@ -44,6 +44,14 @@ export interface PedidoCredito {
   creado_por_nombre: string | null;
   creado_en: string;
   actualizado_en: string;
+  /** Fecha de nómina en que se cobrará (13 o 27 del mes, YYYY-MM-DD). */
+  nomina_fecha: string | null;
+  /** Total extraído por OCR de la foto de factura. */
+  factura_total_leido: number | null;
+  /** true si el OCR confirmó que el total coincide. */
+  factura_validada: boolean;
+  /** Imagen base64 de la factura (solo en obtenerPedido, no en listado). */
+  factura_imagen?: string | null;
 }
 
 @Injectable()
@@ -88,6 +96,110 @@ export class CreditoEmpleadosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Columnas de nómina y factura OCR.
+    for (const sql of [
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS nomina_fecha date NULL`,
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_imagen text NULL`,
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_total_leido numeric NULL`,
+      `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS factura_validada boolean NOT NULL DEFAULT false`,
+    ]) {
+      await this.pool.query(sql);
+    }
+  }
+
+  /**
+   * Fecha de nómina en que se cobrará el pedido.
+   * Nóminas: 13 y 27 de cada mes.
+   * Si quedan ≤ 3 días para la próxima nómina → cobrar en la siguiente.
+   */
+  private calcularFechaNomina(fecha: Date): string {
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const bogotaStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+    }).format(fecha);
+    const [y, m, d] = bogotaStr.split('-').map(Number);
+    const hoy = new Date(y, m - 1, d);
+    const candidates: Date[] = [];
+    for (let i = 0; i < 3; i++) {
+      const cm = m - 1 + i;
+      const yr = y + Math.floor(cm / 12);
+      const mo = cm % 12;
+      candidates.push(new Date(yr, mo, 13), new Date(yr, mo, 27));
+    }
+    const futuras = candidates
+      .filter((c) => c.getTime() >= hoy.getTime())
+      .sort((a, b) => a.getTime() - b.getTime());
+    if (futuras.length === 0) return fmt(new Date(y, m, 13));
+    const proxima = futuras[0];
+    const diffDias = Math.round((proxima.getTime() - hoy.getTime()) / 86_400_000);
+    if (diffDias <= 3) {
+      if (futuras[1]) return fmt(futuras[1]);
+      return proxima.getDate() === 13
+        ? fmt(new Date(proxima.getFullYear(), proxima.getMonth(), 27))
+        : fmt(new Date(proxima.getFullYear(), proxima.getMonth() + 1, 13));
+    }
+    return fmt(proxima);
+  }
+
+  /** Llama a Google Vision API para extraer el total de una imagen de factura. */
+  private async procesarOCR(imagen: string): Promise<number | null> {
+    const apiKey = process.env.GOOGLE_VISION_API_KEY;
+    if (!apiKey || !imagen) return null;
+    try {
+      const base64 = imagen.includes(',') ? imagen.split(',')[1] : imagen;
+      const resp = await fetch(
+        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requests: [{ image: { content: base64 }, features: [{ type: 'TEXT_DETECTION', maxResults: 1 }] }],
+          }),
+        },
+      );
+      const data = await (resp.json() as Promise<{ responses?: Array<{ fullTextAnnotation?: { text?: string } }> }>);
+      const texto = data.responses?.[0]?.fullTextAnnotation?.text ?? '';
+      for (const p of [
+        /TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+        /VALOR\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+        /A\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
+        /IMPORTE\s*:?\s*\$?\s*([\d.,]+)/i,
+      ]) {
+        const match = texto.match(p);
+        if (match) {
+          const n = Number(match[1].replace(/\./g, '').replace(/,/g, ''));
+          if (Number.isFinite(n) && n > 0) return n;
+        }
+      }
+    } catch {
+      /* OCR falla silenciosamente */
+    }
+    return null;
+  }
+
+  /** Totales por fecha de nómina para el panel de cobros. */
+  async resumenNomina(): Promise<
+    Array<{ nomina_fecha: string; total: number; n_pedidos: number; trabajadores: number }>
+  > {
+    const res = await this.pool.query<{
+      nomina_fecha: string; total: string; n_pedidos: string; trabajadores: string;
+    }>(
+      `SELECT
+         to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
+         SUM(total)::text                    AS total,
+         COUNT(*)::text                      AS n_pedidos,
+         COUNT(DISTINCT trabajador_cedula)::text AS trabajadores
+       FROM credito_empleados_pedidos
+       WHERE estado <> 'anulado' AND nomina_fecha IS NOT NULL
+       GROUP BY nomina_fecha ORDER BY nomina_fecha ASC`,
+    );
+    return res.rows.map((r) => ({
+      nomina_fecha: r.nomina_fecha,
+      total: Number(r.total) || 0,
+      n_pedidos: Number(r.n_pedidos) || 0,
+      trabajadores: Number(r.trabajadores) || 0,
+    }));
   }
 
   private filaATrabajador(r: Record<string, unknown>, siesaSaldo: number | null = null): TrabajadorCreditoResumen {
@@ -204,12 +316,14 @@ export class CreditoEmpleadosService implements OnModuleInit {
     observacion?: string;
     creado_por_id?: string | null;
     creado_por_nombre?: string | null;
+    factura_imagen?: string | null;
   }): Promise<PedidoCredito> {
     const cedula = String(input.trabajador_cedula ?? '').trim();
     const puntoId = String(input.punto_id ?? '').trim();
     const puntoNombre = String(input.punto_nombre ?? '').trim();
     const total = Number(input.total) || 0;
     const observacion = String(input.observacion ?? '').trim() || null;
+    const facturaImagen = input.factura_imagen ?? null;
 
     if (!cedula || !puntoId || !puntoNombre) {
       throw new BadRequestException('Faltan datos del trabajador o del punto de venta');
@@ -228,12 +342,17 @@ export class CreditoEmpleadosService implements OnModuleInit {
       );
     }
 
+    const nominaFecha = this.calcularFechaNomina(new Date());
+    const facturaTotal = facturaImagen ? await this.procesarOCR(facturaImagen) : null;
+    const facturaValidada = facturaTotal !== null && Math.abs(facturaTotal - total) <= total * 0.02;
+
     const id = randomUUID();
     await this.pool.query(
       `INSERT INTO credito_empleados_pedidos
          (id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
-          observacion, estado, cartera_estado, creado_por_id, creado_por_nombre, actualizado_en)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9, now())`,
+          observacion, estado, cartera_estado, creado_por_id, creado_por_nombre,
+          nomina_fecha, factura_imagen, factura_total_leido, factura_validada, actualizado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9, $10::date, $11, $12, $13, now())`,
       [
         id,
         trabajador.cedula,
@@ -244,6 +363,10 @@ export class CreditoEmpleadosService implements OnModuleInit {
         observacion,
         input.creado_por_id ?? null,
         input.creado_por_nombre ?? null,
+        nominaFecha,
+        facturaImagen,
+        facturaTotal,
+        facturaValidada,
       ],
     );
 
@@ -285,7 +408,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
     const res = await this.pool.query<PedidoCredito>(
       `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre,
               total, observacion, estado, cartera_referencia, cartera_estado,
-              creado_por_id, creado_por_nombre, creado_en, actualizado_en
+              creado_por_id, creado_por_nombre, creado_en, actualizado_en,
+              to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
+              factura_total_leido, factura_validada, factura_imagen
          FROM credito_empleados_pedidos
         WHERE id = $1
         LIMIT 1`,
@@ -335,7 +460,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
     const res = await this.pool.query<PedidoCredito>(
       `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre,
               total, observacion, estado, cartera_referencia, cartera_estado,
-              creado_por_id, creado_por_nombre, creado_en, actualizado_en
+              creado_por_id, creado_por_nombre, creado_en, actualizado_en,
+              to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
+              factura_total_leido, factura_validada
          FROM credito_empleados_pedidos
          ${where}
         ORDER BY creado_en DESC

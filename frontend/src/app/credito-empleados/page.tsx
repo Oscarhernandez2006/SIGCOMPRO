@@ -10,7 +10,9 @@ import {
   crearPedidoCredito,
   listarPedidosCredito,
   obtenerTrabajadorCredito,
+  resumenNomina,
   type PedidoCredito,
+  type ResumenNomina,
   type TrabajadorCredito,
 } from "@/lib/credito-empleados";
 
@@ -80,6 +82,8 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
   const [observacion, setObservacion] = useState("");
   const [guardando, setGuardando]   = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
+  const [facturaImagen, setFacturaImagen] = useState<string | null>(null);
+  const facturaInputRef = useRef<HTMLInputElement>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -103,7 +107,10 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
     if (!punto) { setErrorGuardar("Selecciona un punto de venta."); return; }
     setGuardando(true); setErrorGuardar(null);
     try {
-      await crearPedidoCredito({ trabajador_cedula: trabajador.cedula, punto_id: punto.id, punto_nombre: punto.nombre, total: valor, observacion });
+      await crearPedidoCredito({
+        trabajador_cedula: trabajador.cedula, punto_id: punto.id, punto_nombre: punto.nombre,
+        total: valor, observacion, factura_imagen: facturaImagen,
+      });
       onCreado(); onClose();
     } catch (err) { setErrorGuardar(err instanceof ApiError ? err.message : "No se pudo registrar la compra."); }
     finally { setGuardando(false); }
@@ -257,6 +264,46 @@ function ModalNuevaCompra({ puntos, onClose, onCreado }: { puntos: PuntoVenta[];
                     rows={2} placeholder="Detalle o notas de cartera…"
                     className="w-full resize-none rounded-xl border border-brand-brown/25 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine" />
                 </div>
+                {/* Foto de la factura */}
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                    </svg>
+                    Foto de la factura
+                    <span className="font-normal normal-case text-brand-brown/35">(opcional · con cédula al lado)</span>
+                  </label>
+                  <input
+                    ref={facturaInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setFacturaImagen(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {facturaImagen ? (
+                    <div className="relative overflow-hidden rounded-xl border border-brand-brown/20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={facturaImagen} alt="Factura" className="max-h-48 w-full object-cover" />
+                      <button type="button" onClick={() => { setFacturaImagen(null); if (facturaInputRef.current) facturaInputRef.current.value = ""; }}
+                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">
+                        <Icon d={Ico.xmark} cls="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => facturaInputRef.current?.click()}
+                      className="flex h-20 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-brown/25 text-sm text-brand-brown/50 transition hover:border-brand-wine/40 hover:text-brand-wine/70">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                      </svg>
+                      Tomar foto o seleccionar imagen
+                    </button>
+                  )}
+                </div>
                 {errorGuardar && (
                   <p className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
@@ -353,11 +400,13 @@ export default function CreditoEmpleadosPage() {
 
   const [modalNueva, setModalNueva]   = useState(false);
   const [confirmacion, setConfirmacion] = useState<{ pedido: PedidoCredito; nuevoEstado: "facturado" | "anulado" | "pendiente" } | null>(null);
+  const [resumen, setResumen] = useState<ResumenNomina[]>([]);
 
   const puedeCrear         = puedeAccion(usuario, "credito_empleados.pedidos") || puedeAccion(usuario, "credito_empleados");
   const puedeCambiarEstado = puedeAccion(usuario, "credito_empleados.estado")  || puedeAccion(usuario, "credito_empleados");
 
   useEffect(() => { misPuntosVenta().then(setPuntos).catch(() => setPuntos([])); }, []);
+  useEffect(() => { resumenNomina().then(setResumen).catch(() => setResumen([])); }, []);
 
   const cargarPedidos = useCallback(async () => {
     setCargando(true); setErrorPedidos(null);
@@ -379,6 +428,7 @@ export default function CreditoEmpleadosPage() {
     if (!confirmacion) return;
     const act = await actualizarEstadoPedidoCredito(confirmacion.pedido.id, confirmacion.nuevoEstado);
     setPedidos((prev) => prev.map((p) => (p.id === act.id ? act : p)));
+    resumenNomina().then(setResumen).catch(() => {});
   }
 
   const nPendiente     = pedidos.filter((p) => p.estado === "pendiente").length;
@@ -425,6 +475,54 @@ export default function CreditoEmpleadosPage() {
           </div>
         ))}
       </div>
+
+      {/* Cobros por nómina */}
+      {resumen.length > 0 && (
+        <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+          <div className="flex items-center gap-2 border-b border-brand-brown/8 px-4 py-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4 text-brand-wine">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+            </svg>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/50">Cobros por nómina</p>
+            <span className="ml-auto text-[11px] text-brand-brown/35">Días de pago: 13 y 27 de cada mes</span>
+          </div>
+          <div className="flex flex-wrap gap-3 px-4 py-3">
+            {resumen.map((r) => {
+              const fecha = new Date(r.nomina_fecha + 'T00:00:00');
+              const hoy = new Date();
+              const diffDias = Math.round((fecha.getTime() - hoy.getTime()) / 86_400_000);
+              const esPasado = diffDias < 0;
+              const esProximo = diffDias >= 0 && diffDias <= 7;
+              return (
+                <div key={r.nomina_fecha}
+                  className={`flex min-w-[220px] flex-1 flex-col gap-1 rounded-xl border px-4 py-3 ${
+                    esPasado ? 'border-neutral-200 bg-neutral-50'
+                    : esProximo ? 'border-brand-wine/30 bg-brand-wine/5'
+                    : 'border-brand-brown/15 bg-white'
+                  }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold ${esPasado ? 'text-neutral-500' : 'text-brand-wine'}`}>
+                      Nómina {fecha.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </span>
+                    {esProximo && (
+                      <span className="rounded-full bg-brand-wine px-2 py-0.5 text-[10px] font-bold text-white">Próxima</span>
+                    )}
+                    {esPasado && (
+                      <span className="rounded-full bg-neutral-300 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">Pasada</span>
+                    )}
+                  </div>
+                  <p className={`text-lg font-bold tabular-nums ${esPasado ? 'text-neutral-600' : 'text-brand-black'}`}>
+                    {money(r.total)}
+                  </p>
+                  <p className="text-[11px] text-brand-brown/50">
+                    {r.n_pedidos} {r.n_pedidos === 1 ? 'compra' : 'compras'} · {r.trabajadores} {r.trabajadores === 1 ? 'colaborador' : 'colaboradores'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
@@ -515,6 +613,7 @@ export default function CreditoEmpleadosPage() {
                 <th className="px-4 py-3">Punto</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Nómina</th>
                 <th className="px-4 py-3">Observación</th>
                 {puedeCambiarEstado && <th className="px-4 py-3" />}
               </tr>
@@ -557,6 +656,18 @@ export default function CreditoEmpleadosPage() {
                       {money(Number(p.total) || 0)}
                     </td>
                     <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                      {p.nomina_fecha
+                        ? new Date(p.nomina_fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+                        : <span className="italic text-brand-brown/25">—</span>}
+                      {p.factura_total_leido != null && (
+                        <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                          p.factura_validada ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {p.factura_validada ? '✓ OCR' : '⚠ OCR'}
+                        </span>
+                      )}
+                    </td>
                     <td className="max-w-[180px] truncate px-4 py-3 text-xs text-brand-brown/60">
                       {p.observacion || <span className="italic text-brand-brown/25">—</span>}
                     </td>
@@ -593,7 +704,10 @@ export default function CreditoEmpleadosPage() {
       </div>
 
       {modalNueva && (
-        <ModalNuevaCompra puntos={puntos} onClose={() => setModalNueva(false)} onCreado={() => void cargarPedidos()} />
+        <ModalNuevaCompra puntos={puntos} onClose={() => setModalNueva(false)} onCreado={() => {
+          void cargarPedidos();
+          resumenNomina().then(setResumen).catch(() => {});
+        }} />
       )}
       {confirmacion && (
         <ModalConfirm pedido={confirmacion.pedido} nuevoEstado={confirmacion.nuevoEstado}
