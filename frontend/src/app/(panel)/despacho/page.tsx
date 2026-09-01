@@ -308,7 +308,7 @@ const ESTADOS: EstadoDef[] = [
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     ),
-    match: (x) => norm(x.estado) === "entregado",
+    match: (x) => norm(x.estado) === "entregado" || norm(x.estado) === "rechazado",
     chip: "bg-green-100 text-green-600",
   },
 ];
@@ -669,7 +669,7 @@ export default function DespachoPage() {
         const e = norm(p.estado);
         if (p.anulado && e !== "anulado" && e !== "cancelado") return false;
         if (e === "despachado" || e === "en tránsito") return true;
-        if (e === "entregado" && revisarEntregados) return true;
+        if ((e === "entregado" || e === "rechazado") && revisarEntregados) return true;
         // Revalida anulados/cancelados para corregir casos heredados.
         if ((e === "anulado" || e === "cancelado") && revisarEntregados) return true;
         return false;
@@ -736,12 +736,11 @@ export default function DespachoPage() {
               const yaMarcado =
                 !!actual &&
                 !actual.anulado &&
-                norm(actual.estado) === "entregado" &&
-                norm(actual.motivo ?? "").includes("rechazado por el cliente");
+                norm(actual.estado) === "rechazado";
               if (!actual || yaMarcado) return prev;
               const next = prev.map((x) =>
                 x.id === p.id
-                  ? { ...x, anulado: false, estado: "Entregado" as Pedido["estado"], motivo }
+                  ? { ...x, anulado: false, estado: "Rechazado" as Pedido["estado"], motivo }
                   : x,
               );
               const upd = next.find((x) => x.id === p.id);
@@ -848,7 +847,12 @@ export default function DespachoPage() {
           const debeDespachar = est === "facturado" && !compPendiente;
           if (cambioDomi || debeDespachar) {
             const despachoFin = m.despachoFin ?? new Date().toISOString();
-            const despachadoPor = m.despachadoPor || usuarioDesp?.nombre || "Auto (Drivin)";
+            // Los admin que solo mueven el estado NO quedan como autores del
+            // despacho: se prefiere quien ya estaba o "Auto (Drivin)".
+            const despachadoPor =
+              m.despachadoPor ||
+              (tieneAccesoAdministrativo(usuarioDesp?.rol) ? "" : usuarioDesp?.nombre) ||
+              "Auto (Drivin)";
             setMeta((prev) => {
               const nuevo = { ...prev[p.id], domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor };
               actualizarMetaApi(p.id, { domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor }).catch(() => { /* ignore */ });
@@ -1016,7 +1020,11 @@ export default function DespachoPage() {
       setMeta((prev) => {
         if (prev[id]?.despachoFin) return prev;
         const despachoFin = new Date().toISOString();
-        const despachadoPor = usuarioDesp?.nombre ?? "";
+        // Un admin que solo cambia el estado NO se registra como autor del
+        // despacho: se conserva el que hubiera (o vacío).
+        const despachadoPor = tieneAccesoAdministrativo(usuarioDesp?.rol)
+          ? (prev[id]?.despachadoPor ?? "")
+          : (usuarioDesp?.nombre ?? "");
         actualizarMetaApi(id, { despachoFin, despachadoPor }).catch(() => { /* ignore */ });
         return { ...prev, [id]: { ...prev[id], despachoFin, despachadoPor } };
       });
@@ -1035,9 +1043,13 @@ export default function DespachoPage() {
     // Drivin SIN domiciliario: Drivin asigna el vehículo y SIGCOMPRO lo baja
     // luego (poll de asignaciones) para despachar automáticamente.
     if (norm(estado) === "facturado") {
-      const facturadoPor = usuarioDesp?.nombre ?? "";
-      actualizarMetaApi(id, { facturadoPor }).catch(() => { /* ignore */ });
-      setMeta((prev) => ({ ...prev, [id]: { ...prev[id], facturadoPor } }));
+      // Solo los facturadores/operadores quedan como autores de la factura. Un
+      // admin que únicamente cambia el estado NO se registra como facturador.
+      if (!tieneAccesoAdministrativo(usuarioDesp?.rol)) {
+        const facturadoPor = usuarioDesp?.nombre ?? "";
+        actualizarMetaApi(id, { facturadoPor }).catch(() => { /* ignore */ });
+        setMeta((prev) => ({ ...prev, [id]: { ...prev[id], facturadoPor } }));
+      }
       // NO reenviar si ya se subió antes (p. ej. si revierten a Alistado y
       // vuelven a facturar por corregir la factura/un valor). La bandera
       // `drivinEnviado` queda PERSISTIDA en la meta.
@@ -1679,7 +1691,7 @@ export default function DespachoPage() {
             </p>
           </div>
           <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">
-            {pedidosDeHoy.filter((p) => norm(p.estado) === "entregado").length}
+            {pedidosDeHoy.filter((p) => norm(p.estado) === "entregado" || norm(p.estado) === "rechazado").length}
           </span>
         </button>
       </div>
@@ -2867,7 +2879,7 @@ export default function DespachoPage() {
           puntoDrivin={idsDrivin.has(String(modalReplica.pedido.punto?.id))}
           pesoKg={pesoPedidoKg(modalReplica.pedido)}
           facturado={
-            ["facturado", "despachado", "en tránsito", "en transito", "entregado"].includes(
+            ["facturado", "despachado", "en tránsito", "en transito", "entregado", "rechazado"].includes(
               norm(modalReplica.pedido.estado),
             ) || !!(meta[modalReplica.pedido.id]?.facturaNumero ?? "").trim()
           }

@@ -13,6 +13,17 @@ export function aNombrePropio(texto: string): string {
 }
 
 /**
+ * Convierte un texto a formato "mayúscula inicial" (sentence case): solo la
+ * primera letra del texto en mayúscula y todo lo demás en minúscula. Si el
+ * usuario escribe más mayúsculas, se transforman automáticamente a minúscula.
+ */
+export function aMayusculaInicial(texto: string): string {
+  return texto
+    .toLowerCase()
+    .replace(/^(\s*)([a-záéíóúñü])/, (_, sep, letra) => sep + letra.toUpperCase());
+}
+
+/**
  * Handler de onChange para inputs de nombre propio que aplica el formato
  * sin mover el cursor al final. Como el formato solo cambia mayúsculas
  * (misma longitud), restaura la posición del caret tras el re-render.

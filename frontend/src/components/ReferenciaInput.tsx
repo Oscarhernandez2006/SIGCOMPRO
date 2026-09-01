@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { aNombrePropio } from "@/lib/format";
+import { aNombrePropio, aMayusculaInicial } from "@/lib/format";
 
 /**
  * Campo de referencia con el formato compositivo del negocio, p. ej.:
@@ -183,7 +183,21 @@ export default function ReferenciaInput({
       <div>
         <input
           value={textoLibre}
-          onChange={(e) => cambiarLibre(e.target.value)}
+          onChange={(e) => {
+            // Solo mayúscula inicial: el resto se pasa a minúscula automáticamente.
+            const el = e.currentTarget;
+            const pos = el.selectionStart;
+            cambiarLibre(aMayusculaInicial(el.value));
+            if (pos !== null) {
+              requestAnimationFrame(() => {
+                try {
+                  el.setSelectionRange(pos, pos);
+                } catch {
+                  /* input ya no está en el DOM */
+                }
+              });
+            }
+          }}
           placeholder="Referencia (formato libre)"
           className="campo"
         />

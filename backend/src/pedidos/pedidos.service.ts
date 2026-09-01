@@ -1949,7 +1949,7 @@ export class PedidosService implements OnModuleInit {
 
       // Procesar órdenes canceladas/rechazadas en Drivin.
       // Reglas acordadas:
-      // - rejected  -> estado "Entregado" (con motivo de rechazo)
+      // - rejected  -> estado "Rechazado" (dentro de entregados, con motivo)
       // - cancelled -> estado "Anulado"   (anulado=true)
       const comandasRechazadas: Set<string> = new Set();
       const comandasCanceladas: Set<string> = new Set();
@@ -1969,7 +1969,7 @@ export class PedidosService implements OnModuleInit {
         }
       }
 
-      // Actualizar comandas rejected a estado "Entregado"
+      // Actualizar comandas rejected a estado "Rechazado"
       if (comandasRechazadas.size > 0) {
         const resRechazados = await this.pool.query<{
           id: string;
@@ -1979,7 +1979,7 @@ export class PedidosService implements OnModuleInit {
           `SELECT id, data->>'comanda' as comanda, estado
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
-             AND LOWER(COALESCE(estado, '')) != 'entregado'`,
+             AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
           [[...comandasRechazadas]],
         );
 
@@ -1989,7 +1989,7 @@ export class PedidosService implements OnModuleInit {
               {
                 id: ped.id,
                 anulado: false,
-                estado: 'Entregado',
+                estado: 'Rechazado',
                 motivo: 'Cliente no atendía (rechazado por Drivin)',
               },
               undefined,
@@ -1997,7 +1997,7 @@ export class PedidosService implements OnModuleInit {
             if (actualizado) {
               actualizados++;
               this.logger.log(
-                `Pedido ${ped.id} (${ped.comanda}) sincronizado como Entregado por Drivin rejected (antes: ${ped.estado})`,
+                `Pedido ${ped.id} (${ped.comanda}) sincronizado como Rechazado por Drivin rejected (antes: ${ped.estado})`,
               );
             }
           } catch (e) {

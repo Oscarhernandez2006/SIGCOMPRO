@@ -38,6 +38,15 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 3001);
   await app.listen(port);
+
+  // Evita 502 esporádicos ("connection reset by peer") tras un proxy inverso
+  // (Caddy/Cloudflare): Node cierra las conexiones keep-alive ociosas a los 5 s
+  // y el proxy puede reusar una justo en ese instante. Se amplían los timeouts
+  // para que el backend nunca cierre la conexión antes que el proxy.
+  const server = app.getHttpServer() as import('http').Server;
+  server.keepAliveTimeout = 61_000;
+  server.headersTimeout = 65_000;
+
   // eslint-disable-next-line no-console
   console.log(`🥩 API Carnes Santacruz escuchando en http://localhost:${port}/api`);
 }

@@ -34,7 +34,12 @@ export function esRecoge(p: Pedido): boolean {
  */
 export function yaDespachado(estado?: string | null): boolean {
   const e = (estado ?? "").trim().toLowerCase();
-  return e === "despachado" || e === "en tránsito" || e === "entregado";
+  return (
+    e === "despachado" ||
+    e === "en tránsito" ||
+    e === "entregado" ||
+    e === "rechazado"
+  );
 }
 
 /**
@@ -56,6 +61,8 @@ export function colorEstado(estado?: string | null): string {
       return "border-sky-200 bg-sky-100 text-sky-600";
     case "entregado":
       return "border-green-200 bg-green-100 text-green-700";
+    case "rechazado":
+      return "border-rose-200 bg-rose-100 text-rose-600";
     case "anulado":
     case "cancelado":
       return "border-red-200 bg-red-100 text-red-600";

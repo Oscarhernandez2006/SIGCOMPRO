@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { aMayusculaInicial } from "@/lib/format";
 
 /**
  * Campo de dirección con formato de nomenclatura urbana colombiana.
@@ -156,7 +157,21 @@ export default function DireccionInput({
       <div>
         <input
           value={textoLibre}
-          onChange={(e) => cambiarLibre(e.target.value)}
+          onChange={(e) => {
+            // Solo mayúscula inicial: el resto se pasa a minúscula automáticamente.
+            const el = e.currentTarget;
+            const pos = el.selectionStart;
+            cambiarLibre(aMayusculaInicial(el.value));
+            if (pos !== null) {
+              requestAnimationFrame(() => {
+                try {
+                  el.setSelectionRange(pos, pos);
+                } catch {
+                  /* input ya no está en el DOM */
+                }
+              });
+            }
+          }}
           placeholder="Dirección (formato libre)"
           className="campo"
         />

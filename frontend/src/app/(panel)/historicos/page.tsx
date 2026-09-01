@@ -132,6 +132,19 @@ export default function HistoricosPage() {
     [meta, diaMeta, busqMeta],
   );
 
+  // Clones por comanda de origen: comanda del pedido -> comandas de sus clones.
+  // Permite mostrar la relación de clonación también en Históricos.
+  const clonesPorComanda = useMemo(() => {
+    const mapa = new Map<string, string[]>();
+    for (const p of pool) {
+      if (!p.clonadoDe) continue;
+      const arr = mapa.get(p.clonadoDe);
+      if (arr) arr.push(p.comanda);
+      else mapa.set(p.clonadoDe, [p.comanda]);
+    }
+    return mapa;
+  }, [pool]);
+
   const historicos = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return pool
@@ -373,6 +386,16 @@ export default function HistoricosPage() {
                         {m?.facturaNumero?.trim() && (
                           <div className="text-[11px] font-semibold text-green-600">Fact. {m.facturaNumero}</div>
                         )}
+                        {p.clonadoDe && (
+                          <div className="mt-0.5 text-[11px] font-medium text-brand-amber">
+                            Clonado de #{p.clonadoDe}
+                          </div>
+                        )}
+                        {clonesPorComanda.get(p.comanda) && (
+                          <div className="mt-0.5 text-[11px] font-medium text-brand-wine">
+                            Ya clonado en #{clonesPorComanda.get(p.comanda)!.join(", #")}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                       <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
@@ -416,7 +439,7 @@ export default function HistoricosPage() {
         </div>
       )}
 
-      {detalle && <DetallePedido pedido={detalle} meta={metaTotal[detalle.id]} onCerrar={() => setDetalle(null)} />}
+      {detalle && <DetallePedido pedido={detalle} meta={metaTotal[detalle.id]} clones={clonesPorComanda.get(detalle.comanda)} onCerrar={() => setDetalle(null)} />}
     </div>
   );
 }
