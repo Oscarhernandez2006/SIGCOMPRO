@@ -58,6 +58,16 @@ export class ClientesController {
     return this.clientes.estadisticas();
   }
 
+  /** Últimos puntos de venta donde han comprado los clientes (por NIT/cédula). */
+  @Get('puntos-comprados')
+  puntosComprados(@Query('nits') nits?: string) {
+    const lista = (nits ?? '')
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    return this.clientes.puntosCompradosPorNit(lista);
+  }
+
   @Get(':id')
   obtener(@Param('id') id: string) {
     return this.clientes.obtener(id);

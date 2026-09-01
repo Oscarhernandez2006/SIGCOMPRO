@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listarClientes, type Cliente } from "@/lib/clientes";
+import { listarClientes, puntosCompradosClientes, type Cliente } from "@/lib/clientes";
 import {
   misPuntosVenta,
   puntoMasCercano,
@@ -2278,6 +2278,8 @@ function PasoCliente({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
+  // Últimos puntos de venta donde ha comprado cada cliente (por NIT/cédula).
+  const [puntosPorNit, setPuntosPorNit] = useState<Record<string, string[]>>({});
   // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
   const [ocultos, setOcultos] = useState<Set<string>>(() => new Set());
   // Pedido a visualizar (solo lectura) al hacer clic en un consecutivo.
@@ -2327,6 +2329,31 @@ function PasoCliente({
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Trae los últimos puntos de compra de los clientes visibles (los que aún no
+  // se han consultado). Se hace por lote para no lanzar una petición por tarjeta.
+  useEffect(() => {
+    const faltantes = items
+      .map((c) => (c.nit_cedula ?? "").trim())
+      .filter((nit) => nit && !(nit in puntosPorNit));
+    if (faltantes.length === 0) return;
+    let vigente = true;
+    puntosCompradosClientes(faltantes)
+      .then((mapa) => {
+        if (!vigente) return;
+        // Marca también los que no tienen historial (arreglo vacío) para no
+        // volver a consultarlos.
+        const completo: Record<string, string[]> = {};
+        for (const nit of faltantes) completo[nit] = mapa[nit] ?? [];
+        setPuntosPorNit((prev) => ({ ...prev, ...completo }));
+      })
+      .catch(() => {
+        /* si falla, simplemente no se muestran los puntos de compra */
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [items, puntosPorNit]);
 
   // ¿Hay una búsqueda pendiente (esperando el debounce) o en curso? Sirve para
   // mostrar "Buscando cliente…" y que no se confunda con lentitud de la app.
@@ -2443,6 +2470,50 @@ function PasoCliente({
                       {c.telefono && <DatoCliente icono="tel" valor={c.telefono} />}
                     </span>
                   </span>
+
+                  {/* Clasificación, punto asignado y últimos puntos de compra */}
+                  <span className="ml-2 hidden w-48 shrink-0 flex-col items-end gap-1 pr-5 text-right text-xs sm:flex">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        c.horeca
+                          ? "bg-violet-100 text-violet-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {c.horeca ? "HORECA" : "Hogar"}
+                    </span>
+                    {c.punto_venta && (
+                      <span className="text-brand-brown/60">
+                        Asignado:{" "}
+                        <span className="font-semibold text-brand-black">
+                          {c.punto_venta}
+                        </span>
+                      </span>
+                    )}
+                    {(() => {
+                      const comprados =
+                        puntosPorNit[(c.nit_cedula ?? "").trim()] ?? [];
+                      if (comprados.length === 0) return null;
+                      return (
+                        <span className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
+                            Últimas compras
+                          </span>
+                          <span className="flex flex-wrap justify-end gap-1">
+                            {comprados.map((pv) => (
+                              <span
+                                key={pv}
+                                className="rounded bg-brand-cream-soft px-1.5 py-0.5 text-[10px] font-medium text-brand-wine"
+                              >
+                                {pv}
+                              </span>
+                            ))}
+                          </span>
+                        </span>
+                      );
+                    })()}
+                  </span>
+
                   {activo && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mt-0.5 h-5 w-5 shrink-0 text-brand-amber">
                       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />

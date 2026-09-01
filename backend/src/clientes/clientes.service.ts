@@ -95,6 +95,47 @@ export class ClientesService implements OnModuleInit {
     return res.rows;
   }
 
+  /**
+   * Últimos puntos de venta donde ha comprado cada cliente (por NIT/cédula),
+   * más recientes primero, máximo `limite` por cliente. Se usa en el Step de
+   * cliente del wizard para mostrar el historial de puntos de compra.
+   */
+  async puntosCompradosPorNit(
+    nits: string[],
+    limite = 3,
+  ): Promise<Record<string, string[]>> {
+    const limpios = Array.from(
+      new Set(nits.map((n) => String(n ?? '').trim()).filter(Boolean)),
+    );
+    if (limpios.length === 0) return {};
+    const lim = Math.min(Math.max(limite, 1), 10);
+    const res = await this.pool.query<{ nit: string; punto: string }>(
+      `SELECT nit, punto FROM (
+         SELECT nit, punto,
+                ROW_NUMBER() OVER (PARTITION BY nit ORDER BY ultima DESC) AS rn
+           FROM (
+             SELECT
+               data->'cliente'->>'nit_cedula' AS nit,
+               data->'punto'->>'nombre' AS punto,
+               MAX(fecha) AS ultima
+             FROM pedidos
+             WHERE anulado = false
+               AND data->'cliente'->>'nit_cedula' = ANY($1)
+               AND COALESCE(data->'punto'->>'nombre', '') <> ''
+             GROUP BY 1, 2
+           ) agrupado
+       ) numerado
+       WHERE rn <= $2
+       ORDER BY nit, rn`,
+      [limpios, lim],
+    );
+    const mapa: Record<string, string[]> = {};
+    for (const row of res.rows) {
+      (mapa[row.nit] ??= []).push(row.punto);
+    }
+    return mapa;
+  }
+
   async listar(
     q?: string,
     limit = 50,

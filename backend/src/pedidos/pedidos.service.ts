@@ -171,6 +171,11 @@ export class PedidosService implements OnModuleInit {
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_pedidos_punto_consecutivo ON pedidos (punto_id, consecutivo)`,
     );
+    // Índice funcional por NIT/cédula del cliente: acelera consultar los últimos
+    // puntos de venta donde ha comprado un cliente (Step de cliente del wizard).
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_nit ON pedidos ((data->'cliente'->>'nit_cedula'))`,
+    );
     // Contador del "número del día" (turno) por punto y día (YYYY-MM-DD Bogotá).
     // Reinicia solo cada día (clave por día) y se incrementa de forma atómica
     // (O(1), sin escanear pedidos), evitando el timeout al crear pedidos.

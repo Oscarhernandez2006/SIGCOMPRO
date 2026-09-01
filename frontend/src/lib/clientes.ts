@@ -64,6 +64,19 @@ export function exportarClientes(): Promise<Cliente[]> {
   return apiFetch<Cliente[]>("/clientes/exportar");
 }
 
+/**
+ * Últimos puntos de venta donde han comprado los clientes indicados (por
+ * NIT/cédula), más recientes primero (máx. 3 por cliente).
+ */
+export function puntosCompradosClientes(
+  nits: string[],
+): Promise<Record<string, string[]>> {
+  const lista = Array.from(new Set(nits.map((n) => n.trim()).filter(Boolean)));
+  if (lista.length === 0) return Promise.resolve({});
+  const qs = new URLSearchParams({ nits: lista.join(",") }).toString();
+  return apiFetch<Record<string, string[]>>(`/clientes/puntos-comprados?${qs}`);
+}
+
 /** Estadísticas de clientes según la calidad de su ubicación. */
 export interface EstadisticasClientes {
   total: number;
