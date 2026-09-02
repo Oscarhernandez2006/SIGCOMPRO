@@ -190,6 +190,19 @@ export class CotizacionesService implements OnModuleInit {
       throw new Error('Esta cotización ya fue convertida en pedido.');
     }
 
+    // "Consumidor Final" solo sirve para generar la cotización. Para convertirla
+    // en pedido hay que seleccionar un cliente real (el domicilio necesita datos).
+    const cliente = (cot.cliente ?? {}) as Record<string, unknown>;
+    const esConsumidorFinal =
+      String(cliente.id ?? '').trim().toLowerCase() === 'consumidor-final' ||
+      String(cliente.nit_cedula ?? '').trim() === '222222222';
+    if (esConsumidorFinal) {
+      throw new BadRequestException(
+        'Para convertir la cotización en pedido debes seleccionar un cliente. ' +
+          '"Consumidor Final" solo sirve para generar la cotización.',
+      );
+    }
+
     const carrito = Array.isArray(cot.carrito) ? cot.carrito : [];
     const total = typeof cot.total === 'number' ? cot.total : 0;
 

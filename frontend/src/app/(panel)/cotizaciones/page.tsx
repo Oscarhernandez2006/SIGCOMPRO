@@ -350,6 +350,19 @@ export default function CotizacionesPage() {
 
   async function convertir(cot: Cotizacion) {
     if (convirtiendo) return;
+    // "Consumidor Final" solo sirve para generar la cotización: para convertirla
+    // en pedido hay que seleccionar un cliente real.
+    const cli = cot.cliente as { id?: string; nit_cedula?: string } | null;
+    const esConsumidorFinal =
+      String(cli?.id ?? "").toLowerCase() === "consumidor-final" ||
+      String(cli?.nit_cedula ?? "").trim() === "222222222";
+    if (esConsumidorFinal) {
+      setError(
+        'Para convertir la cotización en pedido debes seleccionar un cliente. ' +
+          '"Consumidor Final" solo sirve para generar la cotización.',
+      );
+      return;
+    }
     setConvirtiendo(cot.id);
     setError(null);
     try {

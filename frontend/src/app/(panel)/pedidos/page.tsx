@@ -4183,7 +4183,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
           <Seccion titulo="Pedido">
             <Dato label="Comanda">{pedido.comanda}</Dato>
             <Dato label="Estado">{pedido.anulado ? "Anulado" : pedido.estado || "En proceso"}</Dato>
-            <Dato label="Consecutivo">{pedido.consecutivo}</Dato>
+            <Dato label="Secuencia de entrada">{pedido.numeroDia ?? numeroDia ?? "—"}</Dato>
             <Dato label="Entrega">{dest}</Dato>
             <Dato label="Punto de venta">{pedido.punto.nombre}</Dato>
             <Dato label="Método de pago">

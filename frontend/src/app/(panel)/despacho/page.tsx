@@ -410,7 +410,10 @@ export default function DespachoPage() {
     numero: number;
     modo: "crear" | "ver";
   } | null>(null);
-  // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
+  // Estado de entrega en Drivin por réplica: pedidoId -> { numeroRéplica -> status }.
+  const [estadosReplica, setEstadosReplica] = useState<
+    Record<string, Record<number, string | null>>
+  >({});  // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
   // recursos, según el punto) y así cerrar el ciclo a Despachado cuando Drivin
   // rebotó el pedido y no lo asignó.
   const [despachoManual, setDespachoManual] = useState<{ id: string } | null>(null);
@@ -675,11 +678,12 @@ export default function DespachoPage() {
         return false;
       });
       // Códigos Drivin por pedido: si tiene RÉPLICAS son "comanda-N" (cada parte
-      // es una orden aparte en Drivin); si no, la comanda base.
+      // es una orden aparte en Drivin) MÁS la comanda base (el envío original,
+      // que pudo ser rechazado antes de la reentrega); si no, solo la base.
       const codigosDe = (p: Pedido): string[] => {
         const reps = mts[p.id]?.replicas ?? [];
         return reps.length > 0
-          ? reps.map((r) => `${p.comanda}-${r.numero}`)
+          ? [p.comanda, ...reps.map((r) => `${p.comanda}-${r.numero}`)]
           : [p.comanda];
       };
       const comandas = Array.from(
@@ -690,6 +694,8 @@ export default function DespachoPage() {
       try {
         const res = await cargarEntregasDrivin(comandas);
         if (!vivo) return;
+        // Acumula el estado Drivin de cada réplica para mostrarlo en las cards.
+        const nuevosEstadosRep: Record<string, Record<number, string | null>> = {};
         for (const p of candidatos) {
           const reps = mts[p.id]?.replicas ?? [];
           // Estado AGREGADO del pedido. Con réplicas: se entrega cuando TODAS
@@ -701,7 +707,19 @@ export default function DespachoPage() {
           if (reps.length > 0) {
             const infos = reps.map((r) => res[`${p.comanda}-${r.numero}`]);
             const sts = infos.map((x) => x?.status);
-            if (sts.length && sts.every((s) => s === "approved")) {
+            // Guarda el estado de cada réplica (numero -> status) para la UI.
+            const porReplica: Record<number, string | null> = {};
+            reps.forEach((r, i) => {
+              porReplica[r.numero] = infos[i]?.status ?? null;
+            });
+            nuevosEstadosRep[p.id] = porReplica;
+            // El rechazo del envío ORIGINAL (comanda base) prima: aunque las
+            // réplicas se hayan entregado, el pedido queda Rechazado.
+            const base = res[p.comanda];
+            if (base?.status === "rejected") {
+              st = "rejected";
+              comment = base.comment;
+            } else if (sts.length && sts.every((s) => s === "approved")) {
               st = "approved";
               entregadoEn =
                 infos.map((x) => x?.entregadoEn).filter(Boolean).sort().pop() ??
@@ -759,6 +777,10 @@ export default function DespachoPage() {
             });
           }
           // "pending" / sin POD: no se toca (seguirá consultándose).
+        }
+        // Publica los estados por réplica (merge; solo cambia si hay algo nuevo).
+        if (Object.keys(nuevosEstadosRep).length > 0) {
+          setEstadosReplica((prev) => ({ ...prev, ...nuevosEstadosRep }));
         }
       } catch {
         /* ignore */
@@ -2493,6 +2515,41 @@ export default function DespachoPage() {
                               );
                             })}
                           </div>
+                          {/* Estado en Drivin de cada réplica (se actualiza solo). */}
+                          {(m.replicas ?? []).length > 0 && (
+                            <div className="mt-1.5 space-y-0.5">
+                              {[...(m.replicas ?? [])]
+                                .sort((a, b) => a.numero - b.numero)
+                                .map((r) => {
+                                  const raw = estadosReplica[p.id]?.[r.numero];
+                                  const label =
+                                    raw === "approved"
+                                      ? "Entregado"
+                                      : raw === "in-transit"
+                                        ? "En Tránsito"
+                                        : raw === "rejected"
+                                          ? "Rechazado"
+                                          : "En proceso";
+                                  const color =
+                                    raw === "approved"
+                                      ? "text-green-600"
+                                      : raw === "in-transit"
+                                        ? "text-sky-600"
+                                        : raw === "rejected"
+                                          ? "text-red-600"
+                                          : "text-brand-brown/50";
+                                  return (
+                                    <div
+                                      key={r.numero}
+                                      className="flex items-center gap-1.5 text-[11px] font-semibold"
+                                    >
+                                      <span className="text-brand-brown/60">{r.numero} -</span>
+                                      <span className={color}>{label}</span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
@@ -3629,7 +3686,7 @@ function ModalReplica({
                     : "border-amber-200 bg-amber-50 text-amber-800"
                 }`}>
                   Al confirmar, la réplica <b>{codigoReplica}</b> se sube a Drivin y
-                  <b> esperará que Drivin le asigne el domiciliario</b> (no se
+                  <b> deberá ir al Gestor de Drivin para asignar Domiciliario</b> (no se
                   selecciona aquí).
                   {rechazoDrivinDelDia && (
                     <>
