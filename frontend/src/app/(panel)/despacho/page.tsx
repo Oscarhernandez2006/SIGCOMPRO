@@ -2941,9 +2941,15 @@ export default function DespachoPage() {
             ) || !!(meta[modalReplica.pedido.id]?.facturaNumero ?? "").trim()
           }
           domiciliarioAsignado={
-            (meta[modalReplica.pedido.id]?.replicas ?? []).find(
+            // Prioriza lo guardado en la réplica; si está vacío, usa la
+            // asignación viva de Drivin para ese código de réplica.
+            ((meta[modalReplica.pedido.id]?.replicas ?? []).find(
               (r) => r.numero === modalReplica.numero,
-            )?.domiciliario ?? ""
+            )?.domiciliario || "").trim() ||
+            asignacionesDrivin[
+              `${modalReplica.pedido.comanda}-${modalReplica.numero}`
+            ]?.nombre ||
+            ""
           }
           esUltima={
             modalReplica.numero ===
@@ -3616,54 +3622,74 @@ function ModalReplica({
               <p className="text-xs text-amber-800">
                 Si necesitas hacerla, solicita una <b>clave dinámica</b> al supervisor y justifica el motivo.
               </p>
-              {!expandeFormPeso ? (
-                <button
-                  type="button"
-                  onClick={() => setExpandeFormPeso(true)}
-                  className="text-xs font-semibold text-amber-700 underline hover:text-amber-900"
-                >
-                  Tengo autorización — ingresar clave dinámica
-                </button>
-              ) : (
-                <div className="space-y-2 pt-1">
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-800">Motivo de la réplica *</label>
-                    <textarea
-                      value={motivoPeso}
-                      onChange={(e) => { setMotivoPeso(e.target.value); setErrorClavePeso(null); }}
-                      rows={2}
-                      placeholder="Describe el motivo por el que se autoriza esta réplica…"
-                      className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs outline-none focus:border-amber-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-800">Clave dinámica *</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={clavePeso}
-                      onChange={(e) => { setClavePeso(e.target.value.replace(/\D/g, "")); setErrorClavePeso(null); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") verificarClavePesoHandler(); }}
-                      placeholder="000000"
-                      disabled={verificandoClavePeso}
-                      autoFocus
-                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-center font-mono text-lg font-bold tracking-widest outline-none focus:border-amber-600 disabled:opacity-50"
-                    />
-                  </div>
-                  {errorClavePeso && (
-                    <p className="text-xs font-semibold text-red-600">❌ {errorClavePeso}</p>
-                  )}
+              <button
+                type="button"
+                onClick={() => setExpandeFormPeso(true)}
+                className="text-xs font-semibold text-amber-700 underline hover:text-amber-900"
+              >
+                Tengo autorización — ingresar clave dinámica
+              </button>
+            </div>
+          )}
+
+          {/* Modal de autorización (clave dinámica + motivo) para réplica < 60 kg */}
+          {modo === "crear" && pesoBloqueado && !claveParaPesoValida && esFacturado && expandeFormPeso && (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/60 p-4">
+              <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-wine/10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 text-brand-wine">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
+                  Autorización requerida
+                </h3>
+                <p className="mt-1 text-center text-sm text-brand-brown/70">
+                  Este pedido pesa <b>{pesoKg % 1 === 0 ? pesoKg : pesoKg.toFixed(1)} kg</b>. Para replicar un pedido menor a 60 kg, indica el <b>motivo</b> e ingresa la <b>clave dinámica</b> de un administrador.
+                </p>
+                <div className="mt-4 text-left">
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Motivo de la réplica *</label>
+                  <textarea
+                    value={motivoPeso}
+                    onChange={(e) => { setMotivoPeso(e.target.value); setErrorClavePeso(null); }}
+                    rows={2}
+                    placeholder="Describe el motivo por el que se autoriza esta réplica…"
+                    className="w-full resize-none rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm outline-none focus:border-brand-wine"
+                  />
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={clavePeso}
+                  onChange={(e) => { setClavePeso(e.target.value.replace(/\D/g, "")); setErrorClavePeso(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") verificarClavePesoHandler(); }}
+                  placeholder="••••••"
+                  disabled={verificandoClavePeso}
+                  autoFocus
+                  className="mt-4 w-full rounded-xl border border-brand-brown/20 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine disabled:opacity-50"
+                />
+                {errorClavePeso && (
+                  <p className="mt-2 text-center text-sm font-medium text-red-600">{errorClavePeso}</p>
+                )}
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setExpandeFormPeso(false); setClavePeso(""); setMotivoPeso(""); setErrorClavePeso(null); }}
+                    className="flex-1 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                  >
+                    Cancelar
+                  </button>
                   <button
                     type="button"
                     onClick={verificarClavePesoHandler}
                     disabled={verificandoClavePeso || !motivoPeso.trim() || clavePeso.length < 6}
-                    className="w-full rounded-lg bg-amber-600 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                    className="flex-1 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
                   >
-                    {verificandoClavePeso ? "Verificando…" : "Verificar y autorizar"}
+                    {verificandoClavePeso ? "Verificando…" : "Autorizar"}
                   </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -3745,10 +3771,10 @@ function ModalReplica({
                           verificarClaveReplicaHandler();
                         }
                       }}
-                      placeholder="000000"
+                      placeholder="••••••"
                       disabled={verificandoClaveReplica}
                       autoFocus
-                      className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-center font-mono text-lg font-bold tracking-widest disabled:opacity-50"
+                      className="w-full rounded-xl border border-brand-brown/20 bg-white px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine disabled:opacity-50"
                     />
                     {errorClaveReplica && (
                       <p className="text-xs font-semibold text-red-600">❌ {errorClaveReplica}</p>
