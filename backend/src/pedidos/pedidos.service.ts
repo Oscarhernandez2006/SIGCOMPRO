@@ -1103,6 +1103,15 @@ export class PedidosService implements OnModuleInit {
         total % 60,
       ).padStart(2, '0')}`;
     };
+    // Suma horas a una hora "HH:MM" sin pasar de las 23:59.
+    const sumarHoras = (hhmm: string, horas: number) => {
+      const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10) || 0);
+      let total = h * 60 + m + Math.round(horas * 60);
+      if (total > 23 * 60 + 59) total = 23 * 60 + 59;
+      return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(
+        total % 60,
+      ).padStart(2, '0')}`;
+    };
 
     let fechaEntrega: string;
     let inicioVentana: string;
@@ -1123,8 +1132,11 @@ export class PedidosService implements OnModuleInit {
         fechaEntrega = fechaISO(creado);
         inicioVentana = horaHM(creado);
       }
-      // La ventana no puede iniciar después de la hora fin (7:00 PM).
-      if (inicioVentana > finVentana) inicioVentana = finVentana;
+      // La ventana no puede tener duración cero: si el pedido se toma a las
+      // 7:00 PM o más tarde, la promesa "hasta las 7 PM" ya venció, así que se
+      // extiende el fin 1 hora desde el inicio (Drivin rechaza ventanas de
+      // duración cero y la réplica/pedido no subía).
+      if (inicioVentana >= finVentana) finVentana = sumarHoras(inicioVentana, 1);
       prioridad = '4.00';
     } else if (programado) {
       // Pedido con FECHA POSTERIOR (programado): entra a Drivin con prioridad 1

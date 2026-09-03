@@ -6,7 +6,7 @@ import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth"
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
 import { objetivoDespacho, colorEstado, yaDespachado } from "@/lib/despacho";
-import type { Pedido } from "@/app/(panel)/pedidos/page";
+import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
   Panel,
   CardHead,
@@ -746,6 +746,7 @@ export default function MiResumenPage() {
                           ) : (
                             <div>{p.comanda}</div>
                           )}
+                          <ReplicasEstado meta={meta[p.id]} />
                         </td>
                         <td className="px-4 py-2.5">{p.cliente?.nombre || p.cliente?.nit_cedula || "—"}</td>
                         <td className="px-4 py-2.5">

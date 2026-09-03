@@ -5,6 +5,7 @@ import {
   DetallePedido,
   formatoCOP,
   imprimirComanda,
+  ReplicasEstado,
   type Pedido,
 } from "@/app/(panel)/pedidos/page";
 import { cargarEstadoPedidos, buscarPedidos, type DespachoMeta } from "@/lib/pedidos";
@@ -396,6 +397,7 @@ export default function HistoricosPage() {
                             Ya clonado en #{clonesPorComanda.get(p.comanda)!.join(", #")}
                           </div>
                         )}
+                        <ReplicasEstado meta={m} />
                       </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                       <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>

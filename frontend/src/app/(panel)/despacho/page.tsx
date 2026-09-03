@@ -36,6 +36,7 @@ import {
   msRestantesDespacho,
   yaDespachado,
   colorEstado,
+  estadoReplicaVista,
 } from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
@@ -410,10 +411,7 @@ export default function DespachoPage() {
     numero: number;
     modo: "crear" | "ver";
   } | null>(null);
-  // Estado de entrega en Drivin por réplica: pedidoId -> { numeroRéplica -> status }.
-  const [estadosReplica, setEstadosReplica] = useState<
-    Record<string, Record<number, string | null>>
-  >({});  // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
+  // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
   // recursos, según el punto) y así cerrar el ciclo a Despachado cuando Drivin
   // rebotó el pedido y no lo asignó.
   const [despachoManual, setDespachoManual] = useState<{ id: string } | null>(null);
@@ -672,6 +670,9 @@ export default function DespachoPage() {
         const e = norm(p.estado);
         if (p.anulado && e !== "anulado" && e !== "cancelado") return false;
         if (e === "despachado" || e === "en tránsito") return true;
+        // Pedidos con réplicas: se consultan también en "facturado" para bajar
+        // el estado (POD) de cada réplica ni bien Drivin las asigna/despacha.
+        if (e === "facturado" && (mts[p.id]?.replicas ?? []).length > 0) return true;
         if ((e === "entregado" || e === "rechazado") && revisarEntregados) return true;
         // Revalida anulados/cancelados para corregir casos heredados.
         if ((e === "anulado" || e === "cancelado") && revisarEntregados) return true;
@@ -694,8 +695,6 @@ export default function DespachoPage() {
       try {
         const res = await cargarEntregasDrivin(comandas);
         if (!vivo) return;
-        // Acumula el estado Drivin de cada réplica para mostrarlo en las cards.
-        const nuevosEstadosRep: Record<string, Record<number, string | null>> = {};
         for (const p of candidatos) {
           const reps = mts[p.id]?.replicas ?? [];
           // Estado AGREGADO del pedido. Con réplicas: se entrega cuando TODAS
@@ -707,12 +706,29 @@ export default function DespachoPage() {
           if (reps.length > 0) {
             const infos = reps.map((r) => res[`${p.comanda}-${r.numero}`]);
             const sts = infos.map((x) => x?.status);
-            // Guarda el estado de cada réplica (numero -> status) para la UI.
-            const porReplica: Record<number, string | null> = {};
-            reps.forEach((r, i) => {
-              porReplica[r.numero] = infos[i]?.status ?? null;
-            });
-            nuevosEstadosRep[p.id] = porReplica;
+            // Persiste el estado (POD) individual de cada réplica para mostrarlo
+            // en Despacho, Pedidos, Históricos y Mi Resumen.
+            const hayCambioEstado = reps.some(
+              (r, i) => sts[i] && sts[i] !== r.estado,
+            );
+            if (hayCambioEstado) {
+              setMeta((prev) => {
+                const actuales = prev[p.id]?.replicas ?? [];
+                if (actuales.length === 0) return prev;
+                let cambio = false;
+                const fusion = actuales.map((r) => {
+                  const nuevo = res[`${p.comanda}-${r.numero}`]?.status;
+                  if (nuevo && nuevo !== r.estado) {
+                    cambio = true;
+                    return { ...r, estado: nuevo };
+                  }
+                  return r;
+                });
+                if (!cambio) return prev;
+                actualizarMetaApi(p.id, { replicas: fusion }).catch(() => { /* ignore */ });
+                return { ...prev, [p.id]: { ...prev[p.id], replicas: fusion } };
+              });
+            }
             // El rechazo del envío ORIGINAL (comanda base) prima: aunque las
             // réplicas se hayan entregado, el pedido queda Rechazado.
             const base = res[p.comanda];
@@ -777,10 +793,6 @@ export default function DespachoPage() {
             });
           }
           // "pending" / sin POD: no se toca (seguirá consultándose).
-        }
-        // Publica los estados por réplica (merge; solo cambia si hay algo nuevo).
-        if (Object.keys(nuevosEstadosRep).length > 0) {
-          setEstadosReplica((prev) => ({ ...prev, ...nuevosEstadosRep }));
         }
       } catch {
         /* ignore */
@@ -2515,36 +2527,23 @@ export default function DespachoPage() {
                               );
                             })}
                           </div>
-                          {/* Estado en Drivin de cada réplica (se actualiza solo). */}
+                          {/* Estado (Drivin) de cada réplica creada. */}
                           {(m.replicas ?? []).length > 0 && (
-                            <div className="mt-1.5 space-y-0.5">
-                              {[...(m.replicas ?? [])]
+                            <div className="mt-1 space-y-0.5">
+                              {(m.replicas ?? [])
+                                .slice()
                                 .sort((a, b) => a.numero - b.numero)
                                 .map((r) => {
-                                  const raw = estadosReplica[p.id]?.[r.numero];
-                                  const label =
-                                    raw === "approved"
-                                      ? "Entregado"
-                                      : raw === "in-transit"
-                                        ? "En Tránsito"
-                                        : raw === "rejected"
-                                          ? "Rechazado"
-                                          : "En proceso";
-                                  const color =
-                                    raw === "approved"
-                                      ? "text-green-600"
-                                      : raw === "in-transit"
-                                        ? "text-sky-600"
-                                        : raw === "rejected"
-                                          ? "text-red-600"
-                                          : "text-brand-brown/50";
+                                  const ev = estadoReplicaVista(r);
                                   return (
-                                    <div
-                                      key={r.numero}
-                                      className="flex items-center gap-1.5 text-[11px] font-semibold"
-                                    >
-                                      <span className="text-brand-brown/60">{r.numero} -</span>
-                                      <span className={color}>{label}</span>
+                                    <div key={r.numero} className="flex items-center gap-1.5 text-[10px]">
+                                      <span className="font-bold text-brand-brown/60">{r.numero} -</span>
+                                      <span className={`rounded px-1.5 py-0.5 font-semibold ${ev.chip}`}>
+                                        {ev.label}
+                                      </span>
+                                      {ev.domiciliario && (
+                                        <span className="truncate text-brand-brown/60">{ev.domiciliario}</span>
+                                      )}
                                     </div>
                                   );
                                 })}

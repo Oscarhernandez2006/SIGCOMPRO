@@ -45,6 +45,13 @@ export interface DespachoMeta {
     domiciliarioCodigo?: string;
     /** La réplica ya se subió a Drivin correctamente. */
     drivinEnviado?: boolean;
+    /**
+     * Estado de entrega (POD) que reporta Drivin para esta réplica:
+     * 'pending' | 'in-transit' | 'approved' (entregado) | 'rejected'.
+     * Se persiste para poder mostrarlo en Despacho, Pedidos, Históricos y
+     * Mi Resumen sin volver a consultar Drivin.
+     */
+    estado?: string;
   }[];
   /** Cuadre de caja: valor liquidado en efectivo por la cajera. */
   cuadreEfectivo?: number;

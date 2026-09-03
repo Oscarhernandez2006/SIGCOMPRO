@@ -75,6 +75,36 @@ export function colorEstado(estado?: string | null): string {
 /** Hora límite (18:00) para entregar pedidos que se RECOGEN en el punto. */
 export const HORA_LIMITE_RECOGE = 18;
 
+/** Estado visual de una réplica a partir de su domiciliario y su POD de Drivin. */
+export interface EstadoReplicaVista {
+  label: string;
+  /** Clases tailwind (fondo + texto) para el chip del estado. */
+  chip: string;
+  domiciliario?: string;
+}
+
+/**
+ * Deriva el estado a mostrar de una réplica combinando el domiciliario asignado
+ * por Drivin y el estado de entrega (POD). Fuente única para Despacho, Pedidos,
+ * Históricos y Mi Resumen.
+ */
+export function estadoReplicaVista(r: {
+  domiciliario?: string;
+  estado?: string;
+}): EstadoReplicaVista {
+  const st = (r.estado ?? "").trim().toLowerCase();
+  const nombre = (r.domiciliario ?? "").trim();
+  if (st === "approved")
+    return { label: "Entregado", chip: "bg-green-100 text-green-700", domiciliario: nombre };
+  if (st === "rejected")
+    return { label: "Rechazado", chip: "bg-rose-100 text-rose-600", domiciliario: nombre };
+  if (st === "in-transit")
+    return { label: "En tránsito", chip: "bg-sky-100 text-sky-600", domiciliario: nombre };
+  if (nombre)
+    return { label: "Asignado", chip: "bg-teal-100 text-teal-700", domiciliario: nombre };
+  return { label: "En espera", chip: "bg-amber-100 text-amber-700" };
+}
+
 /** Día base del pedido: la fecha programada si aplica; si no, la de creación. */
 function baseDiaPedido(p: Pedido): Date {
   return p.entregaProgramada && p.fechaProgramada

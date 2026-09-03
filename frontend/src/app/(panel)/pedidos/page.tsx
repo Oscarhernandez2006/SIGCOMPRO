@@ -20,7 +20,7 @@ import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica } from "@/lib/clave-dinamica";
-import { yaDespachado, colorEstado } from "@/lib/despacho";
+import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
 import CrearClienteModal from "@/components/CrearClienteModal";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
@@ -632,6 +632,7 @@ export default function PedidosPage() {
                     {meta[p.id]?.facturaNumero?.trim() && (
                       <div className="text-[11px] font-semibold text-green-600">Fact. {meta[p.id]!.facturaNumero}</div>
                     )}
+                    <ReplicasEstado meta={meta[p.id]} />
                   </td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
                   <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
@@ -1531,6 +1532,14 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
     if (programado && !fechaProgramada) {
       alert("Selecciona la fecha de entrega programada.");
       return;
+    }
+    // La fecha de despacho no puede ser anterior a la fecha de toma del pedido.
+    if (programado && fechaProgramada) {
+      const tomaISO = new Date(inicial?.fecha ?? Date.now()).toLocaleDateString("en-CA");
+      if (fechaProgramada < tomaISO) {
+        alert("La fecha de despacho no puede ser anterior a la fecha de toma del pedido.");
+        return;
+      }
     }
     // Clonar cambiando el punto de venta es un movimiento sensible (el pedido
     // pasa a otro punto y puede subir a Drivin): requiere autorización con la
@@ -3514,6 +3523,31 @@ export function formatoCOP(v: number) {
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(v);
+}
+
+/**
+ * Chips compactos con el estado (Drivin) de cada réplica de un pedido. Se
+ * muestra en las tablas de Pedidos, Históricos y Mi Resumen junto a la comanda.
+ */
+export function ReplicasEstado({ meta }: { meta?: DespachoMeta }) {
+  const reps = (meta?.replicas ?? []).slice().sort((a, b) => a.numero - b.numero);
+  if (reps.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {reps.map((r) => {
+        const ev = estadoReplicaVista(r);
+        return (
+          <span
+            key={r.numero}
+            title={ev.domiciliario ? `Réplica ${r.numero}: ${ev.label} · ${ev.domiciliario}` : `Réplica ${r.numero}: ${ev.label}`}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${ev.chip}`}
+          >
+            R{r.numero}: {ev.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function cantidadLabel(cant: number, um: string | null): string {
