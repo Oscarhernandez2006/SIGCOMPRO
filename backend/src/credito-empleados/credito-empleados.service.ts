@@ -515,6 +515,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
     punto_id?: string;
     desde?: string;
     hasta?: string;
+    origen?: string;
   }): Promise<PedidoCredito[]> {
     const condiciones: string[] = [];
     const valores: unknown[] = [];
@@ -531,6 +532,12 @@ export class CreditoEmpleadosService implements OnModuleInit {
     if (filtros.punto_id?.trim()) {
       condiciones.push(`punto_id = $${i++}`);
       valores.push(filtros.punto_id.trim());
+    }
+    // Origen del pedido: 'manual' (registrado en el panel) o 'tienda' (compra
+    // online del empleado). Sin filtro = todos.
+    if (filtros.origen?.trim()) {
+      condiciones.push(`COALESCE(origen, 'manual') = $${i++}`);
+      valores.push(filtros.origen.trim().toLowerCase());
     }
     if (filtros.desde?.trim()) {
       condiciones.push(`creado_en >= $${i++}::date`);

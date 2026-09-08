@@ -98,8 +98,9 @@ export class CreditoEmpleadosController {
     @Query('punto_id') punto_id?: string,
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
+    @Query('origen') origen?: string,
   ) {
-    return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta });
+    return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta, origen });
   }
 
   @Post('pedidos')

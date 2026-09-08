@@ -440,6 +440,7 @@ export default function CreditoEmpleadosPage() {
         punto_id: filtroPunto || undefined,
         desde:    filtroDesde || undefined,
         hasta:    filtroHasta || undefined,
+        origen:   "manual",
       }));
     } catch (e) { setErrorPedidos(e instanceof ApiError ? e.message : "No se pudieron cargar los pedidos."); }
     finally { setCargando(false); }

@@ -89,6 +89,7 @@ export function listarPedidosCredito(filtros: {
   punto_id?: string;
   desde?: string;
   hasta?: string;
+  origen?: string;
 }): Promise<PedidoCredito[]> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filtros)) {
