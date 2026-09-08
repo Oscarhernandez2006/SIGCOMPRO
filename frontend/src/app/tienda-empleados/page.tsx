@@ -108,7 +108,7 @@ export default function TiendaEmpleadosLanding() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl px-5">
+      <div className="relative z-10 mx-auto max-w-3xl px-5">
         {/* Tarjeta de ingreso (superpuesta al hero) */}
         {!saldo && (
           <div className="-mt-12 rounded-3xl bg-white p-6 shadow-xl ring-1 ring-brand-brown/5 sm:p-7">

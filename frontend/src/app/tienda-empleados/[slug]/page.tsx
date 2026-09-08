@@ -219,6 +219,9 @@ export default function TiendaEmpleadosStore({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
           </Link>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-brand-brown/10">
+            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={40} height={40} className="h-7 w-auto object-contain" />
+          </span>
           <div className="min-w-0 flex-1">
             <p className={`${playfair.className} truncate text-lg font-extrabold text-brand-wine`}>
               {tienda?.nombre}
@@ -255,9 +258,10 @@ export default function TiendaEmpleadosStore({
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-wine/5 text-brand-wine">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-amber/15 to-brand-amber/5 text-brand-amber">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-6 w-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c-1.657 0-3 1.343-3 3 0 .69.234 1.326.626 1.833C7.06 8.41 5.25 10.51 5.25 13.5c0 .966.28 1.867.762 2.628C4.79 16.79 3.75 18.06 3.75 19.5c0 .414.336.75.75.75h15a.75.75 0 0 0 .75-.75c0-1.44-1.04-2.71-2.262-3.372.482-.76.762-1.662.762-2.628 0-2.99-1.81-5.09-4.376-5.667C14.766 7.326 15 6.69 15 6c0-1.657-1.343-3-3-3Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.362-6.867 8.21 8.21 0 0 0 3 2.48Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z" />
                         </svg>
                       </span>
                       <div className="min-w-0 flex-1">
