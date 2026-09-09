@@ -25,6 +25,15 @@ export interface ProductoFactura {
   total: number;
 }
 
+export interface ItemCompraCredito {
+  referencia: string;
+  producto: string;
+  um: string;
+  precio: number;
+  cantidad: number;
+  observacion?: string;
+}
+
 export interface PedidoCredito {
   id: string;
   trabajador_cedula: string;
@@ -45,6 +54,10 @@ export interface PedidoCredito {
   factura_total_leido: number | null;
   factura_validada: boolean;
   factura_productos: ProductoFactura[];
+  /** Origen: 'manual' (panel) o 'tienda' (compra online del empleado). */
+  origen?: string;
+  /** Productos seleccionados del catálogo (compra por productos o tienda online). */
+  tienda_items?: ItemCompraCredito[];
 }
 
 export interface ResumenNomina {
@@ -107,6 +120,7 @@ export function crearPedidoCredito(input: {
   observacion?: string;
   factura_imagen?: string | null;
   factura_numero?: string | null;
+  items?: ItemCompraCredito[];
 }): Promise<PedidoCredito> {
   return apiFetch<PedidoCredito>("/credito-empleados/pedidos", {
     method: "POST",

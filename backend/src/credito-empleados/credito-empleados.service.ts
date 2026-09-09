@@ -26,6 +26,15 @@ export interface ProductoFactura {
   total: number;
 }
 
+export interface ItemCompra {
+  referencia: string;
+  producto: string;
+  um: string;
+  precio: number;
+  cantidad: number;
+  observacion?: string;
+}
+
 export interface TrabajadorCredito {
   cedula: string;
   nombre: string;
@@ -71,6 +80,10 @@ export interface PedidoCredito {
   factura_productos: ProductoFactura[];
   /** Imagen base64 de la factura (solo en obtenerPedido, no en listado). */
   factura_imagen?: string | null;
+  /** Origen del pedido: 'manual' (panel) o 'tienda' (compra online). */
+  origen?: string;
+  /** Productos seleccionados (compra por catálogo, manual o tienda online). */
+  tienda_items?: ItemCompra[];
 }
 
 @Injectable()
@@ -394,11 +407,11 @@ export class CreditoEmpleadosService implements OnModuleInit {
     creado_por_nombre?: string | null;
     factura_imagen?: string | null;
     factura_numero?: string | null;
+    items?: ItemCompra[];
   }): Promise<PedidoCredito> {
     const cedula = String(input.trabajador_cedula ?? '').trim();
     const puntoId = String(input.punto_id ?? '').trim();
     const puntoNombre = String(input.punto_nombre ?? '').trim();
-    const total = Number(input.total) || 0;
     const observacion = String(input.observacion ?? '').trim() || null;
     const facturaImagen = input.factura_imagen ?? null;
     const facturaNumero = String(input.factura_numero ?? '').trim() || null;
@@ -406,6 +419,43 @@ export class CreditoEmpleadosService implements OnModuleInit {
     if (!cedula || !puntoId || !puntoNombre) {
       throw new BadRequestException('Faltan datos del trabajador o del punto de venta');
     }
+
+    // Si vienen productos, el total se recalcula con los precios del catálogo del
+    // servidor (no se confía en los precios enviados por el cliente) — igual que
+    // en la tienda online. Si no vienen productos, se usa el valor manual.
+    let total = Number(input.total) || 0;
+    let itemsLimpios: ItemCompra[] = [];
+    const itemsEntrada = Array.isArray(input.items) ? input.items : [];
+    if (itemsEntrada.length > 0) {
+      const catRes = await this.pool.query<{ items: ItemCompra[] }>(
+        `SELECT items FROM tienda_empleados_catalogo WHERE punto_id = $1`,
+        [puntoId],
+      );
+      const catalogo = Array.isArray(catRes.rows[0]?.items) ? catRes.rows[0].items : [];
+      const precios = new Map(catalogo.map((c) => [String(c.referencia), c]));
+      let suma = 0;
+      for (const it of itemsEntrada) {
+        const ref = String(it.referencia ?? '').trim();
+        const cant = Number(it.cantidad) || 0;
+        const cat = precios.get(ref);
+        if (!ref || !cat || cant <= 0) continue;
+        const precio = Number(cat.precio) || 0;
+        suma += precio * cant;
+        itemsLimpios.push({
+          referencia: ref,
+          producto: cat.producto,
+          um: cat.um,
+          precio,
+          cantidad: cant,
+          observacion: String(it.observacion ?? '').trim() || undefined,
+        });
+      }
+      if (itemsLimpios.length === 0) {
+        throw new BadRequestException('Ningún producto seleccionado es válido');
+      }
+      total = Math.round(suma);
+    }
+
     if (!Number.isFinite(total) || total <= 0) {
       throw new BadRequestException('El valor de la compra debe ser mayor a 0');
     }
@@ -430,11 +480,11 @@ export class CreditoEmpleadosService implements OnModuleInit {
     await this.pool.query(
       `INSERT INTO credito_empleados_pedidos
          (id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
-          observacion, estado, cartera_estado, creado_por_id, creado_por_nombre,
+          observacion, estado, cartera_estado, origen, creado_por_id, creado_por_nombre,
           nomina_fecha, factura_numero, factura_imagen, factura_total_leido,
-          factura_validada, factura_productos, actualizado_en)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', $8, $9,
-               $10::date, $11, $12, $13, $14, $15::jsonb, now())`,
+          factura_validada, factura_productos, tienda_items, actualizado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'pendiente', 'manual', $8, $9,
+               $10::date, $11, $12, $13, $14, $15::jsonb, $16::jsonb, now())`,
       [
         id,
         trabajador.cedula,
@@ -451,6 +501,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
         facturaTotal,
         facturaValidada,
         JSON.stringify(facturaProductos),
+        JSON.stringify(itemsLimpios),
       ],
     );
 
@@ -495,6 +546,8 @@ export class CreditoEmpleadosService implements OnModuleInit {
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
               factura_numero, factura_total_leido, factura_validada, factura_imagen,
+              COALESCE(origen, 'manual') AS origen,
+              COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
               COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
         WHERE id = $1
@@ -555,6 +608,8 @@ export class CreditoEmpleadosService implements OnModuleInit {
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
               factura_numero, factura_total_leido, factura_validada,
+              COALESCE(origen, 'manual') AS origen,
+              COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
               COALESCE(factura_productos, '[]'::jsonb) AS factura_productos
          FROM credito_empleados_pedidos
          ${where}
@@ -650,16 +705,32 @@ export class CreditoEmpleadosService implements OnModuleInit {
           GROUP BY mes ORDER BY mes ASC`),
 
         this.pool.query<{ descripcion: string; n_pedidos: string; cantidad_total: string; monto_total: string }>(`
-          SELECT p->>'descripcion'         AS descripcion,
-                 COUNT(*)::text            AS n_pedidos,
-                 SUM((p->>'cantidad')::numeric)::text AS cantidad_total,
-                 SUM((p->>'total')::numeric)::text    AS monto_total
-          FROM credito_empleados_pedidos,
-               jsonb_array_elements(COALESCE(factura_productos, '[]'::jsonb)) AS p
-          WHERE estado <> 'anulado'
-            AND jsonb_array_length(COALESCE(factura_productos, '[]'::jsonb)) > 0
-            AND (p->>'descripcion') IS NOT NULL AND (p->>'descripcion') <> ''
-          GROUP BY descripcion ORDER BY COUNT(*) DESC, SUM((p->>'total')::numeric) DESC
+          WITH productos AS (
+            -- Productos leídos por OCR (compras manuales con factura)
+            SELECT p->>'descripcion' AS descripcion,
+                   (p->>'cantidad')::numeric AS cantidad,
+                   (p->>'total')::numeric AS total
+            FROM credito_empleados_pedidos,
+                 jsonb_array_elements(COALESCE(factura_productos, '[]'::jsonb)) AS p
+            WHERE estado <> 'anulado'
+              AND (p->>'descripcion') IS NOT NULL AND (p->>'descripcion') <> ''
+            UNION ALL
+            -- Productos seleccionados del catálogo (tienda online y compras por productos)
+            SELECT i->>'producto' AS descripcion,
+                   (i->>'cantidad')::numeric AS cantidad,
+                   (i->>'precio')::numeric * (i->>'cantidad')::numeric AS total
+            FROM credito_empleados_pedidos,
+                 jsonb_array_elements(COALESCE(tienda_items, '[]'::jsonb)) AS i
+            WHERE estado <> 'anulado'
+              AND (i->>'producto') IS NOT NULL AND (i->>'producto') <> ''
+          )
+          SELECT descripcion,
+                 COUNT(*)::text AS n_pedidos,
+                 SUM(cantidad)::text AS cantidad_total,
+                 SUM(total)::text AS monto_total
+          FROM productos
+          GROUP BY descripcion
+          ORDER BY COUNT(*) DESC, SUM(total) DESC
           LIMIT 15`),
       ]);
 

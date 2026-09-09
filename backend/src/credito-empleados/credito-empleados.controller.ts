@@ -116,6 +116,14 @@ export class CreditoEmpleadosController {
       observacion?: string;
       factura_imagen?: string | null;
       factura_numero?: string | null;
+      items?: Array<{
+        referencia: string;
+        producto: string;
+        um: string;
+        precio: number;
+        cantidad: number;
+        observacion?: string;
+      }>;
     },
     @Req() req: Request & { user?: JwtPayload },
   ) {

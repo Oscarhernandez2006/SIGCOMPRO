@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, Fragment } from "react";
 import { ApiError } from "@/lib/api";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
@@ -15,6 +15,7 @@ import {
   type ResumenNomina,
   type TrabajadorCredito,
 } from "@/lib/credito-empleados";
+import { obtenerCatalogoTienda, type ItemCatalogoTienda } from "@/lib/tienda-empleados";
 
 const fmtCop = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 const money = (v: number) => fmtCop.format(Number.isFinite(v) ? v : 0);
@@ -86,8 +87,56 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
   const [numFactura, setNumFactura] = useState("");
   const facturaInputRef = useRef<HTMLInputElement>(null);
 
+  // Compra por productos (catálogo de la tienda) o por valor manual.
+  const [modo, setModo] = useState<"productos" | "manual">("productos");
+  const [catalogo, setCatalogo] = useState<ItemCatalogoTienda[]>([]);
+  const [cargandoCat, setCargandoCat] = useState(false);
+  const [busquedaProd, setBusquedaProd] = useState("");
+  const [carrito, setCarrito] = useState<Record<string, { item: ItemCatalogoTienda; cantidad: number }>>({});
+
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Carga el catálogo del punto seleccionado cuando se compra por productos.
+  useEffect(() => {
+    if (modo !== "productos" || !puntoSel) { setCatalogo([]); return; }
+    let vivo = true;
+    setCargandoCat(true);
+    obtenerCatalogoTienda(puntoSel)
+      .then((c) => { if (vivo) setCatalogo(c); })
+      .catch(() => { if (vivo) setCatalogo([]); })
+      .finally(() => { if (vivo) setCargandoCat(false); });
+    return () => { vivo = false; };
+  }, [modo, puntoSel]);
+
+  const lineasCarrito = Object.values(carrito);
+  const totalCarrito = lineasCarrito.reduce((s, l) => s + Number(l.item.precio) * l.cantidad, 0);
+  const totalEfectivo = modo === "productos" ? totalCarrito : Number(total || 0);
+
+  function addProducto(item: ItemCatalogoTienda) {
+    setCarrito((prev) => {
+      const actual = prev[item.referencia];
+      return { ...prev, [item.referencia]: { item, cantidad: (actual?.cantidad ?? 0) + 1 } };
+    });
+  }
+  function setCantidadProducto(ref: string, cantidad: number) {
+    setCarrito((prev) => {
+      if (cantidad <= 0) {
+        const next = { ...prev };
+        delete next[ref];
+        return next;
+      }
+      const actual = prev[ref];
+      if (!actual) return prev;
+      return { ...prev, [ref]: { ...actual, cantidad } };
+    });
+  }
+
+  const catalogoFiltrado = catalogo.filter((c) => {
+    const q = busquedaProd.trim().toLowerCase();
+    if (!q) return true;
+    return c.producto.toLowerCase().includes(q) || c.referencia.toLowerCase().includes(q);
+  });
 
   async function buscar(e: React.FormEvent) {
     e.preventDefault();
@@ -102,16 +151,33 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
   async function registrar(e: React.FormEvent) {
     e.preventDefault();
     if (!trabajador) { setErrorGuardar("Busca primero el trabajador."); return; }
-    const valor = Number(total);
-    if (!Number.isFinite(valor) || valor <= 0) { setErrorGuardar("Ingresa un valor válido."); return; }
     const punto = puntos.find((p) => p.id === puntoSel);
     if (!punto) { setErrorGuardar("Selecciona un punto de venta."); return; }
+
+    const items = modo === "productos"
+      ? lineasCarrito.map((l) => ({
+          referencia: l.item.referencia,
+          producto: l.item.producto,
+          um: l.item.um,
+          precio: Number(l.item.precio) || 0,
+          cantidad: l.cantidad,
+        }))
+      : undefined;
+
+    if (modo === "productos") {
+      if (items!.length === 0) { setErrorGuardar("Agrega al menos un producto."); return; }
+    } else {
+      const valor = Number(total);
+      if (!Number.isFinite(valor) || valor <= 0) { setErrorGuardar("Ingresa un valor válido."); return; }
+    }
+
     setGuardando(true); setErrorGuardar(null);
     try {
       await crearPedidoCredito({
         trabajador_cedula: trabajador.cedula, punto_id: punto.id, punto_nombre: punto.nombre,
-        total: valor, observacion, factura_imagen: facturaImagen,
+        total: totalEfectivo, observacion, factura_imagen: facturaImagen,
         factura_numero: numFactura.trim() || null,
+        items,
       });
       onCreado(); onClose();
     } catch (err) { setErrorGuardar(err instanceof ApiError ? err.message : "No se pudo registrar la compra."); }
@@ -119,7 +185,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
   }
 
   const disponible = Number(trabajador?.cupo_disponible ?? 0);
-  const valorNum   = Number(total || 0);
+  const valorNum   = totalEfectivo;
   const superaCupo = trabajador && Number.isFinite(valorNum) && valorNum > 0 && valorNum > disponible;
 
   return (
@@ -264,17 +330,101 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine"
                   />
                 </div>
-                {/* Valor */}
+                {/* Modo: productos o valor manual */}
                 <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-                    <Icon d={Ico.money} cls="h-3.5 w-3.5" />Valor de la compra
-                  </label>
-                  <input value={total} onChange={(e) => setTotal(e.target.value.replace(/[^\d]/g, ""))}
-                    placeholder="Ej: 185000"
-                    className={`h-11 w-full rounded-xl border px-3 text-sm outline-none transition focus:border-brand-wine ${superaCupo ? "border-rose-300 bg-rose-50" : "border-brand-brown/25"}`} />
-                  {superaCupo && <p className="mt-1 text-xs font-medium text-rose-600">Supera el cupo disponible ({money(disponible)})</p>}
-                  {total && !superaCupo && Number(total) > 0 && (
-                    <p className="mt-1 text-xs font-semibold text-brand-wine">{money(Number(total))}</p>
+                  <div className="mb-2 grid grid-cols-2 gap-2">
+                    {(["productos", "manual"] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setModo(m)}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2 text-xs font-bold transition ${
+                          modo === m ? "border-brand-wine bg-brand-wine/10 text-brand-wine" : "border-brand-brown/15 bg-white text-brand-brown/55"
+                        }`}>
+                        {m === "productos" ? "Elegir productos" : "Valor manual"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {modo === "productos" ? (
+                    <div className="space-y-2">
+                      {/* Buscador de productos */}
+                      <div className="relative">
+                        <Icon d={Ico.search} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35" />
+                        <input value={busquedaProd} onChange={(e) => setBusquedaProd(e.target.value)}
+                          placeholder="Buscar producto…"
+                          className="h-10 w-full rounded-xl border border-brand-brown/25 pl-9 pr-3 text-sm outline-none transition focus:border-brand-wine" />
+                      </div>
+
+                      {/* Lista del catálogo */}
+                      {cargandoCat ? (
+                        <div className="flex items-center justify-center py-6 text-sm text-brand-brown/50">
+                          <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
+                        </div>
+                      ) : catalogo.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-brand-brown/20 px-3 py-4 text-center text-xs text-brand-brown/50">
+                          Este punto no tiene catálogo configurado. Usa «Valor manual» o carga el catálogo en «Catálogo tienda».
+                        </p>
+                      ) : (
+                        <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-brand-brown/12 p-1">
+                          {catalogoFiltrado.map((c) => (
+                            <button key={c.referencia} type="button" onClick={() => addProducto(c)}
+                              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-brand-cream-soft">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-brand-black">{c.producto}</p>
+                                <p className="text-[11px] text-brand-brown/50">{c.categoria} · {c.um}</p>
+                              </div>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums text-brand-wine">{money(Number(c.precio))}</span>
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-brand-wine">
+                                <Icon d={Ico.plus} cls="h-3.5 w-3.5" />
+                              </span>
+                            </button>
+                          ))}
+                          {catalogoFiltrado.length === 0 && (
+                            <p className="px-2.5 py-3 text-center text-xs text-brand-brown/40">Sin resultados</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Carrito */}
+                      {lineasCarrito.length > 0 && (
+                        <div className="space-y-1.5 rounded-xl border border-brand-brown/12 bg-brand-cream-soft/40 p-2">
+                          {lineasCarrito.map((l) => (
+                            <div key={l.item.referencia} className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-brand-black">{l.item.producto}</p>
+                                <p className="text-[10px] text-brand-brown/50">{money(Number(l.item.precio))} · {l.item.um}</p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button type="button" onClick={() => setCantidadProducto(l.item.referencia, l.cantidad - 1)}
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown/70 hover:bg-white">−</button>
+                                <input value={l.cantidad}
+                                  onChange={(e) => setCantidadProducto(l.item.referencia, Number(e.target.value.replace(/[^\d.]/g, "")) || 0)}
+                                  className="h-6 w-11 rounded-md border border-brand-brown/20 text-center text-xs outline-none focus:border-brand-wine" />
+                                <button type="button" onClick={() => setCantidadProducto(l.item.referencia, l.cantidad + 1)}
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown/70 hover:bg-white">+</button>
+                              </div>
+                              <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums text-brand-black">
+                                {money(Number(l.item.precio) * l.cantidad)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className={`flex items-center justify-between rounded-xl px-3 py-2 ${superaCupo ? "bg-rose-50" : "bg-brand-wine/5"}`}>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Total</span>
+                        <span className={`text-base font-bold tabular-nums ${superaCupo ? "text-rose-600" : "text-brand-wine"}`}>{money(totalCarrito)}</span>
+                      </div>
+                      {superaCupo && <p className="text-xs font-medium text-rose-600">Supera el cupo disponible ({money(disponible)})</p>}
+                    </div>
+                  ) : (
+                    <div>
+                      <input value={total} onChange={(e) => setTotal(e.target.value.replace(/[^\d]/g, ""))}
+                        placeholder="Ej: 185000"
+                        className={`h-11 w-full rounded-xl border px-3 text-sm outline-none transition focus:border-brand-wine ${superaCupo ? "border-rose-300 bg-rose-50" : "border-brand-brown/25"}`} />
+                      {superaCupo && <p className="mt-1 text-xs font-medium text-rose-600">Supera el cupo disponible ({money(disponible)})</p>}
+                      {total && !superaCupo && Number(total) > 0 && (
+                        <p className="mt-1 text-xs font-semibold text-brand-wine">{money(Number(total))}</p>
+                      )}
+                    </div>
                   )}
                 </div>
                 {/* Observación */}
@@ -340,7 +490,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     className="h-10 rounded-xl border border-brand-brown/25 px-4 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-50">
                     Cancelar
                   </button>
-                  <button type="submit" disabled={guardando || !!superaCupo || !puntoSel || !total}
+                  <button type="submit" disabled={guardando || !!superaCupo || !puntoSel || (modo === "productos" ? lineasCarrito.length === 0 : !total)}
                     className="flex h-10 items-center gap-1.5 rounded-xl bg-brand-wine px-5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-50">
                     {guardando ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Icon d={Ico.check} cls="h-4 w-4" />}
                     {guardando ? "Registrando…" : "Registrar compra"}
@@ -420,6 +570,8 @@ export default function CreditoEmpleadosPage() {
   const [filtroDesde, setFiltroDesde]   = useState("");
   const [filtroHasta, setFiltroHasta]   = useState("");
   const [filtroPunto, setFiltroPunto]   = useState("");
+  const [filtroOrigen, setFiltroOrigen] = useState("");
+  const [expandido, setExpandido]       = useState<Set<string>>(new Set());
 
   const [modalNueva, setModalNueva]   = useState(false);
   const [confirmacion, setConfirmacion] = useState<{ pedido: PedidoCredito; nuevoEstado: "facturado" | "anulado" | "pendiente" } | null>(null);
@@ -440,11 +592,11 @@ export default function CreditoEmpleadosPage() {
         punto_id: filtroPunto || undefined,
         desde:    filtroDesde || undefined,
         hasta:    filtroHasta || undefined,
-        origen:   "manual",
+        origen:   filtroOrigen || undefined,
       }));
     } catch (e) { setErrorPedidos(e instanceof ApiError ? e.message : "No se pudieron cargar los pedidos."); }
     finally { setCargando(false); }
-  }, [filtroCedula, filtroEstado, filtroPunto, filtroDesde, filtroHasta]);
+  }, [filtroCedula, filtroEstado, filtroPunto, filtroDesde, filtroHasta, filtroOrigen]);
 
   useEffect(() => { void cargarPedidos(); }, [cargarPedidos]);
 
@@ -605,12 +757,22 @@ export default function CreditoEmpleadosPage() {
               </select>
             </div>
           )}
+          {/* Origen */}
+          <div className="min-w-[120px]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Origen</label>
+            <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}
+              className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
+              <option value="">Todos</option>
+              <option value="manual">Panel</option>
+              <option value="tienda">Tienda online</option>
+            </select>
+          </div>
           <button type="button" onClick={() => void cargarPedidos()}
             className="flex h-9 items-center gap-1.5 rounded-lg border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5">
             <Icon d={Ico.search} cls="h-3.5 w-3.5" />Filtrar
           </button>
-          {(filtroCedula || filtroEstado || filtroDesde || filtroHasta || filtroPunto) && (
-            <button type="button" onClick={() => { setFiltroCedula(""); setFiltroEstado(""); setFiltroDesde(""); setFiltroHasta(""); setFiltroPunto(""); }}
+          {(filtroCedula || filtroEstado || filtroDesde || filtroHasta || filtroPunto || filtroOrigen) && (
+            <button type="button" onClick={() => { setFiltroCedula(""); setFiltroEstado(""); setFiltroDesde(""); setFiltroHasta(""); setFiltroPunto(""); setFiltroOrigen(""); }}
               className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
@@ -661,8 +823,17 @@ export default function CreditoEmpleadosPage() {
                   </td>
                 </tr>
               ) : (
-                pedidos.map((p) => (
-                  <tr key={p.id} className="border-b border-brand-brown/8 transition hover:bg-neutral-50/60">
+                pedidos.map((p) => {
+                  const items = (p.tienda_items && p.tienda_items.length > 0)
+                    ? p.tienda_items.map((it) => ({ nombre: it.producto, cantidad: it.cantidad, um: it.um, total: Number(it.precio) * it.cantidad }))
+                    : (p.factura_productos && p.factura_productos.length > 0)
+                      ? p.factura_productos.map((it) => ({ nombre: it.descripcion, cantidad: it.cantidad, um: it.um, total: Number(it.total) }))
+                      : [];
+                  const abierto = expandido.has(p.id);
+                  const esTienda = p.origen === "tienda";
+                  return (
+                  <Fragment key={p.id}>
+                  <tr className="border-b border-brand-brown/8 transition hover:bg-neutral-50/60">
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">{fechaCorta(p.creado_en)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
@@ -671,13 +842,28 @@ export default function CreditoEmpleadosPage() {
                         </div>
                         <div>
                           <p className="font-medium text-brand-black leading-tight">{p.trabajador_nombre}</p>
-                          <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
+                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/55"}`}>
+                              {esTienda ? "Tienda online" : "Panel"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-brand-brown/75">{p.punto_nombre}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-brand-black">
-                      {money(Number(p.total) || 0)}
+                    <td className="px-4 py-3 text-right">
+                      <p className="font-semibold tabular-nums text-brand-black">{money(Number(p.total) || 0)}</p>
+                      {items.length > 0 && (
+                        <button type="button"
+                          onClick={() => setExpandido((prev) => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
+                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand-wine hover:underline">
+                          {items.length} {items.length === 1 ? "producto" : "productos"}
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 transition-transform ${abierto ? "rotate-180" : ""}`}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
@@ -722,7 +908,30 @@ export default function CreditoEmpleadosPage() {
                       </td>
                     )}
                   </tr>
-                ))
+                  {abierto && items.length > 0 && (
+                    <tr className="bg-neutral-50/50">
+                      <td colSpan={puedeCambiarEstado ? 8 : 7} className="px-4 pb-3 pt-0">
+                        <div className="rounded-xl border border-brand-brown/10 bg-white p-2">
+                          <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Detalle de productos</p>
+                          <div className="divide-y divide-brand-brown/8">
+                            {items.map((it, idx) => (
+                              <div key={idx} className="flex items-center gap-2 px-1 py-1.5 text-xs">
+                                <span className="flex h-5 min-w-[1.75rem] items-center justify-center rounded-md bg-brand-wine/8 px-1 font-bold text-brand-wine">
+                                  {it.cantidad}
+                                </span>
+                                <span className="flex-1 truncate text-brand-black">{it.nombre}</span>
+                                <span className="text-brand-brown/45">{it.um}</span>
+                                <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{money(it.total)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
