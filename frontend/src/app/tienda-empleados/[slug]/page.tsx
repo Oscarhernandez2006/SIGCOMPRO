@@ -351,7 +351,7 @@ export default function TiendaEmpleadosStore({
       {/* Header + tabs de categorías (pegajosos) */}
       <div className="sticky top-0 z-30">
         <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
-          <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-5">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 sm:py-5">
             {/* Izquierda: volver + nombres */}
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Link href="/tienda-empleados" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
@@ -360,17 +360,17 @@ export default function TiendaEmpleadosStore({
                 </svg>
               </Link>
               <div className="min-w-0">
-                <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
+                <p className={`${playfair.className} truncate text-sm font-extrabold text-white sm:text-lg`}>
                   {tienda?.nombre}
                 </p>
-                <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
+                <p className="truncate text-[10px] font-medium text-brand-cream/70 sm:text-[11px]">{saldo?.nombre}</p>
               </div>
             </div>
-            {/* Centro: logo sin fondo */}
-            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={64} className="h-16 w-auto shrink-0 object-contain drop-shadow-sm" />
+            {/* Centro: logo sin fondo (oculto en móvil) */}
+            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={64} className="hidden h-12 w-auto shrink-0 object-contain drop-shadow-sm sm:block sm:h-16" />
             {/* Derecha: saldo */}
             <div className="flex flex-1 justify-end">
-              <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
+              <div className="rounded-2xl bg-white/10 px-3 py-1.5 text-right ring-1 ring-white/15 sm:px-3.5">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
                 <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
                   {copTienda(restante < 0 ? disponible : restante)}
@@ -461,9 +461,6 @@ export default function TiendaEmpleadosStore({
                     catFiltro === "" ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
                   }`}
                 >
-                  <span className={catFiltro === "" ? "text-brand-amber" : "text-brand-brown/40"}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
-                  </span>
                   <span className="flex-1">Todas</span>
                   <span className={`text-[11px] font-bold ${catFiltro === "" ? "text-white/70" : "text-brand-brown/40"}`}>{tienda?.categorias?.reduce((s, c) => s + c.productos.length, 0) ?? 0}</span>
                 </button>
@@ -477,9 +474,6 @@ export default function TiendaEmpleadosStore({
                         activa ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
                       }`}
                     >
-                      <span className={activa ? "text-brand-amber" : "text-brand-brown/40"}>
-                        {iconoCategoria(limpiarCategoria(cat.categoria), "h-4 w-4")}
-                      </span>
                       <span className="flex-1 truncate">{limpiarCategoria(cat.categoria)}</span>
                       <span className={`text-[11px] font-bold ${activa ? "text-white/70" : "text-brand-brown/40"}`}>{cat.productos.length}</span>
                     </button>
@@ -553,10 +547,9 @@ export default function TiendaEmpleadosStore({
                 return (
                   <section key={cat.categoria} id={slugCat(cat.categoria)} className="mb-9 scroll-mt-32">
                     <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-wine/5 text-brand-wine">{iconoCategoria(nombreCat)}</span>
                       <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
                       <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
-                      <span className="rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length}</span>
+                      <span className="whitespace-nowrap rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length} productos</span>
                     </div>
                     <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                       {cat.productos.map((p) => {
@@ -651,9 +644,9 @@ export default function TiendaEmpleadosStore({
 
       {/* Modal carrito / datos */}
       {modal !== "cerrado" && (
-        <div className={`${manrope.className} fixed inset-0 z-40 flex items-end justify-center bg-brand-black/50 backdrop-blur-sm sm:items-center`} onClick={() => setModal("cerrado")}>
+        <div style={{ zoom: 1.25 }} className={`${manrope.className} fixed inset-0 z-40 flex items-end justify-center bg-brand-black/50 backdrop-blur-sm sm:items-center`} onClick={() => setModal("cerrado")}>
           <div
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -854,11 +847,12 @@ function ProductoModal({
 
   return (
     <div
+      style={{ zoom: 1.25 }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-brand-black/50 backdrop-blur-sm sm:items-center"
       onClick={onCerrar}
     >
       <div
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">

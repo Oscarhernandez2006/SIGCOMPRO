@@ -27,6 +27,11 @@ function labelEstado(estado: string): string {
   );
 }
 
+/** Quita el prefijo "PDV Carnes Santacruz" del nombre del punto para la tabla. */
+function puntoCorto(nombre: string): string {
+  return (nombre ?? "").replace(/^\s*pdv\s+carnes\s+santacruz\s*/i, "").trim() || (nombre ?? "");
+}
+
 export default function PedidosTiendaPage() {
   const [pedidos, setPedidos] = useState<PedidoTienda[]>([]);
   const [filtro, setFiltro] = useState<string>("");
@@ -196,7 +201,7 @@ export default function PedidosTiendaPage() {
                   <th className="px-4 py-3">Entrega</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3">Origen</th>
+                  <th className="whitespace-nowrap px-4 py-3">Origen</th>
                   <th className="px-4 py-3">Nómina</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
@@ -221,7 +226,7 @@ export default function PedidosTiendaPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-brand-brown/75">{p.punto_nombre}</td>
+                      <td className="px-4 py-3 text-brand-brown/75">{puntoCorto(p.punto_nombre)}</td>
                       <td className="px-4 py-3 text-xs text-brand-brown/70">{p.entrega === "domicilio" ? "Domicilio" : "Recoge"}</td>
                       <td className="px-4 py-3 text-right">
                         <p className="font-semibold tabular-nums text-brand-black">{copTienda(p.total)}</p>
@@ -232,8 +237,8 @@ export default function PedidosTiendaPage() {
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>{labelEstado(p.estado)}</span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
                           {esTienda ? "Tienda online" : "Panel"}
                         </span>
                       </td>
