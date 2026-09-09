@@ -3429,7 +3429,6 @@ function ModalReplica({
 
   // Estado para el bloqueo por peso < 60 kg
   const [claveParaPesoValida, setClaveParaPesoValida] = useState(false);
-  const [expandeFormPeso, setExpandeFormPeso] = useState(false);
   const [clavePeso, setClavePeso] = useState("");
   const [motivoPeso, setMotivoPeso] = useState("");
   const [verificandoClavePeso, setVerificandoClavePeso] = useState(false);
@@ -3524,7 +3523,6 @@ function ModalReplica({
         return;
       }
       setClaveParaPesoValida(true);
-      setExpandeFormPeso(false);
     } catch {
       setErrorClavePeso("No se pudo verificar la clave. Inténtalo de nuevo.");
     } finally {
@@ -3609,53 +3607,33 @@ function ModalReplica({
             </div>
           </div>
 
-          {/* Bloqueo visual para pedidos < 60 kg sin autorización */}
+          {/* Réplica < 60 kg: motivo + clave dinámica en una sola vista */}
           {modo === "crear" && pesoBloqueado && !claveParaPesoValida && esFacturado && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm space-y-2">
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 text-sm">
               <p className="font-semibold text-amber-900">
-                ⚠️ Réplica no permitida — pedido menor a 60 kg
+                ⚠️ Réplica de pedido menor a 60 kg
               </p>
-              <p className="text-xs text-amber-800">
-                Este pedido pesa <b>{pesoKg % 1 === 0 ? pesoKg : pesoKg.toFixed(1)} kg</b>. Las réplicas no están permitidas para pedidos menores a 60 kg.
+              <p className="mt-1 text-xs text-amber-800">
+                Este pedido pesa <b>{pesoKg % 1 === 0 ? pesoKg : pesoKg.toFixed(1)} kg</b>. Para replicarlo, indica el <b>motivo</b> e ingresa la <b>clave dinámica</b> de un administrador.
               </p>
-              <p className="text-xs text-amber-800">
-                Si necesitas hacerla, solicita una <b>clave dinámica</b> al supervisor y justifica el motivo.
-              </p>
-              <button
-                type="button"
-                onClick={() => setExpandeFormPeso(true)}
-                className="text-xs font-semibold text-amber-700 underline hover:text-amber-900"
-              >
-                Tengo autorización — ingresar clave dinámica
-              </button>
-            </div>
-          )}
 
-          {/* Modal de autorización (clave dinámica + motivo) para réplica < 60 kg */}
-          {modo === "crear" && pesoBloqueado && !claveParaPesoValida && esFacturado && expandeFormPeso && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/60 p-4">
-              <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-wine/10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6 text-brand-wine">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                  </svg>
-                </div>
-                <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
-                  Autorización requerida
-                </h3>
-                <p className="mt-1 text-center text-sm text-brand-brown/70">
-                  Este pedido pesa <b>{pesoKg % 1 === 0 ? pesoKg : pesoKg.toFixed(1)} kg</b>. Para replicar un pedido menor a 60 kg, indica el <b>motivo</b> e ingresa la <b>clave dinámica</b> de un administrador.
-                </p>
-                <div className="mt-4 text-left">
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Motivo de la réplica *</label>
-                  <textarea
-                    value={motivoPeso}
-                    onChange={(e) => { setMotivoPeso(e.target.value); setErrorClavePeso(null); }}
-                    rows={2}
-                    placeholder="Describe el motivo por el que se autoriza esta réplica…"
-                    className="w-full resize-none rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm outline-none focus:border-brand-wine"
-                  />
-                </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-900/70">
+                  Motivo de la réplica *
+                </label>
+                <textarea
+                  value={motivoPeso}
+                  onChange={(e) => { setMotivoPeso(e.target.value); setErrorClavePeso(null); }}
+                  rows={2}
+                  placeholder="Describe el motivo por el que se autoriza esta réplica…"
+                  className="w-full resize-none rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
+                />
+              </div>
+
+              <div className="mt-3">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-amber-900/70">
+                  Clave dinámica *
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -3665,30 +3643,22 @@ function ModalReplica({
                   onKeyDown={(e) => { if (e.key === "Enter") verificarClavePesoHandler(); }}
                   placeholder="••••••"
                   disabled={verificandoClavePeso}
-                  autoFocus
-                  className="mt-4 w-full rounded-xl border border-brand-brown/20 px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine disabled:opacity-50"
+                  className="w-full rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-center font-mono text-xl font-bold tracking-[0.4em] text-brand-wine outline-none focus:border-brand-wine disabled:opacity-50"
                 />
-                {errorClavePeso && (
-                  <p className="mt-2 text-center text-sm font-medium text-red-600">{errorClavePeso}</p>
-                )}
-                <div className="mt-5 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setExpandeFormPeso(false); setClavePeso(""); setMotivoPeso(""); setErrorClavePeso(null); }}
-                    className="flex-1 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={verificarClavePesoHandler}
-                    disabled={verificandoClavePeso || !motivoPeso.trim() || clavePeso.length < 6}
-                    className="flex-1 rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
-                  >
-                    {verificandoClavePeso ? "Verificando…" : "Autorizar"}
-                  </button>
-                </div>
               </div>
+
+              {errorClavePeso && (
+                <p className="mt-2 text-center text-sm font-medium text-red-600">{errorClavePeso}</p>
+              )}
+
+              <button
+                type="button"
+                onClick={verificarClavePesoHandler}
+                disabled={verificandoClavePeso || !motivoPeso.trim() || clavePeso.length < 6}
+                className="mt-3 w-full rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+              >
+                {verificandoClavePeso ? "Verificando…" : "Autorizar y continuar"}
+              </button>
             </div>
           )}
 
@@ -3781,7 +3751,7 @@ function ModalReplica({
                   </div>
                 )}
               </>
-            ) : (
+            ) : !esFacturado ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
                 {esRechazoDrivin ? (
                   <>
@@ -3797,7 +3767,7 @@ function ModalReplica({
                   <>No se puede realizar réplica si el pedido no está facturado.</>
                 )}
               </div>
-            )
+            ) : null
           ) : (
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
