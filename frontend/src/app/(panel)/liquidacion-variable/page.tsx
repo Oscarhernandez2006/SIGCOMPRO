@@ -186,8 +186,6 @@ export default function LiquidacionVariablePage() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" /></svg>
           Revisar y decidir pedidos
         </button>
-
-        <span className="ml-auto text-xs font-medium text-brand-brown/60">{q.label}</span>
       </div>
 
       {error && (
