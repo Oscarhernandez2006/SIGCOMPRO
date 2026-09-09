@@ -100,15 +100,18 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   const puedeCambiarPanel = panelesAccesibles(usuario).length > 1;
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
+    // Solo un ítem activo: el de la ruta coincidente más larga (evita que
+    // "/…/tienda" y "/…/tienda/catalogo" queden ambos activos).
+    const hrefActivo = navItems
+      .filter((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))
+      .reduce<string | null>((mejor, i) => (i.href.length > (mejor?.length ?? -1) ? i.href : mejor), null);
     return (
       <nav className="flex flex-1 flex-col gap-0.5 px-3">
         <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-brand-cream/40">
           Menú
         </p>
         {navItems.map((item) => {
-          const active =
-            pathname === item.href ||
-            (item.href !== "/credito-empleados" && pathname.startsWith(item.href));
+          const active = item.href === hrefActivo;
           return (
             <Link
               key={item.href}

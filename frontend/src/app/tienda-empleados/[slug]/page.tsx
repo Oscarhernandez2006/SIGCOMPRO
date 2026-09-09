@@ -50,6 +50,24 @@ function ProductoImg({ className }: { className?: string }) {
   );
 }
 
+/** Limpia el nombre de la categoría (quita códigos como "0010 - "). */
+function limpiarCategoria(cat: string): string {
+  return (cat ?? "").replace(/^\s*\d+\s*[-–—]\s*/, "").trim() || (cat ?? "").trim() || "Otros";
+}
+
+/** Emoji según la categoría (detalle gráfico). */
+function emojiCategoria(cat: string): string {
+  const s = cat.toLowerCase();
+  if (/(res|carne|bife|lomo|churrasco)/.test(s)) return "🥩";
+  if (/(cerdo|marrano|costilla|tocin)/.test(s)) return "🐷";
+  if (/(pollo|pechuga|ala|gallin)/.test(s)) return "🍗";
+  if (/(pescado|pesca|mar|camaron)/.test(s)) return "🐟";
+  if (/(bebida|agua|jugo|gaseosa|refresco|hidrat)/.test(s)) return "🥤";
+  if (/(carbon|asado|brasa|parrilla|restaurante|asader)/.test(s)) return "🔥";
+  if (/(embutido|chorizo|salchich)/.test(s)) return "🌭";
+  return "🥩";
+}
+
 export default function TiendaEmpleadosStore({
   params,
 }: {
@@ -282,43 +300,71 @@ export default function TiendaEmpleadosStore({
         </div>
       </header>
 
-      {/* Catálogo */}
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(tienda?.categorias ?? []).flatMap((c) => c.productos).map((p) => {
-            const enCarro = carrito[p.referencia]?.cantidad ?? 0;
-            return (
-              <button
-                key={p.referencia}
-                onClick={() => setProductoModal(p)}
-                className={`group flex items-center gap-3 rounded-3xl bg-white p-3 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
-                  enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
-                }`}
-              >
-                <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-brand-cream-soft">
-                  <ProductoImg />
-                  {enCarro > 0 && (
-                    <span className="absolute right-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-amber px-1 text-[10px] font-extrabold text-white shadow">
-                      {enCarro % 1 === 0 ? enCarro : enCarro.toFixed(1)}
-                    </span>
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 block text-sm font-bold leading-snug text-brand-black">
-                    {p.producto || p.referencia}
-                  </span>
-                  <span className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="text-base font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
-                    <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
-                  </span>
-                </span>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                </span>
-              </button>
-            );
-          })}
+      {/* Banner decorativo */}
+      <div className="mx-auto mt-4 max-w-5xl px-4">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-wine to-brand-wine-dark px-5 py-4 text-white shadow-md">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-brand-amber/20 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-12 left-10 h-32 w-32 rounded-full bg-brand-gold/10 blur-2xl" />
+          <div className="relative flex items-center gap-3">
+            <span className="text-3xl">🥩🍗🐷</span>
+            <div>
+              <p className={`${playfair.className} text-base font-extrabold`}>Elige tus productos</p>
+              <p className="text-[11px] font-medium text-brand-cream/75">Compra con tu crédito · Se descuenta por nómina</p>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Catálogo por categoría */}
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        {(tienda?.categorias ?? []).map((cat) => {
+          const nombreCat = limpiarCategoria(cat.categoria);
+          return (
+            <section key={cat.categoria} className="mb-9">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="text-2xl">{emojiCategoria(nombreCat)}</span>
+                <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
+                <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
+                <span className="rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length}</span>
+              </div>
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                {cat.productos.map((p) => {
+                  const enCarro = carrito[p.referencia]?.cantidad ?? 0;
+                  return (
+                    <button
+                      key={p.referencia}
+                      onClick={() => setProductoModal(p)}
+                      className={`group flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                        enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
+                      }`}
+                    >
+                      <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-brand-cream-soft">
+                        <ProductoImg />
+                        {enCarro > 0 && (
+                          <span className="absolute right-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-amber px-1 text-[10px] font-extrabold text-white shadow">
+                            {enCarro % 1 === 0 ? enCarro : enCarro.toFixed(1)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2 block text-[15px] font-bold leading-snug text-brand-black">
+                          {p.producto || p.referencia}
+                        </span>
+                        <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <span className="text-lg font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
+                          <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
+                        </span>
+                      </span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
       </div>
 
       {productoModal && (
