@@ -55,17 +55,40 @@ function limpiarCategoria(cat: string): string {
   return (cat ?? "").replace(/^\s*\d+\s*[-–—]\s*/, "").trim() || (cat ?? "").trim() || "Otros";
 }
 
-/** Emoji según la categoría (detalle gráfico). */
-function emojiCategoria(cat: string): string {
+/** Slug para anclas de categoría. */
+function slugCat(cat: string): string {
+  return (
+    "cat-" +
+    limpiarCategoria(cat)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+  );
+}
+
+/** Icono SVG profesional según la categoría. */
+function iconoCategoria(cat: string, cls = "h-5 w-5") {
   const s = cat.toLowerCase();
-  if (/(res|carne|bife|lomo|churrasco)/.test(s)) return "🥩";
-  if (/(cerdo|marrano|costilla|tocin)/.test(s)) return "🐷";
-  if (/(pollo|pechuga|ala|gallin)/.test(s)) return "🍗";
-  if (/(pescado|pesca|mar|camaron)/.test(s)) return "🐟";
-  if (/(bebida|agua|jugo|gaseosa|refresco|hidrat)/.test(s)) return "🥤";
-  if (/(carbon|asado|brasa|parrilla|restaurante|asader)/.test(s)) return "🔥";
-  if (/(embutido|chorizo|salchich)/.test(s)) return "🌭";
-  return "🥩";
+  if (/(bebida|agua|jugo|gaseosa|refresco|hidrat|del valle|fuze|ekii|pepsi|cola)/.test(s))
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={cls}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+      </svg>
+    );
+  if (/(carbon|asado|brasa|parrilla|restaurante|asader)/.test(s))
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={cls}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.362-6.867 8.21 8.21 0 0 0 3 2.48Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={cls}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12A1.125 1.125 0 0 1 19.75 21H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 6.75h12.974c.576 0 1.059.435 1.119 1.007Z" />
+    </svg>
+  );
 }
 
 export default function TiendaEmpleadosStore({
@@ -84,6 +107,7 @@ export default function TiendaEmpleadosStore({
 
   const [carrito, setCarrito] = useState<Record<string, LineaCarrito>>({});
   const [productoModal, setProductoModal] = useState<ProductoTienda | null>(null);
+  const [catActiva, setCatActiva] = useState("");
   const [modal, setModal] = useState<"cerrado" | "carrito" | "datos">("cerrado");
   const [entrega, setEntrega] = useState<"recoge" | "domicilio">("recoge");
   const [direccion, setDireccion] = useState("");
@@ -161,6 +185,33 @@ export default function TiendaEmpleadosStore({
       return next;
     });
   }
+
+  // Desplaza a la sección de una categoría al tocar su tab.
+  function irACategoria(cat: string) {
+    document.getElementById(slugCat(cat))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setCatActiva(slugCat(cat));
+  }
+
+  // Scroll-spy: resalta en las tabs la categoría que se está viendo.
+  useEffect(() => {
+    const cats = tienda?.categorias ?? [];
+    if (cats.length === 0) return;
+    const els = cats
+      .map((c) => document.getElementById(slugCat(c.categoria)))
+      .filter((e): e is HTMLElement => e !== null);
+    if (els.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setCatActiva(visible.target.id);
+      },
+      { rootMargin: "-130px 0px -65% 0px", threshold: 0 },
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [tienda]);
 
   async function identificar() {
     const c = inputCedula.trim();
@@ -274,45 +325,71 @@ export default function TiendaEmpleadosStore({
 
   return (
     <main className={`${manrope.className} min-h-screen bg-brand-cream-soft pb-32 text-brand-black`}>
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href="/tienda-empleados" className="flex h-9 w-9 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
-          </Link>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/95 shadow-sm">
-            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={40} height={40} className="h-7 w-auto object-contain" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
-              {tienda?.nombre}
-            </p>
-            <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
-          </div>
-          <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
-            <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
-              {copTienda(restante < 0 ? disponible : restante)}
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* Banner decorativo */}
-      <div className="mx-auto mt-4 max-w-5xl px-4">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-wine to-brand-wine-dark px-5 py-4 text-white shadow-md">
-          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-brand-amber/20 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-12 left-10 h-32 w-32 rounded-full bg-brand-gold/10 blur-2xl" />
-          <div className="relative flex items-center gap-3">
-            <span className="text-3xl">🥩🍗🐷</span>
-            <div>
-              <p className={`${playfair.className} text-base font-extrabold`}>Elige tus productos</p>
-              <p className="text-[11px] font-medium text-brand-cream/75">Compra con tu crédito · Se descuenta por nómina</p>
+      {/* Header + tabs de categorías (pegajosos) */}
+      <div className="sticky top-0 z-30">
+        <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+            <Link href="/tienda-empleados" className="flex h-9 w-9 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
+            </Link>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/95 shadow-sm">
+              <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={40} height={40} className="h-7 w-auto object-contain" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
+                {tienda?.nombre}
+              </p>
+              <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
+            </div>
+            <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
+              <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
+                {copTienda(restante < 0 ? disponible : restante)}
+              </p>
             </div>
           </div>
-        </div>
+        </header>
+
+        {(tienda?.categorias?.length ?? 0) > 1 && (
+          <div className="border-b border-brand-brown/10 bg-brand-cream-soft/95 backdrop-blur">
+            <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {(tienda?.categorias ?? []).map((cat) => {
+                const activa = catActiva === slugCat(cat.categoria);
+                return (
+                  <button
+                    key={cat.categoria}
+                    onClick={() => irACategoria(cat.categoria)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
+                      activa
+                        ? "bg-brand-wine text-white shadow-sm"
+                        : "bg-white text-brand-brown/70 ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
+                    }`}
+                  >
+                    <span className={activa ? "text-brand-amber" : "text-brand-brown/40"}>
+                      {iconoCategoria(limpiarCategoria(cat.categoria), "h-4 w-4")}
+                    </span>
+                    {limpiarCategoria(cat.categoria)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Banner */}
+      <div className="mx-auto mt-4 max-w-5xl px-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner-compra-creditos.png"
+          alt="Compra con tu crédito"
+          className="w-full rounded-3xl shadow-md"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
       </div>
 
       {/* Catálogo por categoría */}
@@ -320,9 +397,9 @@ export default function TiendaEmpleadosStore({
         {(tienda?.categorias ?? []).map((cat) => {
           const nombreCat = limpiarCategoria(cat.categoria);
           return (
-            <section key={cat.categoria} className="mb-9">
+            <section key={cat.categoria} id={slugCat(cat.categoria)} className="mb-9 scroll-mt-32">
               <div className="mb-4 flex items-center gap-3">
-                <span className="text-2xl">{emojiCategoria(nombreCat)}</span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-wine/5 text-brand-wine">{iconoCategoria(nombreCat)}</span>
                 <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
                 <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
                 <span className="rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length}</span>
