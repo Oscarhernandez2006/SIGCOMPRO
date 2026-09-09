@@ -351,7 +351,7 @@ export default function TiendaEmpleadosStore({
       {/* Header + tabs de categorías (pegajosos) */}
       <div className="sticky top-0 z-30">
         <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-5">
             {/* Izquierda: volver + nombres */}
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Link href="/tienda-empleados" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
@@ -367,7 +367,7 @@ export default function TiendaEmpleadosStore({
               </div>
             </div>
             {/* Centro: logo sin fondo */}
-            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={48} className="h-11 w-auto shrink-0 object-contain drop-shadow-sm" />
+            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={64} className="h-16 w-auto shrink-0 object-contain drop-shadow-sm" />
             {/* Derecha: saldo */}
             <div className="flex flex-1 justify-end">
               <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
@@ -382,7 +382,7 @@ export default function TiendaEmpleadosStore({
 
         {(tienda?.categorias?.length ?? 0) > 1 && (
           <div className="border-b border-brand-brown/10 bg-brand-cream-soft/95 backdrop-blur lg:hidden">
-            <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mx-auto flex max-w-[1500px] gap-2 overflow-x-auto px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 onClick={() => setCatFiltro("")}
                 className={`inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
@@ -418,7 +418,7 @@ export default function TiendaEmpleadosStore({
       </div>
 
       {/* Banner (ancho completo) */}
-      <div className="mx-auto max-w-6xl px-4 pt-4">
+      <div className="mx-auto max-w-[1500px] px-4 pt-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/banner-compra-creditos.png"
@@ -431,10 +431,10 @@ export default function TiendaEmpleadosStore({
       </div>
 
       {/* Contenido: filtros (izquierda) + catálogo */}
-      <div className="mx-auto max-w-6xl items-start gap-6 px-4 lg:flex">
+      <div className="mx-auto max-w-[1500px] items-start gap-6 px-4 lg:flex">
         {/* Sidebar de filtros (escritorio) — sticky al hacer scroll */}
         <aside className="hidden shrink-0 lg:block lg:w-64">
-          <div className="sticky top-20 mt-6 space-y-3">
+          <div className="sticky top-28 mt-6 space-y-3">
             {/* Buscador */}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Buscar producto</label>
@@ -578,7 +578,7 @@ export default function TiendaEmpleadosStore({
                               )}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="line-clamp-2 block text-[15px] font-bold leading-snug text-brand-black">
+                              <span className="block text-[15px] font-bold leading-snug text-brand-black">
                                 {p.producto || p.referencia}
                               </span>
                               <span className="mt-1.5 flex flex-wrap items-center gap-2">
