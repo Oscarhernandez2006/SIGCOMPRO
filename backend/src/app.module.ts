@@ -17,6 +17,7 @@ import { ProvisioningModule } from './provisioning/provisioning.module';
 import { MenuModule } from './menu/menu.module';
 import { CreditoEmpleadosModule } from './credito-empleados/credito-empleados.module';
 import { TiendaEmpleadosModule } from './tienda-empleados/tienda-empleados.module';
+import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-variable.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { TiendaEmpleadosModule } from './tienda-empleados/tienda-empleados.modul
     MenuModule,
     CreditoEmpleadosModule,
     TiendaEmpleadosModule,
+    LiquidacionVariableModule,
   ],
   controllers: [AppController],
 })

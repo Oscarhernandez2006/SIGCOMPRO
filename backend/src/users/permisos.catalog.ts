@@ -119,6 +119,10 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: 'mi_resumen',
         label: 'Mi resumen',
       },
+      {
+        key: 'liquidacion_variable',
+        label: 'Liquidación variable',
+      },
     ],
   },
   {

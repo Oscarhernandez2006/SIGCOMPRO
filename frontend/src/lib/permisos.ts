@@ -28,6 +28,7 @@ export const RUTA_MODULO: Record<string, string> = {
   cotizaciones: "/cotizaciones",
   lista_precios: "/lista-precios",
   mi_resumen: "/mi-resumen",
+  liquidacion_variable: "/liquidacion-variable",
   credito_empleados: "/credito-empleados",
 };
 
