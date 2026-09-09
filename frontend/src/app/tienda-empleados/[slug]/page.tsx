@@ -417,11 +417,24 @@ export default function TiendaEmpleadosStore({
         )}
       </div>
 
+      {/* Banner (ancho completo) */}
+      <div className="mx-auto max-w-6xl px-4 pt-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner-compra-creditos.png"
+          alt="Compra con tu crédito"
+          className="w-full rounded-3xl shadow-md"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      </div>
+
       {/* Contenido: filtros (izquierda) + catálogo */}
-      <div className="mx-auto max-w-6xl gap-6 px-4 lg:flex">
-        {/* Sidebar de filtros (escritorio) */}
+      <div className="mx-auto max-w-6xl items-start gap-6 px-4 lg:flex">
+        {/* Sidebar de filtros (escritorio) — sticky al hacer scroll */}
         <aside className="hidden shrink-0 lg:block lg:w-64">
-          <div className="sticky top-32 mt-4 space-y-3">
+          <div className="sticky top-20 mt-6 space-y-3">
             {/* Buscador */}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Buscar producto</label>
@@ -506,19 +519,6 @@ export default function TiendaEmpleadosStore({
 
         {/* Columna principal */}
         <div className="min-w-0 flex-1">
-          {/* Banner */}
-          <div className="mt-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/banner-compra-creditos.png"
-              alt="Compra con tu crédito"
-              className="w-full rounded-3xl shadow-md"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
-          </div>
-
           {/* Buscador (móvil) */}
           <div className="relative mt-4 lg:hidden">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35">
