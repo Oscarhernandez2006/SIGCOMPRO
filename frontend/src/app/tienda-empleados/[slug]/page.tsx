@@ -421,7 +421,7 @@ export default function TiendaEmpleadosStore({
       <div className="mx-auto max-w-[1500px] px-4 pt-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/banner-compra-creditos.png"
+          src="/banner-compra-creditos.png?v=2"
           alt="Compra con tu crédito"
           className="w-full rounded-3xl shadow-md"
           onError={(e) => {
