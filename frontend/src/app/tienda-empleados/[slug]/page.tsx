@@ -108,7 +108,9 @@ export default function TiendaEmpleadosStore({
 
   const [carrito, setCarrito] = useState<Record<string, LineaCarrito>>({});
   const [productoModal, setProductoModal] = useState<ProductoTienda | null>(null);
-  const [catActiva, setCatActiva] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [catFiltro, setCatFiltro] = useState("");
+  const [ordenPrecio, setOrdenPrecio] = useState<"" | "asc" | "desc">("");
   const [modal, setModal] = useState<"cerrado" | "carrito" | "datos">("cerrado");
   const [entrega, setEntrega] = useState<"recoge" | "domicilio">("recoge");
   const [direccion, setDireccion] = useState("");
@@ -159,6 +161,31 @@ export default function TiendaEmpleadosStore({
   const excede = total > disponible;
   const restante = disponible - total;
 
+  // Catálogo con filtros aplicados (búsqueda por nombre, categoría y orden).
+  const categoriasFiltradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return (tienda?.categorias ?? [])
+      .filter((c) => !catFiltro || c.categoria === catFiltro)
+      .map((c) => {
+        let productos = q
+          ? c.productos.filter((p) => (p.producto || p.referencia).toLowerCase().includes(q))
+          : c.productos;
+        if (ordenPrecio) {
+          productos = [...productos].sort((a, b) =>
+            ordenPrecio === "asc" ? a.precio - b.precio : b.precio - a.precio,
+          );
+        }
+        return { ...c, productos };
+      })
+      .filter((c) => c.productos.length > 0);
+  }, [tienda, busqueda, catFiltro, ordenPrecio]);
+
+  const nResultados = useMemo(
+    () => categoriasFiltradas.reduce((s, c) => s + c.productos.length, 0),
+    [categoriasFiltradas],
+  );
+  const hayFiltros = busqueda.trim() !== "" || catFiltro !== "" || ordenPrecio !== "";
+
   // Cambia la cantidad conservando la observación (stepper del carrito).
   function setCantidad(p: LineaCarrito, cant: number) {
     setCarrito((prev) => {
@@ -186,33 +213,6 @@ export default function TiendaEmpleadosStore({
       return next;
     });
   }
-
-  // Desplaza a la sección de una categoría al tocar su tab.
-  function irACategoria(cat: string) {
-    document.getElementById(slugCat(cat))?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setCatActiva(slugCat(cat));
-  }
-
-  // Scroll-spy: resalta en las tabs la categoría que se está viendo.
-  useEffect(() => {
-    const cats = tienda?.categorias ?? [];
-    if (cats.length === 0) return;
-    const els = cats
-      .map((c) => document.getElementById(slugCat(c.categoria)))
-      .filter((e): e is HTMLElement => e !== null);
-    if (els.length === 0) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (visible) setCatActiva(visible.target.id);
-      },
-      { rootMargin: "-130px 0px -65% 0px", threshold: 0 },
-    );
-    els.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, [tienda]);
 
   async function identificar() {
     const c = inputCedula.trim();
@@ -381,14 +381,24 @@ export default function TiendaEmpleadosStore({
         </header>
 
         {(tienda?.categorias?.length ?? 0) > 1 && (
-          <div className="border-b border-brand-brown/10 bg-brand-cream-soft/95 backdrop-blur">
+          <div className="border-b border-brand-brown/10 bg-brand-cream-soft/95 backdrop-blur lg:hidden">
             <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                onClick={() => setCatFiltro("")}
+                className={`inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
+                  catFiltro === ""
+                    ? "bg-brand-wine text-white shadow-sm"
+                    : "bg-white text-brand-brown/70 ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
+                }`}
+              >
+                Todas
+              </button>
               {(tienda?.categorias ?? []).map((cat) => {
-                const activa = catActiva === slugCat(cat.categoria);
+                const activa = catFiltro === cat.categoria;
                 return (
                   <button
                     key={cat.categoria}
-                    onClick={() => irACategoria(cat.categoria)}
+                    onClick={() => setCatFiltro(activa ? "" : cat.categoria)}
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
                       activa
                         ? "bg-brand-wine text-white shadow-sm"
@@ -407,69 +417,188 @@ export default function TiendaEmpleadosStore({
         )}
       </div>
 
-      {/* Banner */}
-      <div className="mx-auto mt-4 max-w-5xl px-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/banner-compra-creditos.png"
-          alt="Compra con tu crédito"
-          className="w-full rounded-3xl shadow-md"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      </div>
-
-      {/* Catálogo por categoría */}
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        {(tienda?.categorias ?? []).map((cat) => {
-          const nombreCat = limpiarCategoria(cat.categoria);
-          return (
-            <section key={cat.categoria} id={slugCat(cat.categoria)} className="mb-9 scroll-mt-32">
-              <div className="mb-4 flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-wine/5 text-brand-wine">{iconoCategoria(nombreCat)}</span>
-                <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
-                <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
-                <span className="rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length}</span>
+      {/* Contenido: filtros (izquierda) + catálogo */}
+      <div className="mx-auto max-w-6xl gap-6 px-4 lg:flex">
+        {/* Sidebar de filtros (escritorio) */}
+        <aside className="hidden shrink-0 lg:block lg:w-64">
+          <div className="sticky top-32 mt-4 space-y-3">
+            {/* Buscador */}
+            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Buscar producto</label>
+              <div className="relative">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
+                </svg>
+                <input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Nombre del producto…"
+                  className="h-10 w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft/50 pl-9 pr-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:bg-white"
+                />
               </div>
-              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                {cat.productos.map((p) => {
-                  const enCarro = carrito[p.referencia]?.cantidad ?? 0;
+            </div>
+
+            {/* Categorías */}
+            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
+              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Categorías</p>
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => setCatFiltro("")}
+                  className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm font-semibold transition ${
+                    catFiltro === "" ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
+                  }`}
+                >
+                  <span className={catFiltro === "" ? "text-brand-amber" : "text-brand-brown/40"}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+                  </span>
+                  <span className="flex-1">Todas</span>
+                  <span className={`text-[11px] font-bold ${catFiltro === "" ? "text-white/70" : "text-brand-brown/40"}`}>{tienda?.categorias?.reduce((s, c) => s + c.productos.length, 0) ?? 0}</span>
+                </button>
+                {(tienda?.categorias ?? []).map((cat) => {
+                  const activa = catFiltro === cat.categoria;
                   return (
                     <button
-                      key={p.referencia}
-                      onClick={() => setProductoModal(p)}
-                      className={`group flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
-                        enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
+                      key={cat.categoria}
+                      onClick={() => setCatFiltro(activa ? "" : cat.categoria)}
+                      className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm font-semibold transition ${
+                        activa ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
                       }`}
                     >
-                      <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-brand-cream-soft">
-                        <ProductoImg />
-                        {enCarro > 0 && (
-                          <span className="absolute right-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-amber px-1 text-[10px] font-extrabold text-white shadow">
-                            {enCarro % 1 === 0 ? enCarro : enCarro.toFixed(1)}
-                          </span>
-                        )}
+                      <span className={activa ? "text-brand-amber" : "text-brand-brown/40"}>
+                        {iconoCategoria(limpiarCategoria(cat.categoria), "h-4 w-4")}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 block text-[15px] font-bold leading-snug text-brand-black">
-                          {p.producto || p.referencia}
-                        </span>
-                        <span className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="text-lg font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
-                          <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
-                        </span>
-                      </span>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                      </span>
+                      <span className="flex-1 truncate">{limpiarCategoria(cat.categoria)}</span>
+                      <span className={`text-[11px] font-bold ${activa ? "text-white/70" : "text-brand-brown/40"}`}>{cat.productos.length}</span>
                     </button>
                   );
                 })}
               </div>
-            </section>
-          );
-        })}
+            </div>
+
+            {/* Ordenar por precio */}
+            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
+              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Ordenar por precio</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([["asc", "Menor"], ["desc", "Mayor"]] as const).map(([val, lbl]) => (
+                  <button
+                    key={val}
+                    onClick={() => setOrdenPrecio((prev) => (prev === val ? "" : val))}
+                    className={`rounded-xl px-2 py-2 text-xs font-bold transition ${
+                      ordenPrecio === val ? "bg-brand-amber text-white" : "bg-brand-cream-soft text-brand-brown/60 hover:bg-brand-cream"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {hayFiltros && (
+              <button
+                onClick={() => { setBusqueda(""); setCatFiltro(""); setOrdenPrecio(""); }}
+                className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-xs font-semibold text-brand-brown/60 transition hover:bg-brand-cream-soft"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* Columna principal */}
+        <div className="min-w-0 flex-1">
+          {/* Banner */}
+          <div className="mt-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/banner-compra-creditos.png"
+              alt="Compra con tu crédito"
+              className="w-full rounded-3xl shadow-md"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          </div>
+
+          {/* Buscador (móvil) */}
+          <div className="relative mt-4 lg:hidden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
+            </svg>
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar producto…"
+              className="h-11 w-full rounded-2xl border border-brand-brown/15 bg-white pl-10 pr-4 text-sm text-brand-black shadow-sm outline-none transition focus:border-brand-amber"
+            />
+          </div>
+
+          {/* Catálogo por categoría */}
+          <div className="py-6">
+            {categoriasFiltradas.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-brand-brown/20 bg-white/60 px-6 py-16 text-center">
+                <p className="text-sm font-semibold text-brand-brown/55">No se encontraron productos</p>
+                <p className="mt-1 text-xs text-brand-brown/40">Prueba con otro nombre o quita los filtros.</p>
+                {hayFiltros && (
+                  <button
+                    onClick={() => { setBusqueda(""); setCatFiltro(""); setOrdenPrecio(""); }}
+                    className="mt-4 rounded-xl bg-brand-wine px-4 py-2 text-xs font-bold text-white"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+            ) : (
+              categoriasFiltradas.map((cat) => {
+                const nombreCat = limpiarCategoria(cat.categoria);
+                return (
+                  <section key={cat.categoria} id={slugCat(cat.categoria)} className="mb-9 scroll-mt-32">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-wine/5 text-brand-wine">{iconoCategoria(nombreCat)}</span>
+                      <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
+                      <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
+                      <span className="rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length}</span>
+                    </div>
+                    <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {cat.productos.map((p) => {
+                        const enCarro = carrito[p.referencia]?.cantidad ?? 0;
+                        return (
+                          <button
+                            key={p.referencia}
+                            onClick={() => setProductoModal(p)}
+                            className={`group flex items-center gap-4 rounded-3xl bg-white p-4 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                              enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
+                            }`}
+                          >
+                            <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-brand-cream-soft">
+                              <ProductoImg />
+                              {enCarro > 0 && (
+                                <span className="absolute right-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-amber px-1 text-[10px] font-extrabold text-white shadow">
+                                  {enCarro % 1 === 0 ? enCarro : enCarro.toFixed(1)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="line-clamp-2 block text-[15px] font-bold leading-snug text-brand-black">
+                                {p.producto || p.referencia}
+                              </span>
+                              <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <span className="text-lg font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
+                                <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
+                              </span>
+                            </span>
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
 
       {productoModal && (
