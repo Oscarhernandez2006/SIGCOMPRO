@@ -58,6 +58,7 @@ export interface ItemPedidoTienda {
   um: string;
   precio: number;
   cantidad: number;
+  observacion?: string;
 }
 
 export interface PedidoTienda {

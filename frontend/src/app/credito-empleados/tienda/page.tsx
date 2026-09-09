@@ -168,7 +168,10 @@ export default function PedidosTiendaPage() {
                       {p.items.map((it) => (
                         <tr key={it.referencia} className="border-b border-brand-brown/5 last:border-0">
                           <td className="px-3 py-1.5 text-brand-brown/50">{it.cantidad}×</td>
-                          <td className="px-1 py-1.5 text-brand-black">{it.producto || it.referencia}</td>
+                          <td className="px-1 py-1.5 text-brand-black">
+                            {it.producto || it.referencia}
+                            {it.observacion && <span className="block text-[10px] italic text-brand-brown/50">“{it.observacion}”</span>}
+                          </td>
                           <td className="px-3 py-1.5 text-right font-medium text-brand-black">{copTienda(it.precio * it.cantidad)}</td>
                         </tr>
                       ))}

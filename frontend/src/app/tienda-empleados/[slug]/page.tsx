@@ -12,6 +12,7 @@ import {
   SESSION_KEY,
   type SaldoTrabajador,
   type TiendaCatalogoPublico,
+  type ProductoTienda,
   type PedidoTienda,
 } from "@/lib/tienda-empleados";
 
@@ -24,6 +25,29 @@ interface LineaCarrito {
   um: string;
   precio: number;
   cantidad: number;
+  observacion?: string;
+}
+
+/** Imagen de producto con placeholder de marca (cae al logo si aún no existe). */
+function ProductoImg({ className }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/producto-placeholder.jpg"
+      alt=""
+      loading="lazy"
+      onError={(e) => {
+        const img = e.currentTarget;
+        if (!img.dataset.fallback) {
+          img.dataset.fallback = "1";
+          img.src = "/LOGOCARNESSANTACRUZ.png";
+          img.classList.remove("object-cover");
+          img.classList.add("object-contain", "p-3", "opacity-80");
+        }
+      }}
+      className={`h-full w-full object-cover ${className ?? ""}`}
+    />
+  );
 }
 
 export default function TiendaEmpleadosStore({
@@ -41,6 +65,7 @@ export default function TiendaEmpleadosStore({
   const [error, setError] = useState<string | null>(null);
 
   const [carrito, setCarrito] = useState<Record<string, LineaCarrito>>({});
+  const [productoModal, setProductoModal] = useState<ProductoTienda | null>(null);
   const [modal, setModal] = useState<"cerrado" | "carrito" | "datos">("cerrado");
   const [entrega, setEntrega] = useState<"recoge" | "domicilio">("recoge");
   const [direccion, setDireccion] = useState("");
@@ -86,16 +111,35 @@ export default function TiendaEmpleadosStore({
 
   const lineas = useMemo(() => Object.values(carrito), [carrito]);
   const total = useMemo(() => lineas.reduce((s, l) => s + l.precio * l.cantidad, 0), [lineas]);
-  const nItems = useMemo(() => lineas.reduce((s, l) => s + l.cantidad, 0), [lineas]);
+  const nItems = useMemo(() => lineas.length, [lineas]);
   const disponible = saldo?.cupo_disponible ?? 0;
   const excede = total > disponible;
   const restante = disponible - total;
 
-  function setCantidad(p: { referencia: string; producto: string; um: string; precio: number }, cant: number) {
+  // Cambia la cantidad conservando la observación (stepper del carrito).
+  function setCantidad(p: LineaCarrito, cant: number) {
     setCarrito((prev) => {
       const next = { ...prev };
       if (cant <= 0) delete next[p.referencia];
-      else next[p.referencia] = { ...p, cantidad: cant };
+      else next[p.referencia] = { ...next[p.referencia], ...p, cantidad: cant };
+      return next;
+    });
+  }
+
+  // Agrega/actualiza una línea con cantidad y observación (desde el modal).
+  function setLinea(p: ProductoTienda, cantidad: number, observacion: string) {
+    setCarrito((prev) => {
+      const next = { ...prev };
+      if (cantidad <= 0) delete next[p.referencia];
+      else
+        next[p.referencia] = {
+          referencia: p.referencia,
+          producto: p.producto,
+          um: p.um,
+          precio: p.precio,
+          cantidad,
+          observacion: observacion.trim() || undefined,
+        };
       return next;
     });
   }
@@ -142,6 +186,7 @@ export default function TiendaEmpleadosStore({
           um: l.um,
           precio: l.precio,
           cantidad: l.cantidad,
+          observacion: l.observacion,
         })),
         entrega,
         direccion: entrega === "domicilio" ? direccion.trim() : undefined,
@@ -212,25 +257,25 @@ export default function TiendaEmpleadosStore({
   return (
     <main className={`${manrope.className} min-h-screen bg-brand-cream-soft pb-32 text-brand-black`}>
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-brand-brown/10 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-20 bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href="/tienda-empleados" className="flex h-9 w-9 items-center justify-center rounded-full text-brand-wine transition hover:bg-brand-cream-soft" title="Volver">
+          <Link href="/tienda-empleados" className="flex h-9 w-9 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
           </Link>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-brand-brown/10">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/95 shadow-sm">
             <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={40} height={40} className="h-7 w-auto object-contain" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className={`${playfair.className} truncate text-lg font-extrabold text-brand-wine`}>
+            <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
               {tienda?.nombre}
             </p>
-            <p className="truncate text-[11px] font-medium text-brand-brown/50">{saldo?.nombre}</p>
+            <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
           </div>
-          <div className="rounded-2xl bg-brand-cream-soft px-3.5 py-1.5 text-right ring-1 ring-brand-brown/5">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-brand-brown/45">Saldo</p>
-            <p className={`text-sm font-extrabold ${excede ? "text-red-500" : "text-emerald-600"}`}>
+          <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
+            <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
               {copTienda(restante < 0 ? disponible : restante)}
             </p>
           </div>
@@ -239,77 +284,55 @@ export default function TiendaEmpleadosStore({
 
       {/* Catálogo */}
       <div className="mx-auto max-w-5xl px-4 py-6">
-        {tienda?.categorias.map((cat) => (
-          <section key={cat.categoria} className="mb-8">
-            <div className="mb-4 flex items-center gap-3">
-              <h2 className={`${playfair.className} text-xl font-extrabold text-brand-wine`}>
-                {cat.categoria}
-              </h2>
-              <span className="h-px flex-1 bg-gradient-to-r from-brand-amber/40 to-transparent" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {cat.productos.map((p) => {
-                const enCarro = carrito[p.referencia]?.cantidad ?? 0;
-                return (
-                  <div
-                    key={p.referencia}
-                    className={`flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
-                      enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-amber/15 to-brand-amber/5 text-brand-amber">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-6 w-6">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.362-6.867 8.21 8.21 0 0 0 3 2.48Z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z" />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold leading-snug text-brand-black">
-                          {p.producto || p.referencia}
-                        </p>
-                        <span className="mt-1 inline-block rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">
-                          {p.um || "UND"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <span className="text-lg font-extrabold text-brand-wine">
-                        {copTienda(p.precio)}
-                      </span>
-                      {enCarro === 0 ? (
-                        <button
-                          onClick={() => setCantidad(p, 1)}
-                          className="flex items-center gap-1 rounded-full bg-brand-amber px-3.5 py-2 text-xs font-extrabold uppercase text-white shadow-sm shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-95"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3.5 w-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                          Agregar
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1 rounded-full bg-brand-amber p-1 shadow-sm shadow-brand-amber/30">
-                          <button
-                            onClick={() => setCantidad(p, enCarro - 1)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-lg font-bold text-white transition active:scale-90"
-                          >
-                            −
-                          </button>
-                          <span className="w-6 text-center text-sm font-extrabold text-white">{enCarro}</span>
-                          <button
-                            onClick={() => setCantidad(p, enCarro + 1)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-lg font-bold text-white transition active:scale-90"
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(tienda?.categorias ?? []).flatMap((c) => c.productos).map((p) => {
+            const enCarro = carrito[p.referencia]?.cantidad ?? 0;
+            return (
+              <button
+                key={p.referencia}
+                onClick={() => setProductoModal(p)}
+                className={`group flex items-center gap-3 rounded-3xl bg-white p-3 text-left shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                  enCarro > 0 ? "ring-2 ring-brand-amber" : "ring-brand-brown/5"
+                }`}
+              >
+                <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-brand-cream-soft">
+                  <ProductoImg />
+                  {enCarro > 0 && (
+                    <span className="absolute right-1 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-amber px-1 text-[10px] font-extrabold text-white shadow">
+                      {enCarro % 1 === 0 ? enCarro : enCarro.toFixed(1)}
+                    </span>
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-2 block text-sm font-bold leading-snug text-brand-black">
+                    {p.producto || p.referencia}
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-base font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
+                    <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
+                  </span>
+                </span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {productoModal && (
+        <ProductoModal
+          producto={productoModal}
+          inicialCantidad={carrito[productoModal.referencia]?.cantidad ?? 0}
+          inicialObs={carrito[productoModal.referencia]?.observacion ?? ""}
+          onConfirmar={(cant, obs) => {
+            setLinea(productoModal, cant, obs);
+            setProductoModal(null);
+          }}
+          onCerrar={() => setProductoModal(null)}
+        />
+      )}
 
       {/* Barra inferior del carrito */}
       {nItems > 0 && (
@@ -372,6 +395,7 @@ export default function TiendaEmpleadosStore({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-brand-black">{l.producto || l.referencia}</p>
                         <p className="text-[11px] font-medium text-brand-brown/50">{copTienda(l.precio)} · {l.um || "UND"}</p>
+                        {l.observacion && <p className="truncate text-[11px] italic text-brand-brown/50">“{l.observacion}”</p>}
                       </div>
                       <div className="flex items-center gap-1 rounded-full bg-brand-amber p-1">
                         <button onClick={() => setCantidad(l, l.cantidad - 1)} className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-base font-bold text-white active:scale-90">−</button>
@@ -524,5 +548,102 @@ export default function TiendaEmpleadosStore({
         </div>
       )}
     </main>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modal de producto: imagen grande, cantidad (kg) y observación               */
+/* -------------------------------------------------------------------------- */
+function ProductoModal({
+  producto,
+  inicialCantidad,
+  inicialObs,
+  onConfirmar,
+  onCerrar,
+}: {
+  producto: ProductoTienda;
+  inicialCantidad: number;
+  inicialObs: string;
+  onConfirmar: (cantidad: number, observacion: string) => void;
+  onCerrar: () => void;
+}) {
+  const esKg = (producto.um || "").trim().toUpperCase() === "KG";
+  const paso = esKg ? 0.5 : 1;
+  const [cantidad, setCantidad] = useState(inicialCantidad > 0 ? inicialCantidad : paso);
+  const [obs, setObs] = useState(inicialObs);
+  const cambiar = (v: number) => setCantidad(Math.max(0, Math.round(v * 100) / 100));
+  const subtotal = producto.precio * cantidad;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-brand-black/50 backdrop-blur-sm sm:items-center"
+      onClick={onCerrar}
+    >
+      <div
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative">
+          <div className="aspect-[16/10] w-full overflow-hidden bg-brand-cream-soft">
+            <ProductoImg />
+          </div>
+          <button
+            onClick={onCerrar}
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-brand-brown shadow transition hover:bg-white"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="p-5">
+          <h3 className="text-lg font-extrabold leading-tight text-brand-black">
+            {producto.producto || producto.referencia}
+          </h3>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-xl font-extrabold text-brand-wine">{copTienda(producto.precio)}</span>
+            <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+              {producto.um || "UND"}
+            </span>
+          </div>
+
+          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-brown/50">
+            {esKg ? "¿Cuántos kilos?" : "Cantidad"}
+          </label>
+          <div className="mt-1.5 flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full bg-brand-amber p-1 shadow-sm shadow-brand-amber/30">
+              <button onClick={() => cambiar(cantidad - paso)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white transition active:scale-90">−</button>
+              <input
+                value={cantidad}
+                onChange={(e) => cambiar(Number(e.target.value.replace(",", ".")) || 0)}
+                inputMode="decimal"
+                className="w-16 bg-transparent text-center text-xl font-extrabold text-white outline-none"
+              />
+              <button onClick={() => cambiar(cantidad + paso)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white transition active:scale-90">+</button>
+            </div>
+            {esKg && <span className="text-xs font-medium text-brand-brown/50">Puedes pedir medios kilos (0.5)</span>}
+          </div>
+
+          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-brown/50">
+            Observación (opcional)
+          </label>
+          <textarea
+            value={obs}
+            onChange={(e) => setObs(e.target.value)}
+            rows={2}
+            placeholder="Ej. bien molido, sin grasa, en bandeja…"
+            className="mt-1.5 w-full rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:bg-white"
+          />
+
+          <button
+            onClick={() => onConfirmar(cantidad, obs)}
+            disabled={cantidad <= 0}
+            className="mt-5 flex w-full items-center justify-between rounded-2xl bg-brand-amber px-5 py-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-[0.99] disabled:opacity-40"
+          >
+            <span>{inicialCantidad > 0 ? "Actualizar carrito" : "Agregar al carrito"}</span>
+            <span>{copTienda(subtotal)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

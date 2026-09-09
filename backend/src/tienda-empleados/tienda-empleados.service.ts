@@ -25,6 +25,7 @@ export interface ItemPedidoTienda {
   um: string;
   precio: number;
   cantidad: number;
+  observacion?: string;
 }
 
 export interface TiendaResumen {
@@ -372,6 +373,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
         um: cat.um,
         precio,
         cantidad: cant,
+        observacion: String(it.observacion ?? '').trim() || undefined,
       });
     }
     if (limpios.length === 0) throw new BadRequestException('Ningún producto del carrito es válido');
