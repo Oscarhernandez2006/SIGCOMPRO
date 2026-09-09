@@ -15,6 +15,7 @@ import {
   type ProductoTienda,
   type PedidoTienda,
 } from "@/lib/tienda-empleados";
+import DireccionInput from "@/components/DireccionInput";
 
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["600", "700", "800"] });
@@ -277,28 +278,50 @@ export default function TiendaEmpleadosStore({
   // ---- Pantalla: pedir cédula si no hay sesión ----
   if (!cedula) {
     return (
-      <main className={`${manrope.className} flex min-h-screen flex-col items-center justify-center bg-brand-cream-soft px-5 text-brand-black`}>
-        <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-xl ring-1 ring-brand-brown/5">
-          <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={160} className="mx-auto h-16 w-auto object-contain" />
-          <h1 className={`${playfair.className} mt-4 text-2xl font-extrabold text-brand-wine`}>Identifícate</h1>
-          <p className="mt-1 text-xs font-medium text-brand-brown/55">Ingresa tu cédula para comprar</p>
-          <div className="mt-5 flex gap-2">
-            <input
-              value={inputCedula}
-              onChange={(e) => setInputCedula(e.target.value.replace(/\D/g, ""))}
-              onKeyDown={(e) => e.key === "Enter" && identificar()}
-              inputMode="numeric"
-              placeholder="Cédula"
-              className="flex-1 rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3 text-brand-black outline-none transition focus:border-brand-amber focus:bg-white focus:ring-4 focus:ring-brand-amber/15"
-            />
-            <button onClick={identificar} className="rounded-2xl bg-brand-amber px-5 py-3 font-extrabold text-white shadow-md shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-95">
-              Entrar
-            </button>
+      <main className={`${manrope.className} flex min-h-screen bg-brand-cream-soft text-brand-black`}>
+        {/* Panel izquierdo — Branding */}
+        <div className="relative hidden overflow-hidden bg-gradient-to-br from-brand-wine to-brand-wine-dark lg:flex lg:w-1/2">
+          <div className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-brand-amber/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-28 right-0 h-96 w-96 rounded-full bg-brand-gold/10 blur-3xl" />
+          <div className="relative z-10 flex w-full flex-col items-center justify-center px-14 text-center">
+            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={220} height={220} className="h-40 w-auto object-contain drop-shadow-2xl" />
+            <h1 className={`${playfair.className} mt-6 text-4xl font-extrabold text-white`}>Tienda de empleados</h1>
+            <div className="mt-4 h-1 w-16 rounded-full bg-brand-amber" />
+            <p className="mt-5 max-w-sm text-sm font-light text-brand-cream/80">
+              Compra con tu crédito y págalo cómodamente por nómina.
+            </p>
           </div>
-          {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
-          <Link href="/tienda-empleados" className="mt-5 inline-block text-xs font-semibold text-brand-brown/50 underline">
-            Volver al inicio
-          </Link>
+        </div>
+
+        {/* Panel derecho — Formulario */}
+        <div className="flex flex-1 items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm">
+            <div className="mb-8 text-center lg:hidden">
+              <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={160} className="mx-auto h-20 w-auto object-contain" />
+            </div>
+
+            <div className="rounded-3xl bg-white p-7 shadow-xl ring-1 ring-brand-brown/5">
+              <h2 className={`${playfair.className} text-2xl font-extrabold text-brand-wine`}>Identifícate</h2>
+              <p className="mt-1 text-xs font-medium text-brand-brown/55">Ingresa tu cédula para comprar</p>
+              <div className="mt-5 flex gap-2">
+                <input
+                  value={inputCedula}
+                  onChange={(e) => setInputCedula(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && identificar()}
+                  inputMode="numeric"
+                  placeholder="Cédula"
+                  className="flex-1 rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3 text-brand-black outline-none transition focus:border-brand-amber focus:bg-white focus:ring-4 focus:ring-brand-amber/15"
+                />
+                <button onClick={identificar} className="rounded-2xl bg-brand-amber px-5 py-3 font-extrabold text-white shadow-md shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-95">
+                  Entrar
+                </button>
+              </div>
+              {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
+              <Link href="/tienda-empleados" className="mt-5 inline-block text-xs font-semibold text-brand-brown/50 underline">
+                Volver al inicio
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -329,25 +352,30 @@ export default function TiendaEmpleadosStore({
       <div className="sticky top-0 z-30">
         <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-            <Link href="/tienda-empleados" className="flex h-9 w-9 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-            </Link>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/95 shadow-sm">
-              <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={40} height={40} className="h-7 w-auto object-contain" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
-                {tienda?.nombre}
-              </p>
-              <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
+            {/* Izquierda: volver + nombres */}
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Link href="/tienda-empleados" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+              </Link>
+              <div className="min-w-0">
+                <p className={`${playfair.className} truncate text-lg font-extrabold text-white`}>
+                  {tienda?.nombre}
+                </p>
+                <p className="truncate text-[11px] font-medium text-brand-cream/70">{saldo?.nombre}</p>
+              </div>
             </div>
-            <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
-              <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
-                {copTienda(restante < 0 ? disponible : restante)}
-              </p>
+            {/* Centro: logo sin fondo */}
+            <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={48} className="h-11 w-auto shrink-0 object-contain drop-shadow-sm" />
+            {/* Derecha: saldo */}
+            <div className="flex flex-1 justify-end">
+              <div className="rounded-2xl bg-white/10 px-3.5 py-1.5 text-right ring-1 ring-white/15">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
+                <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
+                  {copTienda(restante < 0 ? disponible : restante)}
+                </p>
+              </div>
             </div>
           </div>
         </header>
@@ -582,12 +610,10 @@ export default function TiendaEmpleadosStore({
                   </p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    <input
-                      value={direccion}
-                      onChange={(e) => setDireccion(e.target.value)}
-                      placeholder="Dirección de entrega"
-                      className="w-full rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:bg-white"
-                    />
+                    <div className="rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 p-3">
+                      <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-brand-brown/50">Dirección de entrega</p>
+                      <DireccionInput value={direccion} onChange={setDireccion} />
+                    </div>
                     <input
                       value={telefono}
                       onChange={(e) => setTelefono(e.target.value.replace(/\D/g, "").slice(0, 10))}
