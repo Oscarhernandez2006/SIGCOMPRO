@@ -29,7 +29,7 @@ function labelEstado(estado: string): string {
 
 export default function PedidosTiendaPage() {
   const [pedidos, setPedidos] = useState<PedidoTienda[]>([]);
-  const [filtro, setFiltro] = useState<string>("pendiente");
+  const [filtro, setFiltro] = useState<string>("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entregar, setEntregar] = useState<PedidoTienda | null>(null);
@@ -59,12 +59,6 @@ export default function PedidosTiendaPage() {
     return () => clearInterval(id);
   }, [cargar]);
 
-  const conteos = useMemo(() => {
-    const c: Record<string, number> = { pendiente: 0, facturado: 0, entregado: 0, anulado: 0 };
-    for (const p of pedidos) c[p.estado] = (c[p.estado] ?? 0) + 1;
-    return c;
-  }, [pedidos]);
-
   const puntosUnicos = useMemo(
     () => Array.from(new Set(pedidos.map((p) => p.punto_nombre).filter(Boolean))).sort(),
     [pedidos],
@@ -75,7 +69,7 @@ export default function PedidosTiendaPage() {
     const hastaTs = fHasta ? new Date(`${fHasta}T00:00:00`).getTime() + 86_400_000 : null;
     const desdeTs = fDesde ? new Date(`${fDesde}T00:00:00`).getTime() : null;
     return pedidos.filter((p) => {
-      if (p.estado !== filtro) return false;
+      if (filtro && p.estado !== filtro) return false;
       if (fPunto && p.punto_nombre !== fPunto) return false;
       if (fOrigen && (p.origen || "manual") !== fOrigen) return false;
       if (q && !`${p.trabajador_nombre} ${p.trabajador_cedula}`.toLowerCase().includes(q)) return false;
@@ -86,7 +80,7 @@ export default function PedidosTiendaPage() {
     });
   }, [pedidos, filtro, busq, fPunto, fOrigen, fDesde, fHasta]);
 
-  const hayFiltros = !!(busq || fPunto || fOrigen || fDesde || fHasta);
+  const hayFiltros = !!(busq || filtro || fPunto || fOrigen || fDesde || fHasta);
 
   async function cambiar(id: string, estado: "pendiente" | "facturado" | "entregado" | "anulado") {
     try {
@@ -117,24 +111,6 @@ export default function PedidosTiendaPage() {
         </Link>
       </div>
 
-      {/* Tabs por estado */}
-      <div className="mb-5 flex flex-wrap gap-2">
-        {ESTADOS.map((e) => (
-          <button
-            key={e.key}
-            onClick={() => setFiltro(e.key)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              filtro === e.key ? "bg-brand-wine text-white" : "bg-white text-brand-brown hover:bg-brand-cream-soft"
-            }`}
-          >
-            {e.label}
-            <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] ${filtro === e.key ? "bg-white/20 text-white" : e.chip}`}>
-              {conteos[e.key] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
       {/* Filtros */}
       <div className="mb-4 rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-end gap-2 px-4 py-3">
@@ -148,6 +124,17 @@ export default function PedidosTiendaPage() {
                 placeholder="Nombre o cédula"
                 className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
             </div>
+          </div>
+          <div className="min-w-[130px]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Estado</label>
+            <select value={filtro} onChange={(e) => setFiltro(e.target.value)}
+              className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
+              <option value="">Todos</option>
+              <option value="pendiente">Nuevos</option>
+              <option value="facturado">Preparados</option>
+              <option value="entregado">Entregados</option>
+              <option value="anulado">Anulados</option>
+            </select>
           </div>
           {puntosUnicos.length > 1 && (
             <div className="min-w-[140px]">
@@ -179,7 +166,7 @@ export default function PedidosTiendaPage() {
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           {hayFiltros && (
-            <button type="button" onClick={() => { setBusq(""); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
+            <button type="button" onClick={() => { setBusq(""); setFiltro(""); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
               className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
@@ -195,7 +182,7 @@ export default function PedidosTiendaPage() {
         <p className="py-10 text-center text-sm text-brand-brown/60">Cargando pedidos…</p>
       ) : visibles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center text-sm text-brand-brown/60">
-          No hay pedidos en este estado.
+          No hay pedidos para los filtros aplicados.
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
@@ -208,6 +195,7 @@ export default function PedidosTiendaPage() {
                   <th className="px-4 py-3">Punto</th>
                   <th className="px-4 py-3">Entrega</th>
                   <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Origen</th>
                   <th className="px-4 py-3">Nómina</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -240,6 +228,9 @@ export default function PedidosTiendaPage() {
                         {p.items.length > 0 && (
                           <p className="mt-0.5 text-[11px] text-brand-brown/45">{p.items.length} {p.items.length === 1 ? "producto" : "productos"}</p>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>{labelEstado(p.estado)}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
