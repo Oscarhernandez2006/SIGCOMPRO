@@ -8,6 +8,7 @@ import {
   copTienda,
   type PedidoTienda,
 } from "@/lib/tienda-empleados";
+import { obtenerPedidoCredito, type PedidoCredito } from "@/lib/credito-empleados";
 
 const ESTADOS: Array<{ key: string; label: string; chip: string }> = [
   { key: "pendiente", label: "Nuevos", chip: "bg-amber-100 text-amber-700" },
@@ -32,6 +33,12 @@ export default function PedidosTiendaPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entregar, setEntregar] = useState<PedidoTienda | null>(null);
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [busq, setBusq] = useState("");
+  const [fPunto, setFPunto] = useState("");
+  const [fOrigen, setFOrigen] = useState("");
+  const [fDesde, setFDesde] = useState("");
+  const [fHasta, setFHasta] = useState("");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -58,10 +65,28 @@ export default function PedidosTiendaPage() {
     return c;
   }, [pedidos]);
 
-  const visibles = useMemo(
-    () => pedidos.filter((p) => p.estado === filtro),
-    [pedidos, filtro],
+  const puntosUnicos = useMemo(
+    () => Array.from(new Set(pedidos.map((p) => p.punto_nombre).filter(Boolean))).sort(),
+    [pedidos],
   );
+
+  const visibles = useMemo(() => {
+    const q = busq.trim().toLowerCase();
+    const hastaTs = fHasta ? new Date(`${fHasta}T00:00:00`).getTime() + 86_400_000 : null;
+    const desdeTs = fDesde ? new Date(`${fDesde}T00:00:00`).getTime() : null;
+    return pedidos.filter((p) => {
+      if (p.estado !== filtro) return false;
+      if (fPunto && p.punto_nombre !== fPunto) return false;
+      if (fOrigen && (p.origen || "manual") !== fOrigen) return false;
+      if (q && !`${p.trabajador_nombre} ${p.trabajador_cedula}`.toLowerCase().includes(q)) return false;
+      const ts = new Date(p.creado_en).getTime();
+      if (desdeTs !== null && ts < desdeTs) return false;
+      if (hastaTs !== null && ts >= hastaTs) return false;
+      return true;
+    });
+  }, [pedidos, filtro, busq, fPunto, fOrigen, fDesde, fHasta]);
+
+  const hayFiltros = !!(busq || fPunto || fOrigen || fDesde || fHasta);
 
   async function cambiar(id: string, estado: "pendiente" | "facturado" | "entregado" | "anulado") {
     try {
@@ -110,6 +135,58 @@ export default function PedidosTiendaPage() {
         ))}
       </div>
 
+      {/* Filtros */}
+      <div className="mb-4 rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-end gap-2 px-4 py-3">
+          <div className="min-w-[160px] flex-1">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Buscar</label>
+            <div className="relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
+              </svg>
+              <input value={busq} onChange={(e) => setBusq(e.target.value)}
+                placeholder="Nombre o cédula"
+                className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
+            </div>
+          </div>
+          {puntosUnicos.length > 1 && (
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Punto</label>
+              <select value={fPunto} onChange={(e) => setFPunto(e.target.value)}
+                className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
+                <option value="">Todos</option>
+                {puntosUnicos.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="min-w-[120px]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Origen</label>
+            <select value={fOrigen} onChange={(e) => setFOrigen(e.target.value)}
+              className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
+              <option value="">Todos</option>
+              <option value="manual">Panel</option>
+              <option value="tienda">Tienda online</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Desde</label>
+            <input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)}
+              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Hasta</label>
+            <input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)}
+              className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
+          </div>
+          {hayFiltros && (
+            <button type="button" onClick={() => { setBusq(""); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
+              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
+              Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
       {error && (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</div>
       )}
@@ -121,118 +198,90 @@ export default function PedidosTiendaPage() {
           No hay pedidos en este estado.
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {visibles.map((p) => (
-            <div key={p.id} className="flex flex-col overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-              <div className="flex items-start justify-between gap-3 border-b border-brand-brown/10 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-brand-black">{p.trabajador_nombre}</p>
-                  <p className="text-[11px] text-brand-brown/50">C.C. {p.trabajador_cedula}</p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>
-                    {labelEstado(p.estado)}
-                  </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${p.origen === "tienda" ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/55"}`}>
-                    {p.origen === "tienda" ? "Tienda online" : "Panel"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="px-4 py-3">
-                <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-brand-brown/60">
-                  <span className="inline-flex items-center gap-1">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
-                    </svg>
-                    {p.punto_nombre}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-6" />
-                    </svg>
-                    {p.entrega === "domicilio" ? "Domicilio" : "Recoge en punto"}
-                  </span>
-                  {p.nomina_fecha && (
-                    <span className="inline-flex items-center gap-1">
-                      Nómina {new Date(`${p.nomina_fecha}T00:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
-                    </span>
-                  )}
-                </div>
-
-                {p.entrega === "domicilio" && (p.direccion || p.telefono) && (
-                  <div className="mb-2 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/50 px-3 py-2 text-xs text-brand-brown/70">
-                    {p.direccion && <div>{p.direccion}</div>}
-                    {p.telefono && <div>Tel. {p.telefono}</div>}
-                  </div>
-                )}
-
-                {/* Productos */}
-                <div className="max-h-40 overflow-y-auto rounded-lg border border-brand-brown/10">
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {p.items.map((it) => (
-                        <tr key={it.referencia} className="border-b border-brand-brown/5 last:border-0">
-                          <td className="px-3 py-1.5 text-brand-brown/50">{it.cantidad}×</td>
-                          <td className="px-1 py-1.5 text-brand-black">
-                            {it.producto || it.referencia}
-                            {it.observacion && <span className="block text-[10px] italic text-brand-brown/50">“{it.observacion}”</span>}
-                          </td>
-                          <td className="px-3 py-1.5 text-right font-medium text-brand-black">{copTienda(it.precio * it.cantidad)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {p.observacion && (
-                  <p className="mt-2 text-xs italic text-brand-brown/60">Nota: {p.observacion}</p>
-                )}
-
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs text-brand-brown/50">Total a crédito</span>
-                  <span className="font-serif text-lg font-bold text-brand-wine">{copTienda(p.total)}</span>
-                </div>
-              </div>
-
-              {/* Acciones */}
-              <div className="mt-auto flex gap-2 border-t border-brand-brown/10 px-4 py-3">
-                {p.estado === "pendiente" && (
-                  <>
-                    <button onClick={() => cambiar(p.id, "facturado")} className="flex-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-sky-700">
-                      Marcar preparado
-                    </button>
-                    <button onClick={() => { if (confirm("¿Anular este pedido?")) cambiar(p.id, "anulado"); }} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">
-                      Anular
-                    </button>
-                  </>
-                )}
-                {p.estado === "facturado" && (
-                  <>
-                    <button onClick={() => setEntregar(p)} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-700">
-                      Marcar entregado
-                    </button>
-                    <button onClick={() => cambiar(p.id, "pendiente")} className="rounded-lg border border-brand-brown/15 px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft">
-                      Volver a nuevo
-                    </button>
-                  </>
-                )}
-                {p.estado === "entregado" && (
-                  <div className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-50 py-2 text-sm font-semibold text-green-700">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    Entregado
-                  </div>
-                )}
-                {p.estado === "anulado" && (
-                  <button onClick={() => cambiar(p.id, "pendiente")} className="w-full rounded-lg border border-brand-brown/15 px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft">
-                    Reactivar
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Colaborador</th>
+                  <th className="px-4 py-3">Punto</th>
+                  <th className="px-4 py-3">Entrega</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3">Origen</th>
+                  <th className="px-4 py-3">Nómina</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((p) => {
+                  const esTienda = p.origen === "tienda";
+                  return (
+                    <tr key={p.id} onClick={() => setDetalleId(p.id)}
+                      className="cursor-pointer border-b border-brand-brown/8 transition hover:bg-brand-cream-soft/50">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                        {new Date(p.creado_en).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-[10px] font-bold text-brand-wine">
+                            {(p.trabajador_nombre ?? "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium leading-tight text-brand-black">{p.trabajador_nombre}</p>
+                            <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-brand-brown/75">{p.punto_nombre}</td>
+                      <td className="px-4 py-3 text-xs text-brand-brown/70">{p.entrega === "domicilio" ? "Domicilio" : "Recoge"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <p className="font-semibold tabular-nums text-brand-black">{copTienda(p.total)}</p>
+                        {p.items.length > 0 && (
+                          <p className="mt-0.5 text-[11px] text-brand-brown/45">{p.items.length} {p.items.length === 1 ? "producto" : "productos"}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                          {esTienda ? "Tienda online" : "Panel"}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                        {p.nomina_fecha
+                          ? new Date(`${p.nomina_fecha}T00:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })
+                          : <span className="italic text-brand-brown/25">—</span>}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          {p.estado === "pendiente" && (
+                            <>
+                              <button onClick={() => cambiar(p.id, "facturado")} className="rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-sky-700">Preparar</button>
+                              <button onClick={() => { if (confirm("¿Anular este pedido?")) cambiar(p.id, "anulado"); }} className="rounded-lg border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-50">Anular</button>
+                            </>
+                          )}
+                          {p.estado === "facturado" && (
+                            <>
+                              <button onClick={() => setEntregar(p)} className="rounded-lg bg-green-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-green-700">Entregar</button>
+                              <button onClick={() => cambiar(p.id, "pendiente")} className="rounded-lg border border-brand-brown/15 px-2.5 py-1 text-[11px] font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Volver</button>
+                            </>
+                          )}
+                          {p.estado === "entregado" && (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3 w-3"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                              Entregado
+                            </span>
+                          )}
+                          {p.estado === "anulado" && (
+                            <button onClick={() => cambiar(p.id, "pendiente")} className="rounded-lg border border-brand-brown/15 px-2.5 py-1 text-[11px] font-semibold text-brand-brown transition hover:bg-brand-cream-soft">Reactivar</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -246,6 +295,134 @@ export default function PedidosTiendaPage() {
           }}
         />
       )}
+      {detalleId && (
+        <DetallePedidoModal id={detalleId} onClose={() => setDetalleId(null)} />
+      )}
+    </div>
+  );
+}
+
+// ── Modal detalle del pedido (click en una fila) ───────────────────────────────
+
+function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const [pedido, setPedido] = useState<PedidoCredito | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setCargando(true);
+    obtenerPedidoCredito(id)
+      .then((p) => { if (vivo) setPedido(p); })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo cargar el detalle."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [id]);
+
+  const items = pedido
+    ? (pedido.tienda_items && pedido.tienda_items.length > 0)
+      ? pedido.tienda_items.map((it) => ({ nombre: it.producto, cantidad: it.cantidad, um: it.um, total: Number(it.precio) * it.cantidad, obs: it.observacion }))
+      : (pedido.factura_productos && pedido.factura_productos.length > 0)
+        ? pedido.factura_productos.map((it) => ({ nombre: it.descripcion, cantidad: it.cantidad, um: it.um, total: Number(it.total), obs: undefined as string | undefined }))
+        : []
+    : [];
+  const esTienda = pedido?.origen === "tienda";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
+          <div>
+            <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle del pedido</h2>
+            <p className="text-xs text-brand-brown/55">Información completa</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4">
+          {cargando ? (
+            <div className="flex items-center justify-center py-12 text-brand-brown/50">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
+            </div>
+          ) : error ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+          ) : pedido ? (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-brand-black">{pedido.trabajador_nombre}</p>
+                  <p className="text-xs text-brand-brown/55">CC {pedido.trabajador_cedula}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(pedido.estado)}`}>{labelEstado(pedido.estado)}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                    {esTienda ? "Tienda online" : "Panel"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <Dato label="Punto de venta">{pedido.punto_nombre}</Dato>
+                <Dato label="Fecha">{new Date(pedido.creado_en).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</Dato>
+                <Dato label="Nómina">
+                  {pedido.nomina_fecha ? new Date(`${pedido.nomina_fecha}T00:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" }) : "—"}
+                </Dato>
+                {pedido.entrega && <Dato label="Entrega">{pedido.entrega === "domicilio" ? "Domicilio" : "Recoge en punto"}</Dato>}
+                {pedido.factura_numero && <Dato label="N° factura">{pedido.factura_numero}</Dato>}
+                {pedido.telefono && <Dato label="Teléfono">{pedido.telefono}</Dato>}
+              </div>
+              {pedido.direccion && <Dato label="Dirección">{pedido.direccion}</Dato>}
+
+              {items.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Productos</p>
+                  <div className="divide-y divide-brand-brown/8 rounded-xl border border-brand-brown/10">
+                    {items.map((it, idx) => (
+                      <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                        <span className="flex h-6 min-w-[2rem] items-center justify-center rounded-md bg-brand-wine/8 px-1 text-xs font-bold text-brand-wine">{it.cantidad}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-brand-black">{it.nombre}</p>
+                          {it.obs && <p className="text-[11px] italic text-brand-brown/50">“{it.obs}”</p>}
+                        </div>
+                        <span className="text-[11px] text-brand-brown/45">{it.um}</span>
+                        <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{copTienda(it.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pedido.observacion && <Dato label="Observación">{pedido.observacion}</Dato>}
+
+              {pedido.factura_imagen && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Comprobante (factura + cédula)</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={pedido.factura_imagen} alt="Comprobante" className="w-full rounded-xl border border-brand-brown/15" />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-xl bg-brand-wine px-4 py-3 text-white">
+                <span className="text-sm font-medium text-brand-cream/80">Total a crédito</span>
+                <span className="font-serif text-xl font-bold">{copTienda(Number(pedido.total) || 0)}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/45">{label}</p>
+      <p className="mt-0.5 text-sm text-brand-black">{children}</p>
     </div>
   );
 }
