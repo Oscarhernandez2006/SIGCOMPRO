@@ -60,7 +60,7 @@ const navItems = [
   { label: "Dashboard",            href: "/credito-empleados/dashboard",   icon: IcoDashboard },
   { label: "Mi crédito",           href: "/credito-empleados/consulta",    icon: IcoSearch },
   { label: "Registro de compras",  href: "/credito-empleados",             icon: IcoCart   },
-  { label: "Tienda online",        href: "/credito-empleados/tienda",      icon: IcoStore  },
+  { label: "Pedidos a crédito",    href: "/credito-empleados/tienda",      icon: IcoStore  },
   { label: "Catálogo tienda",      href: "/credito-empleados/tienda/catalogo", icon: IcoTag },
   { label: "Trabajadores y cupos", href: "/credito-empleados/trabajadores", icon: IcoUsers  },
 ];
