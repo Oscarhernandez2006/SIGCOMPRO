@@ -85,14 +85,21 @@ export class TiendaEmpleadosController {
     @Query('punto_id') punto_id?: string,
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
+    @Query('origen') origen?: string,
   ) {
-    return this.tienda.listarPedidos({ estado, punto_id, desde, hasta });
+    return this.tienda.listarPedidos({ estado, punto_id, desde, hasta, origen });
   }
 
   @Patch('pedidos/:id/estado')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
-  estado(@Param('id') id: string, @Body() body: { estado: string }) {
-    return this.tienda.actualizarEstado(id, body?.estado);
+  estado(
+    @Param('id') id: string,
+    @Body() body: { estado: string; factura_imagen?: string | null; factura_numero?: string | null },
+  ) {
+    return this.tienda.actualizarEstado(id, body?.estado, {
+      factura_imagen: body?.factura_imagen ?? null,
+      factura_numero: body?.factura_numero ?? null,
+    });
   }
 }

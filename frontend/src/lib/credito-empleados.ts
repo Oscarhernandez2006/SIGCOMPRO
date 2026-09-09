@@ -54,10 +54,16 @@ export interface PedidoCredito {
   factura_total_leido: number | null;
   factura_validada: boolean;
   factura_productos: ProductoFactura[];
+  /** Imagen base64 de la factura (solo en el detalle). */
+  factura_imagen?: string | null;
   /** Origen: 'manual' (panel) o 'tienda' (compra online del empleado). */
   origen?: string;
   /** Productos seleccionados del catálogo (compra por productos o tienda online). */
   tienda_items?: ItemCompraCredito[];
+  /** Datos de entrega (compras de tienda online). */
+  entrega?: string | null;
+  direccion?: string | null;
+  telefono?: string | null;
 }
 
 export interface ResumenNomina {
@@ -110,6 +116,11 @@ export function listarPedidosCredito(filtros: {
   }
   const sufijo = qs.toString();
   return apiFetch<PedidoCredito[]>(`/credito-empleados/pedidos${sufijo ? `?${sufijo}` : ""}`);
+}
+
+/** Detalle completo de un pedido (incluye la imagen de la factura). */
+export function obtenerPedidoCredito(id: string): Promise<PedidoCredito> {
+  return apiFetch<PedidoCredito>(`/credito-empleados/pedidos/${encodeURIComponent(id)}`);
 }
 
 export function crearPedidoCredito(input: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   listarPedidosTienda,
@@ -31,6 +31,7 @@ export default function PedidosTiendaPage() {
   const [filtro, setFiltro] = useState<string>("pendiente");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [entregar, setEntregar] = useState<PedidoTienda | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -75,9 +76,9 @@ export default function PedidosTiendaPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-brand-wine">Pedidos de la tienda online</h1>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">Pedidos a crédito</h1>
           <p className="mt-1 text-sm text-brand-brown/70">
-            Compras de empleados a crédito. Prepáralas y márcalas como entregadas al reclamarlas.
+            Compras de empleados (panel y tienda online). Prepáralas y ciérralas con la foto de la factura al entregar.
           </p>
         </div>
         <Link
@@ -128,9 +129,14 @@ export default function PedidosTiendaPage() {
                   <p className="truncate font-semibold text-brand-black">{p.trabajador_nombre}</p>
                   <p className="text-[11px] text-brand-brown/50">C.C. {p.trabajador_cedula}</p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>
-                  {labelEstado(p.estado)}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>
+                    {labelEstado(p.estado)}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${p.origen === "tienda" ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/55"}`}>
+                    {p.origen === "tienda" ? "Tienda online" : "Panel"}
+                  </span>
+                </div>
               </div>
 
               <div className="px-4 py-3">
@@ -203,7 +209,7 @@ export default function PedidosTiendaPage() {
                 )}
                 {p.estado === "facturado" && (
                   <>
-                    <button onClick={() => cambiar(p.id, "entregado")} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-700">
+                    <button onClick={() => setEntregar(p)} className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-700">
                       Marcar entregado
                     </button>
                     <button onClick={() => cambiar(p.id, "pendiente")} className="rounded-lg border border-brand-brown/15 px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft">
@@ -229,6 +235,122 @@ export default function PedidosTiendaPage() {
           ))}
         </div>
       )}
+
+      {entregar && (
+        <EntregarModal
+          pedido={entregar}
+          onClose={() => setEntregar(null)}
+          onEntregado={(act) => {
+            setPedidos((prev) => prev.map((p) => (p.id === act.id ? act : p)));
+            setEntregar(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal de entrega: exige foto de la factura (con la cédula) para cerrar ──────
+
+function EntregarModal({ pedido, onClose, onEntregado }: {
+  pedido: PedidoTienda;
+  onClose: () => void;
+  onEntregado: (p: PedidoTienda) => void;
+}) {
+  const [imagen, setImagen] = useState<string | null>(null);
+  const [numFactura, setNumFactura] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function confirmar() {
+    if (!imagen) { setError("Adjunta la foto de la factura con la cédula al lado."); return; }
+    setGuardando(true); setError(null);
+    try {
+      const act = await actualizarEstadoPedidoTienda(pedido.id, "entregado", {
+        factura_imagen: imagen,
+        factura_numero: numFactura.trim() || null,
+      });
+      onEntregado(act);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cerrar la venta.");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !guardando && onClose()} />
+      <div className="relative z-10 w-full max-w-md rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="border-b border-brand-brown/10 px-5 py-4">
+          <h2 className="font-serif text-lg font-bold text-brand-wine">Cerrar venta y entregar</h2>
+          <p className="text-xs text-brand-brown/55">
+            {pedido.trabajador_nombre} · C.C. {pedido.trabajador_cedula} · {copTienda(pedido.total)}
+          </p>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+              Foto de la factura <span className="normal-case text-brand-brown/40">(con la cédula al lado)</span>
+            </label>
+            <input
+              ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setImagen(ev.target?.result as string);
+                reader.readAsDataURL(file);
+              }}
+            />
+            {imagen ? (
+              <div className="relative overflow-hidden rounded-xl border border-brand-brown/20">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagen} alt="Factura" className="max-h-56 w-full object-cover" />
+                <button type="button" onClick={() => { setImagen(null); if (inputRef.current) inputRef.current.value = ""; }}
+                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => inputRef.current?.click()}
+                className="flex h-24 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-brown/30 text-sm text-brand-brown/55 transition hover:border-brand-wine/40 hover:text-brand-wine/70">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                </svg>
+                Tomar foto o seleccionar imagen
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+              N° de factura <span className="normal-case text-brand-brown/40">(opcional)</span>
+            </label>
+            <input value={numFactura} onChange={(e) => setNumFactura(e.target.value)}
+              placeholder="Ej: CE1C11433"
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine" />
+          </div>
+
+          {error && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-3">
+          <button type="button" onClick={onClose} disabled={guardando}
+            className="h-10 rounded-xl border border-brand-brown/25 px-4 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-50">
+            Cancelar
+          </button>
+          <button type="button" onClick={confirmar} disabled={guardando || !imagen}
+            className="flex h-10 items-center gap-1.5 rounded-xl bg-green-600 px-5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50">
+            {guardando ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : null}
+            {guardando ? "Cerrando…" : "Confirmar entrega"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

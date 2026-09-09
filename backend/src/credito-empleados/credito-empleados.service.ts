@@ -83,8 +83,10 @@ export interface PedidoCredito {
   /** Origen del pedido: 'manual' (panel) o 'tienda' (compra online). */
   origen?: string;
   /** Productos seleccionados (compra por catálogo, manual o tienda online). */
-  tienda_items?: ItemCompra[];
-}
+  tienda_items?: ItemCompra[];  /** Datos de entrega (compras de tienda online). */
+  entrega?: string | null;
+  direccion?: string | null;
+  telefono?: string | null;}
 
 @Injectable()
 export class CreditoEmpleadosService implements OnModuleInit {
@@ -546,6 +548,7 @@ export class CreditoEmpleadosService implements OnModuleInit {
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
               factura_numero, factura_total_leido, factura_validada, factura_imagen,
+              entrega, direccion, telefono,
               COALESCE(origen, 'manual') AS origen,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
               COALESCE(factura_productos, '[]'::jsonb) AS factura_productos

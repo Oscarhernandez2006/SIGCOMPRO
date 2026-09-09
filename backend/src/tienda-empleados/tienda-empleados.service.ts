@@ -72,6 +72,9 @@ export interface PedidoTienda {
   observacion: string | null;
   items: ItemPedidoTienda[];
   estado: string;
+  origen: string;
+  factura_numero: string | null;
+  factura_imagen?: string | null;
   nomina_fecha: string | null;
   creado_en: string;
   actualizado_en: string;
@@ -445,6 +448,9 @@ export class TiendaEmpleadosService implements OnModuleInit {
       observacion: r.observacion ? String(r.observacion) : null,
       items: Array.isArray(r.tienda_items) ? (r.tienda_items as ItemPedidoTienda[]) : [],
       estado: String(r.estado ?? 'pendiente'),
+      origen: String(r.origen ?? 'manual'),
+      factura_numero: r.factura_numero ? String(r.factura_numero) : null,
+      factura_imagen: r.factura_imagen ? String(r.factura_imagen) : null,
       nomina_fecha: r.nomina_fecha ? String(r.nomina_fecha) : null,
       creado_en: String(r.creado_en ?? ''),
       actualizado_en: String(r.actualizado_en ?? ''),
@@ -455,6 +461,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
     const res = await this.pool.query(
       `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
               observacion, estado, entrega, direccion, telefono, metodo_pago,
+              COALESCE(origen, 'manual') AS origen, factura_numero, factura_imagen,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha, creado_en, actualizado_en
          FROM credito_empleados_pedidos
@@ -471,10 +478,15 @@ export class TiendaEmpleadosService implements OnModuleInit {
     punto_id?: string;
     desde?: string;
     hasta?: string;
+    origen?: string;
   }): Promise<PedidoTienda[]> {
-    const cond: string[] = [`origen = 'tienda'`];
+    const cond: string[] = [];
     const val: unknown[] = [];
     let i = 1;
+    if (filtros.origen?.trim()) {
+      cond.push(`COALESCE(origen, 'manual') = $${i++}`);
+      val.push(filtros.origen.trim().toLowerCase());
+    }
     if (filtros.estado?.trim()) {
       cond.push(`estado = $${i++}`);
       val.push(filtros.estado.trim().toLowerCase());
@@ -491,13 +503,15 @@ export class TiendaEmpleadosService implements OnModuleInit {
       cond.push(`creado_en < ($${i++}::date + interval '1 day')`);
       val.push(filtros.hasta.trim());
     }
+    const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
     const res = await this.pool.query(
       `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
               observacion, estado, entrega, direccion, telefono, metodo_pago,
+              COALESCE(origen, 'manual') AS origen, factura_numero,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha, creado_en, actualizado_en
          FROM credito_empleados_pedidos
-        WHERE ${cond.join(' AND ')}
+        ${where}
         ORDER BY creado_en DESC
         LIMIT 300`,
       val,
@@ -505,20 +519,34 @@ export class TiendaEmpleadosService implements OnModuleInit {
     return res.rows.map((r) => this.filaAPedido(r as Record<string, unknown>));
   }
 
-  async actualizarEstado(id: string, estado: string): Promise<PedidoTienda> {
+  async actualizarEstado(
+    id: string,
+    estado: string,
+    extra?: { factura_imagen?: string | null; factura_numero?: string | null },
+  ): Promise<PedidoTienda> {
     const st = String(estado ?? '').trim().toLowerCase();
     if (!ESTADOS_VALIDOS.includes(st)) throw new BadRequestException('Estado inválido');
+
+    // Al entregar se exige el comprobante (foto de la factura) para cerrar la venta.
+    const facturaImagen = extra?.factura_imagen ?? null;
+    const facturaNumero = String(extra?.factura_numero ?? '').trim() || null;
+    if (st === 'entregado' && !facturaImagen) {
+      throw new BadRequestException('Adjunta la foto de la factura (con la cédula) para cerrar la venta');
+    }
+
     const res = await this.pool.query(
       `UPDATE credito_empleados_pedidos
           SET estado = $2,
               cartera_estado = CASE WHEN $2 = 'anulado' THEN 'anulado'
                                     WHEN $2 = 'pendiente' THEN 'pendiente'
                                     ELSE 'facturado' END,
+              factura_imagen = COALESCE($3, factura_imagen),
+              factura_numero = COALESCE($4, factura_numero),
               actualizado_en = now()
-        WHERE id = $1 AND origen = 'tienda'`,
-      [id, st],
+        WHERE id = $1`,
+      [id, st, facturaImagen, facturaNumero],
     );
-    if (!res.rowCount) throw new NotFoundException('Pedido de tienda no encontrado');
+    if (!res.rowCount) throw new NotFoundException('Pedido no encontrado');
     return this.obtenerPedido(id);
   }
 }

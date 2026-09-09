@@ -197,18 +197,18 @@ export default function DashboardComprasPage() {
         </div>
       </div>
 
-      {/* Top productos (OCR) */}
+      {/* Top productos */}
       <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-brand-black">Productos más comprados</p>
           <span className="rounded-full bg-brand-brown/8 px-2.5 py-1 text-[11px] text-brand-brown/55">
-            Extraído de fotos de facturas (OCR)
+            Panel y tienda online
           </span>
         </div>
         {top_productos.length === 0 ? (
           <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-4 py-8 text-center">
             <p className="text-sm text-brand-brown/50">Sin datos de productos aún.</p>
-            <p className="mt-1 text-xs text-brand-brown/35">Los productos aparecen cuando se suben fotos de facturas al registrar compras.</p>
+            <p className="mt-1 text-xs text-brand-brown/35">Los productos aparecen cuando se eligen del catálogo al registrar compras o desde la tienda online.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

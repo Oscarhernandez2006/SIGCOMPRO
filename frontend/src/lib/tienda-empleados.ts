@@ -75,6 +75,9 @@ export interface PedidoTienda {
   observacion: string | null;
   items: ItemPedidoTienda[];
   estado: string;
+  origen: string;
+  factura_numero: string | null;
+  factura_imagen?: string | null;
   nomina_fecha: string | null;
   creado_en: string;
   actualizado_en: string;
@@ -148,12 +151,14 @@ export function listarPedidosTienda(filtros: {
   punto_id?: string;
   desde?: string;
   hasta?: string;
+  origen?: string;
 } = {}): Promise<PedidoTienda[]> {
   const p = new URLSearchParams();
   if (filtros.estado) p.set("estado", filtros.estado);
   if (filtros.punto_id) p.set("punto_id", filtros.punto_id);
   if (filtros.desde) p.set("desde", filtros.desde);
   if (filtros.hasta) p.set("hasta", filtros.hasta);
+  if (filtros.origen) p.set("origen", filtros.origen);
   const qs = p.toString();
   return apiFetch<PedidoTienda[]>(`/tienda-empleados/pedidos${qs ? `?${qs}` : ""}`);
 }
@@ -161,10 +166,11 @@ export function listarPedidosTienda(filtros: {
 export function actualizarEstadoPedidoTienda(
   id: string,
   estado: "pendiente" | "facturado" | "entregado" | "anulado",
+  extra?: { factura_imagen?: string | null; factura_numero?: string | null },
 ): Promise<PedidoTienda> {
   return apiFetch<PedidoTienda>(`/tienda-empleados/pedidos/${encodeURIComponent(id)}/estado`, {
     method: "PATCH",
-    body: JSON.stringify({ estado }),
+    body: JSON.stringify({ estado, ...(extra ?? {}) }),
   });
 }
 

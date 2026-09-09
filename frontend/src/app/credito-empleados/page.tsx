@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useRef, useState, Fragment } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
@@ -9,6 +9,7 @@ import {
   actualizarEstadoPedidoCredito,
   crearPedidoCredito,
   listarPedidosCredito,
+  obtenerPedidoCredito,
   obtenerTrabajadorCredito,
   resumenNomina,
   type PedidoCredito,
@@ -83,9 +84,6 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
   const [observacion, setObservacion] = useState("");
   const [guardando, setGuardando]   = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
-  const [facturaImagen, setFacturaImagen] = useState<string | null>(null);
-  const [numFactura, setNumFactura] = useState("");
-  const facturaInputRef = useRef<HTMLInputElement>(null);
 
   // Compra por productos (catálogo de la tienda) o por valor manual.
   const [modo, setModo] = useState<"productos" | "manual">("productos");
@@ -175,8 +173,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
     try {
       await crearPedidoCredito({
         trabajador_cedula: trabajador.cedula, punto_id: punto.id, punto_nombre: punto.nombre,
-        total: totalEfectivo, observacion, factura_imagen: facturaImagen,
-        factura_numero: numFactura.trim() || null,
+        total: totalEfectivo, observacion,
         items,
       });
       onCreado(); onClose();
@@ -315,21 +312,6 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     {puntos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
                 </div>
-                {/* Número de factura */}
-                <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                    </svg>
-                    N° de factura <span className="font-normal normal-case text-brand-brown/35">(opcional)</span>
-                  </label>
-                  <input
-                    value={numFactura}
-                    onChange={(e) => setNumFactura(e.target.value)}
-                    placeholder="Ej: CE1C11433"
-                    className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine"
-                  />
-                </div>
                 {/* Modo: productos o valor manual */}
                 <div>
                   <div className="mb-2 grid grid-cols-2 gap-2">
@@ -437,46 +419,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     rows={2} placeholder="Detalle o notas de cartera…"
                     className="w-full resize-none rounded-xl border border-brand-brown/25 px-3 py-2.5 text-sm outline-none transition focus:border-brand-wine" />
                 </div>
-                {/* Foto de la factura */}
-                <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-                    </svg>
-                    Foto de la factura
-                    <span className="font-normal normal-case text-brand-brown/35">(opcional · con cédula al lado)</span>
-                  </label>
-                  <input
-                    ref={facturaInputRef} type="file" accept="image/*" capture="environment" className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setFacturaImagen(ev.target?.result as string);
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                  {facturaImagen ? (
-                    <div className="relative overflow-hidden rounded-xl border border-brand-brown/20">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={facturaImagen} alt="Factura" className="max-h-48 w-full object-cover" />
-                      <button type="button" onClick={() => { setFacturaImagen(null); if (facturaInputRef.current) facturaInputRef.current.value = ""; }}
-                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70">
-                        <Icon d={Ico.xmark} cls="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => facturaInputRef.current?.click()}
-                      className="flex h-20 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-brown/25 text-sm text-brand-brown/50 transition hover:border-brand-wine/40 hover:text-brand-wine/70">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-                      </svg>
-                      Tomar foto o seleccionar imagen
-                    </button>
-                  )}
-                </div>
+                {/* La foto de la factura se solicita al ENTREGAR el pedido en «Pedidos». */}
                 {errorGuardar && (
                   <p className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
@@ -556,8 +499,147 @@ function ModalConfirm({ pedido, nuevoEstado, onClose, onConfirmar }: {
   );
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
+// ── Modal detalle de la compra (click en una fila) ────────────────────────────
 
+function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const [pedido, setPedido] = useState<PedidoCredito | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setCargando(true);
+    obtenerPedidoCredito(id)
+      .then((p) => { if (vivo) setPedido(p); })
+      .catch((e) => { if (vivo) setError(e instanceof ApiError ? e.message : "No se pudo cargar el detalle."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [id]);
+
+  const items = pedido
+    ? (pedido.tienda_items && pedido.tienda_items.length > 0)
+      ? pedido.tienda_items.map((it) => ({ nombre: it.producto, cantidad: it.cantidad, um: it.um, total: Number(it.precio) * it.cantidad, obs: it.observacion }))
+      : (pedido.factura_productos && pedido.factura_productos.length > 0)
+        ? pedido.factura_productos.map((it) => ({ nombre: it.descripcion, cantidad: it.cantidad, um: it.um, total: Number(it.total), obs: undefined as string | undefined }))
+        : []
+    : [];
+  const esTienda = pedido?.origen === "tienda";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
+            <Icon d={Ico.wallet} cls="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle de la compra</h2>
+            <p className="text-xs text-brand-brown/55">Información completa del pedido</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown">
+            <Icon d={Ico.xmark} cls="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4">
+          {cargando ? (
+            <div className="flex items-center justify-center py-12 text-brand-brown/50">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
+            </div>
+          ) : error ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+          ) : pedido ? (
+            <div className="space-y-4">
+              {/* Colaborador + estado */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-brand-black">{pedido.trabajador_nombre}</p>
+                  <p className="text-xs text-brand-brown/55">CC {pedido.trabajador_cedula}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <EstadoBadge estado={pedido.estado} />
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                    {esTienda ? "Tienda online" : "Panel"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Datos */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <Dato label="Punto de venta">{pedido.punto_nombre}</Dato>
+                <Dato label="Fecha">{fechaCorta(pedido.creado_en)}</Dato>
+                <Dato label="Nómina">
+                  {pedido.nomina_fecha
+                    ? new Date(pedido.nomina_fecha + "T00:00:00").toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" })
+                    : "—"}
+                </Dato>
+                {pedido.factura_numero && <Dato label="N° factura">{pedido.factura_numero}</Dato>}
+                {pedido.entrega && <Dato label="Entrega">{pedido.entrega === "domicilio" ? "Domicilio" : "Recoge en punto"}</Dato>}
+                {pedido.telefono && <Dato label="Teléfono">{pedido.telefono}</Dato>}
+              </div>
+              {pedido.direccion && <Dato label="Dirección">{pedido.direccion}</Dato>}
+
+              {/* Productos */}
+              {items.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Productos</p>
+                  <div className="divide-y divide-brand-brown/8 rounded-xl border border-brand-brown/10">
+                    {items.map((it, idx) => (
+                      <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                        <span className="flex h-6 min-w-[2rem] items-center justify-center rounded-md bg-brand-wine/8 px-1 text-xs font-bold text-brand-wine">
+                          {it.cantidad}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-brand-black">{it.nombre}</p>
+                          {it.obs && <p className="text-[11px] italic text-brand-brown/50">“{it.obs}”</p>}
+                        </div>
+                        <span className="text-[11px] text-brand-brown/45">{it.um}</span>
+                        <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{money(it.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Observación */}
+              {pedido.observacion && (
+                <Dato label="Observación">{pedido.observacion}</Dato>
+              )}
+
+              {/* Comprobante */}
+              {pedido.factura_imagen && (
+                <div>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Comprobante (factura + cédula)</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={pedido.factura_imagen} alt="Comprobante" className="w-full rounded-xl border border-brand-brown/15" />
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="flex items-center justify-between rounded-xl bg-brand-wine px-4 py-3 text-white">
+                <span className="text-sm font-medium text-brand-cream/80">Total a crédito</span>
+                <span className="font-serif text-xl font-bold">{money(Number(pedido.total) || 0)}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/45">{label}</p>
+      <p className="mt-0.5 text-sm text-brand-black">{children}</p>
+    </div>
+  );
+}
+
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function CreditoEmpleadosPage() {
   const [usuario]   = useState(() => getUsuario());
   const [puntos, setPuntos]         = useState<PuntoVenta[]>([]);
@@ -571,7 +653,7 @@ export default function CreditoEmpleadosPage() {
   const [filtroHasta, setFiltroHasta]   = useState("");
   const [filtroPunto, setFiltroPunto]   = useState("");
   const [filtroOrigen, setFiltroOrigen] = useState("");
-  const [expandido, setExpandido]       = useState<Set<string>>(new Set());
+  const [detalleId, setDetalleId]       = useState<string | null>(null);
 
   const [modalNueva, setModalNueva]   = useState(false);
   const [confirmacion, setConfirmacion] = useState<{ pedido: PedidoCredito; nuevoEstado: "facturado" | "anulado" | "pendiente" } | null>(null);
@@ -800,7 +882,7 @@ export default function CreditoEmpleadosPage() {
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Nómina</th>
-                <th className="px-4 py-3">Observación</th>
+                <th className="px-4 py-3">Origen</th>
                 {puedeCambiarEstado && <th className="px-4 py-3" />}
               </tr>
             </thead>
@@ -824,16 +906,11 @@ export default function CreditoEmpleadosPage() {
                 </tr>
               ) : (
                 pedidos.map((p) => {
-                  const items = (p.tienda_items && p.tienda_items.length > 0)
-                    ? p.tienda_items.map((it) => ({ nombre: it.producto, cantidad: it.cantidad, um: it.um, total: Number(it.precio) * it.cantidad }))
-                    : (p.factura_productos && p.factura_productos.length > 0)
-                      ? p.factura_productos.map((it) => ({ nombre: it.descripcion, cantidad: it.cantidad, um: it.um, total: Number(it.total) }))
-                      : [];
-                  const abierto = expandido.has(p.id);
+                  const nItems = (p.tienda_items?.length ?? 0) || (p.factura_productos?.length ?? 0);
                   const esTienda = p.origen === "tienda";
                   return (
-                  <Fragment key={p.id}>
-                  <tr className="border-b border-brand-brown/8 transition hover:bg-neutral-50/60">
+                  <tr key={p.id} onClick={() => setDetalleId(p.id)}
+                    className="cursor-pointer border-b border-brand-brown/8 transition hover:bg-brand-cream-soft/50">
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">{fechaCorta(p.creado_en)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
@@ -842,27 +919,15 @@ export default function CreditoEmpleadosPage() {
                         </div>
                         <div>
                           <p className="font-medium text-brand-black leading-tight">{p.trabajador_nombre}</p>
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
-                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/55"}`}>
-                              {esTienda ? "Tienda online" : "Panel"}
-                            </span>
-                          </div>
+                          <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-brand-brown/75">{p.punto_nombre}</td>
                     <td className="px-4 py-3 text-right">
                       <p className="font-semibold tabular-nums text-brand-black">{money(Number(p.total) || 0)}</p>
-                      {items.length > 0 && (
-                        <button type="button"
-                          onClick={() => setExpandido((prev) => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
-                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-brand-wine hover:underline">
-                          {items.length} {items.length === 1 ? "producto" : "productos"}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 transition-transform ${abierto ? "rotate-180" : ""}`}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                          </svg>
-                        </button>
+                      {nItems > 0 && (
+                        <p className="mt-0.5 text-[11px] text-brand-brown/45">{nItems} {nItems === 1 ? "producto" : "productos"}</p>
                       )}
                     </td>
                     <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
@@ -870,21 +935,19 @@ export default function CreditoEmpleadosPage() {
                       {p.nomina_fecha
                         ? new Date(p.nomina_fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
                         : <span className="italic text-brand-brown/25">—</span>}
-                      {p.factura_total_leido != null && (
-                        <span title={`OCR leyó: ${money(p.factura_total_leido)}${p.factura_productos?.length ? ` · ${p.factura_productos.length} producto(s)` : ''}`}
-                          className={`ml-1.5 cursor-help rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                            p.factura_validada ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                          {p.factura_validada ? '✓' : '⚠'} OCR
-                          {p.factura_productos?.length > 0 && ` · ${p.factura_productos.length}p`}
-                        </span>
-                      )}
                     </td>
-                    <td className="max-w-[180px] truncate px-4 py-3 text-xs text-brand-brown/60">
-                      {p.observacion || <span className="italic text-brand-brown/25">—</span>}
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
+                          {esTienda
+                            ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                            : <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />}
+                        </svg>
+                        {esTienda ? "Tienda online" : "Panel"}
+                      </span>
                     </td>
                     {puedeCambiarEstado && (
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           {p.estado !== "facturado" && (
                             <button onClick={() => setConfirmacion({ pedido: p, nuevoEstado: "facturado" })}
@@ -908,28 +971,6 @@ export default function CreditoEmpleadosPage() {
                       </td>
                     )}
                   </tr>
-                  {abierto && items.length > 0 && (
-                    <tr className="bg-neutral-50/50">
-                      <td colSpan={puedeCambiarEstado ? 8 : 7} className="px-4 pb-3 pt-0">
-                        <div className="rounded-xl border border-brand-brown/10 bg-white p-2">
-                          <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Detalle de productos</p>
-                          <div className="divide-y divide-brand-brown/8">
-                            {items.map((it, idx) => (
-                              <div key={idx} className="flex items-center gap-2 px-1 py-1.5 text-xs">
-                                <span className="flex h-5 min-w-[1.75rem] items-center justify-center rounded-md bg-brand-wine/8 px-1 font-bold text-brand-wine">
-                                  {it.cantidad}
-                                </span>
-                                <span className="flex-1 truncate text-brand-black">{it.nombre}</span>
-                                <span className="text-brand-brown/45">{it.um}</span>
-                                <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{money(it.total)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
                   );
                 })
               )}
@@ -947,6 +988,9 @@ export default function CreditoEmpleadosPage() {
       {confirmacion && (
         <ModalConfirm pedido={confirmacion.pedido} nuevoEstado={confirmacion.nuevoEstado}
           onClose={() => setConfirmacion(null)} onConfirmar={ejecutarCambioEstado} />
+      )}
+      {detalleId && (
+        <DetalleCompraModal id={detalleId} onClose={() => setDetalleId(null)} />
       )}
     </div>
   );

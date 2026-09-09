@@ -103,6 +103,14 @@ export class CreditoEmpleadosController {
     return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta, origen });
   }
 
+  /** Detalle completo de un pedido (incluye la imagen de la factura). */
+  @Get('pedidos/:id')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  pedidoDetalle(@Param('id') id: string) {
+    return this.credito.obtenerPedido(id);
+  }
+
   @Post('pedidos')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
