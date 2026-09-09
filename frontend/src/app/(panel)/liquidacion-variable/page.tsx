@@ -49,6 +49,7 @@ export default function LiquidacionVariablePage() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalConfig, setModalConfig] = useState<string | null>(null);
+  const [modalDetalle, setModalDetalle] = useState(false);
 
   const q = useMemo(() => quincena(anio, mes, mitad), [anio, mes, mitad]);
 
@@ -178,6 +179,14 @@ export default function LiquidacionVariablePage() {
           Configurar punto
         </button>
 
+        <button
+          onClick={() => setModalDetalle(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-wine px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" /></svg>
+          Revisar y decidir pedidos
+        </button>
+
         <span className="ml-auto text-xs font-medium text-brand-brown/60">{q.label}</span>
       </div>
 
@@ -218,8 +227,9 @@ export default function LiquidacionVariablePage() {
             {rolData.resumen.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-brand-brown/50">Sin personas en este periodo.</p>
             ) : (
+              <div className="max-h-[calc(100vh-320px)] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="text-left text-[11px] uppercase tracking-wide text-brand-brown/45">
+                <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-brown/45 shadow-sm">
                   <tr>
                     <th className="px-4 py-2">Persona</th>
                     <th className="px-4 py-2">Punto</th>
@@ -247,17 +257,25 @@ export default function LiquidacionVariablePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
+        </div>
+      )}
 
-          {/* Detalle de pedidos con decisión manual */}
-          <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-            <div className="border-b border-brand-brown/10 bg-brand-cream-soft px-4 py-2.5">
-              <p className="text-xs font-bold uppercase tracking-wide text-brand-brown/60">
-                Detalle de pedidos — decide qué se paga
+      {/* Modal: detalle de pedidos con decisión manual */}
+      {modalDetalle && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={() => setModalDetalle(false)}>
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-brand-brown/10 bg-brand-cream-soft px-4 py-3">
+              <p className="text-sm font-bold text-brand-wine">
+                Detalle — {ROLES_LIQUIDACION.find((r) => r.key === rol)?.label} · decide qué se paga
               </p>
+              <button onClick={() => setModalDetalle(false)} className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-white">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+              </button>
             </div>
-            <div className="max-h-[calc(100vh-360px)] overflow-auto">
+            <div className="flex-1 overflow-auto">
               <table className="w-full min-w-[820px] text-sm">
                 <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-brown/45 shadow-sm">
                   <tr>
