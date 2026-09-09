@@ -347,7 +347,7 @@ export default function TiendaEmpleadosStore({
   }
 
   return (
-    <main className={`${manrope.className} min-h-screen bg-brand-cream-soft pb-32 text-brand-black`}>
+    <main style={{ zoom: 0.8 }} className={`${manrope.className} min-h-screen bg-brand-cream-soft pb-32 text-brand-black`}>
       {/* Header + tabs de categorías (pegajosos) */}
       <div className="sticky top-0 z-30">
         <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
