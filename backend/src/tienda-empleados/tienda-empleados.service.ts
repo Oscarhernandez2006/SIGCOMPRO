@@ -412,7 +412,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
     await this.pool.query(
       `UPDATE credito_empleados_trabajadores
           SET cedula_foto = $2, actualizado_en = now() WHERE cedula = $1`,
-      [c, foto],
+      [c, verif.fotoOptim],
     );
     return { ok: true, nombre: t.nombre };
   }
@@ -501,23 +501,40 @@ export class TiendaEmpleadosService implements OnModuleInit {
   private async verificarCedulaFoto(
     foto: string,
     cedula: string,
-  ): Promise<{ ok: boolean; mensaje: string }> {
+  ): Promise<{ ok: boolean; mensaje: string; fotoOptim: string }> {
     let texto = '';
+    let fotoOptim = foto;
     try {
       const base64 = foto.includes(',') ? foto.split(',')[1] : foto;
-      let buffer = Buffer.from(base64, 'base64');
+      const original = Buffer.from(base64, 'base64');
+      let ocrBuffer = original;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
         const sharpMod = require('sharp') as any;
-        buffer = await sharpMod(buffer).grayscale().normalise().sharpen().toBuffer();
+        // Redimensiona ANTES de procesar: acota memoria/tiempo del OCR y evita
+        // que una foto de celular a resolución completa tumbe el proceso (OOM).
+        const base = sharpMod(original, { failOn: 'none', limitInputPixels: 300000000 })
+          .rotate()
+          .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true });
+        fotoOptim =
+          'data:image/jpeg;base64,' +
+          (await base.clone().jpeg({ quality: 72 }).toBuffer()).toString('base64');
+        ocrBuffer = await base.clone().grayscale().normalise().sharpen().toBuffer();
       } catch {
-        /* sharp opcional */
+        /* sharp opcional; si falla, usa el buffer original */
       }
-      texto = await tesseract.recognize(buffer, { lang: 'spa', oem: 1, psm: 6 });
+      // Timeout de seguridad para que una petición no cuelgue el backend.
+      texto = await Promise.race<string>([
+        tesseract.recognize(ocrBuffer, { lang: 'spa', oem: 1, psm: 6 }),
+        new Promise<string>((_, rej) =>
+          setTimeout(() => rej(new Error('OCR timeout')), 25000),
+        ),
+      ]);
     } catch {
       return {
         ok: false,
         mensaje: 'No pudimos procesar la foto. Intenta con una imagen más nítida y bien iluminada.',
+        fotoOptim,
       };
     }
 
@@ -531,9 +548,10 @@ export class TiendaEmpleadosService implements OnModuleInit {
         ok: false,
         mensaje:
           'No reconocimos el número de tu cédula en la foto. Asegúrate de que se vean claramente los números y vuelve a intentar.',
+        fotoOptim,
       };
     }
-    return { ok: true, mensaje: 'ok' };
+    return { ok: true, mensaje: 'ok', fotoOptim };
   }
 
   // ---------------------------------------------------------------------------

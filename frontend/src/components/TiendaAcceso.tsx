@@ -9,6 +9,32 @@ import {
   type SesionTrabajador,
 } from "@/lib/tienda-empleados";
 
+/** Redimensiona/comprime la foto en el navegador (evita subir 5-12 MP y que el OCR tumbe el backend). */
+async function comprimirImagen(file: File, maxLado = 1400, calidad = 0.7): Promise<string> {
+  const dataUrl = await new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = () => rej(new Error("read"));
+    r.readAsDataURL(file);
+  });
+  const img = document.createElement("img");
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error("img"));
+    img.src = dataUrl;
+  });
+  const escala = Math.min(1, maxLado / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * escala));
+  const h = Math.max(1, Math.round(img.height * escala));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", calidad);
+}
+
 /**
  * Acceso del trabajador a la tienda (contenido del formulario, sin contenedor).
  * Flujo: cédula → si ya tiene contraseña la pide; si es primer ingreso, pide
@@ -160,13 +186,17 @@ export default function TiendaAcceso({
 
         <input
           ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={(e) => {
+          onChange={async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
             setError(null);
-            const reader = new FileReader();
-            reader.onload = (ev) => setFoto(ev.target?.result as string);
-            reader.readAsDataURL(file);
+            try {
+              setFoto(await comprimirImagen(file));
+            } catch {
+              const reader = new FileReader();
+              reader.onload = (ev) => setFoto(ev.target?.result as string);
+              reader.readAsDataURL(file);
+            }
           }}
         />
         {foto ? (
