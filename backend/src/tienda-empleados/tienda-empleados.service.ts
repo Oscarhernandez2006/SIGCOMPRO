@@ -390,19 +390,15 @@ export class TiendaEmpleadosService implements OnModuleInit {
   }
 
   /**
-   * Primer ingreso: verifica la foto de la cédula con OCR (que el número de la
-   * cédula aparezca en la imagen) y crea la contraseña del trabajador.
+   * Paso 1 del primer ingreso: verifica la foto de la cédula con OCR (que el
+   * número de la cédula aparezca) y la guarda. No crea la contraseña todavía.
    */
-  async registrarTrabajador(input: {
+  async verificarCedulaTrabajador(input: {
     cedula: string;
     foto: string;
-    clave: string;
-    telefono?: string;
-  }): Promise<{ cedula: string; nombre: string; telefono: string | null }> {
+  }): Promise<{ ok: true; nombre: string }> {
     const c = String(input.cedula ?? '').trim();
-    const clave = String(input.clave ?? '');
     const foto = String(input.foto ?? '');
-    if (clave.length < 4) throw new BadRequestException('La contraseña debe tener al menos 4 caracteres.');
     if (!foto) throw new BadRequestException('Toma la foto de tu cédula para continuar.');
 
     const t = await this.filaTrabajador(c);
@@ -413,13 +409,45 @@ export class TiendaEmpleadosService implements OnModuleInit {
     const verif = await this.verificarCedulaFoto(foto, c);
     if (!verif.ok) throw new BadRequestException(verif.mensaje);
 
+    await this.pool.query(
+      `UPDATE credito_empleados_trabajadores
+          SET cedula_foto = $2, actualizado_en = now() WHERE cedula = $1`,
+      [c, foto],
+    );
+    return { ok: true, nombre: t.nombre };
+  }
+
+  /**
+   * Paso 2 del primer ingreso: crea la contraseña. Requiere haber verificado
+   * antes la cédula (foto guardada por `verificarCedulaTrabajador`).
+   */
+  async registrarTrabajador(input: {
+    cedula: string;
+    clave: string;
+  }): Promise<{ cedula: string; nombre: string; telefono: string | null }> {
+    const c = String(input.cedula ?? '').trim();
+    const clave = String(input.clave ?? '');
+    if (clave.length < 4) throw new BadRequestException('La contraseña debe tener al menos 4 caracteres.');
+
+    const t = await this.filaTrabajador(c);
+    if (!t) throw new BadRequestException('Tu cédula no está registrada en crédito de empleados.');
+    if (!t.activo) throw new BadRequestException('Tu crédito no está activo. Comunícate con nómina.');
+    if (t.clave_hash) throw new BadRequestException('Ya tienes contraseña. Ingresa con ella.');
+
+    const fotoRes = await this.pool.query<{ tiene: boolean }>(
+      `SELECT (cedula_foto IS NOT NULL) AS tiene FROM credito_empleados_trabajadores WHERE cedula = $1`,
+      [c],
+    );
+    if (!fotoRes.rows[0]?.tiene) {
+      throw new BadRequestException('Primero verifica tu cédula con la foto.');
+    }
+
     const hash = bcrypt.hashSync(clave, 10);
     await this.pool.query(
       `UPDATE credito_empleados_trabajadores
-          SET clave_hash = $2, cedula_foto = $3, telefono = COALESCE($4, telefono),
-              registrado_en = now(), actualizado_en = now()
+          SET clave_hash = $2, registrado_en = now(), actualizado_en = now()
         WHERE cedula = $1`,
-      [c, hash, foto, String(input.telefono ?? '').trim() || null],
+      [c, hash],
     );
     return { cedula: t.cedula, nombre: t.nombre, telefono: t.telefono };
   }

@@ -145,11 +145,19 @@ export function loginTrabajador(cedula: string, clave: string): Promise<SesionTr
   });
 }
 
-export function registrarTrabajador(input: {
+export function verificarCedulaTrabajador(input: {
   cedula: string;
   foto: string;
+}): Promise<{ ok: true; nombre: string }> {
+  return fetchPublico("/tienda-empleados/auth/verificar-cedula", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function registrarTrabajador(input: {
+  cedula: string;
   clave: string;
-  telefono?: string;
 }): Promise<SesionTrabajador> {
   return fetchPublico<SesionTrabajador>("/tienda-empleados/auth/registrar", {
     method: "POST",

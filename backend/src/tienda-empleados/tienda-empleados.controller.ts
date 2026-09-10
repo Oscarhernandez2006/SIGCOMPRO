@@ -47,11 +47,15 @@ export class TiendaEmpleadosController {
     return this.tienda.loginTrabajador(body?.cedula, body?.clave);
   }
 
-  /** Primer ingreso: verifica la foto de la cédula y crea la contraseña. */
+  /** Primer ingreso · paso 1: verifica la foto de la cédula (OCR). */
+  @Post('auth/verificar-cedula')
+  authVerificarCedula(@Body() body: { cedula: string; foto: string }) {
+    return this.tienda.verificarCedulaTrabajador(body);
+  }
+
+  /** Primer ingreso · paso 2: crea la contraseña (tras verificar la cédula). */
   @Post('auth/registrar')
-  authRegistrar(
-    @Body() body: { cedula: string; foto: string; clave: string; telefono?: string },
-  ) {
+  authRegistrar(@Body() body: { cedula: string; clave: string }) {
     return this.tienda.registrarTrabajador(body);
   }
 
