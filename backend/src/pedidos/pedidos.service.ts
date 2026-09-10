@@ -428,8 +428,16 @@ export class PedidosService implements OnModuleInit {
 
     const codigo = String(filtros.codigo ?? '').trim();
     if (codigo) {
-      cond.push(`(it->'producto'->>'referencia') = $${i++}`);
+      // Match tolerante: ignora espacios y ceros a la izquierda cuando el código
+      // es numérico (evita perder registros por variaciones de formato).
+      cond.push(
+        `(btrim(it->'producto'->>'referencia') = $${i}
+          OR (btrim(it->'producto'->>'referencia') ~ '^[0-9]+$'
+              AND $${i} ~ '^[0-9]+$'
+              AND (btrim(it->'producto'->>'referencia'))::numeric = ($${i})::numeric))`,
+      );
       val.push(codigo);
+      i++;
     }
     const puntoId = String(filtros.punto_id ?? '').trim();
     if (puntoId) {
@@ -472,7 +480,7 @@ export class PedidosService implements OnModuleInit {
        WHERE ${where}
        GROUP BY nit, cliente, punto, codigo, producto
        ORDER BY cliente ASC, cantidad DESC
-       LIMIT 5000`,
+       LIMIT 50000`,
       val,
     );
 
