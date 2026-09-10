@@ -400,6 +400,12 @@ export class TiendaEmpleadosService implements OnModuleInit {
     const c = String(input.cedula ?? '').trim();
     const foto = String(input.foto ?? '');
     if (!foto) throw new BadRequestException('Toma la foto de tu cédula para continuar.');
+    // Guarda anti-OOM: rechaza fotos demasiado pesadas antes de procesarlas.
+    // (El frontend ya la redimensiona; esto protege ante clientes desactualizados.)
+    const base64Len = foto.includes(',') ? foto.split(',')[1].length : foto.length;
+    if (base64Len * 0.75 > 6 * 1024 * 1024) {
+      throw new BadRequestException('La foto es demasiado pesada. Vuelve a tomarla e inténtalo de nuevo.');
+    }
 
     const t = await this.filaTrabajador(c);
     if (!t) throw new BadRequestException('Tu cédula no está registrada en crédito de empleados.');
