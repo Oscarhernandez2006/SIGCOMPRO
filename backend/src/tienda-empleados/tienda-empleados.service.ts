@@ -4,10 +4,17 @@ import {
   Injectable,
   NotFoundException,
   OnModuleInit,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
+import * as bcrypt from 'bcryptjs';
 import { PG_POOL } from '../database/database.module';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const tesseract = require('node-tesseract-ocr') as {
+  recognize: (src: Buffer | string, config: Record<string, unknown>) => Promise<string>;
+};
 
 /** Ítem del catálogo curado de la tienda de empleados (por punto). */
 export interface ItemCatalogoTienda {
@@ -127,6 +134,17 @@ export class TiendaEmpleadosService implements OnModuleInit {
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS telefono text NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS metodo_pago text NULL`,
       `ALTER TABLE credito_empleados_pedidos ADD COLUMN IF NOT EXISTS tienda_items jsonb NOT NULL DEFAULT '[]'::jsonb`,
+    ]) {
+      await this.pool.query(sql);
+    }
+
+    // Acceso del trabajador a la tienda: contraseña (hash) y foto de la cédula
+    // capturada al registrarse por primera vez.
+    for (const sql of [
+      `ALTER TABLE credito_empleados_trabajadores ADD COLUMN IF NOT EXISTS clave_hash text NULL`,
+      `ALTER TABLE credito_empleados_trabajadores ADD COLUMN IF NOT EXISTS cedula_foto text NULL`,
+      `ALTER TABLE credito_empleados_trabajadores ADD COLUMN IF NOT EXISTS telefono text NULL`,
+      `ALTER TABLE credito_empleados_trabajadores ADD COLUMN IF NOT EXISTS registrado_en timestamptz NULL`,
     ]) {
       await this.pool.query(sql);
     }
@@ -305,6 +323,189 @@ export class TiendaEmpleadosService implements OnModuleInit {
       cupo_asignado: cupo,
       cupo_disponible: Math.max(0, cupo - deuda),
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Acceso del trabajador (cédula + contraseña, registro con foto de cédula)
+  // ---------------------------------------------------------------------------
+
+  /** Datos del trabajador tal como se guardan (acceso). */
+  private async filaTrabajador(cedula: string): Promise<{
+    cedula: string;
+    nombre: string;
+    activo: boolean;
+    clave_hash: string | null;
+    telefono: string | null;
+  } | null> {
+    const res = await this.pool.query<{
+      cedula: string;
+      nombre: string;
+      activo: boolean;
+      clave_hash: string | null;
+      telefono: string | null;
+    }>(
+      `SELECT cedula, nombre, activo, clave_hash, telefono
+         FROM credito_empleados_trabajadores WHERE cedula = $1 LIMIT 1`,
+      [String(cedula ?? '').trim()],
+    );
+    return res.rows[0] ?? null;
+  }
+
+  /**
+   * Estado de acceso: indica si el trabajador existe/activo y si ya configuró
+   * una contraseña (para pedirla) o si es su primer ingreso (registro con foto).
+   */
+  async estadoAcceso(cedula: string): Promise<{
+    encontrado: boolean;
+    activo: boolean;
+    nombre: string | null;
+    registrado: boolean;
+  }> {
+    const c = String(cedula ?? '').trim();
+    if (!c) throw new BadRequestException('Ingresa tu número de cédula');
+    const t = await this.filaTrabajador(c);
+    if (!t) return { encontrado: false, activo: false, nombre: null, registrado: false };
+    return {
+      encontrado: true,
+      activo: t.activo === true,
+      nombre: t.nombre,
+      registrado: !!t.clave_hash,
+    };
+  }
+
+  /** Inicia sesión validando la contraseña del trabajador. */
+  async loginTrabajador(
+    cedula: string,
+    clave: string,
+  ): Promise<{ cedula: string; nombre: string; telefono: string | null }> {
+    const c = String(cedula ?? '').trim();
+    const t = await this.filaTrabajador(c);
+    if (!t) throw new BadRequestException('Tu cédula no está registrada en crédito de empleados.');
+    if (!t.activo) throw new BadRequestException('Tu crédito no está activo. Comunícate con nómina.');
+    if (!t.clave_hash) throw new BadRequestException('Aún no tienes contraseña. Regístrate con la foto de tu cédula.');
+    if (!bcrypt.compareSync(String(clave ?? ''), t.clave_hash)) {
+      throw new UnauthorizedException('Contraseña incorrecta.');
+    }
+    return { cedula: t.cedula, nombre: t.nombre, telefono: t.telefono };
+  }
+
+  /**
+   * Primer ingreso: verifica la foto de la cédula con OCR (que el número de la
+   * cédula aparezca en la imagen) y crea la contraseña del trabajador.
+   */
+  async registrarTrabajador(input: {
+    cedula: string;
+    foto: string;
+    clave: string;
+    telefono?: string;
+  }): Promise<{ cedula: string; nombre: string; telefono: string | null }> {
+    const c = String(input.cedula ?? '').trim();
+    const clave = String(input.clave ?? '');
+    const foto = String(input.foto ?? '');
+    if (clave.length < 4) throw new BadRequestException('La contraseña debe tener al menos 4 caracteres.');
+    if (!foto) throw new BadRequestException('Toma la foto de tu cédula para continuar.');
+
+    const t = await this.filaTrabajador(c);
+    if (!t) throw new BadRequestException('Tu cédula no está registrada en crédito de empleados.');
+    if (!t.activo) throw new BadRequestException('Tu crédito no está activo. Comunícate con nómina.');
+    if (t.clave_hash) throw new BadRequestException('Ya tienes contraseña. Ingresa con ella.');
+
+    const verif = await this.verificarCedulaFoto(foto, c);
+    if (!verif.ok) throw new BadRequestException(verif.mensaje);
+
+    const hash = bcrypt.hashSync(clave, 10);
+    await this.pool.query(
+      `UPDATE credito_empleados_trabajadores
+          SET clave_hash = $2, cedula_foto = $3, telefono = COALESCE($4, telefono),
+              registrado_en = now(), actualizado_en = now()
+        WHERE cedula = $1`,
+      [c, hash, foto, String(input.telefono ?? '').trim() || null],
+    );
+    return { cedula: t.cedula, nombre: t.nombre, telefono: t.telefono };
+  }
+
+  /** Cambia la contraseña (requiere la actual). */
+  async cambiarClaveTrabajador(input: {
+    cedula: string;
+    clave_actual: string;
+    clave_nueva: string;
+  }): Promise<{ ok: true }> {
+    const c = String(input.cedula ?? '').trim();
+    const nueva = String(input.clave_nueva ?? '');
+    if (nueva.length < 4) throw new BadRequestException('La nueva contraseña debe tener al menos 4 caracteres.');
+    const t = await this.filaTrabajador(c);
+    if (!t || !t.clave_hash) throw new BadRequestException('No encontramos tu registro.');
+    if (!bcrypt.compareSync(String(input.clave_actual ?? ''), t.clave_hash)) {
+      throw new UnauthorizedException('La contraseña actual no es correcta.');
+    }
+    await this.pool.query(
+      `UPDATE credito_empleados_trabajadores SET clave_hash = $2, actualizado_en = now() WHERE cedula = $1`,
+      [c, bcrypt.hashSync(nueva, 10)],
+    );
+    return { ok: true };
+  }
+
+  /** Actualiza el teléfono de contacto del trabajador (requiere contraseña). */
+  async actualizarTelefonoTrabajador(input: {
+    cedula: string;
+    clave: string;
+    telefono: string;
+  }): Promise<{ ok: true; telefono: string | null }> {
+    const c = String(input.cedula ?? '').trim();
+    const t = await this.filaTrabajador(c);
+    if (!t || !t.clave_hash) throw new BadRequestException('No encontramos tu registro.');
+    if (!bcrypt.compareSync(String(input.clave ?? ''), t.clave_hash)) {
+      throw new UnauthorizedException('Contraseña incorrecta.');
+    }
+    const tel = String(input.telefono ?? '').replace(/\D/g, '').slice(0, 10) || null;
+    await this.pool.query(
+      `UPDATE credito_empleados_trabajadores SET telefono = $2, actualizado_en = now() WHERE cedula = $1`,
+      [c, tel],
+    );
+    return { ok: true, telefono: tel };
+  }
+
+  /**
+   * Verifica con OCR que la foto corresponda a la cédula del trabajador: el
+   * número de la cédula debe aparecer en el texto leído. Como refuerzo, si se
+   * lee, valida que al menos un nombre/apellido coincida.
+   */
+  private async verificarCedulaFoto(
+    foto: string,
+    cedula: string,
+  ): Promise<{ ok: boolean; mensaje: string }> {
+    let texto = '';
+    try {
+      const base64 = foto.includes(',') ? foto.split(',')[1] : foto;
+      let buffer = Buffer.from(base64, 'base64');
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const sharpMod = require('sharp') as any;
+        buffer = await sharpMod(buffer).grayscale().normalise().sharpen().toBuffer();
+      } catch {
+        /* sharp opcional */
+      }
+      texto = await tesseract.recognize(buffer, { lang: 'spa', oem: 1, psm: 6 });
+    } catch {
+      return {
+        ok: false,
+        mensaje: 'No pudimos procesar la foto. Intenta con una imagen más nítida y bien iluminada.',
+      };
+    }
+
+    // Dígitos leídos por OCR (sin separadores) y dígitos de la cédula esperada.
+    const digitos = (texto.match(/\d/g) ?? []).join('');
+    const cedulaLimpia = cedula.replace(/\D/g, '');
+    const cedulaEncontrada = cedulaLimpia.length >= 5 && digitos.includes(cedulaLimpia);
+
+    if (!cedulaEncontrada) {
+      return {
+        ok: false,
+        mensaje:
+          'No reconocimos el número de tu cédula en la foto. Asegúrate de que se vean claramente los números y vuelve a intentar.',
+      };
+    }
+    return { ok: true, mensaje: 'ok' };
   }
 
   // ---------------------------------------------------------------------------

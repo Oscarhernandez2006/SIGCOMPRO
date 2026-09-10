@@ -35,6 +35,40 @@ export class TiendaEmpleadosController {
     return this.tienda.saldoPorCedula(cedula);
   }
 
+  /** Estado de acceso: existe/activo y si ya tiene contraseña. */
+  @Post('auth/estado')
+  authEstado(@Body() body: { cedula: string }) {
+    return this.tienda.estadoAcceso(body?.cedula);
+  }
+
+  /** Inicia sesión con cédula + contraseña. */
+  @Post('auth/login')
+  authLogin(@Body() body: { cedula: string; clave: string }) {
+    return this.tienda.loginTrabajador(body?.cedula, body?.clave);
+  }
+
+  /** Primer ingreso: verifica la foto de la cédula y crea la contraseña. */
+  @Post('auth/registrar')
+  authRegistrar(
+    @Body() body: { cedula: string; foto: string; clave: string; telefono?: string },
+  ) {
+    return this.tienda.registrarTrabajador(body);
+  }
+
+  /** Cambia la contraseña (requiere la actual). */
+  @Post('auth/cambiar-clave')
+  authCambiarClave(
+    @Body() body: { cedula: string; clave_actual: string; clave_nueva: string },
+  ) {
+    return this.tienda.cambiarClaveTrabajador(body);
+  }
+
+  /** Actualiza el teléfono de contacto (requiere contraseña). */
+  @Post('auth/telefono')
+  authTelefono(@Body() body: { cedula: string; clave: string; telefono: string }) {
+    return this.tienda.actualizarTelefonoTrabajador(body);
+  }
+
   /** Catálogo público de una tienda por slug. */
   @Get('tienda/:slug')
   tiendaPublica(@Param('slug') slug: string) {

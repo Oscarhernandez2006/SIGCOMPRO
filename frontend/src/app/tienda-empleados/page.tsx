@@ -11,14 +11,17 @@ import {
   SESSION_KEY,
   type SaldoTrabajador,
   type TiendaResumen,
+  type SesionTrabajador,
 } from "@/lib/tienda-empleados";
+import TiendaAcceso from "@/components/TiendaAcceso";
+import TiendaUserMenu from "@/components/TiendaUserMenu";
 
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["600", "700", "800"] });
 
 export default function TiendaEmpleadosLanding() {
   const router = useRouter();
-  const [cedula, setCedula] = useState("");
+  const [sesion, setSesion] = useState<SesionTrabajador | null>(null);
   const [saldo, setSaldo] = useState<SaldoTrabajador | null>(null);
   const [tiendas, setTiendas] = useState<TiendaResumen[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -29,59 +32,41 @@ export default function TiendaEmpleadosLanding() {
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (raw) {
-        const s = JSON.parse(raw) as { cedula: string };
-        if (s?.cedula) {
-          setCedula(s.cedula);
-          void identificar(s.cedula, true);
-        }
+        const s = JSON.parse(raw) as SesionTrabajador;
+        if (s?.cedula) { setSesion(s); void cargar(s.cedula); }
       }
     } catch {
       /* sin sesión previa */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function identificar(ced: string, silencioso = false) {
-    const c = ced.trim();
-    if (!c) {
-      setError("Ingresa tu número de cédula.");
-      return;
-    }
+  async function cargar(ced: string) {
     setCargando(true);
-    if (!silencioso) setError(null);
     try {
-      const s = await consultarSaldoPublico(c);
-      if (!s.encontrado) {
-        setSaldo(null);
-        setError("Tu cédula no está registrada en el crédito de empleados.");
-        sessionStorage.removeItem(SESSION_KEY);
-        return;
-      }
-      if (!s.activo) {
-        setSaldo(null);
-        setError("Tu crédito no está activo. Comunícate con nómina.");
-        sessionStorage.removeItem(SESSION_KEY);
-        return;
-      }
+      const s = await consultarSaldoPublico(ced);
+      if (!s.encontrado || !s.activo) { salir(); return; }
       setSaldo(s);
+      setTiendas(await listarTiendasPublicas());
       setError(null);
-      sessionStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify({ cedula: s.cedula, nombre: s.nombre }),
-      );
-      const lista = await listarTiendasPublicas();
-      setTiendas(lista);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo consultar tu crédito.");
+      setError(e instanceof Error ? e.message : "No se pudo cargar tu crédito.");
     } finally {
       setCargando(false);
     }
+  }
+
+  function onAutenticado(s: SesionTrabajador) {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    setSesion(s);
+    void cargar(s.cedula);
   }
 
   function salir() {
     sessionStorage.removeItem(SESSION_KEY);
     setSaldo(null);
     setTiendas([]);
-    setCedula("");
+    setSesion(null);
   }
 
   return (
@@ -113,34 +98,15 @@ export default function TiendaEmpleadosLanding() {
         {!saldo && (
           <div className="-mt-12 rounded-3xl bg-white p-6 shadow-xl ring-1 ring-brand-brown/5 sm:p-7">
             <div className="mx-auto max-w-md">
-              <p className="text-center text-xs font-bold uppercase tracking-widest text-brand-brown/50">
-                Ingresa con tu cédula
+              <TiendaAcceso onAutenticado={onAutenticado} />
+              <p className="mt-4 text-center text-xs text-brand-brown/45">
+                Para reclamar tu pedido presentarás tu cédula física en el punto.
               </p>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={cedula}
-                  onChange={(e) => setCedula(e.target.value.replace(/\D/g, ""))}
-                  onKeyDown={(e) => e.key === "Enter" && identificar(cedula)}
-                  inputMode="numeric"
-                  placeholder="Número de cédula"
-                  className="flex-1 rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3.5 text-base font-medium text-brand-black outline-none transition focus:border-brand-amber focus:bg-white focus:ring-4 focus:ring-brand-amber/15"
-                />
-                <button
-                  onClick={() => identificar(cedula)}
-                  disabled={cargando}
-                  className="rounded-2xl bg-brand-amber px-6 py-3.5 text-sm font-extrabold uppercase tracking-wide text-white shadow-md shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-95 disabled:opacity-50"
-                >
-                  {cargando ? "…" : "Entrar"}
-                </button>
-              </div>
-              {error && (
-                <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600">
-                  {error}
+              {(error || cargando) && (
+                <p className={`mt-3 text-center text-sm font-medium ${cargando ? "text-brand-brown/50" : "text-red-600"}`}>
+                  {cargando ? "Cargando tu información…" : error}
                 </p>
               )}
-              <p className="mt-4 text-center text-xs text-brand-brown/45">
-                Solo necesitas tu cédula. Te mostraremos tu saldo disponible.
-              </p>
             </div>
           </div>
         )}
@@ -160,12 +126,9 @@ export default function TiendaEmpleadosLanding() {
                     <p className="text-[11px] text-brand-brown/50">C.C. {saldo.cedula}</p>
                   </div>
                 </div>
-                <button
-                  onClick={salir}
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
-                >
-                  Salir
-                </button>
+                {sesion && (
+                  <TiendaUserMenu sesion={sesion} variant="cream" onCerrarSesion={salir} />
+                )}
               </div>
               <div className="bg-gradient-to-br from-emerald-50 to-white px-6 py-6 text-center">
                 <p className="text-xs font-bold uppercase tracking-widest text-brand-brown/50">

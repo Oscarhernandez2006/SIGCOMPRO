@@ -113,6 +113,72 @@ export function consultarSaldoPublico(cedula: string): Promise<SaldoTrabajador> 
   return fetchPublico<SaldoTrabajador>(`/tienda-empleados/saldo/${encodeURIComponent(cedula)}`);
 }
 
+// ---------------------------------------------------------------------------
+// Acceso del trabajador (cédula + contraseña, registro con foto de cédula)
+// ---------------------------------------------------------------------------
+
+export interface EstadoAccesoTrabajador {
+  encontrado: boolean;
+  activo: boolean;
+  nombre: string | null;
+  /** true si ya configuró contraseña (pedir clave); false = primer ingreso. */
+  registrado: boolean;
+}
+
+export interface SesionTrabajador {
+  cedula: string;
+  nombre: string;
+  telefono?: string | null;
+}
+
+export function estadoAccesoTrabajador(cedula: string): Promise<EstadoAccesoTrabajador> {
+  return fetchPublico<EstadoAccesoTrabajador>("/tienda-empleados/auth/estado", {
+    method: "POST",
+    body: JSON.stringify({ cedula }),
+  });
+}
+
+export function loginTrabajador(cedula: string, clave: string): Promise<SesionTrabajador> {
+  return fetchPublico<SesionTrabajador>("/tienda-empleados/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ cedula, clave }),
+  });
+}
+
+export function registrarTrabajador(input: {
+  cedula: string;
+  foto: string;
+  clave: string;
+  telefono?: string;
+}): Promise<SesionTrabajador> {
+  return fetchPublico<SesionTrabajador>("/tienda-empleados/auth/registrar", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function cambiarClaveTrabajador(input: {
+  cedula: string;
+  clave_actual: string;
+  clave_nueva: string;
+}): Promise<{ ok: true }> {
+  return fetchPublico("/tienda-empleados/auth/cambiar-clave", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function actualizarTelefonoTrabajador(input: {
+  cedula: string;
+  clave: string;
+  telefono: string;
+}): Promise<{ ok: true; telefono: string | null }> {
+  return fetchPublico("/tienda-empleados/auth/telefono", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function crearPedidoTiendaPublico(input: {
   cedula: string;
   slug: string;

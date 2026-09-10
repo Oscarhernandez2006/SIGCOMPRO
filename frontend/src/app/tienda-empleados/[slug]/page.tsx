@@ -14,8 +14,11 @@ import {
   type TiendaCatalogoPublico,
   type ProductoTienda,
   type PedidoTienda,
+  type SesionTrabajador,
 } from "@/lib/tienda-empleados";
 import DireccionInput from "@/components/DireccionInput";
+import TiendaAcceso from "@/components/TiendaAcceso";
+import TiendaUserMenu from "@/components/TiendaUserMenu";
 
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["600", "700", "800"] });
@@ -100,7 +103,7 @@ export default function TiendaEmpleadosStore({
   const { slug } = use(params);
 
   const [cedula, setCedula] = useState<string | null>(null);
-  const [inputCedula, setInputCedula] = useState("");
+  const [sesion, setSesion] = useState<SesionTrabajador | null>(null);
   const [saldo, setSaldo] = useState<SaldoTrabajador | null>(null);
   const [tienda, setTienda] = useState<TiendaCatalogoPublico | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -124,8 +127,8 @@ export default function TiendaEmpleadosStore({
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (raw) {
-        const s = JSON.parse(raw) as { cedula: string };
-        if (s?.cedula) setCedula(s.cedula);
+        const s = JSON.parse(raw) as SesionTrabajador;
+        if (s?.cedula) { setCedula(s.cedula); setSesion(s); }
       }
     } catch {
       /* sin sesión */
@@ -214,28 +217,19 @@ export default function TiendaEmpleadosStore({
     });
   }
 
-  async function identificar() {
-    const c = inputCedula.trim();
-    if (!c) return;
-    setCargando(true);
-    try {
-      const s = await consultarSaldoPublico(c);
-      if (!s.encontrado) {
-        setError("Tu cédula no está registrada en el crédito de empleados.");
-        return;
-      }
-      if (!s.activo) {
-        setError("Tu crédito no está activo. Comunícate con nómina.");
-        return;
-      }
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ cedula: s.cedula, nombre: s.nombre }));
-      setError(null);
-      setCedula(s.cedula);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo consultar tu crédito.");
-    } finally {
-      setCargando(false);
-    }
+  function onAutenticado(s: SesionTrabajador) {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    setSesion(s);
+    setError(null);
+    setCedula(s.cedula);
+  }
+
+  function cerrarSesion() {
+    sessionStorage.removeItem(SESSION_KEY);
+    setSesion(null);
+    setCedula(null);
+    setSaldo(null);
+    setCarrito({});
   }
 
   async function confirmar() {
@@ -301,22 +295,7 @@ export default function TiendaEmpleadosStore({
             </div>
 
             <div className="rounded-3xl bg-white p-7 shadow-xl ring-1 ring-brand-brown/5">
-              <h2 className={`${playfair.className} text-2xl font-extrabold text-brand-wine`}>Identifícate</h2>
-              <p className="mt-1 text-xs font-medium text-brand-brown/55">Ingresa tu cédula para comprar</p>
-              <div className="mt-5 flex gap-2">
-                <input
-                  value={inputCedula}
-                  onChange={(e) => setInputCedula(e.target.value.replace(/\D/g, ""))}
-                  onKeyDown={(e) => e.key === "Enter" && identificar()}
-                  inputMode="numeric"
-                  placeholder="Cédula"
-                  className="flex-1 rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 px-4 py-3 text-brand-black outline-none transition focus:border-brand-amber focus:bg-white focus:ring-4 focus:ring-brand-amber/15"
-                />
-                <button onClick={identificar} className="rounded-2xl bg-brand-amber px-5 py-3 font-extrabold text-white shadow-md shadow-brand-amber/30 transition hover:bg-brand-amber-light active:scale-95">
-                  Entrar
-                </button>
-              </div>
-              {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
+              <TiendaAcceso onAutenticado={onAutenticado} />
               <Link href="/tienda-empleados" className="mt-5 inline-block text-xs font-semibold text-brand-brown/50 underline">
                 Volver al inicio
               </Link>
@@ -368,14 +347,17 @@ export default function TiendaEmpleadosStore({
             </div>
             {/* Centro: logo sin fondo (oculto en móvil) */}
             <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={64} className="hidden h-12 w-auto shrink-0 object-contain drop-shadow-sm sm:block sm:h-16" />
-            {/* Derecha: saldo */}
-            <div className="flex flex-1 justify-end">
+            {/* Derecha: saldo + cuenta */}
+            <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
               <div className="rounded-2xl bg-white/10 px-3 py-1.5 text-right ring-1 ring-white/15 sm:px-3.5">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-brand-cream/60">Saldo</p>
                 <p className={`text-sm font-extrabold ${excede ? "text-red-300" : "text-emerald-300"}`}>
                   {copTienda(restante < 0 ? disponible : restante)}
                 </p>
               </div>
+              {sesion && (
+                <TiendaUserMenu sesion={sesion} variant="wine" onCerrarSesion={cerrarSesion} />
+              )}
             </div>
           </div>
         </header>
