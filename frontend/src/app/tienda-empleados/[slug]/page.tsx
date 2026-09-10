@@ -3,15 +3,18 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Manrope, Playfair_Display } from "next/font/google";
 import {
   consultarSaldoPublico,
   obtenerTiendaPublica,
   crearPedidoTiendaPublico,
+  listarTiendasPublicas,
   copTienda,
   SESSION_KEY,
   type SaldoTrabajador,
   type TiendaCatalogoPublico,
+  type TiendaResumen,
   type ProductoTienda,
   type PedidoTienda,
   type SesionTrabajador,
@@ -109,6 +112,12 @@ export default function TiendaEmpleadosStore({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Selector de puntos de venta (modal en el header).
+  const router = useRouter();
+  const [tiendas, setTiendas] = useState<TiendaResumen[]>([]);
+  const [modalPdv, setModalPdv] = useState(false);
+  const [buscarPdv, setBuscarPdv] = useState("");
+
   const [carrito, setCarrito] = useState<Record<string, LineaCarrito>>({});
   const [productoModal, setProductoModal] = useState<ProductoTienda | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -134,6 +143,23 @@ export default function TiendaEmpleadosStore({
       /* sin sesión */
     }
   }, []);
+
+  // Lista de puntos de venta para el selector del header.
+  useEffect(() => {
+    listarTiendasPublicas().then(setTiendas).catch(() => {});
+  }, []);
+
+  const tiendasFiltradas = tiendas.filter((t) => {
+    const q = buscarPdv.trim().toLowerCase();
+    if (!q) return true;
+    return (t.nombre ?? "").toLowerCase().includes(q) || (t.ciudad ?? "").toLowerCase().includes(q);
+  });
+
+  function irATienda(nuevoSlug: string) {
+    setModalPdv(false);
+    setBuscarPdv("");
+    if (nuevoSlug !== slug) router.push(`/tienda-empleados/${nuevoSlug}`);
+  }
 
   // Carga catálogo + saldo cuando hay cédula.
   useEffect(() => {
@@ -331,19 +357,31 @@ export default function TiendaEmpleadosStore({
       <div className="sticky top-0 z-30">
         <header className="bg-gradient-to-br from-brand-wine to-brand-wine-dark shadow-md">
           <div className="mx-auto flex max-w-[1500px] items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 sm:py-5">
-            {/* Izquierda: volver + nombres */}
+            {/* Izquierda: selector de punto de venta */}
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <Link href="/tienda-empleados" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10" title="Volver">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              <button
+                onClick={() => setModalPdv(true)}
+                title="Cambiar de punto de venta"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand-cream/90 transition hover:bg-white/10"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
                 </svg>
-              </Link>
-              <div className="min-w-0">
-                <p className={`${playfair.className} truncate text-sm font-extrabold text-white sm:text-lg`}>
-                  {tienda?.nombre}
-                </p>
-                <p className="truncate text-[10px] font-medium text-brand-cream/70 sm:text-[11px]">{saldo?.nombre}</p>
-              </div>
+              </button>
+              <button
+                onClick={() => setModalPdv(true)}
+                className="group flex min-w-0 items-center gap-1.5 rounded-xl px-1.5 py-1 text-left transition hover:bg-white/10"
+              >
+                <span className="min-w-0">
+                  <span className={`${playfair.className} flex items-center gap-1.5 truncate text-sm font-extrabold text-white sm:text-lg`}>
+                    <span className="truncate">{tienda?.nombre}</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-4 w-4 shrink-0 text-brand-cream/70">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </span>
+                  <span className="block truncate text-[10px] font-medium text-brand-cream/70 sm:text-[11px]">{saldo?.nombre}</span>
+                </span>
+              </button>
             </div>
             {/* Centro: logo sin fondo (oculto en móvil) */}
             <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={160} height={64} className="hidden h-12 w-auto shrink-0 object-contain drop-shadow-sm sm:block sm:h-16" />
@@ -587,6 +625,96 @@ export default function TiendaEmpleadosStore({
           }}
           onCerrar={() => setProductoModal(null)}
         />
+      )}
+
+      {/* Modal selector de puntos de venta */}
+      {modalPdv && (
+        <div
+          style={{ zoom: 1.25 }}
+          className={`${manrope.className} fixed inset-0 z-50 flex items-end justify-center bg-brand-black/50 backdrop-blur-sm sm:items-center`}
+          onClick={() => setModalPdv(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
+              <div className="min-w-0">
+                <p className={`${playfair.className} text-lg font-extrabold text-brand-wine`}>Elige tu punto</p>
+                <p className="text-xs text-brand-brown/55">Cambia a la tienda de otro punto de venta.</p>
+              </div>
+              <button
+                onClick={() => setModalPdv(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-brand-brown/50 transition hover:bg-brand-cream-soft"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="border-b border-brand-brown/10 px-5 py-3">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-brown/40">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
+                  </svg>
+                </span>
+                <input
+                  autoFocus
+                  value={buscarPdv}
+                  onChange={(e) => setBuscarPdv(e.target.value)}
+                  placeholder="Buscar punto de venta…"
+                  className="w-full rounded-2xl bg-brand-cream-soft py-2.5 pl-10 pr-4 text-sm font-medium text-brand-black outline-none ring-1 ring-brand-brown/10 transition placeholder:text-brand-brown/40 focus:ring-2 focus:ring-brand-wine/30"
+                />
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
+              {tiendas.length === 0 && (
+                <p className="py-8 text-center text-sm text-brand-brown/50">Cargando puntos de venta…</p>
+              )}
+              {tiendas.length > 0 && tiendasFiltradas.length === 0 && (
+                <p className="py-8 text-center text-sm text-brand-brown/50">
+                  No encontramos puntos que coincidan con “{buscarPdv}”.
+                </p>
+              )}
+              {tiendasFiltradas.map((t) => {
+                const actual = t.slug === slug;
+                return (
+                  <button
+                    key={t.slug}
+                    onClick={() => irATienda(t.slug)}
+                    className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${
+                      actual
+                        ? "bg-brand-wine/10 ring-1 ring-brand-wine/25"
+                        : "bg-brand-cream-soft/60 ring-1 ring-brand-brown/5 hover:bg-brand-cream-soft"
+                    }`}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-amber to-brand-amber-light text-white shadow-sm shadow-brand-amber/25">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-6 w-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-extrabold text-brand-black">{t.nombre}</span>
+                      {t.ciudad && <span className="block truncate text-xs font-medium text-brand-brown/50">{t.ciudad}</span>}
+                    </span>
+                    {actual ? (
+                      <span className="shrink-0 rounded-full bg-brand-wine px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Aquí</span>
+                    ) : (
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-brand-wine">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Barra inferior del carrito */}
