@@ -44,6 +44,18 @@ export class PedidosController {
     return this.pedidos.buscar(q ?? '');
   }
 
+  /** Reporte de clientes que han comprado un producto (por punto / código / general). */
+  @Get('reporte-productos')
+  @Permisos('reporte_productos')
+  reporteProductos(
+    @Query('codigo') codigo?: string,
+    @Query('punto_id') punto_id?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.pedidos.reporteProductosPorCliente({ codigo, punto_id, desde, hasta });
+  }
+
   /** Trazabilidad (historial) de un pedido, bajo demanda (no viaja en el listado). */
   @Get(':id/trazabilidad')
   trazabilidad(@Param('id') id: string) {

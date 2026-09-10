@@ -394,6 +394,111 @@ export class PedidosService implements OnModuleInit {
     return { pedidos: res.rows.map((r) => r.data) };
   }
 
+  /**
+   * Reporte de clientes que han comprado productos, agrupado por cliente +
+   * producto. Filtrable por punto de venta, por código (referencia) específico
+   * o general (todos los productos), y por rango de fechas.
+   */
+  async reporteProductosPorCliente(filtros: {
+    codigo?: string;
+    punto_id?: string;
+    desde?: string;
+    hasta?: string;
+  }): Promise<{
+    filas: Array<{
+      nit: string;
+      cliente: string;
+      punto: string;
+      codigo: string;
+      producto: string;
+      cantidad: number;
+      n_pedidos: number;
+      monto: number;
+      ultima_compra: string | null;
+    }>;
+    resumen: { clientes: number; cantidad: number; monto: number; filas: number };
+  }> {
+    const cond: string[] = [
+      'p.anulado = false',
+      `(it->'producto'->>'referencia') IS NOT NULL`,
+      `(it->'producto'->>'referencia') <> ''`,
+    ];
+    const val: unknown[] = [];
+    let i = 1;
+
+    const codigo = String(filtros.codigo ?? '').trim();
+    if (codigo) {
+      cond.push(`(it->'producto'->>'referencia') = $${i++}`);
+      val.push(codigo);
+    }
+    const puntoId = String(filtros.punto_id ?? '').trim();
+    if (puntoId) {
+      cond.push(`p.punto_id = $${i++}`);
+      val.push(puntoId);
+    }
+    if (filtros.desde?.trim()) {
+      cond.push(`p.fecha >= $${i++}::date`);
+      val.push(filtros.desde.trim());
+    }
+    if (filtros.hasta?.trim()) {
+      cond.push(`p.fecha < ($${i++}::date + interval '1 day')`);
+      val.push(filtros.hasta.trim());
+    }
+
+    const where = cond.join(' AND ');
+    const res = await this.pool.query<{
+      nit: string;
+      cliente: string;
+      punto: string;
+      codigo: string;
+      producto: string;
+      cantidad: string;
+      n_pedidos: string;
+      monto: string;
+      ultima_compra: string | null;
+    }>(
+      `SELECT
+         COALESCE(NULLIF(p.data->'cliente'->>'nit_cedula', ''), '—') AS nit,
+         COALESCE(NULLIF(p.data->'cliente'->>'nombre', ''), 'Sin nombre') AS cliente,
+         COALESCE(p.data->'punto'->>'nombre', '') AS punto,
+         (it->'producto'->>'referencia') AS codigo,
+         COALESCE(it->'producto'->>'producto', '') AS producto,
+         SUM(COALESCE((it->>'cantidad')::numeric, 0)) AS cantidad,
+         COUNT(DISTINCT p.id) AS n_pedidos,
+         SUM(COALESCE((it->>'cantidad')::numeric, 0) * COALESCE((it->'producto'->>'precio')::numeric, 0)) AS monto,
+         to_char(MAX(p.fecha) AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS ultima_compra
+       FROM pedidos p,
+            jsonb_array_elements(COALESCE(p.data->'carrito', '[]'::jsonb)) AS it
+       WHERE ${where}
+       GROUP BY nit, cliente, punto, codigo, producto
+       ORDER BY cliente ASC, cantidad DESC
+       LIMIT 5000`,
+      val,
+    );
+
+    const filas = res.rows.map((r) => ({
+      nit: r.nit,
+      cliente: r.cliente,
+      punto: r.punto,
+      codigo: r.codigo,
+      producto: r.producto,
+      cantidad: Number(r.cantidad) || 0,
+      n_pedidos: Number(r.n_pedidos) || 0,
+      monto: Number(r.monto) || 0,
+      ultima_compra: r.ultima_compra,
+    }));
+
+    const clientesSet = new Set(filas.map((f) => f.nit));
+    const resumen = {
+      clientes: clientesSet.size,
+      cantidad: filas.reduce((s, f) => s + f.cantidad, 0),
+      monto: filas.reduce((s, f) => s + f.monto, 0),
+      filas: filas.length,
+    };
+
+    return { filas, resumen };
+  }
+
   /** Fecha (YYYY-MM-DD) en zona horaria de Bogotá. Por defecto, hoy. */
   private diaBogota(fecha?: string | Date | null): string {
     const d = fecha ? new Date(fecha) : new Date();
