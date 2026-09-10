@@ -9,11 +9,6 @@ const fmtCop = new Intl.NumberFormat("es-CO", { style: "currency", currency: "CO
 const money = (v: number) => fmtCop.format(Number.isFinite(v) ? v : 0);
 const fmtNum = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
 
-function csvEscape(v: string | number): string {
-  const s = String(v ?? "");
-  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export default function ReporteProductosPage() {
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
   const [codigo, setCodigo] = useState("");
@@ -54,21 +49,114 @@ export default function ReporteProductosPage() {
     );
   }, [data, busq]);
 
-  function exportarCsv() {
+  async function exportarExcel() {
     if (!data || filas.length === 0) return;
-    const encabezados = ["Cliente", "NIT/Cédula", "Punto", "Código", "Producto", "Cantidad", "N° pedidos", "Monto", "Última compra"];
-    const lineas = [encabezados.join(";")];
-    for (const f of filas) {
-      lineas.push([
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "SIGCOMPRO";
+    wb.created = new Date();
+    const ws = wb.addWorksheet("Reporte", {
+      views: [{ state: "frozen", ySplit: 4 }],
+      pageSetup: { fitToPage: true, fitToWidth: 1, orientation: "landscape" },
+    });
+
+    const columnas = [
+      { header: "Cliente", key: "cliente", width: 34 },
+      { header: "NIT / Cédula", key: "nit", width: 16 },
+      { header: "Punto", key: "punto", width: 22 },
+      { header: "Código", key: "codigo", width: 12 },
+      { header: "Producto", key: "producto", width: 40 },
+      { header: "Cantidad", key: "cantidad", width: 12 },
+      { header: "N° pedidos", key: "n_pedidos", width: 12 },
+      { header: "Monto", key: "monto", width: 16 },
+      { header: "Última compra", key: "ultima", width: 15 },
+    ];
+    const nCols = columnas.length;
+
+    // Fila 1: título
+    ws.mergeCells(1, 1, 1, nCols);
+    const tCell = ws.getCell(1, 1);
+    tCell.value = "Reporte de productos por cliente";
+    tCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+    tCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    tCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7A1E2B" } };
+    ws.getRow(1).height = 30;
+
+    // Fila 2: filtros aplicados
+    ws.mergeCells(2, 1, 2, nCols);
+    const fCell = ws.getCell(2, 1);
+    const partes: string[] = [];
+    partes.push(codigo ? `Código: ${codigo}` : "Todos los productos");
+    partes.push(puntoId ? `Punto: ${puntos.find((p) => p.id === puntoId)?.nombre ?? puntoId}` : "Todos los puntos");
+    if (desde) partes.push(`Desde: ${desde}`);
+    if (hasta) partes.push(`Hasta: ${hasta}`);
+    partes.push(`Generado: ${new Date().toLocaleString("es-CO")}`);
+    fCell.value = partes.join("    ·    ");
+    fCell.font = { size: 10, italic: true, color: { argb: "FF6B4F3A" } };
+    fCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    fCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF6EFE7" } };
+    ws.getRow(2).height = 20;
+
+    // Fila 3: vacía (separador)
+    ws.getRow(3).height = 6;
+
+    // Fila 4: encabezados
+    const headerRow = ws.getRow(4);
+    columnas.forEach((c, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = c.header;
+      cell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+      cell.alignment = { vertical: "middle", horizontal: idx >= 5 && idx <= 7 ? "right" : "left" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF5E1622" } };
+      cell.border = { bottom: { style: "thin", color: { argb: "FF7A1E2B" } } };
+    });
+    headerRow.height = 26;
+    columnas.forEach((c, idx) => { ws.getColumn(idx + 1).width = c.width; });
+
+    // Filas de datos
+    filas.forEach((f, i) => {
+      const r = ws.addRow([
         f.cliente, f.nit, f.punto, f.codigo, f.producto,
-        f.cantidad, f.n_pedidos, f.monto, f.ultima_compra ?? "",
-      ].map(csvEscape).join(";"));
-    }
-    const blob = new Blob(["\uFEFF" + lineas.join("\n")], { type: "text/csv;charset=utf-8;" });
+        f.cantidad, f.n_pedidos, f.monto,
+        f.ultima_compra ? new Date(`${f.ultima_compra}T00:00:00`) : null,
+      ]);
+      r.height = 18;
+      r.eachCell((cell, col) => {
+        cell.font = { size: 11, color: { argb: "FF2B2320" } };
+        cell.alignment = { vertical: "middle", horizontal: col >= 6 && col <= 8 ? "right" : "left" };
+        cell.border = { bottom: { style: "hair", color: { argb: "FFE3D8CC" } } };
+      });
+      if (i % 2 === 1) {
+        r.eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFBF7F2" } }; });
+      }
+      r.getCell(6).numFmt = "#,##0.##";
+      r.getCell(8).numFmt = '"$"#,##0';
+      r.getCell(9).numFmt = "dd/mm/yyyy";
+    });
+
+    // Fila de totales
+    const totalRow = ws.addRow([
+      "TOTAL", "", "", "", "",
+      data.resumen.cantidad, "", data.resumen.monto, "",
+    ]);
+    totalRow.height = 22;
+    totalRow.eachCell((cell, col) => {
+      cell.font = { bold: true, size: 11, color: { argb: "FF5E1622" } };
+      cell.alignment = { vertical: "middle", horizontal: col >= 6 && col <= 8 ? "right" : "left" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1E4D6" } };
+      cell.border = { top: { style: "thin", color: { argb: "FF7A1E2B" } } };
+    });
+    totalRow.getCell(6).numFmt = "#,##0.##";
+    totalRow.getCell(8).numFmt = '"$"#,##0';
+
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: nCols } };
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `reporte-productos${codigo ? `-${codigo}` : ""}.csv`;
+    a.download = `reporte-productos${codigo ? `-${codigo}` : ""}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -154,10 +242,10 @@ export default function ReporteProductosPage() {
               placeholder="Buscar en resultados (cliente, producto…)"
               className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
           </div>
-          <button type="button" onClick={exportarCsv} disabled={!data || filas.length === 0}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-brand-wine px-3 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={exportarExcel} disabled={!data || filas.length === 0}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-emerald-600 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-            Exportar CSV
+            Exportar Excel
           </button>
         </div>
 
