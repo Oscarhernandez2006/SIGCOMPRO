@@ -1874,6 +1874,8 @@ export default function DespachoPage() {
                 const estado = anulado ? "Anulado" : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
                 const porcSel = porcBorrador[p.id] ?? m.porcionador ?? "";
+                // La facturación exige un porcionador asignado en el alistamiento.
+                const hayPorcionador = Boolean((m.porcionador ?? "").trim());
                 // Porcionadores y domiciliarios del punto de venta de este pedido.
                 const personal = personalPorPunto[String(p.punto?.id ?? "")] ?? {
                   porcionadores: [],
@@ -2302,8 +2304,9 @@ export default function DespachoPage() {
                           type="text"
                           value={m.facturaNumero ?? ""}
                           onChange={(ev) => actualizarMeta(p.id, { facturaNumero: ev.target.value })}
-                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
+                          disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="N° factura"
+                          title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
                         <input
@@ -2315,8 +2318,9 @@ export default function DespachoPage() {
                               facturaValor: ev.target.value === "" ? undefined : Number(ev.target.value),
                             })
                           }
-                          disabled={anulado || facturado || !alistado || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
+                          disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="Valor factura"
+                          title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
                         {typeof m.facturaValor === "number" && m.facturaValor > 0 && (
@@ -2385,15 +2389,17 @@ export default function DespachoPage() {
                         ) : (
                           <button
                             onClick={() => cambiarEstado(p.id, "Facturado")}
-                            disabled={anulado || facturado || !alistado || comprobantePendiente || !puedeEstado("Facturado")}
+                            disabled={anulado || facturado || !alistado || !hayPorcionador || comprobantePendiente || !puedeEstado("Facturado")}
                             title={
-                              !alistado && !facturado
-                                ? "Debes terminar el alistamiento antes de facturar"
-                                : comprobantePendiente
-                                  ? "Debes confirmar el comprobante de pago para facturar"
-                                  : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
-                                    ? "Ingresa el número y el valor de la factura para facturar"
-                                    : "Marcar el pedido como facturado"
+                              !hayPorcionador
+                                ? "Asigna un porcionador en el alistamiento antes de facturar"
+                                : !alistado && !facturado
+                                  ? "Debes terminar el alistamiento antes de facturar"
+                                  : comprobantePendiente
+                                    ? "Debes confirmar el comprobante de pago para facturar"
+                                    : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                                      ? "Ingresa el número y el valor de la factura para facturar"
+                                      : "Marcar el pedido como facturado"
                             }
                             className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
