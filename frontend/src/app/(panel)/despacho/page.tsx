@@ -870,55 +870,61 @@ export default function DespachoPage() {
       const est = norm(p.estado);
       if (est !== "facturado" && est !== "despachado") continue;
 
-      // BASE: si la comanda está en Drivin, refleja su asignación.
-      if (p.comanda in asignacionesDrivin) {
-        const asg = asignacionesDrivin[p.comanda]; // {code,nombre} | null
-        if (asg) {
-          // Drivin tiene un domiciliario asignado.
-          const cambioDomi = m.domiciliarioCodigo !== asg.code;
-          // NO auto-despachar si hay comprobante subido sin confirmar.
-          const compPendiente = !!m.comprobante?.tiene && !m.comprobante?.confirmado;
-          const debeDespachar = est === "facturado" && !compPendiente;
-          if (cambioDomi || debeDespachar) {
-            const despachoFin = m.despachoFin ?? new Date().toISOString();
-            // Los admin que solo mueven el estado NO quedan como autores del
-            // despacho: se prefiere quien ya estaba o "Auto (Drivin)".
-            const despachadoPor =
-              m.despachadoPor ||
-              (tieneAccesoAdministrativo(usuarioDesp?.rol) ? "" : usuarioDesp?.nombre) ||
-              "Auto (Drivin)";
-            setMeta((prev) => {
-              const nuevo = { ...prev[p.id], domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor };
-              actualizarMetaApi(p.id, { domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor }).catch(() => { /* ignore */ });
-              return { ...prev, [p.id]: nuevo };
+      // BASE: refleja la asignación de Drivin (o su AUSENCIA).
+      //  - asg = {code,nombre} -> Drivin asignó un domiciliario.
+      //  - asg = null          -> la comanda está en Drivin SIN domiciliario.
+      //  - asg = undefined     -> la comanda YA NO está en ningún escenario de
+      //    Drivin (al desasignar, Drivin la saca de la ruta). También cuenta como
+      //    desasignación cuando el pedido ya tenía domiciliario de Drivin.
+      const enMapaBase = p.comanda in asignacionesDrivin;
+      const asg = enMapaBase ? asignacionesDrivin[p.comanda] : undefined;
+      const teniaDomi = !!(m.domiciliario || m.domiciliarioCodigo);
+      if (asg) {
+        // Drivin tiene un domiciliario asignado.
+        const cambioDomi = m.domiciliarioCodigo !== asg.code;
+        // NO auto-despachar si hay comprobante subido sin confirmar.
+        const compPendiente = !!m.comprobante?.tiene && !m.comprobante?.confirmado;
+        const debeDespachar = est === "facturado" && !compPendiente;
+        if (cambioDomi || debeDespachar) {
+          const despachoFin = m.despachoFin ?? new Date().toISOString();
+          // Los admin que solo mueven el estado NO quedan como autores del
+          // despacho: se prefiere quien ya estaba o "Auto (Drivin)".
+          const despachadoPor =
+            m.despachadoPor ||
+            (tieneAccesoAdministrativo(usuarioDesp?.rol) ? "" : usuarioDesp?.nombre) ||
+            "Auto (Drivin)";
+          setMeta((prev) => {
+            const nuevo = { ...prev[p.id], domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor };
+            actualizarMetaApi(p.id, { domiciliario: asg.nombre, domiciliarioCodigo: asg.code, despachoFin, despachadoPor }).catch(() => { /* ignore */ });
+            return { ...prev, [p.id]: nuevo };
+          });
+          if (debeDespachar) {
+            setPedidos((prev) => {
+              const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Despachado" as Pedido["estado"] } : x));
+              const upd = next.find((x) => x.id === p.id);
+              if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+              return next;
             });
-            if (debeDespachar) {
-              setPedidos((prev) => {
-                const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Despachado" as Pedido["estado"] } : x));
-                const upd = next.find((x) => x.id === p.id);
-                if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
-                return next;
-              });
-            }
           }
-        } else if (mapaTieneDatos) {
-          // Drivin DESASIGNÓ: quitar el domiciliario y, si estaba despachado,
-          // volver a Facturado para esperar la reasignación.
-          const teniaDomi = !!(m.domiciliario || m.domiciliarioCodigo);
-          if (teniaDomi || est === "despachado") {
-            setMeta((prev) => {
-              const nuevo = { ...prev[p.id], domiciliario: "", domiciliarioCodigo: "" };
-              actualizarMetaApi(p.id, { domiciliario: "", domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
-              return { ...prev, [p.id]: nuevo };
+        }
+      } else if (mapaTieneDatos) {
+        // Drivin DESASIGNÓ (asg null o comanda fuera de la ruta). Si la comanda
+        // ya no está en el mapa, solo desasignamos si el pedido tenía un
+        // domiciliario de Drivin (así no tocamos pedidos que nunca subieron).
+        const desasignar = enMapaBase ? (teniaDomi || est === "despachado") : teniaDomi;
+        if (desasignar) {
+          setMeta((prev) => {
+            const nuevo = { ...prev[p.id], domiciliario: "", domiciliarioCodigo: "" };
+            actualizarMetaApi(p.id, { domiciliario: "", domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
+            return { ...prev, [p.id]: nuevo };
+          });
+          if (est === "despachado") {
+            setPedidos((prev) => {
+              const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Facturado" as Pedido["estado"] } : x));
+              const upd = next.find((x) => x.id === p.id);
+              if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
+              return next;
             });
-            if (est === "despachado") {
-              setPedidos((prev) => {
-                const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Facturado" as Pedido["estado"] } : x));
-                const upd = next.find((x) => x.id === p.id);
-                if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
-                return next;
-              });
-            }
           }
         }
       }
@@ -930,8 +936,8 @@ export default function DespachoPage() {
         let cambioRep = false;
         const nuevas = reps.map((r) => {
           const key = `${p.comanda}-${r.numero}`;
-          if (!(key in asignacionesDrivin)) return r;
-          const a = asignacionesDrivin[key];
+          // undefined = la réplica ya no está en la ruta de Drivin (desasignada).
+          const a = key in asignacionesDrivin ? asignacionesDrivin[key] : undefined;
           if (a) {
             if (r.domiciliarioCodigo !== a.code) {
               cambioRep = true;
@@ -939,6 +945,7 @@ export default function DespachoPage() {
             }
             return r;
           }
+          // Desasignada (null o fuera de la ruta): limpia si tenía domiciliario.
           if (mapaTieneDatos && (r.domiciliario || r.domiciliarioCodigo)) {
             cambioRep = true;
             return { ...r, domiciliario: "", domiciliarioCodigo: "" };
