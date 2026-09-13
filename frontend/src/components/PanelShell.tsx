@@ -282,7 +282,14 @@ export default function PanelShell({ children }: { children: ReactNode }) {
                   height={120}
                   className="h-11 w-auto"
                 />
-                <span className="text-lg font-bold text-brand-cream/50">✕</span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-cream/10">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-brand-cream/70" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 1l4 4-4 4" />
+                    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                    <path d="M7 23l-4-4 4-4" />
+                    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                  </svg>
+                </span>
                 <Image
                   src="/LOGOCARNESSANTACRUZ.png"
                   alt="Carnes Santacruz"

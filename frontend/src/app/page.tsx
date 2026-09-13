@@ -89,7 +89,14 @@ export default function LoginPage() {
             height={120}
             className="h-16 w-auto"
           />
-          <span className="text-3xl font-bold text-brand-brown/30">✕</span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-amber/10">
+            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-brand-amber" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 1l4 4-4 4" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <path d="M7 23l-4-4 4-4" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+          </span>
           <Image
             src="/LOGOCARNESSANTACRUZ.png"
             alt="Carnes Santacruz — Vendemos Vida"
