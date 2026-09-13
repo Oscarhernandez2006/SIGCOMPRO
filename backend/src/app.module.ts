@@ -18,6 +18,7 @@ import { MenuModule } from './menu/menu.module';
 import { CreditoEmpleadosModule } from './credito-empleados/credito-empleados.module';
 import { TiendaEmpleadosModule } from './tienda-empleados/tienda-empleados.module';
 import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-variable.module';
+import { MachineLearningModule } from './machine-learning/machine-learning.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-va
     CreditoEmpleadosModule,
     TiendaEmpleadosModule,
     LiquidacionVariableModule,
+    MachineLearningModule,
   ],
   controllers: [AppController],
 })
