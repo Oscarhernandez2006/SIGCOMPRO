@@ -96,7 +96,9 @@ export default function SeleccionarPanelPage() {
       <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_50%_0%,_var(--color-brand-amber)_0%,_var(--color-brand-amber)_18%,_var(--color-brand-wine)_60%,_var(--color-brand-wine-dark)_100%)]" />
       <div className="absolute inset-0 opacity-[0.07] [background-image:repeating-linear-gradient(45deg,#000_0_2px,transparent_2px_14px)]" />
 
-      <div className="relative z-10 w-full max-w-4xl">
+      {/* "relative" (sin z-index) para que pinte encima de los fondos
+          absolutos de arriba; ya está en el mismo nivel de apilado. */}
+      <div className="relative w-full max-w-4xl">
         {/* Encabezado */}
         <div className="mb-8 flex flex-col items-center text-center">
           <Image
@@ -105,7 +107,7 @@ export default function SeleccionarPanelPage() {
             width={170}
             height={170}
             priority
-            className="h-16 w-auto drop-shadow-md"
+            className="h-20 w-auto drop-shadow-md"
           />
           <h1 className="mt-4 font-serif text-3xl font-bold text-brand-cream">
             Hola, {usuario?.nombre?.split(" ")[0] ?? "usuario"}

@@ -19,7 +19,7 @@ import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExce
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
-import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
 import CrearClienteModal from "@/components/CrearClienteModal";
 
@@ -1573,9 +1573,13 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
     setVerificandoAuth(true);
     setErrorAuth(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigo);
+      if (!punto) {
+        setErrorAuth("No se pudo determinar el punto de venta.");
+        return;
+      }
+      const { valido, motivo } = await verificarClaveDinamica(String(punto.id), codigo);
       if (!valido) {
-        setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
+        setErrorAuth(mensajeClaveInvalida(motivo));
         return;
       }
       setAutorizacionAbierta(false);

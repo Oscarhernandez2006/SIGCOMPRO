@@ -11,7 +11,7 @@ import {
   guardarPedidoApi,
   type DespachoMeta,
 } from "@/lib/pedidos";
-import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { yaDespachado } from "@/lib/despacho";
 import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
 import { METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
@@ -545,12 +545,17 @@ export default function CuadreCajaPage() {
       setErrorAuth("Ingresa el código de 6 dígitos.");
       return;
     }
+    const puntoVentaId = pedidos.find((p) => p.id === authCeldaId)?.punto?.id;
+    if (!puntoVentaId) {
+      setErrorAuth("No se pudo determinar el punto de venta del pedido.");
+      return;
+    }
     setVerificandoAuth(true);
     setErrorAuth(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigo);
+      const { valido, motivo } = await verificarClaveDinamica(String(puntoVentaId), codigo);
       if (!valido) {
-        setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
+        setErrorAuth(mensajeClaveInvalida(motivo));
         return;
       }
       setDesbloqueadoId(authCeldaId);
@@ -573,12 +578,16 @@ export default function CuadreCajaPage() {
       setErrorAuth("Ingresa el código de 6 dígitos.");
       return;
     }
+    if (puntoSel === "todos") {
+      setErrorAuth("Selecciona un punto de venta.");
+      return;
+    }
     setVerificandoAuth(true);
     setErrorAuth(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigo);
+      const { valido, motivo } = await verificarClaveDinamica(puntoSel, codigo);
       if (!valido) {
-        setErrorAuth("Código incorrecto o expirado. Solicítalo de nuevo.");
+        setErrorAuth(mensajeClaveInvalida(motivo));
         return;
       }
       // Reabre el cuadre en el backend: así la edición persiste tras refrescar.

@@ -381,7 +381,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             width={120}
             height={120}
             priority
-            className="h-11 w-auto drop-shadow"
+            className="h-16 w-auto drop-shadow"
           />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold">Carnes Santacruz</p>

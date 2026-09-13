@@ -22,7 +22,7 @@ import {
   type DespachoMeta,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
-import { verificarClaveDinamica } from "@/lib/clave-dinamica";
+import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
@@ -645,7 +645,8 @@ export default function DespachoPage() {
 
   // Estado de ENTREGA (POD) de Drivin. Máquina de estados por pedido:
   //   customer_status "approved"    -> estado "Entregado"  (final)
-  //   customer_status "rejected"    -> estado "Entregado"  (incidencia por cliente; permite réplica del día)
+  //   customer_status "rejected"    -> estado "Rechazado"  (incidencia por cliente; permite réplica del día)
+  //   customer_status "partial"     -> estado "Rechazado"  (entrega parcial; misma incidencia que un rechazo)
   //   customer_status "in-transit"  -> estado "En tránsito" (sigue consultando)
   //   "pending" / sin POD           -> se deja igual (sigue consultando)
   // El endpoint /pods es POR PEDIDO. Cada ciclo (5s) consulta los NO finales
@@ -729,12 +730,14 @@ export default function DespachoPage() {
                 return { ...prev, [p.id]: { ...prev[p.id], replicas: fusion } };
               });
             }
-            // El rechazo del envío ORIGINAL (comanda base) prima: aunque las
-            // réplicas se hayan entregado, el pedido queda Rechazado.
+            // El rechazo (o entrega parcial) del envío ORIGINAL (comanda base)
+            // prima: aunque las réplicas se hayan entregado, el pedido queda Rechazado.
             const base = res[p.comanda];
-            if (base?.status === "rejected") {
-              st = "rejected";
+            if (base?.status === "rejected" || base?.status === "partial") {
+              st = base.status;
               comment = base.comment;
+            } else if (sts.some((s) => s === "rejected" || s === "partial")) {
+              st = sts.find((s) => s === "rejected" || s === "partial");
             } else if (sts.length && sts.every((s) => s === "approved")) {
               st = "approved";
               entregadoEn =
@@ -763,8 +766,12 @@ export default function DespachoPage() {
               if (upd) guardarPedidoApi(upd).catch(() => { /* ignore */ });
               return next;
             });
-          } else if (st === "rejected") {
-            const motivo = (comment || "").trim() || "Rechazado por el cliente (Drivin)";
+          } else if (st === "rejected" || st === "partial") {
+            const motivo =
+              (comment || "").trim() ||
+              (st === "partial"
+                ? "Entrega parcial (Drivin)"
+                : "Rechazado por el cliente (Drivin)");
             setPedidos((prev) => {
               const actual = prev.find((x) => x.id === p.id);
               const yaMarcado =
@@ -1242,12 +1249,17 @@ export default function DespachoPage() {
       setErrorReset("Ingresa la clave dinámica de 6 dígitos.");
       return;
     }
+    const puntoVentaId = pedidos.find((p) => p.id === resetTiemposId)?.punto?.id;
+    if (!puntoVentaId) {
+      setErrorReset("No se pudo determinar el punto de venta del pedido.");
+      return;
+    }
     setVerificandoReset(true);
     setErrorReset(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigo);
+      const { valido, motivo } = await verificarClaveDinamica(String(puntoVentaId), codigo);
       if (!valido) {
-        setErrorReset("Clave incorrecta o vencida.");
+        setErrorReset(mensajeClaveInvalida(motivo));
         return;
       }
       const id = resetTiemposId;
@@ -1410,12 +1422,17 @@ export default function DespachoPage() {
       setErrorComp("Ingresa la clave dinámica de 6 dígitos.");
       return;
     }
+    const puntoVentaId = pedidos.find((p) => p.id === compClaveId)?.punto?.id;
+    if (!puntoVentaId) {
+      setErrorComp("No se pudo determinar el punto de venta del pedido.");
+      return;
+    }
     setVerificandoComp(true);
     setErrorComp(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigo);
+      const { valido, motivo } = await verificarClaveDinamica(String(puntoVentaId), codigo);
       if (!valido) {
-        setErrorComp("Clave incorrecta o vencida.");
+        setErrorComp(mensajeClaveInvalida(motivo));
         return;
       }
       const id = compClaveId;
@@ -3530,9 +3547,14 @@ function ModalReplica({
     setVerificandoClavePeso(true);
     setErrorClavePeso(null);
     try {
-      const { valido } = await verificarClaveDinamica(clavePeso.replace(/\D/g, ""));
+      const puntoVentaId = pedido.punto?.id;
+      if (!puntoVentaId) {
+        setErrorClavePeso("No se pudo determinar el punto de venta del pedido.");
+        return;
+      }
+      const { valido, motivo } = await verificarClaveDinamica(String(puntoVentaId), clavePeso.replace(/\D/g, ""));
       if (!valido) {
-        setErrorClavePeso("Clave incorrecta o vencida.");
+        setErrorClavePeso(mensajeClaveInvalida(motivo));
         return;
       }
       setClaveParaPesoValida(true);
@@ -3552,9 +3574,14 @@ function ModalReplica({
     setVerificandoClaveReplica(true);
     setErrorClaveReplica(null);
     try {
-      const { valido } = await verificarClaveDinamica(codigoClaveReplica);
+      const puntoVentaId = pedido.punto?.id;
+      if (!puntoVentaId) {
+        setErrorClaveReplica("No se pudo determinar el punto de venta del pedido.");
+        return;
+      }
+      const { valido, motivo } = await verificarClaveDinamica(String(puntoVentaId), codigoClaveReplica);
       if (!valido) {
-        setErrorClaveReplica("Clave incorrecta o vencida.");
+        setErrorClaveReplica(mensajeClaveInvalida(motivo));
         return;
       }
       // Clave válida: proceder con la réplica

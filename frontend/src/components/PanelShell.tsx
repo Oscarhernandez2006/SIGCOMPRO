@@ -231,7 +231,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             width={120}
             height={120}
             priority
-            className="h-11 w-auto drop-shadow"
+            className="h-16 w-auto drop-shadow"
           />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold">Carnes Santacruz</p>
@@ -274,13 +274,21 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-brand-wine text-brand-cream shadow-2xl">
             <div className="flex items-center justify-between px-5 py-5">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/sigcompro-removebg-preview.png"
+                  alt="SIGCOMPRO"
+                  width={120}
+                  height={120}
+                  className="h-11 w-auto"
+                />
+                <span className="text-lg font-bold text-brand-cream/50">✕</span>
                 <Image
                   src="/LOGOCARNESSANTACRUZ.png"
                   alt="Carnes Santacruz"
                   width={120}
                   height={120}
-                  className="h-10 w-auto"
+                  className="h-14 w-auto"
                 />
                 <p className="font-serif text-sm font-bold">Carnes Santacruz</p>
               </div>
@@ -339,6 +347,14 @@ export default function PanelShell({ children }: { children: ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+
+          <Image
+            src="/sigcompro-removebg-preview.png"
+            alt="SIGCOMPRO"
+            width={120}
+            height={120}
+            className="absolute left-1/2 h-16 w-auto -translate-x-1/2"
+          />
 
           <div className="ml-auto flex items-center gap-3">
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}

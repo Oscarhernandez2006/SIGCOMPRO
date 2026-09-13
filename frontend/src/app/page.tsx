@@ -80,15 +80,23 @@ export default function LoginPage() {
 
       {/* ---------- Card de login ---------- */}
       <div className="relative z-10 w-full max-w-sm rounded-3xl border border-white/40 bg-brand-cream/95 p-6 shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md sm:p-7">
-        {/* Logo dentro de la card */}
-        <div className="mb-3 flex justify-center">
+        {/* Logo dentro de la card: SIGCOMPRO (software) x Carnes Santacruz (cliente) */}
+        <div className="mb-3 flex items-center justify-center gap-3">
+          <Image
+            src="/sigcompro-removebg-preview.png"
+            alt="SIGCOMPRO"
+            width={120}
+            height={120}
+            className="h-16 w-auto"
+          />
+          <span className="text-3xl font-bold text-brand-brown/30">✕</span>
           <Image
             src="/LOGOCARNESSANTACRUZ.png"
             alt="Carnes Santacruz — Vendemos Vida"
             width={170}
             height={170}
             priority
-            className="h-16 w-auto drop-shadow-md"
+            className="h-24 w-auto drop-shadow-md"
           />
         </div>
 

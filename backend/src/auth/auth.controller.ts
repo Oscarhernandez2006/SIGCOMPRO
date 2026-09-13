@@ -35,21 +35,25 @@ export class AuthController {
     return this.authService.loginBySso(dto.ticket);
   }
 
-  @Get('clave-dinamica')
+  @Get('claves-dinamicas')
   @UseGuards(JwtAuthGuard)
-  claveDinamica(@Req() req: Request & { user?: JwtPayload }) {
+  clavesDinamicas(@Req() req: Request & { user?: JwtPayload }) {
     this.exigirRolClave(req);
-    return this.authService.claveDinamica();
+    return this.authService.clavesDinamicas();
   }
 
   @Post('clave-dinamica/verificar')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  verificarClave(@Body() body: { codigo?: string }) {
-    // Cualquier usuario autenticado puede VERIFICAR un código: la idea es que
-    // un operador ingrese el código que le dicta/muestra un administrador para
-    // autorizar una acción sensible (ver el código sigue siendo solo de admins).
-    return { valido: this.authService.verificarClave(body?.codigo ?? '') };
+  verificarClave(@Body() body: { puntoVentaId?: string; codigo?: string }) {
+    // Cualquier usuario autenticado puede VERIFICAR un código de un punto: la
+    // idea es que un operador ingrese el código que le dicta/muestra un
+    // administrador para autorizar una acción sensible (ver el código sigue
+    // siendo solo de admins). El código es de un solo uso por punto de venta.
+    return this.authService.verificarClave(
+      body?.puntoVentaId ?? '',
+      body?.codigo ?? '',
+    );
   }
 
   /** Solo "administrador app" y "desarrollador" pueden usar la clave dinámica. */

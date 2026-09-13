@@ -98,6 +98,8 @@ export function estadoReplicaVista(r: {
     return { label: "Entregado", chip: "bg-green-100 text-green-700", domiciliario: nombre };
   if (st === "rejected")
     return { label: "Rechazado", chip: "bg-rose-100 text-rose-600", domiciliario: nombre };
+  if (st === "partial")
+    return { label: "Parcial", chip: "bg-orange-100 text-orange-600", domiciliario: nombre };
   if (st === "in-transit")
     return { label: "En tránsito", chip: "bg-sky-100 text-sky-600", domiciliario: nombre };
   if (nombre)
