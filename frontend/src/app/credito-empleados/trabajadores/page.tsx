@@ -8,6 +8,7 @@ import {
   buscarTrabajadoresCredito,
   buscarEnSiesa,
   importarTrabajadores,
+  sincronizarTrabajadoresSiesa,
   guardarTrabajadorCredito,
   type TrabajadorCredito,
 } from "@/lib/credito-empleados";
@@ -293,6 +294,8 @@ export default function TrabajadoresCreditoPage() {
   const [csvTexto, setCsvTexto]           = useState("");
   const [importando, setImportando]       = useState(false);
   const [importResult, setImportResult]   = useState<{ importados: number; errores: Array<{ cedula: string; error: string }> } | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [siesaResult, setSiesaResult]     = useState<{ creados: number; actualizados: number; total: number; errores: Array<{ cedula: string; error: string }> } | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true); setError(null);
@@ -322,6 +325,16 @@ export default function TrabajadoresCreditoPage() {
   function abrirEditar(t: TrabajadorCredito) {
     setModal({ form: { cedula: t.cedula, nombre: t.nombre, cupo_asignado: String(Number(t.cupo_asignado) || 0), activo: t.activo, fecha_proximo_descuento: t.fecha_proximo_descuento ?? "" }, esEdicion: true });
   }
+  async function resincronizarSiesa() {
+    setSincronizando(true); setSiesaResult(null);
+    try {
+      const r = await sincronizarTrabajadoresSiesa();
+      setSiesaResult(r);
+      void cargar();
+    } catch (e) {
+      setSiesaResult({ creados: 0, actualizados: 0, total: 0, errores: [{ cedula: "—", error: e instanceof ApiError ? e.message : "No se pudo conectar con el servidor." }] });
+    } finally { setSincronizando(false); }
+  }
   function onGuardado(t: TrabajadorCredito) {
     setTrabajadores((prev) => {
       const idx = prev.findIndex((x) => x.cedula === t.cedula);
@@ -348,6 +361,17 @@ export default function TrabajadoresCreditoPage() {
         </div>
         {puedeGestionar && (
           <div className="flex gap-2">
+            <button type="button" onClick={() => void resincronizarSiesa()} disabled={sincronizando}
+              className="flex h-10 items-center gap-2 rounded-xl border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5 disabled:opacity-50">
+              {sincronizando ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-wine/30 border-t-brand-wine" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              )}
+              {sincronizando ? "Sincronizando…" : "Re-sincronizar de Siesa"}
+            </button>
             <button type="button" onClick={() => { setModalImportar(true); setCsvTexto(""); setImportResult(null); }}
               className="flex h-10 items-center gap-2 rounded-xl border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4">
@@ -363,6 +387,20 @@ export default function TrabajadoresCreditoPage() {
           </div>
         )}
       </div>
+
+      {siesaResult && (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${siesaResult.errores.length > 0 ? "border-amber-300 bg-amber-50 text-amber-800" : "border-emerald-300 bg-emerald-50 text-emerald-800"}`}>
+          <div className="flex items-start justify-between gap-3">
+            <p>
+              <span className="font-semibold">Sincronización con Siesa:</span>{" "}
+              {siesaResult.creados} nuevos, {siesaResult.actualizados} actualizados
+              {siesaResult.total > 0 ? ` (de ${siesaResult.total} empleados)` : ""}.
+              {siesaResult.errores.length > 0 && ` ${siesaResult.errores.length} con error.`}
+            </p>
+            <button type="button" onClick={() => setSiesaResult(null)} className="shrink-0 text-xs font-semibold underline">Cerrar</button>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">

@@ -666,6 +666,52 @@ export class CreditoEmpleadosService implements OnModuleInit {
     return { importados, errores };
   }
 
+  /**
+   * Re-sincroniza los trabajadores desde Siesa (GET /empleados): crea los
+   * nuevos (con cupo_asignado = 0, a la espera de que se les asigne) y
+   * actualiza nombre/activo de los existentes. El cupo asignado NUNCA se
+   * toca aquí (se preserva lo que ya tenía cada trabajador).
+   */
+  async sincronizarDesdeSiesa(): Promise<{
+    creados: number;
+    actualizados: number;
+    total: number;
+    errores: Array<{ cedula: string; error: string }>;
+  }> {
+    const empleados = await this.carteraClient.listarEmpleados();
+    let creados = 0;
+    let actualizados = 0;
+    const errores: Array<{ cedula: string; error: string }> = [];
+
+    for (const emp of empleados) {
+      try {
+        const res = await this.pool.query<{ creado: boolean }>(
+          `INSERT INTO credito_empleados_trabajadores
+             (cedula, nombre, cupo_asignado, activo, actualizado_en)
+           VALUES ($1, $2, 0, $3, now())
+           ON CONFLICT (cedula) DO UPDATE
+             SET nombre = EXCLUDED.nombre,
+                 activo = EXCLUDED.activo,
+                 actualizado_en = now()
+           RETURNING (xmax = 0) AS creado`,
+          [emp.cedula, emp.nombre, emp.activo],
+        );
+        if (res.rows[0]?.creado) creados++;
+        else actualizados++;
+      } catch (err) {
+        errores.push({
+          cedula: emp.cedula,
+          error: err instanceof Error ? err.message : 'Error desconocido',
+        });
+      }
+    }
+
+    this.logger.log(
+      `Sincronización con Siesa: ${creados} creados, ${actualizados} actualizados, ${errores.length} errores (de ${empleados.length} empleados)`,
+    );
+    return { creados, actualizados, total: empleados.length, errores };
+  }
+
   /** Métricas completas para el dashboard de compras clientes. */
   async dashboardMetrics() {
     const [kpisRes, topRes, puntoRes, estadoRes, mesRes, productosRes] =

@@ -171,6 +171,16 @@ export function importarTrabajadores(
   });
 }
 
+/** Re-sincroniza los trabajadores desde Siesa (crea nuevos y actualiza nombre/activo). */
+export function sincronizarTrabajadoresSiesa(): Promise<{
+  creados: number;
+  actualizados: number;
+  total: number;
+  errores: Array<{ cedula: string; error: string }>;
+}> {
+  return apiFetch("/credito-empleados/sincronizar-siesa", { method: "POST" });
+}
+
 export function actualizarEstadoPedidoCredito(
   id: string,
   estado: "pendiente" | "facturado" | "anulado",
