@@ -310,29 +310,59 @@ export class CreditoEmpleadosService implements OnModuleInit {
     };
   }
 
-  async buscarTrabajadores(q = ''): Promise<TrabajadorCreditoResumen[]> {
+  async buscarTrabajadores(
+    q = '',
+    page = 1,
+    pageSize = 100,
+  ): Promise<{
+    items: TrabajadorCreditoResumen[];
+    total: number;
+    activos: number;
+    inactivos: number;
+  }> {
     const term = String(q).trim();
     const p = `%${term}%`;
-    const res = await this.pool.query(
-      `SELECT
-         t.cedula,
-         t.nombre,
-         t.cupo_asignado,
-         t.activo,
-         t.creado_en,
-         t.actualizado_en,
-         COALESCE(SUM(CASE WHEN p.estado <> 'anulado' THEN p.total ELSE 0 END), 0) AS deuda_vigente
-       FROM credito_empleados_trabajadores t
-       LEFT JOIN credito_empleados_pedidos p
-         ON p.trabajador_cedula = t.cedula
-       WHERE ($1 = '' OR t.cedula ILIKE $2 OR t.nombre ILIKE $2)
-       GROUP BY t.cedula, t.nombre, t.cupo_asignado, t.activo, t.creado_en, t.actualizado_en
-       ORDER BY t.nombre ASC
-       LIMIT 100`,
-      [term, p],
-    );
+    const limit = Math.min(Math.max(Number(pageSize) || 100, 1), 500);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const offset = (pageNum - 1) * limit;
+
+    const [rowsRes, resumenRes] = await Promise.all([
+      this.pool.query(
+        `SELECT
+           t.cedula,
+           t.nombre,
+           t.cupo_asignado,
+           t.activo,
+           t.creado_en,
+           t.actualizado_en,
+           COALESCE(SUM(CASE WHEN p.estado <> 'anulado' THEN p.total ELSE 0 END), 0) AS deuda_vigente
+         FROM credito_empleados_trabajadores t
+         LEFT JOIN credito_empleados_pedidos p
+           ON p.trabajador_cedula = t.cedula
+         WHERE ($1 = '' OR t.cedula ILIKE $2 OR t.nombre ILIKE $2)
+         GROUP BY t.cedula, t.nombre, t.cupo_asignado, t.activo, t.creado_en, t.actualizado_en
+         ORDER BY t.nombre ASC
+         LIMIT $3 OFFSET $4`,
+        [term, p, limit, offset],
+      ),
+      // Totales sobre TODO el filtro (no solo la página), para los KPIs.
+      this.pool.query<{ total: string; activos: string; inactivos: string }>(
+        `SELECT
+           COUNT(*)::text AS total,
+           COUNT(*) FILTER (WHERE t.activo)::text AS activos,
+           COUNT(*) FILTER (WHERE NOT t.activo)::text AS inactivos
+         FROM credito_empleados_trabajadores t
+         WHERE ($1 = '' OR t.cedula ILIKE $2 OR t.nombre ILIKE $2)`,
+        [term, p],
+      ),
+    ]);
     // No consultamos Siesa en búsqueda masiva (performance); siesa_saldo llega en obtenerTrabajador
-    return res.rows.map((r) => this.filaATrabajador(r as Record<string, unknown>, null));
+    return {
+      items: rowsRes.rows.map((r) => this.filaATrabajador(r as Record<string, unknown>, null)),
+      total: Number(resumenRes.rows[0]?.total) || 0,
+      activos: Number(resumenRes.rows[0]?.activos) || 0,
+      inactivos: Number(resumenRes.rows[0]?.inactivos) || 0,
+    };
   }
 
   async obtenerTrabajador(cedula: string): Promise<TrabajadorCreditoResumen> {

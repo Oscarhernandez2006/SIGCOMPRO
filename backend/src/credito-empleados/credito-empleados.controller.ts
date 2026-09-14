@@ -56,8 +56,12 @@ export class CreditoEmpleadosController {
   @Get('trabajadores')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
-  trabajadores(@Query('q') q?: string) {
-    return this.credito.buscarTrabajadores(q ?? '');
+  trabajadores(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.credito.buscarTrabajadores(q ?? '', Number(page) || 1, Number(pageSize) || 100);
   }
 
   @Get('trabajadores/:cedula')
