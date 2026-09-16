@@ -219,6 +219,7 @@ export class PedidosService implements OnModuleInit {
     desde?: string,
     rango?: string,
     fecha?: string,
+    hasta?: string,
   ): Promise<EstadoPedidos> {
     // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
     // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
@@ -253,6 +254,7 @@ export class PedidosService implements OnModuleInit {
 
     const params: unknown[] = [];
     let scope: string;
+    const fechaValida = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
     if (rango === 'hoy') {
       // HOY: día de entrega = hoy (cualquier estado) + TODO lo que sigue activo
       // (arrastrados de días anteriores y programados a futuro, que el flujo de
@@ -262,10 +264,24 @@ export class PedidosService implements OnModuleInit {
     } else if (rango === 'posteriores') {
       // POSTERIORES: programados para un día futuro.
       scope = `((${diaEfectivo}) > ${hoy})`;
-    } else if (rango === 'fecha' && fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      // Un día CONCRETO (para ver días anteriores bajo demanda).
-      params.push(fecha);
-      scope = `((${diaEfectivo}) = $${params.length}::date)`;
+    } else if (rango === 'todo') {
+      // TODO el historial, sin restricción (Dashboard con periodo "Todo").
+      scope = 'true';
+    } else if (rango === 'fecha' && (fechaValida(fecha) || fechaValida(hasta))) {
+      // Un día concreto (Históricos) o un RANGO de días (Dashboard: fecha=desde,
+      // hasta=hasta). Si solo llega uno de los dos, ese lado queda sin tope.
+      const lo = fechaValida(fecha) ? fecha : null;
+      const hi = fechaValida(hasta) ? hasta : lo;
+      if (lo && hi) {
+        params.push(lo, hi);
+        scope = `((${diaEfectivo}) BETWEEN $${params.length - 1}::date AND $${params.length}::date)`;
+      } else if (lo) {
+        params.push(lo);
+        scope = `((${diaEfectivo}) >= $${params.length}::date)`;
+      } else {
+        params.push(hi);
+        scope = `((${diaEfectivo}) <= $${params.length}::date)`;
+      }
     } else {
       // Comportamiento previo (reciente): activos + últimos N días.
       scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;

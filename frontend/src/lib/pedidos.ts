@@ -90,8 +90,10 @@ export interface EstadoPedidos {
  */
 export interface OpcionesCargaPedidos {
   desde?: string;
-  rango?: "hoy" | "fecha" | "posteriores";
+  rango?: "hoy" | "fecha" | "posteriores" | "todo";
   fecha?: string;
+  /** Fin del rango cuando `rango === "fecha"` (con `fecha` como inicio). */
+  hasta?: string;
 }
 
 export function cargarEstadoPedidos(
@@ -101,6 +103,7 @@ export function cargarEstadoPedidos(
   if (opts?.desde) p.set("desde", opts.desde);
   if (opts?.rango) p.set("rango", opts.rango);
   if (opts?.fecha) p.set("fecha", opts.fecha);
+  if (opts?.hasta) p.set("hasta", opts.hasta);
   const qs = p.toString();
   return apiFetch<EstadoPedidos>(`/pedidos${qs ? `?${qs}` : ""}`);
 }
