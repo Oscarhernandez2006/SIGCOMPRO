@@ -90,9 +90,9 @@ export interface EstadoPedidos {
  */
 export interface OpcionesCargaPedidos {
   desde?: string;
-  rango?: "hoy" | "fecha" | "posteriores" | "todo";
+  rango?: "hoy" | "fecha" | "posteriores" | "todo" | "rango";
   fecha?: string;
-  /** Fin del rango cuando `rango === "fecha"` (con `fecha` como inicio). */
+  /** Fin del rango cuando `rango === "rango"` (con `fecha` como inicio, ambos opcionales). */
   hasta?: string;
 }
 

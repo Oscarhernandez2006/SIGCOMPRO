@@ -267,11 +267,16 @@ export class PedidosService implements OnModuleInit {
     } else if (rango === 'todo') {
       // TODO el historial, sin restricción (Dashboard con periodo "Todo").
       scope = 'true';
-    } else if (rango === 'fecha' && (fechaValida(fecha) || fechaValida(hasta))) {
-      // Un día concreto (Históricos) o un RANGO de días (Dashboard: fecha=desde,
-      // hasta=hasta). Si solo llega uno de los dos, ese lado queda sin tope.
+    } else if (rango === 'fecha' && fechaValida(fecha)) {
+      // Un día CONCRETO (Históricos): SOLO ese día, sin importar `hasta`.
+      params.push(fecha);
+      scope = `((${diaEfectivo}) = $${params.length}::date)`;
+    } else if (rango === 'rango' && (fechaValida(fecha) || fechaValida(hasta))) {
+      // RANGO de días (Dashboard: fecha=desde, hasta=hasta). Si solo llega uno
+      // de los dos, ese lado queda sin tope (p. ej. sin `hasta` no se pierden
+      // los pedidos programados a futuro).
       const lo = fechaValida(fecha) ? fecha : null;
-      const hi = fechaValida(hasta) ? hasta : lo;
+      const hi = fechaValida(hasta) ? hasta : null;
       if (lo && hi) {
         params.push(lo, hi);
         scope = `((${diaEfectivo}) BETWEEN $${params.length - 1}::date AND $${params.length}::date)`;

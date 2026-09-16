@@ -211,7 +211,9 @@ export default function DashboardPage() {
   // eso un rango de varios días mostraba solo lo reciente).
   const opcionesCarga = useMemo((): OpcionesCargaPedidos => {
     if (usaRango) {
-      const o: OpcionesCargaPedidos = { rango: "fecha" };
+      // "rango" (no "fecha"): si solo llega un extremo, el otro queda SIN
+      // tope en el backend en vez de colapsar a un único día.
+      const o: OpcionesCargaPedidos = { rango: "rango" };
       if (rangoDesde) o.fecha = rangoDesde;
       if (rangoHasta) o.hasta = rangoHasta;
       return o;
@@ -224,7 +226,7 @@ export default function DashboardPage() {
     const hoy = new Date();
     const desdeFecha = new Date(hoy);
     desdeFecha.setDate(desdeFecha.getDate() - (periodo * 2 - 1));
-    return { rango: "fecha", fecha: isoDeFecha(desdeFecha) };
+    return { rango: "rango", fecha: isoDeFecha(desdeFecha) };
   }, [usaRango, rangoDesde, rangoHasta, periodo]);
 
   useEffect(() => {
