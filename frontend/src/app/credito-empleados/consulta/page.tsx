@@ -180,15 +180,15 @@ export default function MiCreditoPage() {
             ico: disponible > 0 ? "text-brand-wine" : "text-rose-500",
           },
         ].map((k) => (
-          <div key={k.label} className="rounded-2xl border border-brand-brown/10 bg-white p-3.5 shadow-sm">
+          <div key={k.label} className="min-w-0 rounded-2xl border border-brand-brown/10 bg-white p-2.5 shadow-sm sm:p-3.5">
             <div className={`mb-2 flex h-8 w-8 items-center justify-center rounded-xl ${k.bg}`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={`h-4 w-4 ${k.ico}`}>
                 {k.icon}
               </svg>
             </div>
-            <p className={`text-base font-bold tabular-nums leading-tight ${k.color}`}>{k.val}</p>
-            <p className="mt-0.5 text-[11px] text-brand-brown/50">{k.label}</p>
-            <p className="text-[10px] text-brand-brown/35">{k.sub}</p>
+            <p className={`truncate text-sm font-bold tabular-nums leading-tight sm:text-base ${k.color}`} title={k.val}>{k.val}</p>
+            <p className="mt-0.5 truncate text-[11px] text-brand-brown/50">{k.label}</p>
+            <p className="truncate text-[10px] text-brand-brown/35">{k.sub}</p>
           </div>
         ))}
       </div>

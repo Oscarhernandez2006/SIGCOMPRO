@@ -117,7 +117,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !guardando && onClose()} />
-      <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
@@ -373,7 +373,7 @@ export default function TrabajadoresCreditoPage() {
           <p className="mt-0.5 text-sm text-brand-brown/60">Gestiona los colaboradores habilitados para compras a crédito.</p>
         </div>
         {puedeGestionar && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => void resincronizarSiesa()} disabled={sincronizando}
               className="flex h-10 items-center gap-2 rounded-xl border border-brand-wine px-4 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5 disabled:opacity-50">
               {sincronizando ? (
@@ -587,7 +587,7 @@ export default function TrabajadoresCreditoPage() {
       {modalImportar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !importando && setModalImportar(false)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+          <div className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
