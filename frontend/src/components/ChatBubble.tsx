@@ -99,6 +99,22 @@ function reproducirTimbre() {
   }
 }
 
+/** Doble chulo estilo WhatsApp: gris si no lo han leído, azul si ya lo leyeron. */
+function DobleCheck({ leido }: { leido: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 11"
+      width="14"
+      height="10"
+      fill="none"
+      className={`shrink-0 ${leido ? "text-sky-300" : "text-white/50"}`}
+    >
+      <path d="M11.3 0.6 5.6 6.9 4 5.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15.1 0.6 9.4 6.9 8.4 5.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Burbuja flotante de mensajería interna (visible en todo el panel/admin). */
 export default function ChatBubble() {
   const usuario = getUsuario();
@@ -578,11 +594,12 @@ export default function ChatBubble() {
                         {m.contenido && (
                           <p className="whitespace-pre-wrap break-words">{m.contenido}</p>
                         )}
-                        <p className={`mt-0.5 text-[10px] ${esMio ? "text-white/60" : "text-brand-brown/40"}`}>
+                        <p className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${esMio ? "text-white/60" : "text-brand-brown/40"}`}>
                           {new Date(m.creado_en).toLocaleTimeString("es-CO", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
+                          {esMio && <DobleCheck leido={m.leido} />}
                         </p>
                       </div>
                       {!esMio && botonResponder}

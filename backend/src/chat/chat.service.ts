@@ -71,6 +71,24 @@ export interface GrupoChatDetalle {
 }
 
 
+/**
+ * Para mensajes directos usa la columna `leido`; para mensajes de grupo se considera
+ * "leído" cuando TODOS los demás miembros del grupo ya vieron el mensaje (según
+ * `chat_grupos_leidos`), similar a los dos chulos azules de WhatsApp en grupos.
+ */
+const SQL_LEIDO = `
+  CASE
+    WHEN m.grupo_id IS NULL THEN m.leido
+    ELSE NOT EXISTS (
+      SELECT 1 FROM chat_grupos_miembros gm2
+      LEFT JOIN chat_grupos_leidos gl2 ON gl2.grupo_id = gm2.grupo_id AND gl2.usuario_id = gm2.usuario_id
+      WHERE gm2.grupo_id = m.grupo_id
+        AND gm2.usuario_id <> m.remitente_id
+        AND (gl2.ultimo_leido_en IS NULL OR gl2.ultimo_leido_en < m.creado_en)
+    )
+  END AS leido
+`;
+
 /** Mensajería interna (tipo chat) entre usuarios de SIGCOMPRO. */
 @Injectable()
 export class ChatService implements OnModuleInit {
@@ -294,7 +312,7 @@ export class ChatService implements OnModuleInit {
       `SELECT m.id::text AS id, m.remitente_id::text AS remitente_id,
               m.destinatario_id::text AS destinatario_id, m.grupo_id::text AS grupo_id,
               u.nombre AS remitente_nombre,
-              m.contenido, m.leido, m.creado_en,
+              m.contenido, ${SQL_LEIDO}, m.creado_en,
               m.responde_a_id::text AS responde_a_id,
               r.contenido AS responde_a_contenido,
               r.remitente_id::text AS responde_a_remitente_id,
@@ -568,7 +586,7 @@ export class ChatService implements OnModuleInit {
       `SELECT m.id::text AS id, m.remitente_id::text AS remitente_id,
               m.destinatario_id::text AS destinatario_id, m.grupo_id::text AS grupo_id,
               u.nombre AS remitente_nombre,
-              m.contenido, m.leido, m.creado_en,
+              m.contenido, ${SQL_LEIDO}, m.creado_en,
               m.responde_a_id::text AS responde_a_id,
               r.contenido AS responde_a_contenido,
               r.remitente_id::text AS responde_a_remitente_id,
