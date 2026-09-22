@@ -1044,14 +1044,14 @@ function ModalCongelados({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-auto">
           {congelados.length === 0 ? (
             <p className="px-6 py-16 text-center text-sm text-brand-brown/50">
               No hay pedidos congelados en tus puntos de venta. Usa el botón
               “Congelar” dentro de un pedido para dejarlo en espera.
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="sticky top-0 bg-brand-cream-soft/80 text-left text-xs uppercase tracking-wide text-brand-brown/50">
                 <tr>
                   <th className="px-4 py-3">Temporal</th>

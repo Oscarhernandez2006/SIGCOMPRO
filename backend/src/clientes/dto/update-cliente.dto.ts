@@ -87,4 +87,10 @@ export class UpdateClienteDto {
   @IsArray()
   @IsString({ each: true })
   dias_despacho?: string[];
+
+  /** Vendedor de Siesa asignado al cliente (informativo). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  vendedor_asignado?: string;
 }

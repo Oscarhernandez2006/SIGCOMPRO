@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { API_URL } from "./api";
 import { getToken, limpiarSesion } from "./auth";
 
@@ -61,4 +62,41 @@ export function descargarBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Genera y descarga la plantilla Excel (con encabezado y una fila de ejemplo
+ * en "formato malo") que el usuario debe llenar y luego subir para normalizar.
+ */
+export function descargarPlantillaExcel(): void {
+  const encabezado = [
+    "Código",
+    "Razón social",
+    "Ciudad",
+    "Celular",
+    "Contacto",
+    "Barrio",
+    "Dirección 1",
+    "Dirección 2",
+    "Dirección 3",
+  ];
+  const ejemplo = [
+    "0001",
+    "juan perez sas",
+    "bogota",
+    "3001234567",
+    "juan perez",
+    "chapinero",
+    "cll 45 # 12 - 30 apto 501 torre b cerca al parque",
+    "",
+    "",
+  ];
+  const hoja = XLSX.utils.aoa_to_sheet([encabezado, ejemplo]);
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Clientes");
+  const buffer = XLSX.write(libro, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  descargarBlob(blob, "plantilla_direcciones.xlsx");
 }

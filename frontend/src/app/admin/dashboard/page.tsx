@@ -9,7 +9,7 @@ import {
   misPuntosVenta,
   type PuntoVenta,
 } from "@/lib/puntos-venta";
-import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho, yaDespachado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
@@ -26,6 +26,14 @@ function pesoPedidoKg(p: Pedido): number {
   return (p.carrito ?? []).reduce((s, i) => {
     const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
     return s + (esKilo ? Number(i.cantidad) || 0 : 0);
+  }, 0);
+}
+
+/** Peso realmente porcionado en kilos (solo ítems con el check "Porcionado": unidades x gramos). */
+function pesoPorcionadoKg(p: Pedido): number {
+  return (p.carrito ?? []).reduce((s, i) => {
+    if (!i.porcionado) return s;
+    return s + ((Number(i.unidades) || 0) * (Number(i.gramos) || 0)) / 1000;
   }, 0);
 }
 
@@ -208,7 +216,16 @@ export default function DashboardPage() {
       setError(null);
       try {
         const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
-        const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos()]);
+        // El alcance pedido al backend depende del filtro elegido: así "Todo"
+        // trae todo el historial y "7/30 días" traen realmente esa ventana,
+        // en vez de quedar acotados al recorte fijo por defecto (activos +
+        // pocos días recientes) que usan Cuadre de caja e Históricos.
+        const opts: OpcionesCargaPedidos = usaRango
+          ? { rango: "personalizado", fechaDesde: rangoDesde || undefined, fechaHasta: rangoHasta || undefined }
+          : periodo === 0
+            ? { rango: "todo" }
+            : { rango: "dias", dias: String(periodo * 2) };
+        const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos(opts)]);
         if (cancelado) return;
         setPuntos(ps);
         setPedidos(estado.pedidos ?? []);
@@ -225,7 +242,7 @@ export default function DashboardPage() {
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario, esAdmin]);
+  }, [usuario, esAdmin, periodo, usaRango, rangoDesde, rangoHasta]);
 
   // IDs de puntos que el usuario puede ver (para acotar los pedidos).
   const idsVisibles = useMemo(() => new Set(puntos.map((p) => String(p.id))), [puntos]);
@@ -756,7 +773,7 @@ export default function DashboardPage() {
                 />
               </Panel>
               <Panel>
-                <CardHead titulo="Ranking de porcionadores" desc="Pedidos, kilos y tiempo promedio de preparación" />
+                <CardHead titulo="Ranking de porcionadores" desc="Pedidos, kilos alistados, kilos porcionados y tiempo promedio de preparación" />
                 <TablaTop
                   filas={m.topPorcionadores}
                   col1="Porcionador"
@@ -764,11 +781,12 @@ export default function DashboardPage() {
                     <>
                       <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilosPorcionados ?? 0))} kg</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
-                  cabeceras={["Pedidos", "Kilos", "T. prom", "Valor"]}
+                  cabeceras={["Pedidos", "Kilos", "Kilos porcionados", "T. prom", "Valor"]}
                   max={m.topPorcionadores[0]?.total ?? 0}
                   valor={(f) => f.total}
                 />
@@ -810,6 +828,8 @@ interface FilaTop {
   facturado?: number;
   /** Kilos porcionados (suma del peso KG de los pedidos). Solo porcionadores. */
   kilos?: number;
+  /** Kilos realmente porcionados (unidades x gramos de ítems con check "Porcionado"). Solo porcionadores. */
+  kilosPorcionados?: number;
   /** Suma de tiempos de preparación (fin - inicio) en ms. Solo porcionadores. */
   prepMs?: number;
   /** Número de pedidos con tiempo de preparación registrado. */
@@ -958,10 +978,11 @@ function métricas(
     const dm = metaMap[p.id];
     const porc = (dm?.porcionador || "").trim();
     if (porc) {
-      const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0, kilos: 0, prepMs: 0, prepCount: 0 };
+      const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0, kilos: 0, kilosPorcionados: 0, prepMs: 0, prepCount: 0 };
       e.unidades += 1;
       e.total += Number(p.total) || 0;
       e.kilos = (e.kilos ?? 0) + pesoPedidoKg(p);
+      e.kilosPorcionados = (e.kilosPorcionados ?? 0) + pesoPorcionadoKg(p);
       if (dm?.inicio && dm?.fin) {
         const ms = new Date(dm.fin).getTime() - new Date(dm.inicio).getTime();
         if (Number.isFinite(ms) && ms > 0) {
@@ -1475,36 +1496,38 @@ function TablaTop({
     );
   }
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-brown/50">
-          <th className="pb-2 font-semibold">{col1}</th>
-          {cabeceras.map((c) => (
-            <th key={c} className="whitespace-nowrap pb-2 pl-3 text-right font-semibold">
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {filas.map((f, i) => (
-          <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 last:border-0">
-            <td className="w-full max-w-0 py-2 pr-3">
-              <div className="flex items-center gap-2">
-                <span className="w-4 shrink-0 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>
-                <span className="truncate font-medium text-brand-black">{f.nombre}</span>
-              </div>
-              <div className="mt-1 ml-6 h-1.5 overflow-hidden rounded-full bg-brand-cream-soft">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-brand-amber to-brand-amber-light"
-                  style={{ width: `${max ? (valor(f) / max) * 100 : 0}%` }}
-                />
-              </div>
-            </td>
-            {render(f)}
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[36rem] text-sm">
+        <thead>
+          <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-brown/50">
+            <th className="pb-2 font-semibold">{col1}</th>
+            {cabeceras.map((c) => (
+              <th key={c} className="whitespace-nowrap pb-2 pl-3 text-right font-semibold">
+                {c}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {filas.map((f, i) => (
+            <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 align-top last:border-0">
+              <td className="min-w-[9rem] max-w-[14rem] py-2 pr-3 align-top">
+                <div className="flex items-start gap-2">
+                  <span className="w-4 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>
+                  <span className="break-words font-medium text-brand-black">{f.nombre}</span>
+                </div>
+                <div className="mt-1 ml-6 h-1.5 overflow-hidden rounded-full bg-brand-cream-soft">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-brand-amber to-brand-amber-light"
+                    style={{ width: `${max ? (valor(f) / max) * 100 : 0}%` }}
+                  />
+                </div>
+              </td>
+              {render(f)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

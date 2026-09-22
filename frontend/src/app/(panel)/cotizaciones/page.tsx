@@ -430,8 +430,8 @@ export default function CotizacionesPage() {
           Aún no hay cotizaciones. Crea la primera con “Nueva cotización”.
         </div>
       ) : (
-        <div className="max-h-[calc(100vh-260px)] overflow-y-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-          <table className="w-full text-sm">
+        <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[11px] font-bold uppercase tracking-wide text-brand-brown/60">
                 <th className="px-4 py-3">N°</th>

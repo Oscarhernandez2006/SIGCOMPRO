@@ -20,6 +20,7 @@ export interface Cliente {
   horeca: boolean;
   direccion_incorrecta: boolean;
   dias_despacho?: string[];
+  vendedor_asignado: string | null;
   creado_en: string;
 }
 
@@ -45,6 +46,7 @@ export interface ClienteInput {
   horeca?: boolean;
   direccion_incorrecta?: boolean;
   dias_despacho?: string[];
+  vendedor_asignado?: string;
 }
 
 export function listarClientes(

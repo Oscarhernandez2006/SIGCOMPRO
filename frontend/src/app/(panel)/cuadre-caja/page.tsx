@@ -927,8 +927,8 @@ export default function CuadreCajaPage() {
         </div>
       ) : (
         <>
-          <div className="max-h-[calc(100vh-22rem)] overflow-y-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-            <table className="w-full table-fixed text-xs">
+          <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+            <table className="w-full min-w-[880px] table-fixed text-xs">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/60 shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                   <th className="w-[9%] px-2 py-2.5">No. Factura</th>

@@ -83,15 +83,21 @@ export interface EstadoPedidos {
  * Carga los pedidos con su metadata e impresos.
  * - `desde`: polling incremental — solo lo cambiado desde ese instante.
  * - `rango`: alcance del conjunto. 'hoy' (Pedidos/Despacho, mucho más liviano),
- *   'fecha' (un día concreto, para ver días anteriores), 'posteriores'. Sin
- *   `rango` = comportamiento previo (activos + últimos días) para Cuadre de
- *   caja, Históricos y Dashboard.
+ *   'fecha' (un día concreto, para ver días anteriores), 'posteriores'.
+ *   'todo' (TODO el historial), 'dias' (ventana explícita de N días vía
+ *   `dias`), 'personalizado' (rango de fechas vía `fechaDesde`/`fechaHasta`) —
+ *   estos 3 últimos los usa el Dashboard para que sus filtros de periodo
+ *   controlen realmente lo que trae el servidor. Sin `rango` = comportamiento
+ *   previo (activos + últimos días) para Cuadre de caja e Históricos.
  * - `fecha`: día concreto (YYYY-MM-DD) cuando `rango='fecha'`.
  */
 export interface OpcionesCargaPedidos {
   desde?: string;
-  rango?: "hoy" | "fecha" | "posteriores";
+  rango?: "hoy" | "fecha" | "posteriores" | "todo" | "dias" | "personalizado";
   fecha?: string;
+  dias?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
 }
 
 export function cargarEstadoPedidos(
@@ -101,6 +107,9 @@ export function cargarEstadoPedidos(
   if (opts?.desde) p.set("desde", opts.desde);
   if (opts?.rango) p.set("rango", opts.rango);
   if (opts?.fecha) p.set("fecha", opts.fecha);
+  if (opts?.dias) p.set("dias", opts.dias);
+  if (opts?.fechaDesde) p.set("fechaDesde", opts.fechaDesde);
+  if (opts?.fechaHasta) p.set("fechaHasta", opts.fechaHasta);
   const qs = p.toString();
   return apiFetch<EstadoPedidos>(`/pedidos${qs ? `?${qs}` : ""}`);
 }

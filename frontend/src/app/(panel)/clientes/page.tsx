@@ -212,6 +212,7 @@ export default function ClientesPage() {
       horeca: c.horeca,
       direccion_incorrecta: c.direccion_incorrecta ?? false,
       dias_despacho: c.dias_despacho ?? [],
+      vendedor_asignado: c.vendedor_asignado ?? "",
     });
     // Si el cliente ya tiene apellidos guardados, respetamos la división exacta.
     const apel = (c.apellidos ?? "").trim();
@@ -863,6 +864,12 @@ export default function ClientesPage() {
                       Cliente HORECA (hotel, restaurante o café)
                     </label>
                   </div>
+
+                  {form.vendedor_asignado && (
+                    <p className="mt-2 text-xs text-brand-brown/60">
+                      Vendedor asignado (Siesa): <span className="font-semibold text-brand-black">{form.vendedor_asignado}</span>
+                    </p>
+                  )}
 
                   {/* Días de despacho: solo para clientes HORECA. */}
                   {tipoCliente === "horeca" && (

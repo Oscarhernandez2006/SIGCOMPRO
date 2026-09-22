@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import ClaveDinamica from "./ClaveDinamica";
+import ChatBubble from "./ChatBubble";
 
 interface NavItem {
   label: string;
@@ -381,6 +382,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
 
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
       </div>
+      <ChatBubble />
     </div>
   );
 }

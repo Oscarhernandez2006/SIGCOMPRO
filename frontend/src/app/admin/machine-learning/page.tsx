@@ -6,6 +6,7 @@ import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth"
 import {
   normalizarDireccionesExcel,
   descargarBlob,
+  descargarPlantillaExcel,
 } from "@/lib/machine-learning";
 
 type Estado = "idle" | "procesando" | "ok" | "error";
@@ -61,14 +62,36 @@ export default function MachineLearningPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-wine">
-          Machine Learning
-        </h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
-          Importa un Excel de clientes, lo procesamos (normalizamos direcciones y
-          capitalizamos los datos) y lo exportamos corregido en el mismo formato.
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">
+            Machine Learning
+          </h1>
+          <p className="mt-1 text-sm text-brand-brown/70">
+            Importa un Excel de clientes, lo procesamos (normalizamos direcciones y
+            capitalizamos los datos) y lo exportamos corregido en el mismo formato.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={descargarPlantillaExcel}
+          className="inline-flex items-center gap-2 rounded-xl border border-brand-wine/30 bg-white px-4 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            className="h-4 w-4"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 3v13.5m0 0 4.5-4.5M12 16.5 7.5 12M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5"
+            />
+          </svg>
+          Descargar plantilla
+        </button>
       </div>
 
       {/* Zona de carga */}

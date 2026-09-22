@@ -365,7 +365,7 @@ export default function TrabajadoresCreditoPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {kpis.map((k) => (
           <div key={k.label} className="flex items-center gap-3 rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
             <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${k.bg}`}>

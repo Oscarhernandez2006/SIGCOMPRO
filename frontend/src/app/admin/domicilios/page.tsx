@@ -396,7 +396,7 @@ export default function AdminDomiciliosPage() {
 
                 {/* Columna derecha: tarifa */}
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-brand-brown">
                         Km incluidos

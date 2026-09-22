@@ -30,6 +30,7 @@ export interface ClienteRow {
   horeca: boolean;
   direccion_incorrecta: boolean;
   dias_despacho: string[];
+  vendedor_asignado: string | null;
   creado_en: string;
 }
 
@@ -52,7 +53,7 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado, creado_en';
 
 /** Solo guarda el teléfono si tiene exactamente 10 dígitos (celular colombiano). */
 function soloMovil(tel: string | null | undefined): string | null {
@@ -84,6 +85,10 @@ export class ClientesService implements OnModuleInit {
     // Días de despacho (HORECA): arreglo de días lun..dom en jsonb.
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dias_despacho jsonb NOT NULL DEFAULT '[]'::jsonb`,
+    );
+    // Vendedor de Siesa asignado al cliente (informativo, viene del ERP).
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS vendedor_asignado text`,
     );
   }
 
@@ -274,8 +279,8 @@ export class ClientesService implements OnModuleInit {
 
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17)
        RETURNING ${COLUMNS}`,
       [
         nit,
@@ -294,6 +299,7 @@ export class ClientesService implements OnModuleInit {
         dto.horeca ?? false,
         dto.direccion_incorrecta ?? false,
         JSON.stringify(Array.isArray(dto.dias_despacho) ? dto.dias_despacho : []),
+        dto.vendedor_asignado?.trim() ?? null,
       ],
     );
     return res.rows[0];
@@ -326,6 +332,7 @@ export class ClientesService implements OnModuleInit {
       ['punto_venta', 'punto_venta'],
       ['lat', 'lat'],
       ['lng', 'lng'],
+      ['vendedor_asignado', 'vendedor_asignado'],
     ];
 
     for (const [campo, columna] of campos) {

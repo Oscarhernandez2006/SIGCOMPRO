@@ -34,8 +34,11 @@ export class PedidosController {
     @Query('desde') desde?: string,
     @Query('rango') rango?: string,
     @Query('fecha') fecha?: string,
+    @Query('dias') dias?: string,
+    @Query('fechaDesde') fechaDesde?: string,
+    @Query('fechaHasta') fechaHasta?: string,
   ) {
-    return this.pedidos.estado(desde, rango, fecha);
+    return this.pedidos.estado(desde, rango, fecha, dias, fechaDesde, fechaHasta);
   }
 
   /** Búsqueda de pedidos en TODO el historial (comanda, consecutivo, nombre o NIT). */

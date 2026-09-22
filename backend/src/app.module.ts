@@ -19,6 +19,7 @@ import { CreditoEmpleadosModule } from './credito-empleados/credito-empleados.mo
 import { TiendaEmpleadosModule } from './tienda-empleados/tienda-empleados.module';
 import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-variable.module';
 import { MachineLearningModule } from './machine-learning/machine-learning.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { MachineLearningModule } from './machine-learning/machine-learning.modul
     TiendaEmpleadosModule,
     LiquidacionVariableModule,
     MachineLearningModule,
+    ChatModule,
   ],
   controllers: [AppController],
 })

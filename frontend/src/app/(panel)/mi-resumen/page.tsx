@@ -723,8 +723,8 @@ export default function MiResumenPage() {
               <h2 className="mb-3 font-serif text-lg font-bold text-brand-wine">
                 Pedidos del periodo ({num(ultimos.length)})
               </h2>
-              <div className="max-h-[75vh] overflow-y-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-                <table className="w-full text-left text-sm">
+              <div className="max-h-[75vh] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead className="sticky top-0 z-10 bg-brand-cream-soft/95 text-[11px] uppercase tracking-wide text-brand-brown/60 backdrop-blur">
                     <tr>
                       <th className="px-4 py-2.5">Factura / Comanda</th>
