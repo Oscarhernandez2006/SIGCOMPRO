@@ -2316,7 +2316,7 @@ export default function DespachoPage() {
                               <button
                                 type="button"
                                 onClick={() => setModalSegmentacion(p.id)}
-                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-left text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-brand-wine/20 bg-brand-wine/5 px-2.5 py-1.5 text-left text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
                               >
                                 <span className="inline-flex items-center gap-1.5">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
@@ -2324,7 +2324,7 @@ export default function DespachoPage() {
                                   </svg>
                                   Segmentado
                                 </span>
-                                <span className="rounded-full bg-violet-200/70 px-1.5 py-0.5 text-[10px]">
+                                <span className="rounded-full bg-brand-wine/15 px-1.5 py-0.5 text-[10px]">
                                   {listos}/{segs.length} listos
                                 </span>
                               </button>
@@ -2355,12 +2355,9 @@ export default function DespachoPage() {
                                 type="button"
                                 onClick={() => setModalSegmentacion(p.id)}
                                 title="El pedido lo preparan varias personas: asigna un porcionador distinto por producto"
-                                className="inline-flex items-center gap-1 self-start text-[11px] font-semibold text-violet-700 underline decoration-dotted underline-offset-2 hover:text-violet-800"
+                                className="w-full text-center text-[11px] font-semibold text-brand-wine underline underline-offset-2 hover:text-brand-wine/80"
                               >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15M4.5 9h15M4.5 15h15" />
-                                </svg>
-                                Segmentación (varios porcionadores)
+                                Segmentación
                               </button>
                             )}
                           </>
@@ -3554,7 +3551,7 @@ function ModalSegmentacion({
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
           <div>
-            <h3 className="font-serif text-lg font-bold text-violet-700">Segmentación del alistamiento</h3>
+            <h3 className="font-serif text-lg font-bold text-brand-wine">Segmentación del alistamiento</h3>
             <p className="mt-0.5 text-xs text-brand-brown/60">
               Comanda #{pedido.comanda} · {pedido.cliente?.nombre || pedido.cliente?.nit_cedula} · Asigna un
               porcionador por producto; el pedido queda &quot;Alistado&quot; cuando TODOS terminen.
@@ -3573,13 +3570,13 @@ function ModalSegmentacion({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 bg-violet-50/60 px-5 py-2.5">
-          <span className="text-xs font-semibold text-violet-700">
+        <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 bg-brand-wine/5 px-5 py-2.5">
+          <span className="text-xs font-semibold text-brand-wine">
             {listos} de {segmentos.length} productos listos
           </span>
-          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-violet-100">
+          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-brand-wine/10">
             <div
-              className="h-full rounded-full bg-violet-500 transition-all"
+              className="h-full rounded-full bg-brand-wine transition-all"
               style={{ width: `${segmentos.length ? (listos / segmentos.length) * 100 : 0}%` }}
             />
           </div>
@@ -3598,12 +3595,12 @@ function ModalSegmentacion({
                   </p>
                   {s.inicio && (
                     <p className="mt-0.5 text-[11px] font-medium text-brand-brown/60">
-                      Inicio: <span className="text-violet-700">{fmtHora(s.inicio)}</span>
+                      Inicio: <span className="text-brand-wine">{fmtHora(s.inicio)}</span>
                       {s.fin && (
                         <>
                           {" "}
-                          · Fin: <span className="text-violet-700">{fmtHora(s.fin)}</span> · Duración:{" "}
-                          <span className="text-violet-700">{fmtDuracion(s.inicio, s.fin)}</span>
+                          · Fin: <span className="text-brand-wine">{fmtHora(s.fin)}</span> · Duración:{" "}
+                          <span className="text-brand-wine">{fmtDuracion(s.inicio, s.fin)}</span>
                         </>
                       )}
                     </p>
@@ -3613,7 +3610,7 @@ function ModalSegmentacion({
                   value={porcSel}
                   onChange={(ev) => setBorrador((prev) => ({ ...prev, [s.itemId]: ev.target.value }))}
                   disabled={finalizado || Boolean(s.fin)}
-                  className="w-44 shrink-0 rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50"
+                  className="w-44 shrink-0 rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-wine disabled:opacity-50"
                 >
                   <option value="">Selecciona</option>
                   {(porcSel && !porcionadores.includes(porcSel) ? [porcSel, ...porcionadores] : porcionadores).map(
@@ -3634,7 +3631,7 @@ function ModalSegmentacion({
                     disabled={finalizado || (!s.inicio && !porcSel.trim())}
                     title={!porcSel.trim() ? "Selecciona el porcionador de este producto" : undefined}
                     className={`w-28 shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
-                      enCurso ? "bg-green-600 hover:bg-green-700" : "bg-violet-600 hover:bg-violet-700"
+                      enCurso ? "bg-green-600 hover:bg-green-700" : "bg-brand-wine hover:bg-brand-wine/90"
                     }`}
                   >
                     {enCurso ? "Finalizar" : "Iniciar"}

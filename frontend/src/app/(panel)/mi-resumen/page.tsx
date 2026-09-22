@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
@@ -56,7 +56,95 @@ function Stat({
   );
 }
 
+/** Selector de televendedor CON BUSCADOR (evita bajar y bajar en una lista nativa larga). */
+function SelectorVendedora({
+  valor,
+  opciones,
+  onCambiar,
+}: {
+  valor: string;
+  opciones: string[];
+  onCambiar: (v: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!abierto) return;
+    function onClickFuera(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener("mousedown", onClickFuera);
+    return () => document.removeEventListener("mousedown", onClickFuera);
+  }, [abierto]);
+
+  const filtradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return q ? opciones.filter((v) => v.toLowerCase().includes(q)) : opciones;
+  }, [opciones, busqueda]);
+
+  function elegir(v: string) {
+    onCambiar(v);
+    setAbierto(false);
+    setBusqueda("");
+  }
+
+  return (
+    <div ref={ref} className="relative mt-0.5">
+      <button
+        type="button"
+        onClick={() => setAbierto((a) => !a)}
+        className="flex w-full max-w-xs items-center justify-between gap-2 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-left text-sm font-semibold text-white outline-none backdrop-blur transition hover:bg-white/15 focus:border-white/50 sm:w-56"
+      >
+        <span className="truncate">{valor || "Todos (resumen general)"}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3.5 w-3.5 shrink-0 transition-transform ${abierto ? "rotate-180" : ""}`}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {abierto && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-xl border border-brand-brown/15 bg-white normal-case shadow-xl">
+          <div className="border-b border-brand-brown/10 p-2">
+            <div className="relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
+              </svg>
+              <input
+                autoFocus
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar televendedor…"
+                className="w-full rounded-lg border border-brand-brown/20 py-1.5 pl-8 pr-2 text-xs font-medium text-brand-black outline-none focus:border-brand-wine"
+              />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => elegir("")}
+              className={`block w-full px-3 py-2 text-left text-xs font-medium ${!valor ? "bg-brand-wine/10 font-bold text-brand-wine" : "text-brand-black hover:bg-brand-cream-soft"}`}
+            >
+              Todos (resumen general)
+            </button>
+            {filtradas.length === 0 && (
+              <p className="px-3 py-2 text-xs text-brand-brown/45">Sin resultados para “{busqueda}”.</p>
+            )}
+            {filtradas.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => elegir(v)}
+                className={`block w-full truncate px-3 py-2 text-left text-xs font-medium ${v === valor ? "bg-brand-wine/10 font-bold text-brand-wine" : "text-brand-black hover:bg-brand-cream-soft"}`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Barras simples de "por día" (sin dependencias de gráficas). */
 function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number }[]; formato: (n: number) => string }) {
@@ -473,19 +561,10 @@ export default function MiResumenPage() {
         {/* Fila: televendedora (solo admin) + rango de fechas, lado a lado. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
           {esAdmin && vendedoras.length > 0 && !esTelevendedor && (
-            <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
+            <div className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
               Ver resumen de
-              <select
-                value={vendedoraSel}
-                onChange={(e) => setVendedoraSel(e.target.value)}
-                className="mt-0.5 w-full max-w-xs rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-sm font-semibold text-white outline-none backdrop-blur focus:border-white/50 sm:w-auto"
-              >
-                <option className="text-brand-black" value="">Todos (resumen general)</option>
-                {vendedoras.map((v) => (
-                  <option className="text-brand-black" key={v} value={v}>{v}</option>
-                ))}
-              </select>
-            </label>
+              <SelectorVendedora valor={vendedoraSel} opciones={vendedoras} onCambiar={setVendedoraSel} />
+            </div>
           )}
           {/* Rango de fechas personalizado. */}
           <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
