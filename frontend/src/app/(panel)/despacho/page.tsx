@@ -2355,7 +2355,7 @@ export default function DespachoPage() {
                                 type="button"
                                 onClick={() => setModalSegmentacion(p.id)}
                                 title="El pedido lo preparan varias personas: asigna un porcionador distinto por producto"
-                                className="w-full text-center text-[11px] font-semibold text-brand-wine underline underline-offset-2 hover:text-brand-wine/80"
+                                className="w-full text-left text-[11px] font-semibold text-brand-wine underline underline-offset-2 hover:text-brand-wine/80"
                               >
                                 Segmentación
                               </button>

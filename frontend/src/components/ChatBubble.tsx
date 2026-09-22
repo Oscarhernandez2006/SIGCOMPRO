@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getUsuario } from "@/lib/auth";
 import {
   listarContactosChat,
-  noLeidosChat,
   historialChat,
   enviarMensajeChat,
   type ContactoChat,
@@ -30,7 +29,7 @@ function leerArchivoComoBase64(archivo: File): Promise<string> {
   });
 }
 
-/** Timbre de notificación (dos tonos tipo "ding"), sintetizado con Web Audio API. */
+/** Timbre de notificación (campana de dos golpes con armónicos), más fuerte y lleno que un simple beep. */
 function reproducirTimbre() {
   try {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -38,21 +37,33 @@ function reproducirTimbre() {
     const ctx = new Ctor();
     if (ctx.state === "suspended") void ctx.resume().catch(() => {});
     const ahora = ctx.currentTime;
-    [880, 1175].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const inicio = ahora + i * 0.12;
-      gain.gain.setValueAtTime(0, inicio);
-      gain.gain.linearRampToValueAtTime(0.25, inicio + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(inicio);
-      osc.stop(inicio + 0.4);
-    });
-    setTimeout(() => void ctx.close(), 800);
+    const master = ctx.createGain();
+    master.gain.value = 0.9;
+    master.connect(ctx.destination);
+    // Dos golpes descendentes (mi -> si), cada uno con un armónico superpuesto
+    // para que suene más a campana/timbre que a un pitido plano.
+    const golpes = [
+      { freq: 1318.5, inicio: 0, dur: 0.5 },
+      { freq: 987.77, inicio: 0.16, dur: 0.55 },
+    ];
+    for (const g of golpes) {
+      [1, 2].forEach((armonico) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.value = g.freq * armonico;
+        const inicio = ahora + g.inicio;
+        const pico = armonico === 1 ? 0.5 : 0.15;
+        gain.gain.setValueAtTime(0, inicio);
+        gain.gain.linearRampToValueAtTime(pico, inicio + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, inicio + g.dur);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(inicio);
+        osc.stop(inicio + g.dur + 0.05);
+      });
+    }
+    setTimeout(() => void ctx.close(), 1200);
   } catch {
     /* el navegador puede bloquear audio sin interacción previa del usuario */
   }
@@ -73,12 +84,16 @@ export default function ChatBubble() {
   const [adjuntoPendiente, setAdjuntoPendiente] = useState<AdjuntoChat | null>(null);
   const [errorAdjunto, setErrorAdjunto] = useState<string | null>(null);
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
+  // Preview flotante ("llegó un mensaje") arriba del ícono, se cierra sola a los 5s.
+  const [preview, setPreview] = useState<{ contacto: ContactoChat; texto: string } | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const archivoInputRef = useRef<HTMLInputElement>(null);
   const ahoraRef = useRef<string | undefined>(undefined);
   const enVueloRef = useRef(false);
   const listaRef = useRef<HTMLDivElement>(null);
-  // Total de no leídos de la consulta anterior (para saber si SUBIÓ = mensaje nuevo).
-  const noLeidosPrevRef = useRef<number | null>(null);
+  // No leídos por contacto de la consulta anterior (para saber a QUIÉN le llegó
+  // un mensaje nuevo y mostrar su preview). null = aún no se cargó ninguna vez.
+  const noLeidosPorContactoRef = useRef<Map<string, number> | null>(null);
   // La primera consulta del historial de una conversación es la carga inicial
   // (no "llegó un mensaje"); solo se suena el timbre desde la segunda en adelante.
   const primerPollRef = useRef(true);
@@ -93,30 +108,51 @@ export default function ChatBubble() {
     });
   }, []);
 
-  const cargarContactos = useCallback(async () => {
-    try {
-      const data = await listarContactosChat();
-      setContactos(data);
-    } catch {
-      /* silencioso: no interrumpe la navegación por un fallo de red puntual */
-    }
+  /** Muestra el preview flotante de un contacto y lo cierra solo a los 5 s. */
+  const mostrarPreview = useCallback((contacto: ContactoChat, texto: string) => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    setPreview({ contacto, texto });
+    previewTimerRef.current = setTimeout(() => setPreview(null), 5000);
   }, []);
 
-  // Badge de no leídos: se consulta siempre (esté o no abierto el chat). Si el
-  // total SUBE respecto a la consulta anterior, suena el timbre de notificación
-  // (cubre mensajes nuevos de CUALQUIER contacto, con el chat cerrado o no).
+  /** Abre el chat directo en una conversación (desde el preview o los contactos). */
+  const abrirConversacion = useCallback((contacto: ContactoChat) => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    setPreview(null);
+    setActivo(contacto);
+    setAbierto(true);
+  }, []);
+
+  // Contactos + no leídos: se consulta SIEMPRE (esté o no abierto el chat). Por
+  // cada contacto cuyo `noLeidos` SUBIÓ desde la consulta anterior, es que le
+  // llegó un mensaje nuevo: suena el timbre y muestra el preview flotante (salvo
+  // que ya esté viendo esa misma conversación, donde ya se encarga el polling
+  // del historial de abajo).
   useEffect(() => {
     if (!usuario) return;
     let cancelado = false;
     const revisar = async () => {
       try {
-        const { total } = await noLeidosChat();
+        const data = await listarContactosChat();
         if (cancelado) return;
-        if (noLeidosPrevRef.current !== null && total > noLeidosPrevRef.current) {
-          reproducirTimbre();
+        setContactos(data);
+        setTotalNoLeidos(data.reduce((s, c) => s + (c.noLeidos || 0), 0));
+
+        const previos = noLeidosPorContactoRef.current;
+        if (previos) {
+          let destacado: ContactoChat | null = null;
+          for (const c of data) {
+            const antes = previos.get(c.id) ?? 0;
+            if (c.noLeidos > antes && !(abierto && activo?.id === c.id)) {
+              destacado = c;
+            }
+          }
+          if (destacado) {
+            reproducirTimbre();
+            mostrarPreview(destacado, destacado.ultimoMensaje || "Nuevo mensaje");
+          }
         }
-        noLeidosPrevRef.current = total;
-        setTotalNoLeidos(total);
+        noLeidosPorContactoRef.current = new Map(data.map((c) => [c.id, c.noLeidos || 0]));
       } catch {
         /* silencioso */
       }
@@ -127,15 +163,7 @@ export default function ChatBubble() {
       cancelado = true;
       clearInterval(id);
     };
-  }, [usuario]);
-
-  // Lista de contactos: se refresca mientras el panel está abierto.
-  useEffect(() => {
-    if (!abierto) return;
-    cargarContactos();
-    const id = setInterval(cargarContactos, 8000);
-    return () => clearInterval(id);
-  }, [abierto, cargarContactos]);
+  }, [usuario, abierto, activo, mostrarPreview]);
 
   // Historial de la conversación activa: polling incremental.
   useEffect(() => {
@@ -177,6 +205,13 @@ export default function ChatBubble() {
   useEffect(() => {
     listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight });
   }, [mensajes]);
+
+  // Limpia el temporizador del preview al desmontar.
+  useEffect(() => {
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+  }, []);
 
   const contactosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -498,6 +533,44 @@ export default function ChatBubble() {
             </>
           )}
         </div>
+      )}
+
+      {preview && (
+        <button
+          type="button"
+          onClick={() => abrirConversacion(preview.contacto)}
+          className={`fixed right-6 z-[55] flex w-72 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border border-brand-brown/10 bg-white p-3 text-left shadow-2xl transition hover:shadow-[0_0_0_2px_rgba(122,25,54,0.15)] ${
+            abierto ? "bottom-[33rem]" : "bottom-24"
+          }`}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-wine text-sm font-bold text-white">
+            {preview.contacto.nombre.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-bold text-brand-black">{preview.contacto.nombre}</span>
+              <span className="shrink-0 rounded-full bg-brand-wine/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-wine">
+                Nuevo
+              </span>
+            </span>
+            <span className="mt-0.5 line-clamp-2 block text-xs text-brand-brown/70">{preview.texto}</span>
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreview(null);
+              if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+            }}
+            title="Cerrar"
+            className="shrink-0 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </span>
+        </button>
       )}
 
       <button
