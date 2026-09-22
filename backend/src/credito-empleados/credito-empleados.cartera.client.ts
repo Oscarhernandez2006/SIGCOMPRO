@@ -21,6 +21,35 @@ interface CarteraResponse {
   data?: CarteraFila[];
 }
 
+/** Tercero de Siesa devuelto por GET /empleados (uno por cada cia donde existe). */
+export interface EmpleadoSiesaFila {
+  f200_id_cia?: number;
+  f200_rowid?: number;
+  codigo_tercero?: string;
+  f200_nit?: string;
+  f200_razon_social?: string;
+  f200_apellido1?: string;
+  f200_apellido2?: string;
+  f200_nombres?: string;
+  /** 1 = es empleado. */
+  f200_ind_empleado?: number;
+  /** 1 = activo, 0 = inactivo/retirado. */
+  f200_ind_estado?: number;
+}
+
+interface EmpleadosResponse {
+  cia?: number | null;
+  count?: number;
+  data?: EmpleadoSiesaFila[];
+}
+
+/** Empleado ya normalizado, listo para sincronizar con la BD local. */
+export interface EmpleadoSiesa {
+  cedula: string;
+  nombre: string;
+  activo: boolean;
+}
+
 /**
  * Consulta la cartera de un trabajador en Siesa usando el mismo endpoint
  * que ya usa SIGCOM (apiconsulta.grupo-santacruz.com).
@@ -111,5 +140,60 @@ export class CreditoEmpleadosCarteraClient {
     if (saldo === null) return null;
     // Si tiene saldo 0 también existe — solo null significa "no pudimos consultar"
     return true;
+  }
+
+  /**
+   * Lista los empleados de Siesa (GET /empleados). Si `SIESA_CIA_EMPLEADOS`
+   * está configurada, filtra por esa compañía (?cia=N); si no, trae TODAS las
+   * compañías (un mismo NIT puede repetirse una vez por cada cia donde tiene
+   * tercero, por eso se deduplica por cédula al normalizar).
+   * Solo se incluyen filas con `f200_ind_empleado = 1` (terceros que son
+   * empleados). `activo` refleja `f200_ind_estado` (1 = activo).
+   * Lanza un error si la integración no está configurada o la petición falla.
+   */
+  async listarEmpleados(): Promise<EmpleadoSiesa[]> {
+    const baseUrl = this.config.get<string>('PRICE_LISTS_BASE_URL', '').trim();
+    const token   = this.config.get<string>('PRICE_LISTS_TOKEN', '').trim();
+    const cia     = this.config.get<string>('SIESA_CIA_EMPLEADOS', '').trim();
+
+    if (!baseUrl || !token) {
+      throw new Error(
+        'Integración con Siesa no configurada (falta PRICE_LISTS_BASE_URL o PRICE_LISTS_TOKEN)',
+      );
+    }
+
+    const qs = cia ? `?cia=${encodeURIComponent(cia)}&token=${encodeURIComponent(token)}` : `?token=${encodeURIComponent(token)}`;
+    const url = `${baseUrl}/empleados${qs}`;
+
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      throw new Error(`Siesa /empleados respondió ${res.status}`);
+    }
+    const body = (await res.json()) as EmpleadosResponse;
+    const filas = Array.isArray(body?.data) ? body.data : [];
+
+    const porCedula = new Map<string, EmpleadoSiesa>();
+    for (const f of filas) {
+      if (f.f200_ind_empleado !== 1) continue;
+      const cedula = String(f.f200_nit ?? f.codigo_tercero ?? '').trim();
+      if (!cedula) continue;
+      const nombre =
+        (f.f200_razon_social ?? '').trim() ||
+        [f.f200_apellido1, f.f200_apellido2, f.f200_nombres]
+          .map((s) => (s ?? '').trim())
+          .filter(Boolean)
+          .join(' ');
+      if (!nombre) continue;
+      // Si el mismo NIT aparece en varias compañías, se prefiere el activo.
+      const activo = f.f200_ind_estado === 1;
+      const previo = porCedula.get(cedula);
+      if (!previo || (activo && !previo.activo)) {
+        porCedula.set(cedula, { cedula, nombre, activo });
+      }
+    }
+    return [...porCedula.values()];
   }
 }

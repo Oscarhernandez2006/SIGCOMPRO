@@ -109,6 +109,10 @@ function diaEntregaISOd(p: Pedido): string {
   const d = new Date(p.fecha);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+/** YYYY-MM-DD (local) de una fecha cualquiera, mismo criterio que hoyISOd(). */
+function isoDeFecha(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 /** ¿El pedido es para HOY? Incluye arrastrados activos de días anteriores. */
 function esDeHoyd(p: Pedido): boolean {
   const dia = diaEntregaISOd(p);
@@ -208,6 +212,31 @@ export default function DashboardPage() {
     setUsuario(u);
   }, [router]);
 
+  // Qué pedirle al backend según el periodo/rango elegido. El endpoint, SIN
+  // filtro, solo trae "activos + últimos N días" (liviano para Despacho); el
+  // Dashboard necesita el HISTORIAL completo del rango que el usuario elija,
+  // así que siempre se pide explícitamente (antes se pedía sin filtro y por
+  // eso un rango de varios días mostraba solo lo reciente).
+  const opcionesCarga = useMemo((): OpcionesCargaPedidos => {
+    if (usaRango) {
+      // "rango" (no "fecha"): si solo llega un extremo, el otro queda SIN
+      // tope en el backend en vez de colapsar a un único día.
+      const o: OpcionesCargaPedidos = { rango: "rango" };
+      if (rangoDesde) o.fecha = rangoDesde;
+      if (rangoHasta) o.hasta = rangoHasta;
+      return o;
+    }
+    if (periodo === 0) return { rango: "todo" };
+    if (periodo === 1) return { rango: "hoy" };
+    // Trae desde el doble de días (periodo actual + el anterior, para la
+    // comparación) SIN tope superior: así no se pierden los "posteriores"
+    // (pedidos programados a futuro), que antes venían por el bloque "activo".
+    const hoy = new Date();
+    const desdeFecha = new Date(hoy);
+    desdeFecha.setDate(desdeFecha.getDate() - (periodo * 2 - 1));
+    return { rango: "rango", fecha: isoDeFecha(desdeFecha) };
+  }, [usaRango, rangoDesde, rangoHasta, periodo]);
+
   useEffect(() => {
     if (usuario === null) return;
     let cancelado = false;
@@ -216,16 +245,7 @@ export default function DashboardPage() {
       setError(null);
       try {
         const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
-        // El alcance pedido al backend depende del filtro elegido: así "Todo"
-        // trae todo el historial y "7/30 días" traen realmente esa ventana,
-        // en vez de quedar acotados al recorte fijo por defecto (activos +
-        // pocos días recientes) que usan Cuadre de caja e Históricos.
-        const opts: OpcionesCargaPedidos = usaRango
-          ? { rango: "personalizado", fechaDesde: rangoDesde || undefined, fechaHasta: rangoHasta || undefined }
-          : periodo === 0
-            ? { rango: "todo" }
-            : { rango: "dias", dias: String(periodo * 2) };
-        const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos(opts)]);
+        const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos(opcionesCarga)]);
         if (cancelado) return;
         setPuntos(ps);
         setPedidos(estado.pedidos ?? []);
@@ -242,7 +262,7 @@ export default function DashboardPage() {
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario, esAdmin, periodo, usaRango, rangoDesde, rangoHasta]);
+  }, [usuario, esAdmin, opcionesCarga]);
 
   // IDs de puntos que el usuario puede ver (para acotar los pedidos).
   const idsVisibles = useMemo(() => new Set(puntos.map((p) => String(p.id))), [puntos]);

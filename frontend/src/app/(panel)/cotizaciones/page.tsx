@@ -78,6 +78,7 @@ const CONSUMIDOR_FINAL: Cliente = {
   activo: true,
   horeca: false,
   direccion_incorrecta: false,
+  vendedor_asignado: null,
   creado_en: new Date().toISOString(),
 };
 

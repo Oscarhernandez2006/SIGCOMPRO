@@ -219,9 +219,7 @@ export class PedidosService implements OnModuleInit {
     desde?: string,
     rango?: string,
     fecha?: string,
-    diasParam?: string,
-    fechaDesde?: string,
-    fechaHasta?: string,
+    hasta?: string,
   ): Promise<EstadoPedidos> {
     // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
     // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
@@ -256,6 +254,7 @@ export class PedidosService implements OnModuleInit {
 
     const params: unknown[] = [];
     let scope: string;
+    const fechaValida = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
     if (rango === 'hoy') {
       // HOY: día de entrega = hoy (cualquier estado) + TODO lo que sigue activo
       // (arrastrados de días anteriores y programados a futuro, que el flujo de
@@ -265,30 +264,29 @@ export class PedidosService implements OnModuleInit {
     } else if (rango === 'posteriores') {
       // POSTERIORES: programados para un día futuro.
       scope = `((${diaEfectivo}) > ${hoy})`;
-    } else if (rango === 'fecha' && fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      // Un día CONCRETO (para ver días anteriores bajo demanda).
+    } else if (rango === 'todo') {
+      // TODO el historial, sin restricción (Dashboard con periodo "Todo").
+      scope = 'true';
+    } else if (rango === 'fecha' && fechaValida(fecha)) {
+      // Un día CONCRETO (Históricos): SOLO ese día, sin importar `hasta`.
       params.push(fecha);
       scope = `((${diaEfectivo}) = $${params.length}::date)`;
-    } else if (rango === 'todo') {
-      // TODO el historial (Dashboard con filtro "Todo"): sin límite de fecha.
-      scope = 'TRUE';
-    } else if (rango === 'dias') {
-      // Ventana de días EXPLÍCITA pedida por el cliente (Dashboard con
-      // periodo 1/7/30), en vez de la fija por defecto (PEDIDOS_DIAS_RECIENTES).
-      const n = Math.min(Math.max(Number(diasParam) || dias, 1), 3650);
-      scope = `(${activo} OR fecha >= (now() - make_interval(days => ${n})))`;
-    } else if (rango === 'personalizado' && (fechaDesde || fechaHasta)) {
-      // Rango de fechas personalizado (Dashboard: campos Desde/Hasta).
-      const cond: string[] = [];
-      if (fechaDesde && /^\d{4}-\d{2}-\d{2}$/.test(fechaDesde)) {
-        params.push(fechaDesde);
-        cond.push(`fecha >= $${params.length}::date`);
+    } else if (rango === 'rango' && (fechaValida(fecha) || fechaValida(hasta))) {
+      // RANGO de días (Dashboard: fecha=desde, hasta=hasta). Si solo llega uno
+      // de los dos, ese lado queda sin tope (p. ej. sin `hasta` no se pierden
+      // los pedidos programados a futuro).
+      const lo = fechaValida(fecha) ? fecha : null;
+      const hi = fechaValida(hasta) ? hasta : null;
+      if (lo && hi) {
+        params.push(lo, hi);
+        scope = `((${diaEfectivo}) BETWEEN $${params.length - 1}::date AND $${params.length}::date)`;
+      } else if (lo) {
+        params.push(lo);
+        scope = `((${diaEfectivo}) >= $${params.length}::date)`;
+      } else {
+        params.push(hi);
+        scope = `((${diaEfectivo}) <= $${params.length}::date)`;
       }
-      if (fechaHasta && /^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) {
-        params.push(fechaHasta);
-        cond.push(`fecha < ($${params.length}::date + interval '1 day')`);
-      }
-      scope = cond.length ? `(${cond.join(' AND ')})` : 'TRUE';
     } else {
       // Comportamiento previo (reciente): activos + últimos N días.
       scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;

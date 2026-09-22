@@ -269,7 +269,7 @@ export default function AdminMotivosPage() {
             className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm"
             onClick={cerrar}
           />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <button
               type="button"
               onClick={cerrar}

@@ -38,6 +38,14 @@ export class CreditoEmpleadosController {
     return this.credito.importarTrabajadores(body.trabajadores ?? []);
   }
 
+  /** Re-sincroniza los trabajadores desde Siesa (GET /empleados). */
+  @Post('sincronizar-siesa')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  sincronizarSiesa() {
+    return this.credito.sincronizarDesdeSiesa();
+  }
+
   /** Consulta pública del estado de crédito de un colaborador (solo requiere sesión). */
   @Get('consulta/:cedula')
   @UseGuards(JwtAuthGuard)
@@ -48,8 +56,12 @@ export class CreditoEmpleadosController {
   @Get('trabajadores')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
-  trabajadores(@Query('q') q?: string) {
-    return this.credito.buscarTrabajadores(q ?? '');
+  trabajadores(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.credito.buscarTrabajadores(q ?? '', Number(page) || 1, Number(pageSize) || 100);
   }
 
   @Get('trabajadores/:cedula')

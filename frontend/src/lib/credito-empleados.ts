@@ -73,11 +73,23 @@ export interface ResumenNomina {
   trabajadores: number;
 }
 
-export function buscarTrabajadoresCredito(q: string): Promise<TrabajadorCredito[]> {
+export interface TrabajadoresCreditoPagina {
+  items: TrabajadorCredito[];
+  total: number;
+  activos: number;
+  inactivos: number;
+}
+
+export function buscarTrabajadoresCredito(
+  q: string,
+  page = 1,
+  pageSize = 100,
+): Promise<TrabajadoresCreditoPagina> {
   const qs = new URLSearchParams();
   if (q.trim()) qs.set("q", q.trim());
-  const sufijo = qs.toString();
-  return apiFetch<TrabajadorCredito[]>(`/credito-empleados/trabajadores${sufijo ? `?${sufijo}` : ""}`);
+  qs.set("page", String(page));
+  qs.set("pageSize", String(pageSize));
+  return apiFetch<TrabajadoresCreditoPagina>(`/credito-empleados/trabajadores?${qs.toString()}`);
 }
 
 export function obtenerTrabajadorCredito(cedula: string): Promise<TrabajadorCredito> {
@@ -169,6 +181,16 @@ export function importarTrabajadores(
     method: "POST",
     body: JSON.stringify({ trabajadores }),
   });
+}
+
+/** Re-sincroniza los trabajadores desde Siesa (crea nuevos y actualiza nombre/activo). */
+export function sincronizarTrabajadoresSiesa(): Promise<{
+  creados: number;
+  actualizados: number;
+  total: number;
+  errores: Array<{ cedula: string; error: string }>;
+}> {
+  return apiFetch("/credito-empleados/sincronizar-siesa", { method: "POST" });
 }
 
 export function actualizarEstadoPedidoCredito(
