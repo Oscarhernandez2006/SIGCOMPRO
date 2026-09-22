@@ -20,6 +20,11 @@ export interface MensajeChatRow {
   responde_a_contenido: string | null;
   /** Remitente del mensaje citado (para saber si lo escribí yo o el contacto). */
   responde_a_remitente_id: string | null;
+  /** Adjunto (foto/video/archivo) en base64 con su prefijo data:<mime>;base64,... (null si no tiene). */
+  adjunto_data: string | null;
+  adjunto_mime: string | null;
+  adjunto_nombre: string | null;
+  adjunto_tipo: 'imagen' | 'video' | 'archivo' | null;
 }
 
 export interface ContactoChat {
@@ -62,6 +67,22 @@ export class ChatService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE mensajes_chat ADD COLUMN IF NOT EXISTS responde_a_id bigint REFERENCES mensajes_chat(id)`,
     );
+    // Adjuntos (foto/video/archivo). El mensaje puede ir solo con adjunto (sin texto).
+    await this.pool.query(
+      `ALTER TABLE mensajes_chat ALTER COLUMN contenido DROP NOT NULL`,
+    );
+    await this.pool.query(
+      `ALTER TABLE mensajes_chat ADD COLUMN IF NOT EXISTS adjunto_data text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE mensajes_chat ADD COLUMN IF NOT EXISTS adjunto_mime text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE mensajes_chat ADD COLUMN IF NOT EXISTS adjunto_nombre text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE mensajes_chat ADD COLUMN IF NOT EXISTS adjunto_tipo text`,
+    );
   }
 
   /** Todos los usuarios (menos yo) con su rol, puntos asignados y resumen de la conversación. */
@@ -88,6 +109,7 @@ export class ChatService implements OnModuleInit {
       contacto_id: string;
       ultimo_en: string;
       ultimo_contenido: string;
+      ultimo_adjunto_tipo: string | null;
       ultimo_remitente: string;
       no_leidos: number;
     }>(
@@ -95,6 +117,7 @@ export class ChatService implements OnModuleInit {
          (CASE WHEN remitente_id = $1::bigint THEN destinatario_id ELSE remitente_id END)::text AS contacto_id,
          MAX(creado_en) AS ultimo_en,
          (array_agg(contenido ORDER BY creado_en DESC))[1] AS ultimo_contenido,
+         (array_agg(adjunto_tipo ORDER BY creado_en DESC))[1] AS ultimo_adjunto_tipo,
          (array_agg(remitente_id ORDER BY creado_en DESC))[1]::text AS ultimo_remitente,
          COUNT(*) FILTER (WHERE destinatario_id = $1::bigint AND leido = false)::int AS no_leidos
        FROM mensajes_chat
@@ -113,7 +136,15 @@ export class ChatService implements OnModuleInit {
         activo: u.activo,
         puntos: u.puntos,
         noLeidos: r?.no_leidos ?? 0,
-        ultimoMensaje: r?.ultimo_contenido ?? null,
+        ultimoMensaje:
+          r?.ultimo_contenido ||
+          (r?.ultimo_adjunto_tipo === 'imagen'
+            ? '📷 Foto'
+            : r?.ultimo_adjunto_tipo === 'video'
+              ? '🎥 Video'
+              : r?.ultimo_adjunto_tipo === 'archivo'
+                ? '📎 Archivo'
+                : null),
         ultimoMensajeEn: r?.ultimo_en ?? null,
         ultimoMensajeEsMio: r ? r.ultimo_remitente === usuarioId : false,
       };
@@ -165,7 +196,8 @@ export class ChatService implements OnModuleInit {
               m.destinatario_id::text AS destinatario_id, m.contenido, m.leido, m.creado_en,
               m.responde_a_id::text AS responde_a_id,
               r.contenido AS responde_a_contenido,
-              r.remitente_id::text AS responde_a_remitente_id
+              r.remitente_id::text AS responde_a_remitente_id,
+              m.adjunto_data, m.adjunto_mime, m.adjunto_nombre, m.adjunto_tipo
        FROM mensajes_chat m
        LEFT JOIN mensajes_chat r ON r.id = m.responde_a_id
        WHERE ((m.remitente_id = $1::bigint AND m.destinatario_id = $2::bigint)
@@ -184,7 +216,8 @@ export class ChatService implements OnModuleInit {
               m.destinatario_id::text AS destinatario_id, m.contenido, m.leido, m.creado_en,
               m.responde_a_id::text AS responde_a_id,
               r.contenido AS responde_a_contenido,
-              r.remitente_id::text AS responde_a_remitente_id
+              r.remitente_id::text AS responde_a_remitente_id,
+              m.adjunto_data, m.adjunto_mime, m.adjunto_nombre, m.adjunto_tipo
        FROM mensajes_chat m
        LEFT JOIN mensajes_chat r ON r.id = m.responde_a_id
        WHERE m.id = $1::bigint`,
@@ -196,15 +229,25 @@ export class ChatService implements OnModuleInit {
   async enviar(
     remitenteId: string,
     destinatarioId: string,
-    contenido: string,
+    contenido: string | undefined,
     respondeAId?: string | null,
+    adjunto?: {
+      data: string;
+      mime: string;
+      nombre: string;
+      tipo: 'imagen' | 'video' | 'archivo';
+    } | null,
   ): Promise<MensajeChatRow> {
     if (String(remitenteId) === String(destinatarioId)) {
       throw new BadRequestException('No puedes enviarte mensajes a ti mismo.');
     }
-    const texto = contenido.trim();
-    if (!texto) {
+    const texto = (contenido ?? '').trim();
+    if (!texto && !adjunto) {
       throw new BadRequestException('El mensaje no puede estar vacío.');
+    }
+    // Tope de tamaño del adjunto (base64 incluido): protege el body del backend.
+    if (adjunto && adjunto.data.length > 16 * 1024 * 1024) {
+      throw new BadRequestException('El archivo adjunto es demasiado grande (máx. 12 MB).');
     }
     const destino = await this.pool.query(
       `SELECT id FROM usuarios WHERE id = $1::bigint LIMIT 1`,
@@ -228,10 +271,21 @@ export class ChatService implements OnModuleInit {
     }
 
     const res = await this.pool.query<{ id: string }>(
-      `INSERT INTO mensajes_chat (remitente_id, destinatario_id, contenido, responde_a_id)
-       VALUES ($1::bigint, $2::bigint, $3, $4::bigint)
+      `INSERT INTO mensajes_chat
+         (remitente_id, destinatario_id, contenido, responde_a_id,
+          adjunto_data, adjunto_mime, adjunto_nombre, adjunto_tipo)
+       VALUES ($1::bigint, $2::bigint, $3, $4::bigint, $5, $6, $7, $8)
        RETURNING id::text AS id`,
-      [remitenteId, destinatarioId, texto, respondeA],
+      [
+        remitenteId,
+        destinatarioId,
+        texto || null,
+        respondeA,
+        adjunto?.data ?? null,
+        adjunto?.mime ?? null,
+        adjunto?.nombre ?? null,
+        adjunto?.tipo ?? null,
+      ],
     );
     return this.obtenerMensaje(res.rows[0].id);
   }

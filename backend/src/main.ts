@@ -6,10 +6,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   // Se desactiva el body parser por defecto (límite de 100 kb) para configurar
-  // un límite mayor: los comprobantes de pago se suben como imagen en base64.
+  // un límite mayor: los comprobantes de pago y los adjuntos del chat (foto/video)
+  // se suben como base64 dentro del JSON.
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  app.use(json({ limit: '12mb' }));
-  app.use(urlencoded({ extended: true, limit: '12mb' }));
+  app.use(json({ limit: '20mb' }));
+  app.use(urlencoded({ extended: true, limit: '20mb' }));
   const config = app.get(ConfigService);
 
   // Prefijo global para todas las rutas: /api/...

@@ -35,6 +35,21 @@ export class ChatController {
 
   @Post('mensajes')
   enviar(@Body() dto: EnviarMensajeDto, @Req() req: ReqAuth) {
-    return this.chat.enviar(req.user!.sub, dto.destinatarioId, dto.contenido, dto.respondeAId);
+    const adjunto =
+      dto.adjuntoData && dto.adjuntoMime && dto.adjuntoTipo
+        ? {
+            data: dto.adjuntoData,
+            mime: dto.adjuntoMime,
+            nombre: dto.adjuntoNombre ?? 'archivo',
+            tipo: dto.adjuntoTipo,
+          }
+        : null;
+    return this.chat.enviar(
+      req.user!.sub,
+      dto.destinatarioId,
+      dto.contenido,
+      dto.respondeAId,
+      adjunto,
+    );
   }
 }

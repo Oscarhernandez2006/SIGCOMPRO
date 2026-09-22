@@ -26,6 +26,18 @@ export interface MensajeChat {
   responde_a_contenido: string | null;
   /** Remitente del mensaje citado. */
   responde_a_remitente_id: string | null;
+  /** Adjunto (foto/video/archivo) en base64 con prefijo data:<mime>;base64,... */
+  adjunto_data: string | null;
+  adjunto_mime: string | null;
+  adjunto_nombre: string | null;
+  adjunto_tipo: "imagen" | "video" | "archivo" | null;
+}
+
+export interface AdjuntoChat {
+  data: string;
+  mime: string;
+  nombre: string;
+  tipo: "imagen" | "video" | "archivo";
 }
 
 /** Lista de todos los usuarios con los que se puede chatear + resumen de la conversación. */
@@ -51,9 +63,18 @@ export function enviarMensajeChat(
   destinatarioId: string,
   contenido: string,
   respondeAId?: string,
+  adjunto?: AdjuntoChat,
 ): Promise<MensajeChat> {
   return apiFetch<MensajeChat>("/chat/mensajes", {
     method: "POST",
-    body: JSON.stringify({ destinatarioId, contenido, respondeAId }),
+    body: JSON.stringify({
+      destinatarioId,
+      contenido,
+      respondeAId,
+      adjuntoData: adjunto?.data,
+      adjuntoMime: adjunto?.mime,
+      adjuntoNombre: adjunto?.nombre,
+      adjuntoTipo: adjunto?.tipo,
+    }),
   });
 }

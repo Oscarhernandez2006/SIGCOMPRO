@@ -9,7 +9,26 @@ import {
   enviarMensajeChat,
   type ContactoChat,
   type MensajeChat,
+  type AdjuntoChat,
 } from "@/lib/chat";
+
+/** Tamaño máximo de archivo adjunto (antes de base64) para no reventar el body del backend. */
+const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024; // 10 MB
+
+function tipoAdjuntoDe(mime: string): "imagen" | "video" | "archivo" {
+  if (mime.startsWith("image/")) return "imagen";
+  if (mime.startsWith("video/")) return "video";
+  return "archivo";
+}
+
+function leerArchivoComoBase64(archivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result));
+    lector.onerror = () => reject(lector.error);
+    lector.readAsDataURL(archivo);
+  });
+}
 
 /** Burbuja flotante de mensajería interna (visible en todo el panel/admin). */
 export default function ChatBubble() {
@@ -23,6 +42,10 @@ export default function ChatBubble() {
   const [respondiendoA, setRespondiendoA] = useState<MensajeChat | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [totalNoLeidos, setTotalNoLeidos] = useState(0);
+  const [adjuntoPendiente, setAdjuntoPendiente] = useState<AdjuntoChat | null>(null);
+  const [errorAdjunto, setErrorAdjunto] = useState<string | null>(null);
+  const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
+  const archivoInputRef = useRef<HTMLInputElement>(null);
   const ahoraRef = useRef<string | undefined>(undefined);
   const enVueloRef = useRef(false);
   const listaRef = useRef<HTMLDivElement>(null);
@@ -80,6 +103,8 @@ export default function ChatBubble() {
     ahoraRef.current = undefined;
     setMensajes([]);
     setRespondiendoA(null);
+    setAdjuntoPendiente(null);
+    setErrorAdjunto(null);
 
     const poll = async () => {
       if (enVueloRef.current) return;
@@ -118,19 +143,44 @@ export default function ChatBubble() {
     );
   }, [contactos, busqueda]);
 
+  async function seleccionarArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    setErrorAdjunto(null);
+    if (archivo.size > MAX_ADJUNTO_BYTES) {
+      setErrorAdjunto("El archivo supera el máximo de 10 MB.");
+      return;
+    }
+    try {
+      const data = await leerArchivoComoBase64(archivo);
+      setAdjuntoPendiente({
+        data,
+        mime: archivo.type || "application/octet-stream",
+        nombre: archivo.name,
+        tipo: tipoAdjuntoDe(archivo.type || ""),
+      });
+    } catch {
+      setErrorAdjunto("No se pudo leer el archivo.");
+    }
+  }
+
   async function enviar() {
     const t = texto.trim();
-    if (!t || !activo || enviando) return;
+    if ((!t && !adjuntoPendiente) || !activo || enviando) return;
     setEnviando(true);
     setTexto("");
+    const adjunto = adjuntoPendiente ?? undefined;
+    setAdjuntoPendiente(null);
     const respondeAId = respondiendoA?.id;
     setRespondiendoA(null);
     try {
-      const enviado = await enviarMensajeChat(activo.id, t, respondeAId);
+      const enviado = await enviarMensajeChat(activo.id, t, respondeAId, adjunto);
       agregarMensajes([enviado]);
       ahoraRef.current = enviado.creado_en;
     } catch {
       setTexto(t);
+      if (adjunto) setAdjuntoPendiente(adjunto);
     } finally {
       setEnviando(false);
     }
@@ -266,7 +316,40 @@ export default function ChatBubble() {
                             <p className="truncate">{m.responde_a_contenido}</p>
                           </div>
                         )}
-                        <p className="whitespace-pre-wrap break-words">{m.contenido}</p>
+                        {m.adjunto_data && m.adjunto_tipo === "imagen" && (
+                          <button
+                            type="button"
+                            onClick={() => setImagenAmpliada(m.adjunto_data)}
+                            className="block w-full"
+                          >
+                            <img
+                              src={m.adjunto_data}
+                              alt={m.adjunto_nombre ?? "Imagen"}
+                              className="mb-1 max-h-48 w-full cursor-zoom-in rounded-lg object-cover"
+                            />
+                          </button>
+                        )}
+                        {m.adjunto_data && m.adjunto_tipo === "video" && (
+                          <video
+                            src={m.adjunto_data}
+                            controls
+                            className="mb-1 max-h-48 w-full rounded-lg"
+                          />
+                        )}
+                        {m.adjunto_data && m.adjunto_tipo === "archivo" && (
+                          <a
+                            href={m.adjunto_data}
+                            download={m.adjunto_nombre ?? undefined}
+                            className={`mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs underline ${
+                              esMio ? "bg-white/10 text-white" : "bg-black/5 text-brand-black"
+                            }`}
+                          >
+                            📎 {m.adjunto_nombre ?? "Archivo"}
+                          </a>
+                        )}
+                        {m.contenido && (
+                          <p className="whitespace-pre-wrap break-words">{m.contenido}</p>
+                        )}
                         <p className={`mt-0.5 text-[10px] ${esMio ? "text-white/60" : "text-brand-brown/40"}`}>
                           {new Date(m.creado_en).toLocaleTimeString("es-CO", {
                             hour: "2-digit",
@@ -296,7 +379,55 @@ export default function ChatBubble() {
                   </button>
                 </div>
               )}
+              {errorAdjunto && (
+                <div className="flex items-center justify-between gap-2 border-t border-brand-brown/10 bg-red-50 px-3 py-1.5">
+                  <p className="text-xs text-red-600">{errorAdjunto}</p>
+                  <button
+                    onClick={() => setErrorAdjunto(null)}
+                    className="shrink-0 rounded-full p-1 text-red-500 hover:bg-red-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {adjuntoPendiente && (
+                <div className="flex items-center gap-2 border-t border-brand-brown/10 bg-brand-cream-soft px-3 py-2">
+                  {adjuntoPendiente.tipo === "imagen" ? (
+                    <img
+                      src={adjuntoPendiente.data}
+                      alt={adjuntoPendiente.nombre}
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  ) : adjuntoPendiente.tipo === "video" ? (
+                    <video src={adjuntoPendiente.data} className="h-12 w-12 rounded-lg object-cover" muted />
+                  ) : (
+                    <span className="text-2xl">📎</span>
+                  )}
+                  <p className="min-w-0 flex-1 truncate text-xs text-brand-brown/70">{adjuntoPendiente.nombre}</p>
+                  <button
+                    onClick={() => setAdjuntoPendiente(null)}
+                    className="shrink-0 rounded-full p-1 text-brand-brown/50 transition hover:bg-brand-brown/10"
+                    title="Quitar adjunto"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2 border-t border-brand-brown/10 p-2">
+                <input
+                  ref={archivoInputRef}
+                  type="file"
+                  onChange={seleccionarArchivo}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => archivoInputRef.current?.click()}
+                  disabled={enviando}
+                  title="Adjuntar foto o video"
+                  className="shrink-0 rounded-full p-2 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-40"
+                >
+                  📎
+                </button>
                 <input
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
@@ -312,7 +443,7 @@ export default function ChatBubble() {
                 />
                 <button
                   onClick={enviar}
-                  disabled={!texto.trim() || enviando}
+                  disabled={(!texto.trim() && !adjuntoPendiente) || enviando}
                   className="rounded-full bg-brand-wine px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-40"
                 >
                   Enviar
@@ -339,6 +470,27 @@ export default function ChatBubble() {
           </span>
         )}
       </button>
+
+      {imagenAmpliada && (
+        <div
+          onClick={() => setImagenAmpliada(null)}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        >
+          <button
+            onClick={() => setImagenAmpliada(null)}
+            title="Cerrar"
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-2xl leading-none text-white transition hover:bg-white/20"
+          >
+            ×
+          </button>
+          <img
+            src={imagenAmpliada}
+            alt="Imagen ampliada"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+        </div>
+      )}
     </>
   );
 }
