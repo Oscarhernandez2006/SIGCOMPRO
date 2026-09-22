@@ -227,12 +227,51 @@ export function calcularLiquidacion(
       });
     };
 
-    agregar("porcionador", m.porcionador ?? "", razonable, kilos * cfg.porcionador_por_kg, razonable);
+    // Porcionador: si el alistamiento fue SEGMENTADO (varios porcionadores,
+    // uno por producto), cada quien se liquida por SU parte (kilos y tiempo de
+    // SU segmento), no por el pedido completo — así no se le paga a uno el
+    // trabajo del otro. El override manual (pagar sí/no) sigue siendo por
+    // pedido: afecta a todos los porcionadores de ese pedido por igual.
+    if (m.segmentado && m.segmentos && m.segmentos.length > 0) {
+      for (const seg of m.segmentos) {
+        if (!norm(seg.porcionador)) continue;
+        const segKilos = String(seg.um ?? "").trim().toUpperCase() === "KG" ? Number(seg.cantidad) || 0 : 0;
+        const segFinMs = seg.fin ? new Date(seg.fin).getTime() : null;
+        const segInicioMs = seg.inicio ? new Date(seg.inicio).getTime() : null;
+        const segPrepMs = segFinMs != null && segInicioMs != null ? segFinMs - segInicioMs : null;
+        const segPrepATiempo = segFinMs != null && segFinMs <= deadlinePreparacion(p, pc);
+        const segRazonable =
+          segPrepATiempo &&
+          segPrepMs != null &&
+          segKilos > 0 &&
+          segPrepMs >= segKilos * cfg.porcionador_seg_por_kg * 1000;
+        const ov = overrides[`porcionador|${p.id}`];
+        const pagar = ov ?? segRazonable;
+        detalle.porcionador.push({
+          pedidoId: p.id,
+          comanda: p.comanda,
+          puntoId,
+          puntoNombre,
+          fecha: p.fecha,
+          kilos: segKilos,
+          prepMs: segPrepMs,
+          prepATiempo: segPrepATiempo,
+          entregaATiempo,
+          persona: norm(seg.porcionador),
+          razonable: segRazonable,
+          elegible: segRazonable,
+          pagar,
+          overridden: ov !== undefined && ov !== segRazonable,
+          monto: segKilos * cfg.porcionador_por_kg,
+        });
+      }
+    } else {
+      agregar("porcionador", m.porcionador ?? "", razonable, kilos * cfg.porcionador_por_kg, razonable);
+    }
     agregar("televentas", p.vendedorNombre ?? "", prepATiempo, cfg.televentas_por_pedido);
     agregar("caja", m.despachadoPor ?? "", prepATiempo, cfg.caja_por_pedido);
     agregar("facturacion", m.facturadoPor ?? "", entregaATiempo, cfg.facturacion_por_pedido);
   }
-
   const resultado = {} as LiquidacionCompleta;
   for (const rol of ["porcionador", "televentas", "caja", "facturacion"] as RolLiquidacion[]) {
     const items = detalle[rol];

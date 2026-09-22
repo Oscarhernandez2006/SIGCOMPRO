@@ -20,6 +20,7 @@ import {
   cargarAsignacionesDrivin,
   cargarEntregasDrivin,
   type DespachoMeta,
+  type SegmentoAlistamiento,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
@@ -92,6 +93,17 @@ function pesoPedidoKg(p: Pedido): number {
     const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
     return s + (esKilo ? i.cantidad || 0 : 0);
   }, 0);
+}
+
+/** Un segmento por cada línea del carrito, sin porcionador ni tiempos (punto de partida). */
+function segmentosIniciales(p: Pedido): SegmentoAlistamiento[] {
+  return (p.carrito ?? []).map((i) => ({
+    itemId: i.id,
+    referencia: i.producto?.referencia ?? "",
+    producto: i.producto?.producto ?? "—",
+    um: i.producto?.um ?? "",
+    cantidad: Number(i.cantidad) || 0,
+  }));
 }
 
 /** Clasifica el tamaño del pedido por kilos: ≤10 Pequeño, 11-20 Mediano, >20 Grande. */
@@ -423,6 +435,9 @@ export default function DespachoPage() {
   const [codigoReset, setCodigoReset] = useState("");
   const [verificandoReset, setVerificandoReset] = useState(false);
   const [errorReset, setErrorReset] = useState<string | null>(null);
+  // Id del pedido cuyo modal de "Segmentación" (varios porcionadores, uno por
+  // producto) está abierto.
+  const [modalSegmentacion, setModalSegmentacion] = useState<string | null>(null);
   // Comprobante de pago (imagen) por pedido: subida, previsualización y
   // confirmación. La imagen se consulta bajo demanda (no viene en la carga
   // masiva). `compSubirId` = pedido que abrió el selector de archivo.
@@ -985,6 +1000,39 @@ export default function DespachoPage() {
     });
   };
 
+  /**
+   * Inicia o finaliza el segmento (línea de producto) de un porcionador dentro
+   * de un alistamiento SEGMENTADO. La primera vez que arranca CUALQUIER
+   * segmento, inicia el alistamiento del pedido (igual que el flujo normal);
+   * cuando TODOS los segmentos quedan con porcionador + fin, se cierra el
+   * alistamiento completo del pedido (mismo efecto que "Finalizar Preparación").
+   */
+  const actualizarSegmento = (
+    p: Pedido,
+    itemId: string,
+    cambios: Partial<Pick<SegmentoAlistamiento, "porcionador" | "inicio" | "fin">>,
+  ) => {
+    const m = meta[p.id] ?? {};
+    const base = m.segmentos && m.segmentos.length > 0 ? m.segmentos : segmentosIniciales(p);
+    const segmentos = base.map((s) => (s.itemId === itemId ? { ...s, ...cambios } : s));
+
+    const extra: Partial<DespachoMeta> = { segmentado: true, segmentos };
+    // Primer segmento en arrancar: inicia el pedido igual que el flujo normal.
+    if (cambios.inicio && !m.inicio) {
+      extra.inicio = cambios.inicio;
+      void cambiarEstado(p.id, "En producción");
+    }
+    // ¿Ya todos los segmentos tienen porcionador y quedaron terminados?
+    const todosListos = segmentos.every((s) => s.porcionador?.trim() && s.fin);
+    if (todosListos && !m.fin) {
+      const nombres = [...new Set(segmentos.map((s) => (s.porcionador ?? "").trim()).filter(Boolean))];
+      extra.fin = cambios.fin ?? new Date().toISOString();
+      extra.porcionador = nombres.join(", ");
+      void cambiarEstado(p.id, "Alistado");
+    }
+    actualizarMeta(p.id, extra);
+  };
+
   /** Edita SOLO el método de pago de un pedido y lo persiste. Conserva estado,
    *  factura, alistamiento, confirmación de transferencia y demás información. */
   const cambiarPago = (id: string, pago: string) => {
@@ -1197,6 +1245,8 @@ export default function DespachoPage() {
       const limpiarProduccion = () => {
         reset.porcionador = null;
         reset.inicio = null;
+        reset.segmentado = false;
+        reset.segmentos = [];
       };
       const limpiarAlistado = () => {
         reset.fin = null;
@@ -1263,7 +1313,7 @@ export default function DespachoPage() {
         return;
       }
       const id = resetTiemposId;
-      actualizarMeta(id, { inicio: null, fin: null } as unknown as Partial<DespachoMeta>);
+      actualizarMeta(id, { inicio: null, fin: null, segmentado: false, segmentos: [] } as unknown as Partial<DespachoMeta>);
       setPedidos((prev) => {
         const next = prev.map((p) =>
           p.id === id ? { ...p, estado: "En proceso" as Pedido["estado"] } : p,
@@ -2258,26 +2308,65 @@ export default function DespachoPage() {
                             )}
                           </button>
                         )}
-                        <select
-                          value={porcSel}
-                          onChange={(ev) =>
-                            setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
-                          }
-                          disabled={anulado || Boolean(m.fin) || !impreso || (!puedeEstado("En producción") && !puedeEstado("Alistado"))}
-                          className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                        >
-                          <option value="">Selecciona</option>
-                          {(porcSel && !porcionadores.includes(porcSel)
-                            ? [porcSel, ...porcionadores]
-                            : porcionadores
-                          ).map((nombre) => (
-                            <option key={nombre} value={nombre}>
-                              {nombre}
-                            </option>
-                          ))}
-                        </select>
+                        {m.segmentado ? (
+                          (() => {
+                            const segs = m.segmentos ?? [];
+                            const listos = segs.filter((s) => s.porcionador?.trim() && s.fin).length;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setModalSegmentacion(p.id)}
+                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-left text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+                              >
+                                <span className="inline-flex items-center gap-1.5">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15M4.5 9h15M4.5 15h15" />
+                                  </svg>
+                                  Segmentado
+                                </span>
+                                <span className="rounded-full bg-violet-200/70 px-1.5 py-0.5 text-[10px]">
+                                  {listos}/{segs.length} listos
+                                </span>
+                              </button>
+                            );
+                          })()
+                        ) : (
+                          <>
+                            <select
+                              value={porcSel}
+                              onChange={(ev) =>
+                                setPorcBorrador((prev) => ({ ...prev, [p.id]: ev.target.value }))
+                              }
+                              disabled={anulado || Boolean(m.fin) || !impreso || (!puedeEstado("En producción") && !puedeEstado("Alistado"))}
+                              className="w-full rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
+                            >
+                              <option value="">Selecciona</option>
+                              {(porcSel && !porcionadores.includes(porcSel)
+                                ? [porcSel, ...porcionadores]
+                                : porcionadores
+                              ).map((nombre) => (
+                                <option key={nombre} value={nombre}>
+                                  {nombre}
+                                </option>
+                              ))}
+                            </select>
+                            {!m.inicio && (p.carrito?.length ?? 0) > 1 && !anulado && impreso && puedeEstado("En producción") && (
+                              <button
+                                type="button"
+                                onClick={() => setModalSegmentacion(p.id)}
+                                title="El pedido lo preparan varias personas: asigna un porcionador distinto por producto"
+                                className="inline-flex items-center gap-1 self-start text-[11px] font-semibold text-violet-700 underline decoration-dotted underline-offset-2 hover:text-violet-800"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15M4.5 9h15M4.5 15h15" />
+                                </svg>
+                                Segmentación (varios porcionadores)
+                              </button>
+                            )}
+                          </>
+                        )}
                       </div>
-                      {!m.fin && (
+                      {!m.fin && !m.segmentado && (
                         <div className="absolute inset-x-3 bottom-3">
                           <button
                             onClick={() => {
@@ -3197,6 +3286,30 @@ export default function DespachoPage() {
         </div>
       )}
 
+      {/* Modal de segmentación: un porcionador distinto por producto */}
+      {modalSegmentacion && (() => {
+        const p = pedidos.find((x) => x.id === modalSegmentacion);
+        if (!p) return null;
+        const m = meta[p.id] ?? {};
+        const personal = personalPorPunto[String(p.punto?.id ?? "")] ?? { porcionadores: [], domiciliarios: [] };
+        const listaPorcionadores = [...personal.porcionadores].sort((a, b) =>
+          a.localeCompare(b, "es", { sensitivity: "base" }),
+        );
+        return (
+          <ModalSegmentacion
+            pedido={p}
+            segmentos={m.segmentos && m.segmentos.length > 0 ? m.segmentos : segmentosIniciales(p)}
+            finalizado={Boolean(m.fin)}
+            porcionadores={listaPorcionadores}
+            onIniciar={(itemId, porcionador) =>
+              actualizarSegmento(p, itemId, { porcionador, inicio: new Date().toISOString() })
+            }
+            onFinalizar={(itemId) => actualizarSegmento(p, itemId, { fin: new Date().toISOString() })}
+            onCerrar={() => setModalSegmentacion(null)}
+          />
+        );
+      })()}
+
       {/* Input oculto para subir imágenes del comprobante de pago (varias) */}
       <input
         ref={compFileRef}
@@ -3406,6 +3519,153 @@ export default function DespachoPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Modal de segmentación: cada producto lo prepara un porcionador   */
+/* distinto, con sus propios tiempos.                                */
+/* ---------------------------------------------------------------- */
+function ModalSegmentacion({
+  pedido,
+  segmentos,
+  finalizado,
+  porcionadores,
+  onIniciar,
+  onFinalizar,
+  onCerrar,
+}: {
+  pedido: Pedido;
+  segmentos: SegmentoAlistamiento[];
+  /** El alistamiento del pedido ya quedó cerrado (m.fin): todo queda de solo lectura. */
+  finalizado: boolean;
+  porcionadores: string[];
+  onIniciar: (itemId: string, porcionador: string) => void;
+  onFinalizar: (itemId: string) => void;
+  onCerrar: () => void;
+}) {
+  // Borrador del porcionador elegido por fila, antes de presionar "Iniciar".
+  const [borrador, setBorrador] = useState<Record<string, string>>({});
+  const listos = segmentos.filter((s) => s.porcionador?.trim() && s.fin).length;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/60 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-violet-700">Segmentación del alistamiento</h3>
+            <p className="mt-0.5 text-xs text-brand-brown/60">
+              Comanda #{pedido.comanda} · {pedido.cliente?.nombre || pedido.cliente?.nit_cedula} · Asigna un
+              porcionador por producto; el pedido queda &quot;Alistado&quot; cuando TODOS terminen.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="shrink-0 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft"
+            aria-label="Cerrar"
+            title="Cerrar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 bg-violet-50/60 px-5 py-2.5">
+          <span className="text-xs font-semibold text-violet-700">
+            {listos} de {segmentos.length} productos listos
+          </span>
+          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-violet-100">
+            <div
+              className="h-full rounded-full bg-violet-500 transition-all"
+              style={{ width: `${segmentos.length ? (listos / segmentos.length) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 divide-y divide-brand-brown/8 overflow-y-auto">
+          {segmentos.map((s) => {
+            const porcSel = borrador[s.itemId] ?? s.porcionador ?? "";
+            const enCurso = Boolean(s.inicio) && !s.fin;
+            return (
+              <div key={s.itemId} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-brand-black">{s.producto}</p>
+                  <p className="text-xs text-brand-brown/55">
+                    {s.cantidad} {s.um || ""} {s.referencia ? `· Ref. ${s.referencia}` : ""}
+                  </p>
+                  {s.inicio && (
+                    <p className="mt-0.5 text-[11px] font-medium text-brand-brown/60">
+                      Inicio: <span className="text-violet-700">{fmtHora(s.inicio)}</span>
+                      {s.fin && (
+                        <>
+                          {" "}
+                          · Fin: <span className="text-violet-700">{fmtHora(s.fin)}</span> · Duración:{" "}
+                          <span className="text-violet-700">{fmtDuracion(s.inicio, s.fin)}</span>
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <select
+                  value={porcSel}
+                  onChange={(ev) => setBorrador((prev) => ({ ...prev, [s.itemId]: ev.target.value }))}
+                  disabled={finalizado || Boolean(s.fin)}
+                  className="w-44 shrink-0 rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50"
+                >
+                  <option value="">Selecciona</option>
+                  {(porcSel && !porcionadores.includes(porcSel) ? [porcSel, ...porcionadores] : porcionadores).map(
+                    (nombre) => (
+                      <option key={nombre} value={nombre}>
+                        {nombre}
+                      </option>
+                    ),
+                  )}
+                </select>
+                {!s.fin ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!s.inicio) onIniciar(s.itemId, porcSel);
+                      else onFinalizar(s.itemId);
+                    }}
+                    disabled={finalizado || (!s.inicio && !porcSel.trim())}
+                    title={!porcSel.trim() ? "Selecciona el porcionador de este producto" : undefined}
+                    className={`w-28 shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
+                      enCurso ? "bg-green-600 hover:bg-green-700" : "bg-violet-600 hover:bg-violet-700"
+                    }`}
+                  >
+                    {enCurso ? "Finalizar" : "Iniciar"}
+                  </button>
+                ) : (
+                  <span className="w-28 shrink-0 rounded-lg bg-emerald-50 px-3 py-1.5 text-center text-xs font-semibold text-emerald-700">
+                    Listo
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-brand-brown/10 px-5 py-3.5">
+          <p className="text-xs text-brand-brown/50">
+            {finalizado
+              ? "El alistamiento ya quedó cerrado."
+              : listos === segmentos.length
+                ? "Todos los productos están listos."
+                : "Faltan productos por asignar/terminar."}
+          </p>
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

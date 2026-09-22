@@ -298,7 +298,7 @@ export default function LiquidacionVariablePage() {
                     rolData.detalle.map((d) => {
                       const aTiempo = rol === "facturacion" ? d.entregaATiempo : d.prepATiempo;
                       return (
-                        <tr key={d.pedidoId} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
+                        <tr key={`${d.pedidoId}|${d.persona}`} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
                           <td className="px-4 py-2 font-semibold text-brand-wine">{d.comanda}</td>
                           <td className="px-4 py-2 text-brand-black">{d.persona}</td>
                           <td className="px-4 py-2 text-brand-brown/60">{d.puntoNombre}</td>

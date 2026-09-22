@@ -1,4 +1,5 @@
 import type { Pedido } from "@/app/(panel)/pedidos/page";
+import type { DespachoMeta } from "./pedidos";
 
 /**
  * Lógica de tiempos/deadlines de despacho, compartida entre la vista de
@@ -195,4 +196,17 @@ export function deadlinePreparacion(p: Pedido, pagoConfirmado?: string | null): 
   const obj = objetivoDespacho(p, pagoConfirmado);
   if (!Number.isFinite(obj)) return obj;
   return esTransferencia(p) ? obj : obj - ALERTA_DESPACHO_MS;
+}
+
+/**
+ * Porcionador(es) que prepararon el pedido. Si el alistamiento fue
+ * SEGMENTADO (varias personas, una por producto), devuelve los nombres
+ * distintos de los segmentos; si no, el porcionador único (o [] si no hay).
+ */
+export function porcionadoresDe(m?: DespachoMeta | null): string[] {
+  if (m?.segmentado && m.segmentos?.length) {
+    return [...new Set(m.segmentos.map((s) => (s.porcionador ?? "").trim()).filter(Boolean))];
+  }
+  const unico = (m?.porcionador ?? "").trim();
+  return unico ? [unico] : [];
 }

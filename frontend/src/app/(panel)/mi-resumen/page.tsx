@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
-import { objetivoDespacho, colorEstado, yaDespachado } from "@/lib/despacho";
+import { objetivoDespacho, colorEstado, yaDespachado, porcionadoresDe } from "@/lib/despacho";
 import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
   Panel,
@@ -368,7 +368,11 @@ export default function MiResumenPage() {
     [enPeriodo, meta, nombre, esVistaGlobal],
   );
   const aliste = useMemo(
-    () => enPeriodo.filter((p) => (esVistaGlobal ? norm(meta[p.id]?.porcionador) !== "" : norm(meta[p.id]?.porcionador) === nombre)),
+    () =>
+      enPeriodo.filter((p) => {
+        const nombres = porcionadoresDe(meta[p.id]);
+        return esVistaGlobal ? nombres.length > 0 : nombres.some((n) => norm(n) === nombre);
+      }),
     [enPeriodo, meta, nombre, esVistaGlobal],
   );
   const domicilios = useMemo(
