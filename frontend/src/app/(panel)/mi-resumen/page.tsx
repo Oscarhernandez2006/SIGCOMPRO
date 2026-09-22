@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
-import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { objetivoDespacho, colorEstado, yaDespachado } from "@/lib/despacho";
 import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
@@ -84,6 +84,10 @@ function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number 
 
 function diaLocal(iso: string): string {
   const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** YYYY-MM-DD (local) de una fecha cualquiera, mismo criterio que diaLocal(). */
+function isoDeFecha(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function diaCorto(clave: string): string {
@@ -205,6 +209,25 @@ export default function MiResumenPage() {
     setUsuario(u);
   }, [router]);
 
+  // Qué pedirle al backend según el periodo/rango elegido. El endpoint, SIN
+  // filtro, solo trae "activos + últimos N días" (liviano para Despacho); acá
+  // se pide el rango real para que los totales del periodo elegido no queden
+  // recortados (antes se pedía sin filtro y se filtraba solo en el cliente).
+  const opcionesCarga = useMemo((): OpcionesCargaPedidos => {
+    if (usaRango) {
+      const o: OpcionesCargaPedidos = { rango: "rango" };
+      if (rangoDesde) o.fecha = rangoDesde;
+      if (rangoHasta) o.hasta = rangoHasta;
+      return o;
+    }
+    if (periodo === 0) return { rango: "todo" };
+    if (periodo === 1) return { rango: "hoy" };
+    const hoy = new Date();
+    const desdeFecha = new Date(hoy);
+    desdeFecha.setDate(desdeFecha.getDate() - (periodo * 2 - 1));
+    return { rango: "rango", fecha: isoDeFecha(desdeFecha) };
+  }, [usaRango, rangoDesde, rangoHasta, periodo]);
+
   useEffect(() => {
     if (usuario === null) return;
     let cancelado = false;
@@ -212,7 +235,7 @@ export default function MiResumenPage() {
       setCargando(true);
       setError(null);
       try {
-        const estado = await cargarEstadoPedidos();
+        const estado = await cargarEstadoPedidos(opcionesCarga);
         if (cancelado) return;
         setPedidos(estado.pedidos ?? []);
         setMeta(estado.meta ?? {});
@@ -225,7 +248,7 @@ export default function MiResumenPage() {
     return () => {
       cancelado = true;
     };
-  }, [usuario]);
+  }, [usuario, opcionesCarga]);
 
   // Nombre del que se está viendo: para roles con acceso total puede ser otra
   // televendedora seleccionada; para el resto, siempre el propio.
