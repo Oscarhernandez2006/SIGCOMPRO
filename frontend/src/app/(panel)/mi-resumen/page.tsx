@@ -103,7 +103,7 @@ function SelectorVendedora({
         </svg>
       </button>
       {abierto && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-xl border border-brand-brown/15 bg-white normal-case shadow-xl">
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 overflow-hidden rounded-xl border border-brand-brown/15 bg-white normal-case shadow-xl">
           <div className="border-b border-brand-brown/10 p-2">
             <div className="relative">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
@@ -546,7 +546,7 @@ export default function MiResumenPage() {
   return (
     <div className="pb-4">
       {/* Encabezado */}
-      <div className="mb-6 overflow-hidden rounded-3xl border border-brand-brown/10 bg-gradient-to-br from-brand-wine to-brand-wine-dark p-6 text-white shadow-sm">
+      <div className="relative z-20 mb-6 rounded-3xl border border-brand-brown/10 bg-gradient-to-br from-brand-wine to-brand-wine-dark p-6 text-white shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-gold">Mi resumen</p>
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">
           {esVistaGlobal ? "Resumen general" : esAdmin && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}

@@ -30,6 +30,34 @@ function leerArchivoComoBase64(archivo: File): Promise<string> {
   });
 }
 
+/** Timbre de notificación (dos tonos tipo "ding"), sintetizado con Web Audio API. */
+function reproducirTimbre() {
+  try {
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return;
+    const ctx = new Ctor();
+    if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+    const ahora = ctx.currentTime;
+    [880, 1175].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const inicio = ahora + i * 0.12;
+      gain.gain.setValueAtTime(0, inicio);
+      gain.gain.linearRampToValueAtTime(0.25, inicio + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(inicio);
+      osc.stop(inicio + 0.4);
+    });
+    setTimeout(() => void ctx.close(), 800);
+  } catch {
+    /* el navegador puede bloquear audio sin interacción previa del usuario */
+  }
+}
+
 /** Burbuja flotante de mensajería interna (visible en todo el panel/admin). */
 export default function ChatBubble() {
   const usuario = getUsuario();
@@ -49,6 +77,11 @@ export default function ChatBubble() {
   const ahoraRef = useRef<string | undefined>(undefined);
   const enVueloRef = useRef(false);
   const listaRef = useRef<HTMLDivElement>(null);
+  // Total de no leídos de la consulta anterior (para saber si SUBIÓ = mensaje nuevo).
+  const noLeidosPrevRef = useRef<number | null>(null);
+  // La primera consulta del historial de una conversación es la carga inicial
+  // (no "llegó un mensaje"); solo se suena el timbre desde la segunda en adelante.
+  const primerPollRef = useRef(true);
 
   /** Combina mensajes evitando duplicados (mismo id ya presente en la lista). */
   const agregarMensajes = useCallback((nuevos: MensajeChat[]) => {
@@ -69,14 +102,21 @@ export default function ChatBubble() {
     }
   }, []);
 
-  // Badge de no leídos: se consulta siempre (esté o no abierto el chat).
+  // Badge de no leídos: se consulta siempre (esté o no abierto el chat). Si el
+  // total SUBE respecto a la consulta anterior, suena el timbre de notificación
+  // (cubre mensajes nuevos de CUALQUIER contacto, con el chat cerrado o no).
   useEffect(() => {
     if (!usuario) return;
     let cancelado = false;
     const revisar = async () => {
       try {
         const { total } = await noLeidosChat();
-        if (!cancelado) setTotalNoLeidos(total);
+        if (cancelado) return;
+        if (noLeidosPrevRef.current !== null && total > noLeidosPrevRef.current) {
+          reproducirTimbre();
+        }
+        noLeidosPrevRef.current = total;
+        setTotalNoLeidos(total);
       } catch {
         /* silencioso */
       }
@@ -101,6 +141,7 @@ export default function ChatBubble() {
   useEffect(() => {
     if (!abierto || !activo) return;
     ahoraRef.current = undefined;
+    primerPollRef.current = true;
     setMensajes([]);
     setRespondiendoA(null);
     setAdjuntoPendiente(null);
@@ -115,6 +156,11 @@ export default function ChatBubble() {
           ahoraRef.current,
         );
         ahoraRef.current = ahora;
+        // Suena el timbre si llegó un mensaje NUEVO del otro (no en la carga inicial).
+        if (!primerPollRef.current && nuevos.some((m) => m.remitente_id !== usuario?.id)) {
+          reproducirTimbre();
+        }
+        primerPollRef.current = false;
         agregarMensajes(nuevos);
       } catch {
         /* silencioso */
@@ -125,7 +171,7 @@ export default function ChatBubble() {
     poll();
     const id = setInterval(poll, 4000);
     return () => clearInterval(id);
-  }, [abierto, activo, agregarMensajes]);
+  }, [abierto, activo, agregarMensajes, usuario?.id]);
 
   // Auto-scroll al final cuando llegan mensajes nuevos.
   useEffect(() => {
