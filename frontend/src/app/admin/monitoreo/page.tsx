@@ -37,6 +37,10 @@ function esDeHoy(p: Pedido): boolean {
   return false;
 }
 
+function fmtHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
 /** Formatea milisegundos como cronómetro "1:59:32" (h:mm:ss), valor absoluto. */
 function fmtCronometro(ms: number): string {
   const totalSeg = Math.floor(Math.abs(ms) / 1000);
@@ -322,6 +326,9 @@ function PuntoCard({
                   </p>
                   <p className="mt-0.5 break-words text-xs text-brand-brown/60">
                     Televenta: <span className="font-bold">{p.vendedorNombre || "—"}</span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-brand-brown/60">
+                    Creado: <span className="font-bold">{fmtHora(p.fecha)}</span>
                   </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${colorEstado(p.estado)}`}>
