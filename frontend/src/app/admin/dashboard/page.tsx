@@ -995,22 +995,50 @@ function métricas(
     vendMap.set(vendKey, ve);
 
     // Personal de despacho (porcionador / domiciliario) desde la metadata.
+    // Si el alistamiento fue SEGMENTADO (varios porcionadores, uno por
+    // producto), cada quien suma SOLO su parte (kilos/tiempo de su segmento),
+    // no el pedido completo, para no inflar el ranking de uno con lo del otro.
     const dm = metaMap[p.id];
-    const porc = (dm?.porcionador || "").trim();
-    if (porc) {
-      const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0, kilos: 0, kilosPorcionados: 0, prepMs: 0, prepCount: 0 };
-      e.unidades += 1;
-      e.total += Number(p.total) || 0;
-      e.kilos = (e.kilos ?? 0) + pesoPedidoKg(p);
-      e.kilosPorcionados = (e.kilosPorcionados ?? 0) + pesoPorcionadoKg(p);
-      if (dm?.inicio && dm?.fin) {
-        const ms = new Date(dm.fin).getTime() - new Date(dm.inicio).getTime();
-        if (Number.isFinite(ms) && ms > 0) {
-          e.prepMs = (e.prepMs ?? 0) + ms;
-          e.prepCount = (e.prepCount ?? 0) + 1;
+    if (dm?.segmentado && dm.segmentos && dm.segmentos.length > 0) {
+      for (const seg of dm.segmentos) {
+        const nombre = (seg.porcionador ?? "").trim();
+        if (!nombre) continue;
+        const item = p.carrito?.find((i) => i.id === seg.itemId);
+        const segKg = String(seg.um ?? "").trim().toUpperCase() === "KG" ? Number(seg.cantidad) || 0 : 0;
+        const segPorcionadoKg = item?.porcionado
+          ? ((Number(item.unidades) || 0) * (Number(item.gramos) || 0)) / 1000
+          : 0;
+        const e = porcMap.get(nombre) ?? { nombre, unidades: 0, total: 0, kilos: 0, kilosPorcionados: 0, prepMs: 0, prepCount: 0 };
+        e.unidades += 1;
+        e.total += Number(p.total) || 0;
+        e.kilos = (e.kilos ?? 0) + segKg;
+        e.kilosPorcionados = (e.kilosPorcionados ?? 0) + segPorcionadoKg;
+        if (seg.inicio && seg.fin) {
+          const ms = new Date(seg.fin).getTime() - new Date(seg.inicio).getTime();
+          if (Number.isFinite(ms) && ms > 0) {
+            e.prepMs = (e.prepMs ?? 0) + ms;
+            e.prepCount = (e.prepCount ?? 0) + 1;
+          }
         }
+        porcMap.set(nombre, e);
       }
-      porcMap.set(porc, e);
+    } else {
+      const porc = (dm?.porcionador || "").trim();
+      if (porc) {
+        const e = porcMap.get(porc) ?? { nombre: porc, unidades: 0, total: 0, kilos: 0, kilosPorcionados: 0, prepMs: 0, prepCount: 0 };
+        e.unidades += 1;
+        e.total += Number(p.total) || 0;
+        e.kilos = (e.kilos ?? 0) + pesoPedidoKg(p);
+        e.kilosPorcionados = (e.kilosPorcionados ?? 0) + pesoPorcionadoKg(p);
+        if (dm?.inicio && dm?.fin) {
+          const ms = new Date(dm.fin).getTime() - new Date(dm.inicio).getTime();
+          if (Number.isFinite(ms) && ms > 0) {
+            e.prepMs = (e.prepMs ?? 0) + ms;
+            e.prepCount = (e.prepCount ?? 0) + 1;
+          }
+        }
+        porcMap.set(porc, e);
+      }
     }
     const domi = (dm?.domiciliario || "").trim();
     if (domi) {

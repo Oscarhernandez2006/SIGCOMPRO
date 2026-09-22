@@ -3,11 +3,33 @@ import { API_URL } from "./api";
 import { getToken } from "./auth";
 import type { Pedido, TrazaEvento } from "@/app/(panel)/pedidos/page";
 
+/** Una línea del carrito preparada por un porcionador dentro de un alistamiento segmentado. */
+export interface SegmentoAlistamiento {
+  /** Id del ítem del carrito al que corresponde este segmento. */
+  itemId: string;
+  referencia: string;
+  producto: string;
+  um: string;
+  cantidad: number;
+  porcionador?: string;
+  inicio?: string;
+  fin?: string;
+}
+
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */
 export interface DespachoMeta {
   porcionador?: string;
   inicio?: string;
   fin?: string;
+  /**
+   * Alistamiento SEGMENTADO por producto: cada línea del carrito la prepara
+   * un porcionador distinto, con sus propios tiempos. Cuando está activo,
+   * `porcionador`/`inicio`/`fin` de arriba quedan como el RESUMEN global
+   * (inicio = el primero que arranca, fin = cuando TODOS terminan) para no
+   * romper el resto del flujo (facturación, despacho, liquidación, etc.).
+   */
+  segmentado?: boolean;
+  segmentos?: SegmentoAlistamiento[];
   /** Número de la factura. */
   facturaNumero?: string;
   /** Valor facturado (puede diferir del total del pedido). */

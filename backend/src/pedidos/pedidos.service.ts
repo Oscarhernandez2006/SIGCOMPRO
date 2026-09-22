@@ -382,6 +382,7 @@ export class PedidosService implements OnModuleInit {
                 ),
                 'carrito', COALESCE((
                   SELECT jsonb_agg(jsonb_build_object(
+                    'id', item->>'id',
                     'cantidad', COALESCE((item->>'cantidad')::numeric, 0),
                     'porcionado', COALESCE((item->>'porcionado')::boolean, false),
                     'unidades', (item->>'unidades')::numeric,
