@@ -214,27 +214,16 @@ export class PedidosService implements OnModuleInit {
     );
   }
 
-  /** Devuelve todos los pedidos junto con su metadata e impresos. */
-  async estado(
-    desde?: string,
+  /** Construye el WHERE (scope) + params según rango/fecha/hasta. Compartido por
+   *  estado() (listado completo) y resumenLigero() (agregados de Dashboard/Mi
+   *  resumen), para no duplicar esta lógica de fechas. */
+  private construirScope(
     rango?: string,
     fecha?: string,
     hasta?: string,
-  ): Promise<EstadoPedidos> {
-    // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
-    // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
-    // Despacho piden rango='hoy' (mucho más liviano) y cargan días ANTERIORES
-    // solo cuando el usuario aplica ese filtro (rango='fecha'&fecha=YYYY-MM-DD).
+  ): { scope: string; params: unknown[] } {
     const dias =
       Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
-    // Polling INCREMENTAL: si el cliente envía `desde` (el `ahora` que recibió
-    // en su última respuesta), solo se devuelven los pedidos del conjunto de
-    // trabajo que CAMBIARON desde ese instante (actualizado_en > desde). Así
-    // cada poll pasa de varios MB a unos KB. Sin `desde` = primera carga total.
-    const desdeValido =
-      desde && !Number.isNaN(Date.parse(desde)) ? desde : null;
-    const ahora = new Date().toISOString();
-
     // Día de ENTREGA efectivo (zona Bogotá): la fecha programada si el pedido se
     // dejó para otro día; si no, el día de creación.
     const diaEfectivo = `
@@ -245,36 +234,21 @@ export class PedidosService implements OnModuleInit {
         ELSE (fecha AT TIME ZONE 'America/Bogota')::date
       END`;
     const hoy = `(now() AT TIME ZONE 'America/Bogota')::date`;
-    // "Activo" = aún en proceso (NO terminal). Excluye TODOS los estados
-    // finales, incluidos los posteriores al despacho que trae Drivin
-    // (entregado / en tránsito / cancelado). Si no se excluyeran, el conjunto de
-    // "activos" crecería sin límite (cada pedido entregado quedaría "activo"
-    // para siempre) e inflaría la consulta por defecto hasta saturarla.
     const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito'))`;
 
     const params: unknown[] = [];
     let scope: string;
     const fechaValida = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
     if (rango === 'hoy') {
-      // HOY: día de entrega = hoy (cualquier estado) + TODO lo que sigue activo
-      // (arrastrados de días anteriores y programados a futuro, que el flujo de
-      // despacho necesita). Excluye los FINALIZADOS de días anteriores (el
-      // bulto que Pedidos/Despacho nunca muestran en la vista de hoy).
       scope = `((${diaEfectivo}) = ${hoy} OR ${activo})`;
     } else if (rango === 'posteriores') {
-      // POSTERIORES: programados para un día futuro.
       scope = `((${diaEfectivo}) > ${hoy})`;
     } else if (rango === 'todo') {
-      // TODO el historial, sin restricción (Dashboard con periodo "Todo").
       scope = 'true';
     } else if (rango === 'fecha' && fechaValida(fecha)) {
-      // Un día CONCRETO (Históricos): SOLO ese día, sin importar `hasta`.
       params.push(fecha);
       scope = `((${diaEfectivo}) = $${params.length}::date)`;
     } else if (rango === 'rango' && (fechaValida(fecha) || fechaValida(hasta))) {
-      // RANGO de días (Dashboard: fecha=desde, hasta=hasta). Si solo llega uno
-      // de los dos, ese lado queda sin tope (p. ej. sin `hasta` no se pierden
-      // los pedidos programados a futuro).
       const lo = fechaValida(fecha) ? fecha : null;
       const hi = fechaValida(hasta) ? hasta : null;
       if (lo && hi) {
@@ -288,9 +262,31 @@ export class PedidosService implements OnModuleInit {
         scope = `((${diaEfectivo}) <= $${params.length}::date)`;
       }
     } else {
-      // Comportamiento previo (reciente): activos + últimos N días.
       scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;
     }
+    return { scope, params };
+  }
+
+  /** Devuelve todos los pedidos junto con su metadata e impresos. */
+  async estado(
+    desde?: string,
+    rango?: string,
+    fecha?: string,
+    hasta?: string,
+  ): Promise<EstadoPedidos> {
+    // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
+    // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
+    // Despacho piden rango='hoy' (mucho más liviano) y cargan días ANTERIORES
+    // solo cuando el usuario aplica ese filtro (rango='fecha'&fecha=YYYY-MM-DD).
+    // Polling INCREMENTAL: si el cliente envía `desde` (el `ahora` que recibió
+    // en su última respuesta), solo se devuelven los pedidos del conjunto de
+    // trabajo que CAMBIARON desde ese instante (actualizado_en > desde). Así
+    // cada poll pasa de varios MB a unos KB. Sin `desde` = primera carga total.
+    const desdeValido =
+      desde && !Number.isNaN(Date.parse(desde)) ? desde : null;
+    const ahora = new Date().toISOString();
+
+    const { scope, params } = this.construirScope(rango, fecha, hasta);
     params.push(desdeValido);
     const idxDesde = params.length;
 
@@ -329,6 +325,93 @@ export class PedidosService implements OnModuleInit {
     // recalculaba en la carga completa y podía cambiar, p. ej. 87 -> 88, según
     // los arrastrados u otros pedidos del día.)
     return { pedidos, meta, impresos, ahora };
+  }
+
+  /**
+   * Versión LIGERA de estado(): para Dashboard y Mi resumen, que solo necesitan
+   * un subconjunto de campos de cada pedido para calcular sus métricas (no
+   * edición ni impresión). Proyecta esos campos en el propio SQL en vez de
+   * traer el blob `data` completo (que incluye dirección/teléfono del cliente,
+   * notas del carrito, trazabilidad, etc.) — con historiales grandes ("Todo"),
+   * el payload completo puede pesar 100+ MB y tardar más de un minuto solo en
+   * transferirse por la red; esta proyección lo reduce a una fracción.
+   */
+  async resumenLigero(
+    rango?: string,
+    fecha?: string,
+    hasta?: string,
+  ): Promise<{
+    pedidos: PedidoData[];
+    meta: Record<string, DespachoMeta>;
+    ahora: string;
+  }> {
+    const ahora = new Date().toISOString();
+    const { scope, params } = this.construirScope(rango, fecha, hasta);
+
+    const res = await this.pool.query<{
+      id: string;
+      data: PedidoData;
+      meta: DespachoMeta;
+    }>(
+      `SELECT id,
+              jsonb_build_object(
+                'id', id,
+                'comanda', data->>'comanda',
+                'consecutivo', (data->>'consecutivo')::int,
+                'fecha', data->>'fecha',
+                'total', COALESCE((data->>'total')::numeric, 0),
+                'estado', data->>'estado',
+                'anulado', COALESCE((data->>'anulado')::boolean, false),
+                'motivo', data->>'motivo',
+                'pago', data->>'pago',
+                'entrega', data->>'entrega',
+                'valorDomicilio', (data->>'valorDomicilio')::numeric,
+                'vendedorNombre', data->>'vendedorNombre',
+                'vendedorCedula', data->>'vendedorCedula',
+                'entregaProgramada', (data->>'entregaProgramada')::boolean,
+                'fechaProgramada', data->>'fechaProgramada',
+                'horaDespacho', data->>'horaDespacho',
+                'punto', jsonb_build_object(
+                  'id', data->'punto'->>'id',
+                  'nombre', data->'punto'->>'nombre'
+                ),
+                'cliente', jsonb_build_object(
+                  'nit_cedula', data->'cliente'->>'nit_cedula',
+                  'nombre', data->'cliente'->>'nombre',
+                  'horeca', COALESCE((data->'cliente'->>'horeca')::boolean, false)
+                ),
+                'carrito', COALESCE((
+                  SELECT jsonb_agg(jsonb_build_object(
+                    'cantidad', COALESCE((item->>'cantidad')::numeric, 0),
+                    'porcionado', COALESCE((item->>'porcionado')::boolean, false),
+                    'unidades', (item->>'unidades')::numeric,
+                    'gramos', (item->>'gramos')::numeric,
+                    'producto', jsonb_build_object(
+                      'um', item->'producto'->>'um',
+                      'producto', item->'producto'->>'producto',
+                      'referencia', item->'producto'->>'referencia',
+                      'precio', (item->'producto'->>'precio')::numeric
+                    )
+                  ))
+                  FROM jsonb_array_elements(COALESCE(data->'carrito', '[]'::jsonb)) item
+                ), '[]'::jsonb)
+              ) AS data,
+              meta
+       FROM pedidos
+       WHERE ${scope}
+       ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
+      params,
+    );
+
+    const pedidos: PedidoData[] = [];
+    const meta: Record<string, DespachoMeta> = {};
+    for (const row of res.rows) {
+      pedidos.push(row.data);
+      if (row.meta && Object.keys(row.meta).length > 0) {
+        meta[row.id] = row.meta;
+      }
+    }
+    return { pedidos, meta, ahora };
   }
 
   /**

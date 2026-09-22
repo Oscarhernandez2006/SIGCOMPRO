@@ -45,6 +45,21 @@ export class PedidosController {
     return this.pedidos.buscar(q ?? '');
   }
 
+  /**
+   * Versión ligera de estado(), solo con los campos que necesitan Dashboard y
+   * Mi resumen para calcular sus métricas (sin dirección/teléfono del cliente,
+   * notas del carrito, trazabilidad, etc.). Evita transferir el histórico
+   * completo (100+ MB) cuando el periodo elegido es "Todo" o un rango grande.
+   */
+  @Get('resumen')
+  resumen(
+    @Query('rango') rango?: string,
+    @Query('fecha') fecha?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.pedidos.resumenLigero(rango, fecha, hasta);
+  }
+
   /** Reporte de clientes que han comprado un producto (por punto / código / general). */
   @Get('reporte-productos')
   @Permisos('reporte_productos')

@@ -9,7 +9,7 @@ import {
   misPuntosVenta,
   type PuntoVenta,
 } from "@/lib/puntos-venta";
-import { cargarEstadoPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
+import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho, yaDespachado } from "@/lib/despacho";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
@@ -245,7 +245,7 @@ export default function DashboardPage() {
       setError(null);
       try {
         const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
-        const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos(opcionesCarga)]);
+        const [ps, estado] = await Promise.all([cargaPuntos, cargarResumenPedidos(opcionesCarga)]);
         if (cancelado) return;
         setPuntos(ps);
         setPedidos(estado.pedidos ?? []);

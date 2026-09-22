@@ -117,6 +117,24 @@ export function buscarPedidos(q: string): Promise<EstadoPedidos> {
 }
 
 /**
+ * Versión LIGERA de cargarEstadoPedidos(): usar en Dashboard y Mi resumen, que
+ * solo necesitan un subconjunto de campos de cada pedido para sus métricas
+ * (no edición ni impresión). El backend proyecta esos campos en el propio SQL
+ * en vez de traer el blob completo, lo que evita transferir 100+ MB cuando el
+ * periodo es "Todo" o un rango grande.
+ */
+export function cargarResumenPedidos(
+  opts?: Pick<OpcionesCargaPedidos, "rango" | "fecha" | "hasta">,
+): Promise<{ pedidos: Pedido[]; meta: Record<string, DespachoMeta>; ahora: string }> {
+  const p = new URLSearchParams();
+  if (opts?.rango) p.set("rango", opts.rango);
+  if (opts?.fecha) p.set("fecha", opts.fecha);
+  if (opts?.hasta) p.set("hasta", opts.hasta);
+  const qs = p.toString();
+  return apiFetch(`/pedidos/resumen${qs ? `?${qs}` : ""}`);
+}
+
+/**
  * Trazabilidad (historial) de un pedido, BAJO DEMANDA. El listado no la trae
  * para aligerar el payload que se refresca por polling; se consulta al abrir
  * el modal de trazabilidad de un pedido puntual.

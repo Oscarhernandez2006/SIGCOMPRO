@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
-import { cargarEstadoPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
+import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { objetivoDespacho, colorEstado, yaDespachado } from "@/lib/despacho";
 import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
@@ -235,7 +235,7 @@ export default function MiResumenPage() {
       setCargando(true);
       setError(null);
       try {
-        const estado = await cargarEstadoPedidos(opcionesCarga);
+        const estado = await cargarResumenPedidos(opcionesCarga);
         if (cancelado) return;
         setPedidos(estado.pedidos ?? []);
         setMeta(estado.meta ?? {});
