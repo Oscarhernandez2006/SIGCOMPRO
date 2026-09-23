@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
+import { getUsuario, tieneAccesoAdministrativo, refrescarUsuario, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, puedeAccion, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
@@ -295,14 +295,24 @@ export default function MiResumenPage() {
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false);
 
   // "Mi resumen" es un permiso: si el usuario no lo tiene, no puede entrar
-  // (ni por URL directa); se le manda a su primer módulo disponible.
+  // (ni por URL directa); se le manda a su primer módulo disponible. Primero
+  // se refresca desde el backend (por si un admin acaba de cambiarle los
+  // permisos y su cookie de sesión todavía tiene la lista vieja).
   useEffect(() => {
-    const u = getUsuario();
-    if (!puedeVerModulo(u, "mi_resumen")) {
-      router.replace(rutaOperativaInicial(u) ?? "/seleccionar-panel");
-      return;
-    }
-    setUsuario(u);
+    let cancelado = false;
+    (async () => {
+      await refrescarUsuario();
+      if (cancelado) return;
+      const u = getUsuario();
+      if (!puedeVerModulo(u, "mi_resumen")) {
+        router.replace(rutaOperativaInicial(u) ?? "/seleccionar-panel");
+        return;
+      }
+      setUsuario(u);
+    })();
+    return () => {
+      cancelado = true;
+    };
   }, [router]);
 
   // Carga los puntos de venta asignados solo para quien tenga "ver_todos" sin

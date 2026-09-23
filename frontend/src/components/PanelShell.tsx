@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
+import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, refrescarUsuario, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
@@ -164,6 +164,9 @@ export default function PanelShell({ children }: { children: ReactNode }) {
     }
     setUsuario(u);
     setReady(true);
+    // No bloqueante: si un admin le cambió permisos/rol, la próxima carga de
+    // página ya los verá (evita depender de que vuelva a iniciar sesión).
+    void refrescarUsuario();
   }, [router]);
 
   function cerrarSesion() {

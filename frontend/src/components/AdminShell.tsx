@@ -8,6 +8,7 @@ import {
   getToken,
   getUsuario,
   limpiarSesion,
+  refrescarUsuario,
   tieneAccesoAdministrativo,
   puedeVerDashboard,
   puedeVerClaveDinamica,
@@ -265,6 +266,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     }
     setUsuario(u);
     setReady(true);
+    // No bloqueante: si un admin le cambió permisos/rol, la próxima carga de
+    // página ya los verá (evita depender de que vuelva a iniciar sesión).
+    void refrescarUsuario();
   }, [router]);
 
   function cerrarSesion() {

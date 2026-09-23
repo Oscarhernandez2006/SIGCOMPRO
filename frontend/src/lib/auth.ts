@@ -131,3 +131,29 @@ export function limpiarSesion(): void {
   borrarCookie(COOKIE_TOKEN);
   borrarCookie(COOKIE_USUARIO);
 }
+
+/**
+ * Vuelve a pedir al backend el usuario + permisos ACTUALES (`GET /auth/me`) y
+ * reescribe la cookie. Sin esto, un cambio de permisos hecho por un admin no
+ * se refleja para el usuario ya logueado hasta que vuelve a iniciar sesión
+ * (la cookie se llena una sola vez, al login, y dura hasta 24h).
+ * No usa `apiFetch` (evita el import circular con "./api"); si falla (red,
+ * sesión vencida, etc.) simplemente no toca la cookie existente.
+ */
+export async function refrescarUsuario(): Promise<Usuario | null> {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const API_URL =
+      process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
+    const res = await fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const usuario = (await res.json()) as Usuario;
+    guardarSesion(token, usuario);
+    return usuario;
+  } catch {
+    return null;
+  }
+}

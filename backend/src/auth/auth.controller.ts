@@ -14,13 +14,35 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SsoLoginDto } from './dto/sso-login.dto';
 import { JwtAuthGuard, JwtPayload } from './guards/jwt-auth.guard';
+import { UsersService } from '../users/users.service';
 
 /** Roles autorizados a ver/usar la clave dinámica (NO el "administrador" liso). */
 const ROLES_CLAVE_DINAMICA = ['administrador app', 'desarrollador'];
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
+
+  /**
+   * Usuario + permisos ACTUALES desde la BD (el front los cachea en una
+   * cookie al iniciar sesión; esto permite refrescarla sin pedir un nuevo
+   * login cuando un administrador cambia sus permisos/rol).
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async me(@Req() req: Request & { user?: JwtPayload }) {
+    const usuario = await this.usersService.obtenerCacheado(req.user!.sub);
+    return {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      cedula: usuario.cedula,
+      rol: usuario.rol,
+      permisos: usuario.permisos ?? [],
+    };
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
