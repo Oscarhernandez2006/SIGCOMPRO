@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
-import { puedeVerModulo, rutaOperativaInicial } from "@/lib/permisos";
+import { puedeVerModulo, puedeAccion, rutaOperativaInicial } from "@/lib/permisos";
 import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
+import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { objetivoDespacho, colorEstado, yaDespachado, porcionadoresDe } from "@/lib/despacho";
 import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
@@ -283,6 +284,13 @@ export default function MiResumenPage() {
   // (vacío = mi propio resumen).
   const [vendedoraSel, setVendedoraSel] = useState("");
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
+  // Permiso granular "mi_resumen.ver_todos": igual que un admin para esta
+  // pantalla (ve todas las televendedoras), pero acotado a sus puntos de venta
+  // asignados (ver `pedidosBase` más abajo), a diferencia del admin que ve todo.
+  const puedeVerTodos = esAdmin || puedeAccion(usuario, "mi_resumen.ver_todos");
+  // Puntos de venta asignados (solo se usan para acotar a quien tenga el
+  // permiso "ver_todos" sin ser admin; null = aún no se cargan/no aplican).
+  const [puntosAsignados, setPuntosAsignados] = useState<PuntoVenta[] | null>(null);
   // Toggle "Ver estadísticas" (gráficas detalladas) para no-administradores.
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false);
 
@@ -296,6 +304,23 @@ export default function MiResumenPage() {
     }
     setUsuario(u);
   }, [router]);
+
+  // Carga los puntos de venta asignados solo para quien tenga "ver_todos" sin
+  // ser admin de acceso total (el admin ya ve todo, sin restricción de punto).
+  useEffect(() => {
+    if (!usuario || esAdmin || !puedeAccion(usuario, "mi_resumen.ver_todos")) return;
+    let cancelado = false;
+    misPuntosVenta()
+      .then((ps) => {
+        if (!cancelado) setPuntosAsignados(ps);
+      })
+      .catch(() => {
+        if (!cancelado) setPuntosAsignados([]);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [usuario, esAdmin]);
 
   // Qué pedirle al backend según el periodo/rango elegido. El endpoint, SIN
   // filtro, solo trae "activos + últimos N días" (liviano para Despacho); acá
@@ -340,18 +365,26 @@ export default function MiResumenPage() {
 
   // Nombre del que se está viendo: para roles con acceso total puede ser otra
   // televendedora seleccionada; para el resto, siempre el propio.
-  const nombreMostrado = (esAdmin && vendedoraSel) || usuario?.nombre || "";
+  const nombreMostrado = (puedeVerTodos && vendedoraSel) || usuario?.nombre || "";
   const nombre = useMemo(() => norm(nombreMostrado), [nombreMostrado]);
+
+  // Base de pedidos a analizar: el admin ve todo (sin restricción); quien solo
+  // tiene el permiso "ver_todos" (no admin) se acota a sus puntos asignados.
+  const pedidosBase = useMemo(() => {
+    if (esAdmin || !puedeVerTodos || puntosAsignados === null) return pedidos;
+    const ids = new Set(puntosAsignados.map((p) => String(p.id)));
+    return pedidos.filter((p) => ids.has(String(p.punto?.id ?? "")));
+  }, [pedidos, esAdmin, puedeVerTodos, puntosAsignados]);
 
   // Lista de televendedoras (por vendedorNombre) para el selector de admin.
   const vendedoras = useMemo(() => {
     const m = new Map<string, string>();
-    for (const p of pedidos) {
+    for (const p of pedidosBase) {
       const v = (p.vendedorNombre ?? "").trim();
       if (v) m.set(norm(v), v);
     }
     return [...m.values()].sort((a, b) => a.localeCompare(b));
-  }, [pedidos]);
+  }, [pedidosBase]);
 
   // Ventana de tiempo del periodo elegido.
   const desde = useMemo(() => {
@@ -366,14 +399,14 @@ export default function MiResumenPage() {
     if (usaRango) {
       const min = rangoDesde ? new Date(`${rangoDesde}T00:00:00`).getTime() : -Infinity;
       const max = rangoHasta ? new Date(`${rangoHasta}T23:59:59.999`).getTime() : Infinity;
-      return pedidos.filter((p) => {
+      return pedidosBase.filter((p) => {
         const t = tsPedido(p);
         return t >= min && t <= max;
       });
     }
-    if (desde == null) return pedidos;
-    return pedidos.filter((p) => tsPedido(p) >= desde);
-  }, [pedidos, desde, usaRango, rangoDesde, rangoHasta]);
+    if (desde == null) return pedidosBase;
+    return pedidosBase.filter((p) => tsPedido(p) >= desde);
+  }, [pedidosBase, desde, usaRango, rangoDesde, rangoHasta]);
 
   // ¿Un instante cae dentro del periodo elegido? (misma ventana que enPeriodo,
   // pero aplicable a cualquier fecha, p. ej. la de DESPACHO).
@@ -396,9 +429,10 @@ export default function MiResumenPage() {
     [enPeriodo, nombre],
   );
 
-  // Vista GLOBAL: solo administradores y cuando NO se filtra por una vendedora
-  // concreta. Muestra el resumen agregado de todos los televendedores/despacho.
-  const esVistaGlobal = esAdmin && !vendedoraSel;
+  // Vista GLOBAL: solo administradores (o quien tenga "ver_todos") y cuando NO
+  // se filtra por una vendedora concreta. Muestra el resumen agregado de todos
+  // los televendedores/despacho (acotado a `pedidosBase`).
+  const esVistaGlobal = puedeVerTodos && !vendedoraSel;
   // Conjunto base a analizar para gráficas y KPIs de ventas.
   const analizar = useMemo(
     () => (esVistaGlobal ? enPeriodo : misVentas),
@@ -410,8 +444,8 @@ export default function MiResumenPage() {
   // Así el facturado de esta vista cuadra con el Cuadre de caja del punto.
   const facturadoCaja = useMemo(() => {
     const scope = esVistaGlobal
-      ? pedidos
-      : pedidos.filter((p) => norm(p.vendedorNombre) === nombre);
+      ? pedidosBase
+      : pedidosBase.filter((p) => norm(p.vendedorNombre) === nombre);
     const validos = scope.filter(
       (p) =>
         !p.anulado &&
@@ -423,7 +457,7 @@ export default function MiResumenPage() {
       0,
     );
     return { pedidos: validos.length, valor };
-  }, [esVistaGlobal, pedidos, nombre, meta, enPeriodoTs]);
+  }, [esVistaGlobal, pedidosBase, nombre, meta, enPeriodoTs]);
 
   const ventas = useMemo(() => {
     const validos = analizar.filter((p) => !p.anulado);
@@ -505,8 +539,8 @@ export default function MiResumenPage() {
   const resumenPago = useMemo(() => resumenMetodoPago(analizar, meta), [analizar, meta]);
   const resumenEntrega = useMemo(() => resumenTipoEntrega(analizar), [analizar]);
 
-  // ¿Es televendedor? (rol específico que no es admin)
-  const esTelevendedor = usuario?.rol?.trim().toLowerCase() === "televendedor" && !esAdmin;
+  // ¿Es televendedor? (rol específico que no es admin ni tiene "ver_todos")
+  const esTelevendedor = usuario?.rol?.trim().toLowerCase() === "televendedor" && !puedeVerTodos;
 
   // Últimos pedidos (para la lista) según la actividad del usuario.
   const ultimos = useMemo(() => {
@@ -549,18 +583,18 @@ export default function MiResumenPage() {
       <div className="relative z-20 mb-6 rounded-3xl border border-brand-brown/10 bg-gradient-to-br from-brand-wine to-brand-wine-dark p-6 text-white shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-gold">Mi resumen</p>
         <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">
-          {esVistaGlobal ? "Resumen general" : esAdmin && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}
+          {esVistaGlobal ? "Resumen general" : puedeVerTodos && vendedoraSel ? nombreMostrado : `Hola, ${usuario?.nombre ?? ""}`}
         </h1>
         <p className="mt-1 text-sm text-white/70">
           {esVistaGlobal
             ? `Todos los televendedores y despacho · ${periodoLabel}`
-            : `${esAdmin && vendedoraSel ? "Resumen" : "Tu información personal"} de ${periodoLabel}${
-                esAdmin && vendedoraSel ? "" : usuario?.rol ? ` · ${usuario.rol}` : ""
+            : `${puedeVerTodos && vendedoraSel ? "Resumen" : "Tu información personal"} de ${periodoLabel}${
+                puedeVerTodos && vendedoraSel ? "" : usuario?.rol ? ` · ${usuario.rol}` : ""
               }`}
         </p>
-        {/* Fila: televendedora (solo admin) + rango de fechas, lado a lado. */}
+        {/* Fila: televendedora (admin o con permiso "ver_todos") + rango de fechas, lado a lado. */}
         <div className="mt-4 flex flex-wrap items-end gap-3">
-          {esAdmin && vendedoras.length > 0 && !esTelevendedor && (
+          {puedeVerTodos && vendedoras.length > 0 && !esTelevendedor && (
             <div className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-brand-gold/90">
               Ver resumen de
               <SelectorVendedora valor={vendedoraSel} opciones={vendedoras} onCambiar={setVendedoraSel} />
@@ -630,7 +664,7 @@ export default function MiResumenPage() {
         <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
           {esVistaGlobal
             ? `No hay actividad registrada en ${periodoLabel}.`
-            : esAdmin && vendedoraSel
+            : puedeVerTodos && vendedoraSel
               ? `${nombreMostrado} no tiene actividad registrada en ${periodoLabel}.`
               : `No tienes actividad registrada en ${periodoLabel}.`}
         </div>

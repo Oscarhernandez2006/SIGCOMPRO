@@ -138,6 +138,12 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
       {
         key: "mi_resumen",
         label: "Mi resumen",
+        acciones: [
+          {
+            key: "mi_resumen.ver_todos",
+            label: "Ver el resumen de todas las televendedoras (en sus puntos de venta asignados)",
+          },
+        ],
       },
       {
         key: "liquidacion_variable",
