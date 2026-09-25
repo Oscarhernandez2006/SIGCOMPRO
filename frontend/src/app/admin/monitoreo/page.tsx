@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getUsuario, puedeVerDashboard, type Usuario } from "@/lib/auth";
+import { getUsuario, type Usuario } from "@/lib/auth";
+import { puedeVerModulo } from "@/lib/permisos";
 import { cargarEstadoPedidos, type DespachoMeta } from "@/lib/pedidos";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 import {
@@ -64,7 +65,7 @@ export default function MonitoreoPage() {
 
   useEffect(() => {
     const u = getUsuario();
-    if (!puedeVerDashboard(u?.rol)) {
+    if (!puedeVerModulo(u, "monitoreo")) {
       router.replace("/");
       return;
     }

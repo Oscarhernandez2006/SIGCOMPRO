@@ -115,6 +115,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Monitoreo",
+    href: "/monitoreo",
+    modulo: "monitoreo",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652 12 12m0 0 2.652-2.652M12 12l2.652 2.652M12 12 9.348 9.348M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ),
+  },
+  {
     label: "Puntos de venta",
     href: "/admin/puntos-venta",
     modulo: "puntos_venta",
