@@ -168,9 +168,9 @@ function kilosDe(p: Pedido): number {
   }, 0);
 }
 
-/** Suma de unidades del carrito preparadas con una preparación dada (Entero/Relajado/Molida). */
+/** Kg equivalentes del carrito preparados con una preparación dada (Entero/Relajado/Molida): se paga por kg, no por unidad. */
 function cantidadPreparacionDe(p: Pedido, preparacion: "ENTERO" | "RELAJADO" | "MOLIDA"): number {
-  return (p.carrito ?? []).reduce((s, i) => s + (i.preparacion === preparacion ? Number(i.cantidad) || 0 : 0), 0);
+  return (p.carrito ?? []).reduce((s, i) => s + (i.preparacion === preparacion ? Number(i.kgPreparacion) || 0 : 0), 0);
 }
 
 const norm = (v?: string | null) => (v ?? "").trim();
@@ -262,19 +262,22 @@ export function calcularLiquidacion(
         if (!norm(seg.porcionador)) continue;
         const segEsKg = String(seg.um ?? "").trim().toUpperCase() === "KG";
         const segKilos = segEsKg ? Number(seg.cantidad) || 0 : 0;
-        const segCantidad = !segEsKg ? Number(seg.cantidad) || 0 : 0;
-        const segEntero = seg.preparacion === "ENTERO" ? segCantidad : 0;
-        const segRelajado = seg.preparacion === "RELAJADO" ? segCantidad : 0;
-        const segMolida = seg.preparacion === "MOLIDA" ? segCantidad : 0;
+        // Entero/Relajado/Molida (productos de unidad) se pagan por el peso en
+        // kg equivalente capturado al crear el pedido, no por unidades.
+        const segKgPrep = !segEsKg ? Number(seg.kgPreparacion) || 0 : 0;
+        const segEntero = seg.preparacion === "ENTERO" ? segKgPrep : 0;
+        const segRelajado = seg.preparacion === "RELAJADO" ? segKgPrep : 0;
+        const segMolida = seg.preparacion === "MOLIDA" ? segKgPrep : 0;
         const segFinMs = seg.fin ? new Date(seg.fin).getTime() : null;
         const segInicioMs = seg.inicio ? new Date(seg.inicio).getTime() : null;
         const segPrepMs = segFinMs != null && segInicioMs != null ? segFinMs - segInicioMs : null;
         const segPrepATiempo = segFinMs != null && segFinMs <= deadlinePreparacion(p, pc);
+        const segTotalKg = segKilos + segKgPrep;
         const segRazonable =
           segPrepATiempo &&
           segPrepMs != null &&
-          (segKilos > 0 || segCantidad > 0) &&
-          (segKilos === 0 || segPrepMs >= segKilos * cfg.porcionador_seg_por_kg * 1000);
+          segTotalKg > 0 &&
+          segPrepMs >= segTotalKg * cfg.porcionador_seg_por_kg * 1000;
         const ov = overrides[`porcionador|${p.id}`];
         const pagar = ov ?? segRazonable;
         detalle.porcionador.push({

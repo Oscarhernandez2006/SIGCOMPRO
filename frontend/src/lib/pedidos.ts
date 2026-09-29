@@ -16,6 +16,8 @@ export interface SegmentoAlistamiento {
   fin?: string;
   /** Preparación del ítem (solo productos de unidad: Entero/Relajado/Molida). */
   preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
+  /** Peso en kg equivalente de las unidades, para pagar la preparación por kg. */
+  kgPreparacion?: number;
 }
 
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */

@@ -229,15 +229,15 @@ export default function LiquidacionVariablePage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-brown/45 shadow-sm">
                   <tr>
-                    <th className="px-4 py-2">Persona</th>
                     <th className="px-4 py-2">Punto</th>
+                    <th className="px-4 py-2">Persona</th>
                     {rol === "porcionador" ? (
                       <>
                         <th className="px-3 py-2 text-right">Mínimo</th>
                         <th className="px-3 py-2 text-right">Porcionado (kg)</th>
-                        <th className="px-3 py-2 text-right">Entero</th>
-                        <th className="px-3 py-2 text-right">Molida</th>
-                        <th className="px-3 py-2 text-right">Relajado</th>
+                        <th className="px-3 py-2 text-right">Entero (kg)</th>
+                        <th className="px-3 py-2 text-right">Molida (kg)</th>
+                        <th className="px-3 py-2 text-right">Relajado (kg)</th>
                       </>
                     ) : (
                       <th className="px-4 py-2 text-right">Pedidos pagados</th>
@@ -250,8 +250,8 @@ export default function LiquidacionVariablePage() {
                     const cfgPunto = configs[g.puntoId] ?? CONFIG_DEFECTO;
                     return (
                     <tr key={`${g.persona}|${g.puntoId}`} className="border-t border-brand-brown/5">
-                      <td className="px-4 py-2.5 font-semibold text-brand-black">{g.persona}</td>
                       <td className="px-4 py-2.5 text-brand-brown/70">{g.puntoNombre}</td>
+                      <td className="px-4 py-2.5 font-semibold text-brand-black">{g.persona}</td>
                       {rol === "porcionador" ? (
                         <>
                           <td className="px-3 py-2.5 text-right text-xs">
@@ -263,18 +263,10 @@ export default function LiquidacionVariablePage() {
                               <span className="text-brand-brown/40">{copLiq(cfgPunto.porcionador_minimo)}</span>
                             )}
                           </td>
-                          <td className="px-3 py-2.5 text-right text-xs">
-                            {g.kilos > 0 ? `${g.kilos % 1 === 0 ? g.kilos : g.kilos.toFixed(1)} kg · ${copLiq(g.montoKilos)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-xs">
-                            {g.entero > 0 ? `${g.entero} und · ${copLiq(g.montoEntero)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-xs">
-                            {g.molida > 0 ? `${g.molida} und · ${copLiq(g.montoMolida)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-xs">
-                            {g.relajado > 0 ? `${g.relajado} und · ${copLiq(g.montoRelajado)}` : "—"}
-                          </td>
+                          <CeldaKgPlata kg={g.kilos} monto={g.montoKilos} />
+                          <CeldaKgPlata kg={g.entero} monto={g.montoEntero} />
+                          <CeldaKgPlata kg={g.molida} monto={g.montoMolida} />
+                          <CeldaKgPlata kg={g.relajado} monto={g.montoRelajado} />
                         </>
                       ) : (
                         <td className="px-4 py-2.5 text-right">{g.nPedidos}</td>
@@ -392,6 +384,19 @@ export default function LiquidacionVariablePage() {
   );
 }
 
+/** Celda de la tabla de porcionadores: kg y plata en líneas separadas. */
+function CeldaKgPlata({ kg, monto }: { kg: number; monto: number }) {
+  if (kg <= 0) return <td className="px-3 py-2.5 text-right text-xs text-brand-brown/30">—</td>;
+  return (
+    <td className="px-3 py-2.5 text-right text-xs">
+      <div className="flex flex-col items-end leading-tight">
+        <span className="text-brand-brown/60">{kg % 1 === 0 ? kg : kg.toFixed(1)} kg</span>
+        <span className="font-semibold text-brand-black">{copLiq(monto)}</span>
+      </div>
+    </td>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Modal de configuración por punto                                            */
 /* -------------------------------------------------------------------------- */
@@ -474,9 +479,9 @@ function ModalConfig({
             {campo("porcionador_minimo", "Mínimo garantizado")}
             {campo("porcionador_por_kg", "Porcionado (por kg)")}
             {campo("porcionador_seg_por_kg", "Seg. mínimos/kg", "seg", "Evita tiempos irreales")}
-            {campo("porcionador_entero", "Entero (por unidad)")}
-            {campo("porcionador_molida", "Molida (por unidad)")}
-            {campo("porcionador_relajado", "Relajado (por unidad)")}
+            {campo("porcionador_entero", "Entero (por kg)")}
+            {campo("porcionador_molida", "Molida (por kg)")}
+            {campo("porcionador_relajado", "Relajado (por kg)")}
           </div>
         </div>
 

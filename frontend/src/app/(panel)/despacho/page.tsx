@@ -104,6 +104,7 @@ function segmentosIniciales(p: Pedido): SegmentoAlistamiento[] {
     um: i.producto?.um ?? "",
     cantidad: Number(i.cantidad) || 0,
     preparacion: i.preparacion ?? "",
+    kgPreparacion: Number(i.kgPreparacion) || 0,
   }));
 }
 

@@ -2621,6 +2621,8 @@ export interface ItemCarrito {
   notas: string;
   /** Preparación excluyente (solo productos de unidad, alternativa a Porcionado). */
   preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
+  /** Peso en kg equivalente de las unidades, para pagar la preparación por kg. */
+  kgPreparacion?: number;
 }
 
 function UltimosPedidosModal({
@@ -3230,6 +3232,9 @@ function ConfigProducto({
   const notasIniciales = parsePreparacionDeNotas(inicial?.notas);
   const [preparacion, setPreparacion] = useState<Preparacion>(notasIniciales.preparacion);
   const [notas, setNotas] = useState(notasIniciales.resto);
+  // Peso en kg equivalente de las unidades, para pagar Entero/Molida/Relajado
+  // por kg (no por unidad) en la liquidación de porcionadores.
+  const [kgPreparacion, setKgPreparacion] = useState(inicial?.kgPreparacion ? String(inicial.kgPreparacion) : "");
 
   useEffect(() => {
     obtenerTiposCorteCache().then(setCortes).catch(() => {});
@@ -3266,6 +3271,7 @@ function ConfigProducto({
   // Evita que en las notas se repita lo que ya quedó guardado en el corte/
   // gramos/porciones del porcionado (ej. escribir "churrasco 200g").
   const notasDuplicanPorcionado = puedePorcionar && porcionado && notasDuplicanInfoPorcionado(notas, corte, gramos, unidades);
+  const kgPrep = parseFloat(kgPreparacion.replace(",", ".")) || 0;
 
   function confirmar() {
     if (cant <= 0) return;
@@ -3275,6 +3281,9 @@ function ConfigProducto({
     if (porcionado && !corte.trim()) return;
     if (porcionado && (g <= 0 || u <= 0 || fueraRango)) return;
     if (notasDuplicanPorcionado) return;
+    // Si hay preparación (producto de unidad), el peso en kg es obligatorio:
+    // es lo que se usa para pagarle al porcionador por kg.
+    if (preparacion && kgPrep <= 0) return;
     const notasFinal = preparacion
       ? (notas.trim() ? `${preparacion} / ${notas.trim()}` : preparacion)
       : notas.trim();
@@ -3289,6 +3298,7 @@ function ConfigProducto({
       unidades: puedePorcionar ? u : 0,
       notas: notasFinal,
       preparacion: puedePorcionar ? "" : preparacion,
+      kgPreparacion: !puedePorcionar && preparacion ? kgPrep : 0,
     });
   }
 
@@ -3395,6 +3405,30 @@ function ConfigProducto({
                   </button>
                 ))}
               </div>
+              {preparacion && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs font-medium text-brand-brown/70">
+                    Peso equivalente en kg (para pagarle al porcionador por kg)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={kgPreparacion}
+                      onChange={(e) => setKgPreparacion(e.target.value)}
+                      placeholder="Ej: 4.5"
+                      className="w-32 rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
+                    />
+                    <span className="text-sm text-brand-brown/60">kg</span>
+                  </div>
+                  {kgPrep <= 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-red-600">
+                      Ingresa el peso en kg de estas unidades para continuar.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -3581,16 +3615,19 @@ function ConfigProducto({
             disabled={
               cant <= 0 ||
               (porcionado && (!corte.trim() || g <= 0 || u <= 0 || fueraRango)) ||
-              notasDuplicanPorcionado
+              notasDuplicanPorcionado ||
+              (Boolean(preparacion) && kgPrep <= 0)
             }
             title={
               porcionado && !corte.trim()
                 ? "Selecciona el tipo de corte para el porcionado"
                 : notasDuplicanPorcionado
                   ? "Quita de las notas lo que ya está en el corte/gramos/porciones"
-                  : inicial
-                    ? "Guardar los cambios del producto"
-                    : "Agregar el producto al pedido"
+                  : preparacion && kgPrep <= 0
+                    ? "Ingresa el peso en kg para la preparación seleccionada"
+                    : inicial
+                      ? "Guardar los cambios del producto"
+                      : "Agregar el producto al pedido"
             }
             className="flex-1 rounded-xl bg-brand-amber py-2.5 text-sm font-semibold text-white hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
