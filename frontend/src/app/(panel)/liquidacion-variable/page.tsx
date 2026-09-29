@@ -48,7 +48,6 @@ export default function LiquidacionVariablePage() {
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modalConfig, setModalConfig] = useState<string | null>(null);
   const [modalTodos, setModalTodos] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(false);
 
@@ -172,21 +171,12 @@ export default function LiquidacionVariablePage() {
         </select>
 
         <button
-          onClick={() => setModalConfig(puntoId || puntosLista[0]?.id || "")}
-          disabled={puntosLista.length === 0}
-          className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft disabled:opacity-50"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-          Configurar punto
-        </button>
-
-        <button
           onClick={() => setModalTodos(true)}
           disabled={puntosLista.length === 0}
           className="inline-flex items-center gap-2 rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft disabled:opacity-50"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75h6v6h-6v-6Zm10.5 0h6v6h-6v-6Zm-10.5 10.5h6v6h-6v-6Zm10.5 0h6v6h-6v-6Z" /></svg>
-          Ver todos los puntos
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+          Configuración de liquidación
         </button>
 
         <button
@@ -371,29 +361,12 @@ export default function LiquidacionVariablePage() {
         </div>
       )}
 
-      {modalConfig !== null && (
-        <ModalConfig
-          puntoId={modalConfig}
-          puntos={puntosLista}
-          config={configs[modalConfig] ?? CONFIG_DEFECTO}
-          onCerrar={() => setModalConfig(null)}
-          onGuardado={(pid, cfg) => {
-            setConfigs((prev) => ({ ...prev, [pid]: cfg }));
-            setModalConfig(null);
-          }}
-          onCambiarPunto={setModalConfig}
-        />
-      )}
-
       {modalTodos && (
         <ModalTodosPuntos
           puntos={puntosLista}
           configs={configs}
           onCerrar={() => setModalTodos(false)}
-          onEditar={(pid) => {
-            setModalTodos(false);
-            setModalConfig(pid);
-          }}
+          onGuardado={(pid, cfg) => setConfigs((prev) => ({ ...prev, [pid]: cfg }))}
         />
       )}
     </div>
@@ -414,189 +387,60 @@ function CeldaKgPlata({ kg, monto }: { kg: number; monto: number }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Modal de configuración por punto                                            */
-/* -------------------------------------------------------------------------- */
-function ModalConfig({
-  puntoId,
-  puntos,
-  config,
-  onCerrar,
-  onGuardado,
-  onCambiarPunto,
-}: {
-  puntoId: string;
-  puntos: { id: string; nombre: string }[];
-  config: ConfigLiquidacion;
-  onCerrar: () => void;
-  onGuardado: (puntoId: string, config: ConfigLiquidacion) => void;
-  onCambiarPunto: (puntoId: string) => void;
-}) {
-  const [form, setForm] = useState<ConfigLiquidacion>(config);
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Puntos ADICIONALES a los que también se les guardan los mismos valores.
-  const [extra, setExtra] = useState<Set<string>>(new Set());
-
-  useEffect(() => setForm(config), [config, puntoId]);
-
-  const otrosPuntos = puntos.filter((p) => p.id !== puntoId);
-
-  function toggleExtra(id: string) {
-    setExtra((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const campo = (k: keyof ConfigLiquidacion, label: string, unidad: "money" | "seg" = "money", hint?: string) => (
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">{label}</label>
-      <div className="flex items-center gap-1 rounded-xl border border-brand-brown/15 bg-white px-3 py-2">
-        {unidad === "money" && <span className="text-brand-brown/40">$</span>}
-        <input
-          type="number"
-          min="0"
-          value={form[k]}
-          onChange={(e) => setForm((f) => ({ ...f, [k]: Number(e.target.value) || 0 }))}
-          className="w-full bg-transparent text-right font-semibold text-brand-black outline-none"
-        />
-        {unidad === "seg" && <span className="text-brand-brown/40">s</span>}
-      </div>
-      {hint && <p className="mt-0.5 text-[10px] text-brand-brown/45">{hint}</p>}
-    </div>
-  );
-
-  async function guardar() {
-    setGuardando(true);
-    setError(null);
-    const destinos = [puntoId, ...Array.from(extra)];
-    try {
-      const resultados = await Promise.all(destinos.map((pid) => guardarConfigLiquidacion(pid, form)));
-      destinos.forEach((pid, i) => onGuardado(pid, resultados[i]));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo guardar en uno o más puntos.");
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={onCerrar}>
-      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de liquidación</h3>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Punto de venta</label>
-        <select
-          value={puntoId}
-          onChange={(e) => onCambiarPunto(e.target.value)}
-          className="mb-3 w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-amber"
-        >
-          {puntos.map((p) => (
-            <option key={p.id} value={p.id}>{p.nombre}</option>
-          ))}
-        </select>
-
-        {otrosPuntos.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
-                También aplicar estos valores a
-              </label>
-              <div className="flex gap-2 text-[11px] font-semibold text-brand-wine">
-                <button type="button" onClick={() => setExtra(new Set(otrosPuntos.map((p) => p.id)))} className="hover:underline">
-                  Todos
-                </button>
-                <button type="button" onClick={() => setExtra(new Set())} className="hover:underline">
-                  Ninguno
-                </button>
-              </div>
-            </div>
-            <div className="max-h-32 overflow-y-auto rounded-xl border border-brand-brown/15 p-2">
-              {otrosPuntos.map((p) => (
-                <label key={p.id} className="flex items-center gap-2 py-0.5 text-sm text-brand-black">
-                  <input
-                    type="checkbox"
-                    checked={extra.has(p.id)}
-                    onChange={() => toggleExtra(p.id)}
-                    className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
-                  />
-                  {p.nombre}
-                </label>
-              ))}
-            </div>
-            {extra.size > 0 && (
-              <p className="mt-1 text-[11px] text-brand-brown/50">
-                Se guardará en {extra.size + 1} puntos de venta.
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="mb-2 rounded-xl bg-brand-cream-soft/60 p-3">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-brown/50">Porcionadores</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {campo("porcionador_minimo", "Mínimo garantizado")}
-            {campo("porcionador_por_kg", "Porcionado (por kg)")}
-            {campo("porcionador_seg_por_kg", "Seg. mínimos/kg", "seg", "Evita tiempos irreales")}
-            {campo("porcionador_entero", "Entero (por kg)")}
-            {campo("porcionador_molida", "Molida (por kg)")}
-            {campo("porcionador_relajado", "Relajado (por kg)")}
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-brand-cream-soft/60 p-3">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-brown/50">Valor por pedido cumplido a tiempo</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {campo("televentas_por_pedido", "Televentas")}
-            {campo("caja_por_pedido", "Caja")}
-            {campo("facturacion_por_pedido", "Facturación")}
-          </div>
-        </div>
-
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onCerrar} className="rounded-xl border border-brand-brown/15 px-4 py-2.5 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft">
-            Cancelar
-          </button>
-          <button onClick={guardar} disabled={guardando} className="rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-50">
-            {guardando
-              ? "Guardando…"
-              : extra.size > 0
-                ? `Guardar en ${extra.size + 1} puntos`
-                : "Guardar configuración"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Vista de todos los puntos en una sola tabla (para revisar/captura rápida)   */
+/* Configuración de liquidación: todos los puntos en una sola tabla editable   */
 /* -------------------------------------------------------------------------- */
 function ModalTodosPuntos({
   puntos,
   configs,
   onCerrar,
-  onEditar,
+  onGuardado,
 }: {
   puntos: { id: string; nombre: string }[];
   configs: Record<string, ConfigLiquidacion>;
   onCerrar: () => void;
-  onEditar: (puntoId: string) => void;
+  onGuardado: (puntoId: string, config: ConfigLiquidacion) => void;
 }) {
-  const columnas: { key: keyof ConfigLiquidacion; label: string }[] = [
+  const [forms, setForms] = useState<Record<string, ConfigLiquidacion>>({});
+  const [guardando, setGuardando] = useState<Record<string, boolean>>({});
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [guardadoId, setGuardadoId] = useState<string | null>(null);
+
+  // Toma el valor de cada punto la primera vez que aparece, sin pisar lo que
+  // la usuaria ya esté editando en la fila.
+  useEffect(() => {
+    setForms((prev) => {
+      const next = { ...prev };
+      for (const p of puntos) {
+        if (!(p.id in next)) next[p.id] = configs[p.id] ?? CONFIG_DEFECTO;
+      }
+      return next;
+    });
+  }, [puntos, configs]);
+
+  function setCampo(pid: string, k: keyof ConfigLiquidacion, v: number) {
+    setForms((prev) => ({ ...prev, [pid]: { ...(prev[pid] ?? CONFIG_DEFECTO), [k]: v } }));
+  }
+
+  async function guardarFila(pid: string) {
+    setGuardando((prev) => ({ ...prev, [pid]: true }));
+    setErrores((prev) => ({ ...prev, [pid]: "" }));
+    try {
+      const cfg = await guardarConfigLiquidacion(pid, forms[pid] ?? CONFIG_DEFECTO);
+      setForms((prev) => ({ ...prev, [pid]: cfg }));
+      onGuardado(pid, cfg);
+      setGuardadoId(pid);
+      setTimeout(() => setGuardadoId((v) => (v === pid ? null : v)), 1500);
+    } catch (e) {
+      setErrores((prev) => ({ ...prev, [pid]: e instanceof Error ? e.message : "No se pudo guardar." }));
+    } finally {
+      setGuardando((prev) => ({ ...prev, [pid]: false }));
+    }
+  }
+
+  const columnas: { key: keyof ConfigLiquidacion; label: string; unidad?: "seg" }[] = [
     { key: "porcionador_minimo", label: "Mínimo garantizado" },
     { key: "porcionador_por_kg", label: "Porcionado (kg)" },
-    { key: "porcionador_seg_por_kg", label: "Seg. mínimos/kg" },
+    { key: "porcionador_seg_por_kg", label: "Seg. mínimos/kg", unidad: "seg" },
     { key: "porcionador_entero", label: "Entero (kg)" },
     { key: "porcionador_molida", label: "Molida (kg)" },
     { key: "porcionador_relajado", label: "Relajado (kg)" },
@@ -608,14 +452,14 @@ function ModalTodosPuntos({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={onCerrar}>
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
           <div>
-            <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de todos los puntos</h3>
+            <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de liquidación</h3>
             <p className="text-xs text-brand-brown/50">
-              Vista de una sola pantalla para revisar o compartir. Haz clic en un punto para editarlo.
+              Todos los puntos en una sola pantalla: edita los valores de la fila y guarda con el botón de la derecha.
             </p>
           </div>
           <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
@@ -624,41 +468,61 @@ function ModalTodosPuntos({
         </div>
 
         <div className="overflow-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
+          <table className="w-full min-w-[1200px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-brand-cream-soft">
               <tr>
                 <th className="whitespace-nowrap border-b border-brand-brown/10 px-4 py-2.5 text-left font-semibold text-brand-brown/70">
                   Punto de venta
                 </th>
                 {columnas.map((c) => (
-                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5 text-right font-semibold text-brand-brown/70">
+                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-2 py-2.5 text-center font-semibold text-brand-brown/70">
                     {c.label}
                   </th>
                 ))}
+                <th className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5" />
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-brown/5">
               {puntos.map((p) => {
-                const cfg = configs[p.id] ?? CONFIG_DEFECTO;
+                const form = forms[p.id] ?? configs[p.id] ?? CONFIG_DEFECTO;
+                const err = errores[p.id];
+                const ok = guardadoId === p.id;
                 return (
-                  <tr
-                    key={p.id}
-                    onClick={() => onEditar(p.id)}
-                    title="Editar la configuración de este punto"
-                    className="cursor-pointer transition hover:bg-brand-cream-soft/50"
-                  >
-                    <td className="whitespace-nowrap px-4 py-2 font-medium text-brand-black">{p.nombre}</td>
+                  <tr key={p.id}>
+                    <td className="whitespace-nowrap px-4 py-1.5 font-medium text-brand-black">{p.nombre}</td>
                     {columnas.map((c) => (
-                      <td key={c.key} className="whitespace-nowrap px-3 py-2 text-right text-brand-black">
-                        {c.key === "porcionador_seg_por_kg" ? `${cfg[c.key]} s` : copLiq(cfg[c.key])}
+                      <td key={c.key} className="px-1.5 py-1.5">
+                        <div className="flex items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-2 py-1.5">
+                          {c.unidad !== "seg" && <span className="text-[11px] text-brand-brown/40">$</span>}
+                          <input
+                            type="number"
+                            min="0"
+                            value={form[c.key]}
+                            onChange={(e) => setCampo(p.id, c.key, Number(e.target.value) || 0)}
+                            className="w-16 bg-transparent text-right text-xs font-semibold text-brand-black outline-none"
+                          />
+                          {c.unidad === "seg" && <span className="text-[11px] text-brand-brown/40">s</span>}
+                        </div>
                       </td>
                     ))}
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                      <button
+                        onClick={() => guardarFila(p.id)}
+                        disabled={guardando[p.id]}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
+                          ok ? "bg-green-600" : "bg-brand-wine hover:bg-brand-wine/90"
+                        }`}
+                      >
+                        {guardando[p.id] ? "Guardando…" : ok ? "Guardado ✓" : "Guardar"}
+                      </button>
+                      {err && <p className="mt-1 text-[10px] text-red-600">{err}</p>}
+                    </td>
                   </tr>
                 );
               })}
               {puntos.length === 0 && (
                 <tr>
-                  <td colSpan={columnas.length + 1} className="px-4 py-6 text-center text-sm italic text-brand-brown/40">
+                  <td colSpan={columnas.length + 2} className="px-4 py-6 text-center text-sm italic text-brand-brown/40">
                     No hay puntos de venta para mostrar.
                   </td>
                 </tr>
