@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Playfair_Display, Manrope } from "next/font/google";
+import { Geist, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +14,15 @@ const manrope = Manrope({
   weight: ["500", "600", "700", "800"],
 });
 
-const playfair = Playfair_Display({
+// Autohospedada (no next/font/google): Google sirve el MISMO archivo variable
+// para los pesos 500/600/700/800, y eso rompe la resolución de next/font con
+// Turbopack en un build sin caché previa (Docker) con "next/font/google
+// queries have exactly one entry".
+const playfair = localFont({
+  src: "../fonts/PlayfairDisplay-Variable-latin.woff2",
   variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: "500 800",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
