@@ -3289,11 +3289,12 @@ function ConfigProducto({
     if (porcionado && !corte.trim()) return;
     if (porcionado && (g <= 0 || u <= 0 || fueraRango)) return;
     if (notasDuplicanPorcionado) return;
-    // Entero/Relajado/Molida solo aplica a productos por kg sin Porcionado; si
-    // no se eligió ninguno, se toma como Entero por defecto. La cantidad (kg)
-    // del producto es directamente el peso que se paga a esa tarifa. Se guarda
-    // en su propio campo `preparacion`, SIN mezclarla con las notas libres.
-    const preparacionEfectiva: Preparacion = puedePorcionar && !porcionado ? preparacion || "ENTERO" : "";
+    // Entero/Relajado/Molida solo aplica a productos por kg sin Porcionado, y
+    // SOLO si la vendedora elige una explícitamente (no se asume "Entero" por
+    // defecto: hay productos que ya vienen listos, como churrasco o molida, y
+    // no debe salir una preparación que nadie escogió). Se guarda en su propio
+    // campo `preparacion`, SIN mezclarla con las notas libres.
+    const preparacionEfectiva: Preparacion = puedePorcionar && !porcionado ? preparacion : "";
     onAgregar({
       id: inicial?.id ?? crypto.randomUUID(),
       producto,
@@ -3403,7 +3404,7 @@ function ConfigProducto({
           {puedePorcionar && !porcionado && (
             <div>
               <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">
-                Preparación (si no eliges ninguna, se toma como Entero)
+                Preparación (opcional, solo si aplica)
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {PREPARACIONES.map((op) => (
