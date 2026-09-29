@@ -76,18 +76,22 @@ export default function MonitoreoPage() {
     try {
       // Espera a que React vuelva a renderizar sin los límites de altura antes de capturar.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(contenedorRef.current, {
+      // html-to-image (no html2canvas): dibuja el DOM real vía <foreignObject>
+      // de un SVG, así que soporta los colores modernos que genera Tailwind v4
+      // (oklch/color-mix), que html2canvas no sabe interpretar y hacía fallar
+      // la captura en esta página.
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(contenedorRef.current, {
         backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
+        pixelRatio: 2,
       });
       const link = document.createElement("a");
       const marca = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
       link.download = `monitoreo-${marca}.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.href = dataUrl;
       link.click();
-    } catch {
+    } catch (e) {
+      console.error("No se pudo generar la imagen de Monitoreo:", e);
       alert("No se pudo generar la imagen. Intenta de nuevo.");
     } finally {
       setExpandidoParaImagen(false);
