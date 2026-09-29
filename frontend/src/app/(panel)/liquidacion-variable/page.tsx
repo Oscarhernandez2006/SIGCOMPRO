@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
@@ -404,6 +404,10 @@ function ModalTodosPuntos({
   const [guardando, setGuardando] = useState<Record<string, boolean>>({});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardadoId, setGuardadoId] = useState<string | null>(null);
+  // Fila cuyo panel de "replicar a otros puntos" está abierto, y qué puntos
+  // adicionales tiene marcados cada fila para copiarle los mismos valores.
+  const [replicarAbierto, setReplicarAbierto] = useState<string | null>(null);
+  const [extra, setExtra] = useState<Record<string, Set<string>>>({});
 
   // Toma el valor de cada punto la primera vez que aparece, sin pisar lo que
   // la usuaria ya esté editando en la fila.
@@ -429,20 +433,50 @@ function ModalTodosPuntos({
     return JSON.stringify(form) !== JSON.stringify(original);
   }
 
-  async function guardarFila(pid: string) {
-    setGuardando((prev) => ({ ...prev, [pid]: true }));
+  function toggleExtra(pid: string, destinoId: string) {
+    setExtra((prev) => {
+      const set = new Set(prev[pid] ?? []);
+      if (set.has(destinoId)) set.delete(destinoId);
+      else set.add(destinoId);
+      return { ...prev, [pid]: set };
+    });
+  }
+
+  /** Guarda los valores de la fila `pid` en ese punto y, opcionalmente, en `destinos` adicionales. */
+  async function guardarConDestinos(pid: string, destinos: string[]) {
+    const todos = [pid, ...destinos];
+    const form = forms[pid] ?? CONFIG_DEFECTO;
+    setGuardando((prev) => {
+      const next = { ...prev };
+      for (const id of todos) next[id] = true;
+      return next;
+    });
     setErrores((prev) => ({ ...prev, [pid]: "" }));
     try {
-      const cfg = await guardarConfigLiquidacion(pid, forms[pid] ?? CONFIG_DEFECTO);
-      setForms((prev) => ({ ...prev, [pid]: cfg }));
-      onGuardado(pid, cfg);
+      const resultados = await Promise.all(todos.map((id) => guardarConfigLiquidacion(id, form)));
+      setForms((prev) => {
+        const next = { ...prev };
+        todos.forEach((id, i) => { next[id] = resultados[i]; });
+        return next;
+      });
+      todos.forEach((id, i) => onGuardado(id, resultados[i]));
       setGuardadoId(pid);
       setTimeout(() => setGuardadoId((v) => (v === pid ? null : v)), 1500);
+      setReplicarAbierto(null);
+      setExtra((prev) => ({ ...prev, [pid]: new Set() }));
     } catch (e) {
-      setErrores((prev) => ({ ...prev, [pid]: e instanceof Error ? e.message : "No se pudo guardar." }));
+      setErrores((prev) => ({ ...prev, [pid]: e instanceof Error ? e.message : "No se pudo guardar en uno o más puntos." }));
     } finally {
-      setGuardando((prev) => ({ ...prev, [pid]: false }));
+      setGuardando((prev) => {
+        const next = { ...prev };
+        for (const id of todos) next[id] = false;
+        return next;
+      });
     }
+  }
+
+  function guardarFila(pid: string) {
+    return guardarConDestinos(pid, []);
   }
 
   const columnas: { key: keyof ConfigLiquidacion; label: string; unidad?: "seg" }[] = [
@@ -495,8 +529,12 @@ function ModalTodosPuntos({
                 const form = forms[p.id] ?? configs[p.id] ?? CONFIG_DEFECTO;
                 const err = errores[p.id];
                 const ok = guardadoId === p.id;
+                const otros = puntos.filter((o) => o.id !== p.id);
+                const seleccion = extra[p.id] ?? new Set<string>();
+                const abierto = replicarAbierto === p.id;
                 return (
-                  <tr key={p.id}>
+                  <Fragment key={p.id}>
+                  <tr>
                     <td className="whitespace-nowrap px-3 py-1.5 font-medium text-brand-black">{p.nombre}</td>
                     {columnas.map((c) => (
                       <td key={c.key} className="px-0.5 py-1">
@@ -514,18 +552,96 @@ function ModalTodosPuntos({
                       </td>
                     ))}
                     <td className="whitespace-nowrap px-2 py-1.5 text-right">
-                      <button
-                        onClick={() => guardarFila(p.id)}
-                        disabled={guardando[p.id] || !tieneCambios(p.id)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                          ok ? "bg-green-600" : "bg-brand-wine hover:bg-brand-wine/90"
-                        }`}
-                      >
-                        {guardando[p.id] ? "Guardando…" : ok ? "Guardado ✓" : "Guardar"}
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        {otros.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setReplicarAbierto((v) => (v === p.id ? null : p.id))}
+                            title="Copiar estos valores a otros puntos de venta"
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                              abierto
+                                ? "border-brand-wine bg-brand-wine/10 text-brand-wine"
+                                : "border-brand-brown/15 text-brand-brown hover:bg-brand-cream-soft"
+                            }`}
+                          >
+                            Replicar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => guardarFila(p.id)}
+                          disabled={guardando[p.id] || !tieneCambios(p.id)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            ok ? "bg-green-600" : "bg-brand-wine hover:bg-brand-wine/90"
+                          }`}
+                        >
+                          {guardando[p.id] ? "Guardando…" : ok ? "Guardado ✓" : "Guardar"}
+                        </button>
+                      </div>
                       {err && <p className="mt-1 text-[10px] text-red-600">{err}</p>}
                     </td>
                   </tr>
+                  {abierto && (
+                    <tr className="bg-brand-cream-soft/50">
+                      <td colSpan={columnas.length + 2} className="px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                            Copiar los valores de <span className="text-brand-wine">{p.nombre}</span> también a
+                          </p>
+                          <div className="flex gap-3 text-[11px] font-semibold text-brand-wine">
+                            <button
+                              type="button"
+                              onClick={() => setExtra((prev) => ({ ...prev, [p.id]: new Set(otros.map((o) => o.id)) }))}
+                              className="hover:underline"
+                            >
+                              Todos
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExtra((prev) => ({ ...prev, [p.id]: new Set() }))}
+                              className="hover:underline"
+                            >
+                              Ninguno
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-2 grid max-h-40 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-xl border border-brand-brown/15 bg-white p-2 sm:grid-cols-3 lg:grid-cols-4">
+                          {otros.map((o) => (
+                            <label key={o.id} className="flex items-center gap-2 py-0.5 text-sm text-brand-black">
+                              <input
+                                type="checkbox"
+                                checked={seleccion.has(o.id)}
+                                onChange={() => toggleExtra(p.id, o.id)}
+                                className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
+                              />
+                              {o.nombre}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setReplicarAbierto(null)}
+                            className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown hover:bg-brand-cream-soft"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => guardarConDestinos(p.id, Array.from(seleccion))}
+                            disabled={guardando[p.id]}
+                            className="rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+                          >
+                            {guardando[p.id]
+                              ? "Guardando…"
+                              : seleccion.size > 0
+                                ? `Guardar en ${seleccion.size + 1} puntos`
+                                : "Guardar solo este punto"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
               {puntos.length === 0 && (
