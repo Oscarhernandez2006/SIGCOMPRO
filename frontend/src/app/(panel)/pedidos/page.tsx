@@ -1258,6 +1258,7 @@ function DetalleCongelado({
                       <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
                       {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
                       {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                      {i.preparacion && <p className="text-xs text-brand-brown/80">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
                       {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
                     </div>
                     <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
@@ -3164,6 +3165,7 @@ function ResumenPedido({
                     <span>{cantidadLabel(i.cantidad, i.producto.um)} | {formatoCOP(i.producto.precio)}</span>
                     {i.alVacio && <Tag>Vacío</Tag>}
                     {i.porcionado && <Tag>Porciones {i.unidades} | Gramos {i.gramos} grs.</Tag>}
+                    {i.preparacion && <Tag>{ETIQUETA_PREPARACION[i.preparacion]}</Tag>}
                   </div>
                 </div>
               ))}
@@ -3184,6 +3186,12 @@ function ResumenPedido({
 /** Preparaciones excluyentes entre sí (y con Porcionado), solo para productos por kg. */
 type Preparacion = "" | "ENTERO" | "RELAJADO" | "MOLIDA";
 const PREPARACIONES: Exclude<Preparacion, "">[] = ["ENTERO", "RELAJADO", "MOLIDA"];
+/** Etiqueta visible de cada preparación ("Relajado" también cubre "Picado"). */
+const ETIQUETA_PREPARACION: Record<Exclude<Preparacion, "">, string> = {
+  ENTERO: "Entero",
+  RELAJADO: "Relajado o Picado",
+  MOLIDA: "Molida",
+};
 
 /** Separa el prefijo de preparación ("ENTERO / ...") de las notas libres, si lo tiene. */
 function parsePreparacionDeNotas(notas: string | undefined): { preparacion: Preparacion; resto: string } {
@@ -3227,7 +3235,11 @@ function ConfigProducto({
   const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
-  const notasIniciales = parsePreparacionDeNotas(inicial?.notas);
+  // Ítems nuevos ya guardan la preparación en su propio campo (sin tocar las
+  // notas); los antiguos aún pueden traerla embebida en el texto ("ENTERO / ...").
+  const notasIniciales = inicial?.preparacion
+    ? { preparacion: inicial.preparacion, resto: inicial?.notas ?? "" }
+    : parsePreparacionDeNotas(inicial?.notas);
   const [preparacion, setPreparacion] = useState<Preparacion>(notasIniciales.preparacion);
   const [notas, setNotas] = useState(notasIniciales.resto);
 
@@ -3279,11 +3291,9 @@ function ConfigProducto({
     if (notasDuplicanPorcionado) return;
     // Entero/Relajado/Molida solo aplica a productos por kg sin Porcionado; si
     // no se eligió ninguno, se toma como Entero por defecto. La cantidad (kg)
-    // del producto es directamente el peso que se paga a esa tarifa.
+    // del producto es directamente el peso que se paga a esa tarifa. Se guarda
+    // en su propio campo `preparacion`, SIN mezclarla con las notas libres.
     const preparacionEfectiva: Preparacion = puedePorcionar && !porcionado ? preparacion || "ENTERO" : "";
-    const notasFinal = preparacionEfectiva
-      ? (notas.trim() ? `${preparacionEfectiva} / ${notas.trim()}` : preparacionEfectiva)
-      : notas.trim();
     onAgregar({
       id: inicial?.id ?? crypto.randomUUID(),
       producto,
@@ -3293,7 +3303,7 @@ function ConfigProducto({
       corte: puedePorcionar && porcionado ? corte.trim() : "",
       gramos: puedePorcionar ? g : 0,
       unidades: puedePorcionar ? u : 0,
-      notas: notasFinal,
+      notas: notas.trim(),
       preparacion: preparacionEfectiva,
     });
   }
@@ -3407,7 +3417,7 @@ function ConfigProducto({
                         : "border-brand-brown/15 text-brand-brown hover:bg-brand-cream-soft"
                     }`}
                   >
-                    {op.charAt(0) + op.slice(1).toLowerCase()}
+                    {ETIQUETA_PREPARACION[op]}
                   </button>
                 ))}
               </div>
@@ -3995,6 +4005,7 @@ function PasoConfirmar({
                 {i.alVacio && " · Al vacío"}
                 {i.porcionado && ` · Porciones ${i.unidades} | Gramos ${i.gramos} grs.`}
                 {i.porcionado && i.corte && ` · ${i.corte}`}
+                {i.preparacion && ` · ${ETIQUETA_PREPARACION[i.preparacion]}`}
               </p>
               {i.notas && <p className="text-xs italic text-brand-brown/80">“{i.notas}”</p>}
             </div>
@@ -4368,6 +4379,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                     <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
                     {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
                     {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                    {i.preparacion && <p className="text-xs text-brand-brown/80">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
                     {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
                   </div>
                   <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
@@ -4649,6 +4661,9 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     const lineaPorc = i.porcionado
       ? `<div class="pn-nota">Porcionado: ${i.unidades} und x ${i.gramos} g${i.corte ? ` · ${i.corte}` : ""}</div>`
       : "";
+    const lineaPrep = i.preparacion
+      ? `<div class="pn-nota">Preparación: ${ETIQUETA_PREPARACION[i.preparacion]}</div>`
+      : "";
     const lineaNota = i.notas && i.notas.trim()
       ? `<div class="pn-nota" style="font-weight:bold">Nota: ${i.notas}</div>`
       : "";
@@ -4657,7 +4672,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
         <div class="pl pl-peso">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
-        ${lineaVacio}${lineaPorc}${lineaNota}
+        ${lineaVacio}${lineaPorc}${lineaPrep}${lineaNota}
       </div>`;
   };
   // Agrupa los productos por categoría (conservando el orden de aparición):
