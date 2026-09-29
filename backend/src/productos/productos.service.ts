@@ -179,6 +179,13 @@ export class ProductosService implements OnModuleInit {
         fi: string | null;
       }
     >();
+    // Hoy (YYYY-MM-DD): una fila con fecha_inactivacion en el pasado ya
+    // "venció" en Siesa y no debe ganarle a una fila vigente, aunque tenga
+    // fecha_activacion más reciente (pasó con Concord/ref. 2020: una fila
+    // se activó e inactivó el MISMO día, y por tener la fecha de activación
+    // más nueva se quedaba con el precio en vez de la fila vigente real).
+    const hoy = new Date().toISOString().slice(0, 10);
+    const vigente = (fi: string | null) => !fi || fi >= hoy;
     for (const { p, ciaFuente } of datos) {
       const lista = String(p.LISTA_PRECIO ?? '').trim();
       const referencia = String(p.REFERENCIA ?? '').trim();
@@ -187,9 +194,18 @@ export class ProductosService implements OnModuleInit {
       if (!listaPermitida(ciaFuente, p.DESC_LISTA)) continue;
       const clave = `${lista}|${referencia}`;
       const fa = this.toFecha(p.FECHA_ACTIVACION);
+      const fi = this.toFecha(p.FECHA_INACTIVACION);
       const existente = unicas.get(clave);
-      // Si ya existe y la fila actual no es más reciente, se descarta.
-      if (existente && (existente.fa ?? '') >= (fa ?? '')) continue;
+      if (existente) {
+        const existenteVigente = vigente(existente.fi);
+        const actualVigente = vigente(fi);
+        // Una fila vigente siempre le gana a una ya vencida, sin importar
+        // cuál tenga la fecha de activación más reciente.
+        if (existenteVigente && !actualVigente) continue;
+        // Entre dos filas con el mismo estado de vigencia, gana la más
+        // reciente por fecha de activación (empate: gana la primera).
+        if (existenteVigente === actualVigente && (existente.fa ?? '') >= (fa ?? '')) continue;
+      }
       unicas.set(clave, {
         lista,
         referencia,
@@ -200,7 +216,7 @@ export class ProductosService implements OnModuleInit {
         um: p.UM ?? null,
         precio: p.PRECIO != null ? Number(p.PRECIO) : 0,
         fa,
-        fi: this.toFecha(p.FECHA_INACTIVACION),
+        fi,
       });
     }
     const filas = [...unicas.values()];

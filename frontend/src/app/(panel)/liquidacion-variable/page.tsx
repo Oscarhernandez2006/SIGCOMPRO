@@ -242,7 +242,7 @@ export default function LiquidacionVariablePage() {
                     ) : (
                       <th className="px-4 py-2 text-right">Pedidos pagados</th>
                     )}
-                    <th className="px-4 py-2 text-right">A pagar</th>
+                    <th className="px-4 py-2 text-right">Total a pagar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -254,14 +254,8 @@ export default function LiquidacionVariablePage() {
                       <td className="px-4 py-2.5 font-semibold text-brand-black">{g.persona}</td>
                       {rol === "porcionador" ? (
                         <>
-                          <td className="px-3 py-2.5 text-right text-xs">
-                            {g.minimoAplicado ? (
-                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 font-bold text-amber-700">
-                                {copLiq(cfgPunto.porcionador_minimo)}
-                              </span>
-                            ) : (
-                              <span className="text-brand-brown/40">{copLiq(cfgPunto.porcionador_minimo)}</span>
-                            )}
+                          <td className="px-3 py-2.5 text-right text-xs text-brand-brown/70">
+                            {copLiq(cfgPunto.porcionador_minimo)}
                           </td>
                           <CeldaKgPlata kg={g.kilos} monto={g.montoKilos} />
                           <CeldaKgPlata kg={g.entero} monto={g.montoEntero} />
@@ -418,8 +412,21 @@ function ModalConfig({
   const [form, setForm] = useState<ConfigLiquidacion>(config);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Puntos ADICIONALES a los que también se les guardan los mismos valores.
+  const [extra, setExtra] = useState<Set<string>>(new Set());
 
   useEffect(() => setForm(config), [config, puntoId]);
+
+  const otrosPuntos = puntos.filter((p) => p.id !== puntoId);
+
+  function toggleExtra(id: string) {
+    setExtra((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const campo = (k: keyof ConfigLiquidacion, label: string, unidad: "money" | "seg" = "money", hint?: string) => (
     <div>
@@ -442,11 +449,12 @@ function ModalConfig({
   async function guardar() {
     setGuardando(true);
     setError(null);
+    const destinos = [puntoId, ...Array.from(extra)];
     try {
-      const g = await guardarConfigLiquidacion(puntoId, form);
-      onGuardado(puntoId, g);
+      const resultados = await Promise.all(destinos.map((pid) => guardarConfigLiquidacion(pid, form)));
+      destinos.forEach((pid, i) => onGuardado(pid, resultados[i]));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo guardar.");
+      setError(e instanceof Error ? e.message : "No se pudo guardar en uno o más puntos.");
     } finally {
       setGuardando(false);
     }
@@ -454,7 +462,7 @@ function ModalConfig({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={onCerrar}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de liquidación</h3>
           <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
@@ -466,12 +474,48 @@ function ModalConfig({
         <select
           value={puntoId}
           onChange={(e) => onCambiarPunto(e.target.value)}
-          className="mb-4 w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-amber"
+          className="mb-3 w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-amber"
         >
           {puntos.map((p) => (
             <option key={p.id} value={p.id}>{p.nombre}</option>
           ))}
         </select>
+
+        {otrosPuntos.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                También aplicar estos valores a
+              </label>
+              <div className="flex gap-2 text-[11px] font-semibold text-brand-wine">
+                <button type="button" onClick={() => setExtra(new Set(otrosPuntos.map((p) => p.id)))} className="hover:underline">
+                  Todos
+                </button>
+                <button type="button" onClick={() => setExtra(new Set())} className="hover:underline">
+                  Ninguno
+                </button>
+              </div>
+            </div>
+            <div className="max-h-32 overflow-y-auto rounded-xl border border-brand-brown/15 p-2">
+              {otrosPuntos.map((p) => (
+                <label key={p.id} className="flex items-center gap-2 py-0.5 text-sm text-brand-black">
+                  <input
+                    type="checkbox"
+                    checked={extra.has(p.id)}
+                    onChange={() => toggleExtra(p.id)}
+                    className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
+                  />
+                  {p.nombre}
+                </label>
+              ))}
+            </div>
+            {extra.size > 0 && (
+              <p className="mt-1 text-[11px] text-brand-brown/50">
+                Se guardará en {extra.size + 1} puntos de venta.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mb-2 rounded-xl bg-brand-cream-soft/60 p-3">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-brown/50">Porcionadores</p>
@@ -501,7 +545,11 @@ function ModalConfig({
             Cancelar
           </button>
           <button onClick={guardar} disabled={guardando} className="rounded-xl bg-brand-wine px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-wine/90 disabled:opacity-50">
-            {guardando ? "Guardando…" : "Guardar configuración"}
+            {guardando
+              ? "Guardando…"
+              : extra.size > 0
+                ? `Guardar en ${extra.size + 1} puntos`
+                : "Guardar configuración"}
           </button>
         </div>
       </div>

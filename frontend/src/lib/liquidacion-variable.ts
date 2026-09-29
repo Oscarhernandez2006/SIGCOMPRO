@@ -397,10 +397,11 @@ export function calcularLiquidacion(
         g.montoEntero = g.entero * cfg.porcionador_entero;
         g.montoRelajado = g.relajado * cfg.porcionador_relajado;
         g.montoMolida = g.molida * cfg.porcionador_molida;
-        const porTrabajo = g.montoKilos + g.montoEntero + g.montoRelajado + g.montoMolida;
-        g.minimoAplicado = porTrabajo < cfg.porcionador_minimo;
-        g.montoMinimo = g.minimoAplicado ? cfg.porcionador_minimo : 0;
-        g.monto = Math.max(cfg.porcionador_minimo, porTrabajo);
+        // El mínimo garantizado es una base FIJA que siempre se suma (no un
+        // piso que compite con lo trabajado): Total = mínimo + las 4 columnas.
+        g.montoMinimo = cfg.porcionador_minimo;
+        g.minimoAplicado = true;
+        g.monto = g.montoMinimo + g.montoKilos + g.montoEntero + g.montoRelajado + g.montoMolida;
       } else {
         const valor =
           rol === "televentas"
