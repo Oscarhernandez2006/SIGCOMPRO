@@ -4,7 +4,6 @@ import { use, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Manrope } from "next/font/google";
 import localFont from "next/font/local";
 import {
   consultarSaldoPublico,
@@ -24,9 +23,9 @@ import DireccionInput from "@/components/DireccionInput";
 import TiendaAcceso from "@/components/TiendaAcceso";
 import TiendaUserMenu from "@/components/TiendaUserMenu";
 
-const manrope = Manrope({ subsets: ["latin"], weight: ["500", "600", "700", "800"] });
-// Autohospedada: ver comentario en src/app/layout.tsx (Google sirve el mismo
-// archivo variable para los 4 pesos y rompe Turbopack en builds sin caché).
+// Autohospedadas: ver comentario en src/app/layout.tsx (variable fonts que
+// Google sirve como un solo archivo para todos los pesos, rompe Turbopack).
+const manrope = localFont({ src: "../../../fonts/Manrope-Variable-latin.woff2", weight: "500 800", display: "swap" });
 const playfair = localFont({ src: "../../../fonts/PlayfairDisplay-Variable-latin.woff2", weight: "500 800", display: "swap" });
 
 interface LineaCarrito {

@@ -3,11 +3,15 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Anton, Oswald } from "next/font/google";
+import { Anton } from "next/font/google";
+import localFont from "next/font/local";
 import { API_URL } from "@/lib/api";
 
 const anton = Anton({ subsets: ["latin"], weight: "400" });
-const oswald = Oswald({ subsets: ["latin"], weight: ["500", "600", "700"] });
+// Autohospedada: Oswald es variable font, Google sirve el MISMO archivo para
+// los pesos 500/600/700 y eso rompe next/font/google con Turbopack en un build
+// sin cache previa (ver comentario en src/app/layout.tsx).
+const oswald = localFont({ src: "../../fonts/Oswald-Variable-latin.woff2", weight: "500 700", display: "swap" });
 
 interface TiendaResumen {
   slug: string;

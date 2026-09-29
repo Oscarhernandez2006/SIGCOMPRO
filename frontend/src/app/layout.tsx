@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Manrope } from "next/font/google";
+import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -8,10 +8,14 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const manrope = Manrope({
+// Autohospedada: Manrope también es variable font, Google sirve el MISMO
+// archivo para los pesos 500/600/700/800 (mismo problema que Playfair, ver
+// comentario abajo).
+const manrope = localFont({
+  src: "../fonts/Manrope-Variable-latin.woff2",
   variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: "500 800",
+  display: "swap",
 });
 
 // Autohospedada (no next/font/google): Google sirve el MISMO archivo variable
