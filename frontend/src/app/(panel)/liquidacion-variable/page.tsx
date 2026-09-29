@@ -450,9 +450,9 @@ function ModalTodosPuntos({
   ];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-4" onClick={onCerrar}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-2" onClick={onCerrar}>
       <div
-        className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex h-[97vh] w-[98vw] max-w-none flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
@@ -467,8 +467,8 @@ function ModalTodosPuntos({
           </button>
         </div>
 
-        <div className="overflow-auto">
-          <table className="w-full min-w-[1200px] border-collapse text-sm">
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-brand-cream-soft">
               <tr>
                 <th className="whitespace-nowrap border-b border-brand-brown/10 px-4 py-2.5 text-left font-semibold text-brand-brown/70">
