@@ -2619,10 +2619,8 @@ export interface ItemCarrito {
   gramos: number;
   unidades: number;
   notas: string;
-  /** Preparación excluyente (solo productos de unidad, alternativa a Porcionado). */
+  /** Preparación excluyente (solo productos por kg, alternativa a Porcionado). */
   preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
-  /** Peso en kg equivalente de las unidades, para pagar la preparación por kg. */
-  kgPreparacion?: number;
 }
 
 function UltimosPedidosModal({
@@ -3183,7 +3181,7 @@ function ResumenPedido({
 
 /* ---------- Sub-panel: configurar producto ---------- */
 
-/** Preparaciones excluyentes entre sí (y con Porcionado), solo para productos de unidad. */
+/** Preparaciones excluyentes entre sí (y con Porcionado), solo para productos por kg. */
 type Preparacion = "" | "ENTERO" | "RELAJADO" | "MOLIDA";
 const PREPARACIONES: Exclude<Preparacion, "">[] = ["ENTERO", "RELAJADO", "MOLIDA"];
 
@@ -3232,9 +3230,6 @@ function ConfigProducto({
   const notasIniciales = parsePreparacionDeNotas(inicial?.notas);
   const [preparacion, setPreparacion] = useState<Preparacion>(notasIniciales.preparacion);
   const [notas, setNotas] = useState(notasIniciales.resto);
-  // Peso en kg equivalente de las unidades, para pagar Entero/Molida/Relajado
-  // por kg (no por unidad) en la liquidación de porcionadores.
-  const [kgPreparacion, setKgPreparacion] = useState(inicial?.kgPreparacion ? String(inicial.kgPreparacion) : "");
 
   useEffect(() => {
     obtenerTiposCorteCache().then(setCortes).catch(() => {});
@@ -3242,7 +3237,9 @@ function ConfigProducto({
 
   const esKilo = (producto.um || "").trim().toUpperCase() === "KG";
   // Empaque al vacío y Porcionado solo aplican a productos que se venden por
-  // kg; para productos de unidad se bloquean (en su lugar hay preparación).
+  // kg; para productos de unidad se bloquean. Entero/Relajado/Molida también
+  // son solo para productos por kg (excluyentes con Porcionado): si no se
+  // elige ninguno, se toma como Entero por defecto.
   const puedePorcionar = esKilo;
   const paso = esKilo ? 0.5 : 1;
   const minimo = esKilo ? 0.5 : 1;
@@ -3271,7 +3268,6 @@ function ConfigProducto({
   // Evita que en las notas se repita lo que ya quedó guardado en el corte/
   // gramos/porciones del porcionado (ej. escribir "churrasco 200g").
   const notasDuplicanPorcionado = puedePorcionar && porcionado && notasDuplicanInfoPorcionado(notas, corte, gramos, unidades);
-  const kgPrep = parseFloat(kgPreparacion.replace(",", ".")) || 0;
 
   function confirmar() {
     if (cant <= 0) return;
@@ -3281,11 +3277,12 @@ function ConfigProducto({
     if (porcionado && !corte.trim()) return;
     if (porcionado && (g <= 0 || u <= 0 || fueraRango)) return;
     if (notasDuplicanPorcionado) return;
-    // Si hay preparación (producto de unidad), el peso en kg es obligatorio:
-    // es lo que se usa para pagarle al porcionador por kg.
-    if (preparacion && kgPrep <= 0) return;
-    const notasFinal = preparacion
-      ? (notas.trim() ? `${preparacion} / ${notas.trim()}` : preparacion)
+    // Entero/Relajado/Molida solo aplica a productos por kg sin Porcionado; si
+    // no se eligió ninguno, se toma como Entero por defecto. La cantidad (kg)
+    // del producto es directamente el peso que se paga a esa tarifa.
+    const preparacionEfectiva: Preparacion = puedePorcionar && !porcionado ? preparacion || "ENTERO" : "";
+    const notasFinal = preparacionEfectiva
+      ? (notas.trim() ? `${preparacionEfectiva} / ${notas.trim()}` : preparacionEfectiva)
       : notas.trim();
     onAgregar({
       id: inicial?.id ?? crypto.randomUUID(),
@@ -3297,8 +3294,7 @@ function ConfigProducto({
       gramos: puedePorcionar ? g : 0,
       unidades: puedePorcionar ? u : 0,
       notas: notasFinal,
-      preparacion: puedePorcionar ? "" : preparacion,
-      kgPreparacion: !puedePorcionar && preparacion ? kgPrep : 0,
+      preparacion: preparacionEfectiva,
     });
   }
 
@@ -3376,7 +3372,15 @@ function ConfigProducto({
               {!puedePorcionar && <p className="text-[11px] text-brand-brown/40">Solo disponible para productos por kg</p>}
             </div>
             <button
-              onClick={() => puedePorcionar && setPorcionado((v) => !v)}
+              onClick={() =>
+                puedePorcionar &&
+                setPorcionado((v) => {
+                  const siguiente = !v;
+                  // Excluyente con Entero/Relajado/Molida.
+                  if (siguiente) setPreparacion("");
+                  return siguiente;
+                })
+              }
               disabled={!puedePorcionar}
               title={puedePorcionar ? "Activar o desactivar porcionado" : "Solo disponible para productos por kg"}
               className={`relative h-6 w-11 rounded-full transition ${porcionado && puedePorcionar ? "bg-brand-wine" : "bg-brand-brown/20"} ${!puedePorcionar ? "cursor-not-allowed opacity-50" : ""}`}
@@ -3385,10 +3389,12 @@ function ConfigProducto({
             </button>
           </div>
 
-          {/* Preparación (solo productos de unidad): excluyente entre sí y con Porcionado. */}
-          {!puedePorcionar && (
+          {/* Preparación (solo productos por kg, cuando NO está Porcionado): excluyente entre sí y con Porcionado. */}
+          {puedePorcionar && !porcionado && (
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">Preparación (opcional)</p>
+              <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">
+                Preparación (si no eliges ninguna, se toma como Entero)
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 {PREPARACIONES.map((op) => (
                   <button
@@ -3405,30 +3411,6 @@ function ConfigProducto({
                   </button>
                 ))}
               </div>
-              {preparacion && (
-                <div className="mt-2">
-                  <label className="mb-1 block text-xs font-medium text-brand-brown/70">
-                    Peso equivalente en kg (para pagarle al porcionador por kg)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={kgPreparacion}
-                      onChange={(e) => setKgPreparacion(e.target.value)}
-                      placeholder="Ej: 4.5"
-                      className="w-32 rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-                    />
-                    <span className="text-sm text-brand-brown/60">kg</span>
-                  </div>
-                  {kgPrep <= 0 && (
-                    <p className="mt-1 text-[11px] font-medium text-red-600">
-                      Ingresa el peso en kg de estas unidades para continuar.
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
@@ -3615,19 +3597,16 @@ function ConfigProducto({
             disabled={
               cant <= 0 ||
               (porcionado && (!corte.trim() || g <= 0 || u <= 0 || fueraRango)) ||
-              notasDuplicanPorcionado ||
-              (Boolean(preparacion) && kgPrep <= 0)
+              notasDuplicanPorcionado
             }
             title={
               porcionado && !corte.trim()
                 ? "Selecciona el tipo de corte para el porcionado"
                 : notasDuplicanPorcionado
                   ? "Quita de las notas lo que ya está en el corte/gramos/porciones"
-                  : preparacion && kgPrep <= 0
-                    ? "Ingresa el peso en kg para la preparación seleccionada"
-                    : inicial
-                      ? "Guardar los cambios del producto"
-                      : "Agregar el producto al pedido"
+                  : inicial
+                    ? "Guardar los cambios del producto"
+                    : "Agregar el producto al pedido"
             }
             className="flex-1 rounded-xl bg-brand-amber py-2.5 text-sm font-semibold text-white hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
           >

@@ -161,16 +161,31 @@ export interface LiquidacionRol {
 
 export type LiquidacionCompleta = Record<RolLiquidacion, LiquidacionRol>;
 
+/** ¿El ítem es un producto por kg "liso" (sin Porcionado), pagado por Entero/Relajado/Molida? */
+function esKgSinPorcionar(i: { producto?: { um?: string | null } | null; porcionado?: boolean }): boolean {
+  const esKg = (i.producto?.um ?? "").trim().toUpperCase() === "KG";
+  return esKg && !i.porcionado;
+}
+
+/** Kilos de productos por kg que SÍ están Porcionados (corte/gramos/porciones): se pagan a la tarifa "Porcionado". */
 function kilosDe(p: Pedido): number {
   return (p.carrito ?? []).reduce((s, i) => {
     const esKg = (i.producto?.um ?? "").trim().toUpperCase() === "KG";
-    return s + (esKg ? Number(i.cantidad) || 0 : 0);
+    return s + (esKg && i.porcionado ? Number(i.cantidad) || 0 : 0);
   }, 0);
 }
 
-/** Kg equivalentes del carrito preparados con una preparación dada (Entero/Relajado/Molida): se paga por kg, no por unidad. */
+/**
+ * Kilos de productos por kg que NO están Porcionados, clasificados como
+ * Entero/Relajado/Molida (si no se elige ninguno, se toma como Entero por
+ * defecto). Se pagan a la tarifa de esa preparación, no a la de "Porcionado".
+ */
 function cantidadPreparacionDe(p: Pedido, preparacion: "ENTERO" | "RELAJADO" | "MOLIDA"): number {
-  return (p.carrito ?? []).reduce((s, i) => s + (i.preparacion === preparacion ? Number(i.kgPreparacion) || 0 : 0), 0);
+  return (p.carrito ?? []).reduce((s, i) => {
+    if (!esKgSinPorcionar(i)) return s;
+    const efectiva = i.preparacion || "ENTERO";
+    return s + (efectiva === preparacion ? Number(i.cantidad) || 0 : 0);
+  }, 0);
 }
 
 const norm = (v?: string | null) => (v ?? "").trim();
@@ -198,6 +213,10 @@ export function calcularLiquidacion(
     const puntoNombre = p.punto?.nombre ?? "—";
     const cfg = configs[puntoId] ?? CONFIG_DEFECTO;
     const kilos = kilosDe(p);
+    const entero = cantidadPreparacionDe(p, "ENTERO");
+    const relajado = cantidadPreparacionDe(p, "RELAJADO");
+    const molida = cantidadPreparacionDe(p, "MOLIDA");
+    const kilosTotal = kilos + entero + relajado + molida;
     const pc = m.pagoConfirmado ?? null;
 
     const finMs = m.fin ? new Date(m.fin).getTime() : null;
@@ -209,12 +228,13 @@ export function calcularLiquidacion(
     const entregaATiempo =
       despachoFinMs != null && despachoFinMs <= objetivoDespacho(p, pc);
 
-    // Razonable (porcionador): a tiempo y con un mínimo de segundos por kilo.
+    // Razonable (porcionador): a tiempo y con un mínimo de segundos por kilo
+    // (cuenta el total de kilos, sea "Porcionado" o Entero/Relajado/Molida).
     const razonable =
       prepATiempo &&
       prepMs != null &&
-      kilos > 0 &&
-      prepMs >= kilos * cfg.porcionador_seg_por_kg * 1000;
+      kilosTotal > 0 &&
+      prepMs >= kilosTotal * cfg.porcionador_seg_por_kg * 1000;
 
     const base = {
       pedidoId: p.id,
@@ -261,10 +281,10 @@ export function calcularLiquidacion(
       for (const seg of m.segmentos) {
         if (!norm(seg.porcionador)) continue;
         const segEsKg = String(seg.um ?? "").trim().toUpperCase() === "KG";
-        const segKilos = segEsKg ? Number(seg.cantidad) || 0 : 0;
-        // Entero/Relajado/Molida (productos de unidad) se pagan por el peso en
-        // kg equivalente capturado al crear el pedido, no por unidades.
-        const segKgPrep = !segEsKg ? Number(seg.kgPreparacion) || 0 : 0;
+        // Sin preparación = Porcionado (corte/gramos/porciones); con
+        // preparación (Entero/Relajado/Molida) se paga a esa tarifa por kg.
+        const segKilos = segEsKg && !seg.preparacion ? Number(seg.cantidad) || 0 : 0;
+        const segKgPrep = segEsKg && seg.preparacion ? Number(seg.cantidad) || 0 : 0;
         const segEntero = seg.preparacion === "ENTERO" ? segKgPrep : 0;
         const segRelajado = seg.preparacion === "RELAJADO" ? segKgPrep : 0;
         const segMolida = seg.preparacion === "MOLIDA" ? segKgPrep : 0;
@@ -306,9 +326,6 @@ export function calcularLiquidacion(
         });
       }
     } else {
-      const entero = cantidadPreparacionDe(p, "ENTERO");
-      const relajado = cantidadPreparacionDe(p, "RELAJADO");
-      const molida = cantidadPreparacionDe(p, "MOLIDA");
       const monto =
         kilos * cfg.porcionador_por_kg +
         entero * cfg.porcionador_entero +
