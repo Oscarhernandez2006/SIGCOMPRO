@@ -3250,8 +3250,8 @@ function ConfigProducto({
   const esKilo = (producto.um || "").trim().toUpperCase() === "KG";
   // Empaque al vacío y Porcionado solo aplican a productos que se venden por
   // kg; para productos de unidad se bloquean. Entero/Relajado/Molida también
-  // son solo para productos por kg (excluyentes con Porcionado): si no se
-  // elige ninguno, se toma como Entero por defecto.
+  // son solo para productos por kg (excluyentes con Porcionado), y NO se
+  // asume ninguno por defecto: solo aparece si la vendedora lo elige.
   const puedePorcionar = esKilo;
   const paso = esKilo ? 0.5 : 1;
   const minimo = esKilo ? 0.5 : 1;

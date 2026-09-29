@@ -452,7 +452,7 @@ function ModalTodosPuntos({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/50 p-2" onClick={onCerrar}>
       <div
-        className="flex h-[97vh] w-[98vw] max-w-none flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex h-[97vh] w-[94vw] max-w-none flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
@@ -475,7 +475,7 @@ function ModalTodosPuntos({
                   Punto de venta
                 </th>
                 {columnas.map((c) => (
-                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-2 py-2.5 text-center font-semibold text-brand-brown/70">
+                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-1.5 py-2.5 text-center font-semibold text-brand-brown/70">
                     {c.label}
                   </th>
                 ))}
@@ -491,15 +491,15 @@ function ModalTodosPuntos({
                   <tr key={p.id}>
                     <td className="whitespace-nowrap px-4 py-1.5 font-medium text-brand-black">{p.nombre}</td>
                     {columnas.map((c) => (
-                      <td key={c.key} className="px-1.5 py-1.5">
-                        <div className="flex items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-2 py-1.5">
+                      <td key={c.key} className="px-1 py-1">
+                        <div className="flex w-full items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-1.5 py-1.5">
                           {c.unidad !== "seg" && <span className="text-[11px] text-brand-brown/40">$</span>}
                           <input
                             type="number"
                             min="0"
                             value={form[c.key]}
                             onChange={(e) => setCampo(p.id, c.key, Number(e.target.value) || 0)}
-                            className="w-16 bg-transparent text-right text-xs font-semibold text-brand-black outline-none"
+                            className="w-full min-w-0 flex-1 bg-transparent text-right text-xs font-semibold text-brand-black outline-none"
                           />
                           {c.unidad === "seg" && <span className="text-[11px] text-brand-brown/40">s</span>}
                         </div>
