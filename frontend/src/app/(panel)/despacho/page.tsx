@@ -2366,11 +2366,18 @@ export default function DespachoPage() {
                               const nAlVacio = (p.carrito ?? []).filter((i) => i.alVacio).length;
                               if (nPorcionado === 0 && nAlVacio === 0) return null;
                               return (
-                                <p className="mt-1 text-[10px] font-medium text-brand-brown/60">
-                                  {nPorcionado > 0 && `${nPorcionado} item${nPorcionado === 1 ? "" : "s"} con Porcionado`}
-                                  {nPorcionado > 0 && nAlVacio > 0 && " · "}
-                                  {nAlVacio > 0 && `${nAlVacio} item${nAlVacio === 1 ? "" : "s"} empacado${nAlVacio === 1 ? "" : "s"} al vacío`}
-                                </p>
+                                <div className="mt-1 space-y-0.5">
+                                  {nPorcionado > 0 && (
+                                    <p className="text-[10px] font-semibold text-brand-wine">
+                                      {nPorcionado} item{nPorcionado === 1 ? "" : "s"} con Porcionado
+                                    </p>
+                                  )}
+                                  {nAlVacio > 0 && (
+                                    <p className="text-[10px] font-semibold text-brand-wine">
+                                      {nAlVacio} item{nAlVacio === 1 ? "" : "s"} empacado{nAlVacio === 1 ? "" : "s"} al vacío
+                                    </p>
+                                  )}
+                                </div>
                               );
                             })()}
                           </>
