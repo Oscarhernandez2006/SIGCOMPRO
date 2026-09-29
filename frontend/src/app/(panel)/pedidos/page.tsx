@@ -1255,10 +1255,10 @@ function DetalleCongelado({
                         {i.producto.producto || i.producto.referencia}{" "}
                         <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span>
                       </p>
-                      <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                      {i.alVacio && <p className="text-xs text-brand-brown/60">Empaque al vacío: Sí</p>}
-                      {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
-                      {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
+                      <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
+                      {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
+                      {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                      {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
                     </div>
                     <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                   </div>
@@ -2619,6 +2619,8 @@ export interface ItemCarrito {
   gramos: number;
   unidades: number;
   notas: string;
+  /** Preparación excluyente (solo productos de unidad, alternativa a Porcionado). */
+  preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
 }
 
 function UltimosPedidosModal({
@@ -3179,6 +3181,34 @@ function ResumenPedido({
 
 /* ---------- Sub-panel: configurar producto ---------- */
 
+/** Preparaciones excluyentes entre sí (y con Porcionado), solo para productos de unidad. */
+type Preparacion = "" | "ENTERO" | "RELAJADO" | "MOLIDA";
+const PREPARACIONES: Exclude<Preparacion, "">[] = ["ENTERO", "RELAJADO", "MOLIDA"];
+
+/** Separa el prefijo de preparación ("ENTERO / ...") de las notas libres, si lo tiene. */
+function parsePreparacionDeNotas(notas: string | undefined): { preparacion: Preparacion; resto: string } {
+  const n = (notas ?? "").trim();
+  const mayus = n.toUpperCase();
+  for (const p of PREPARACIONES) {
+    if (mayus === p) return { preparacion: p, resto: "" };
+    if (mayus.startsWith(`${p} / `)) return { preparacion: p, resto: n.slice(p.length + 3) };
+  }
+  return { preparacion: "", resto: n };
+}
+
+/** ¿Las notas repiten info que ya quedó en el corte/gramos/porciones del porcionado? */
+function notasDuplicanInfoPorcionado(notas: string, corte: string, gramos: string, unidades: string): boolean {
+  const n = notas.trim().toLowerCase();
+  if (!n) return false;
+  if (corte.trim().length > 2 && n.includes(corte.trim().toLowerCase())) return true;
+  const g = gramos.trim();
+  if (g && new RegExp(`\\b${g}\\s*(g|gr|grs|gramos)\\b`, "i").test(notas)) return true;
+  const u = unidades.trim();
+  if (u && new RegExp(`\\b${u}\\s*(und|unidades|porcion|porciones)\\b`, "i").test(notas)) return true;
+  if (/\b(porcionad[oa]|gramos|porciones|corte)\b/i.test(notas)) return true;
+  return false;
+}
+
 function ConfigProducto({
   producto,
   onCerrar,
@@ -3197,13 +3227,18 @@ function ConfigProducto({
   const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
-  const [notas, setNotas] = useState(inicial?.notas ?? "");
+  const notasIniciales = parsePreparacionDeNotas(inicial?.notas);
+  const [preparacion, setPreparacion] = useState<Preparacion>(notasIniciales.preparacion);
+  const [notas, setNotas] = useState(notasIniciales.resto);
 
   useEffect(() => {
     obtenerTiposCorteCache().then(setCortes).catch(() => {});
   }, []);
 
   const esKilo = (producto.um || "").trim().toUpperCase() === "KG";
+  // Empaque al vacío y Porcionado solo aplican a productos que se venden por
+  // kg; para productos de unidad se bloquean (en su lugar hay preparación).
+  const puedePorcionar = esKilo;
   const paso = esKilo ? 0.5 : 1;
   const minimo = esKilo ? 0.5 : 1;
   const cant = parseFloat(cantidad.replace(",", ".")) || 0;
@@ -3228,6 +3263,9 @@ function ConfigProducto({
   const exacto = porcionado && cortesG > 0 && cortesG === pesoG;
   const subtotal = producto.precio * cant;
   const pct = pesoG > 0 ? Math.min(100, (cortesG / pesoG) * 100) : 0;
+  // Evita que en las notas se repita lo que ya quedó guardado en el corte/
+  // gramos/porciones del porcionado (ej. escribir "churrasco 200g").
+  const notasDuplicanPorcionado = puedePorcionar && porcionado && notasDuplicanInfoPorcionado(notas, corte, gramos, unidades);
 
   function confirmar() {
     if (cant <= 0) return;
@@ -3236,16 +3274,21 @@ function ConfigProducto({
     // unidades válidas (y dentro de rango).
     if (porcionado && !corte.trim()) return;
     if (porcionado && (g <= 0 || u <= 0 || fueraRango)) return;
+    if (notasDuplicanPorcionado) return;
+    const notasFinal = preparacion
+      ? (notas.trim() ? `${preparacion} / ${notas.trim()}` : preparacion)
+      : notas.trim();
     onAgregar({
       id: inicial?.id ?? crypto.randomUUID(),
       producto,
       cantidad: cant,
-      alVacio,
-      porcionado,
-      corte: porcionado ? corte.trim() : "",
-      gramos: g,
-      unidades: u,
-      notas: notas.trim(),
+      alVacio: puedePorcionar ? alVacio : false,
+      porcionado: puedePorcionar ? porcionado : false,
+      corte: puedePorcionar && porcionado ? corte.trim() : "",
+      gramos: puedePorcionar ? g : 0,
+      unidades: puedePorcionar ? u : 0,
+      notas: notasFinal,
+      preparacion: puedePorcionar ? "" : preparacion,
     });
   }
 
@@ -3300,31 +3343,62 @@ function ConfigProducto({
             </div>
           </div>
 
-          {/* Empaque al vacío */}
+          {/* Empaque al vacío (solo productos por kg) */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-brand-black">Empaque al vacío</span>
+            <div>
+              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/40"}`}>Empaque al vacío</span>
+              {!puedePorcionar && <p className="text-[11px] text-brand-brown/40">Solo disponible para productos por kg</p>}
+            </div>
             <button
-              onClick={() => setAlVacio((v) => !v)}
-              title="Activar o desactivar empaque al vacío"
-              className={`relative h-6 w-11 rounded-full transition ${alVacio ? "bg-brand-wine" : "bg-brand-brown/20"}`}
+              onClick={() => puedePorcionar && setAlVacio((v) => !v)}
+              disabled={!puedePorcionar}
+              title={puedePorcionar ? "Activar o desactivar empaque al vacío" : "Solo disponible para productos por kg"}
+              className={`relative h-6 w-11 rounded-full transition ${alVacio && puedePorcionar ? "bg-brand-wine" : "bg-brand-brown/20"} ${!puedePorcionar ? "cursor-not-allowed opacity-50" : ""}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${alVacio ? "left-5" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${alVacio && puedePorcionar ? "left-5" : "left-0.5"}`} />
             </button>
           </div>
 
-          {/* Porcionado */}
+          {/* Porcionado (solo productos por kg) */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-brand-black">Porcionado</span>
+            <div>
+              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/40"}`}>Porcionado</span>
+              {!puedePorcionar && <p className="text-[11px] text-brand-brown/40">Solo disponible para productos por kg</p>}
+            </div>
             <button
-              onClick={() => setPorcionado((v) => !v)}
-              title="Activar o desactivar porcionado"
-              className={`relative h-6 w-11 rounded-full transition ${porcionado ? "bg-brand-wine" : "bg-brand-brown/20"}`}
+              onClick={() => puedePorcionar && setPorcionado((v) => !v)}
+              disabled={!puedePorcionar}
+              title={puedePorcionar ? "Activar o desactivar porcionado" : "Solo disponible para productos por kg"}
+              className={`relative h-6 w-11 rounded-full transition ${porcionado && puedePorcionar ? "bg-brand-wine" : "bg-brand-brown/20"} ${!puedePorcionar ? "cursor-not-allowed opacity-50" : ""}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${porcionado ? "left-5" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${porcionado && puedePorcionar ? "left-5" : "left-0.5"}`} />
             </button>
           </div>
 
-          {porcionado && (
+          {/* Preparación (solo productos de unidad): excluyente entre sí y con Porcionado. */}
+          {!puedePorcionar && (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">Preparación (opcional)</p>
+              <div className="grid grid-cols-3 gap-2">
+                {PREPARACIONES.map((op) => (
+                  <button
+                    key={op}
+                    type="button"
+                    onClick={() => setPreparacion((v) => (v === op ? "" : op))}
+                    className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                      preparacion === op
+                        ? "border-brand-wine bg-brand-wine text-white"
+                        : "border-brand-brown/15 text-brand-brown hover:bg-brand-cream-soft"
+                    }`}
+                  >
+                    {op.charAt(0) + op.slice(1).toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {puedePorcionar && porcionado && (
             <div className="rounded-xl bg-brand-cream-soft/50 p-3">
               <select
                 value={corte}
@@ -3484,9 +3558,18 @@ function ConfigProducto({
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
             rows={2}
-            placeholder="Notas del producto (opcional)"
+            placeholder={
+              puedePorcionar && porcionado
+                ? "Otras especificaciones (no repitas corte, gramos o porciones)"
+                : "Notas del producto (opcional)"
+            }
             className="w-full resize-none rounded-xl border border-brand-brown/15 px-3 py-2.5 text-sm outline-none focus:border-brand-amber"
           />
+          {notasDuplicanPorcionado && (
+            <p className="-mt-2 text-[11px] font-medium text-red-600">
+              Ya se guardó el corte/gramos/porciones arriba; escribe aquí solo otras indicaciones.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2 border-t border-brand-brown/10 px-5 py-4">
@@ -3495,13 +3578,19 @@ function ConfigProducto({
           </button>
           <button
             onClick={confirmar}
-            disabled={cant <= 0 || (porcionado && (!corte.trim() || g <= 0 || u <= 0 || fueraRango))}
+            disabled={
+              cant <= 0 ||
+              (porcionado && (!corte.trim() || g <= 0 || u <= 0 || fueraRango)) ||
+              notasDuplicanPorcionado
+            }
             title={
               porcionado && !corte.trim()
                 ? "Selecciona el tipo de corte para el porcionado"
-                : inicial
-                  ? "Guardar los cambios del producto"
-                  : "Agregar el producto al pedido"
+                : notasDuplicanPorcionado
+                  ? "Quita de las notas lo que ya está en el corte/gramos/porciones"
+                  : inicial
+                    ? "Guardar los cambios del producto"
+                    : "Agregar el producto al pedido"
             }
             className="flex-1 rounded-xl bg-brand-amber py-2.5 text-sm font-semibold text-white hover:bg-brand-amber/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -3864,14 +3953,14 @@ function PasoConfirmar({
 
       <Bloque titulo="Cliente">
         <p className="font-medium text-brand-black">{cliente?.nombre || "—"}</p>
-        <p className="text-xs text-brand-brown/60">{cliente?.nit_cedula}</p>
-        {cliente?.direccion && <p className="text-xs text-brand-brown/60">{cliente.direccion}</p>}
+        <p className="text-xs text-brand-brown/80">{cliente?.nit_cedula}</p>
+        {cliente?.direccion && <p className="text-xs text-brand-brown/80">{cliente.direccion}</p>}
         {(cliente?.barrio || cliente?.ciudad) && (
-          <p className="text-xs text-brand-brown/60">
+          <p className="text-xs text-brand-brown/80">
             {[cliente.barrio, cliente.ciudad].filter(Boolean).join(", ")}
           </p>
         )}
-        {cliente?.telefono && <p className="text-xs text-brand-brown/60">Tel: {cliente.telefono}</p>}
+        {cliente?.telefono && <p className="text-xs text-brand-brown/80">Tel: {cliente.telefono}</p>}
       </Bloque>
 
       <div className="rounded-xl border border-brand-brown/10 bg-white">
@@ -3885,13 +3974,13 @@ function PasoConfirmar({
                 <span className="font-medium text-brand-black">{i.producto.producto || i.producto.referencia}</span>
                 <span className="font-semibold text-brand-wine">{formatoCOP(i.producto.precio * i.cantidad)}</span>
               </div>
-              <p className="text-xs text-brand-brown/60">
+              <p className="text-xs text-brand-brown/80">
                 {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)}
                 {i.alVacio && " · Al vacío"}
                 {i.porcionado && ` · Porciones ${i.unidades} | Gramos ${i.gramos} grs.`}
                 {i.porcionado && i.corte && ` · ${i.corte}`}
               </p>
-              {i.notas && <p className="text-xs italic text-brand-brown/50">“{i.notas}”</p>}
+              {i.notas && <p className="text-xs italic text-brand-brown/80">“{i.notas}”</p>}
             </div>
           ))}
         </div>
@@ -4260,10 +4349,10 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 <div key={i.id} className="flex justify-between gap-2 rounded-lg bg-brand-cream-soft/30 px-3 py-2">
                   <div className="min-w-0">
                     <p className="font-medium text-brand-black break-words">{i.producto.producto} <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span></p>
-                    <p className="text-xs text-brand-brown/60">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                    {i.alVacio && <p className="text-xs text-brand-brown/60">Empaque al vacío: Sí</p>}
-                    {i.porcionado && <p className="text-xs text-brand-brown/60">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
-                    {i.notas && <p className="text-xs italic text-brand-brown/60">Nota: {i.notas}</p>}
+                    <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
+                    {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
+                    {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                    {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
                   </div>
                   <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                 </div>
@@ -4550,7 +4639,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     return `<div class="prod">
         <div class="pi">Ítem: ${i.producto.referencia}</div>
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
-        <div class="pl">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
+        <div class="pl pl-peso">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
         ${lineaVacio}${lineaPorc}${lineaNota}
       </div>`;
@@ -4605,6 +4694,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     .pi{font-size:11px}
     .pn{font-weight:bold;font-size:13px}
     .pl{margin:1px 0}
+    .pl-peso{font-size:14.5px}
     .pn-nota{color:#000;margin-top:1px}
     .tot{font-size:17px;font-weight:bold;margin:5px 0}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}

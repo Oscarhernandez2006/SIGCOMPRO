@@ -185,7 +185,9 @@ export class AuthService {
     }[]
   > {
     const res = await this.pool.query<{ id: string; nombre: string }>(
-      `SELECT id, nombre FROM puntos_venta WHERE activo = true ORDER BY nombre`,
+      // Mismo orden que el listado admin de puntos de venta (por id, no por
+      // nombre), para que la lista de claves se vea en el orden que ya conocen.
+      `SELECT id, nombre FROM puntos_venta WHERE activo = true ORDER BY id ASC`,
     );
     const duracion = AuthService.DURACION_CLAVE_MS / 1000;
     return res.rows.map((p) => {

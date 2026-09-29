@@ -15,6 +15,9 @@ export const ROLES_LIQUIDACION: { key: RolLiquidacion; label: string }[] = [
 export interface ConfigLiquidacion {
   porcionador_minimo: number;
   porcionador_por_kg: number;
+  porcionador_entero: number;
+  porcionador_relajado: number;
+  porcionador_molida: number;
   porcionador_seg_por_kg: number;
   televentas_por_pedido: number;
   caja_por_pedido: number;
@@ -24,6 +27,9 @@ export interface ConfigLiquidacion {
 export const CONFIG_DEFECTO: ConfigLiquidacion = {
   porcionador_minimo: 150000,
   porcionador_por_kg: 100,
+  porcionador_entero: 0,
+  porcionador_relajado: 0,
+  porcionador_molida: 0,
   porcionador_seg_por_kg: 20,
   televentas_por_pedido: 0,
   caja_por_pedido: 0,
@@ -116,6 +122,9 @@ export interface DetalleLiquidacion {
   fecha: string;
   persona: string;
   kilos: number;
+  entero: number;
+  relajado: number;
+  molida: number;
   prepMs: number | null;
   prepATiempo: boolean;
   entregaATiempo: boolean;
@@ -132,6 +141,14 @@ export interface ResumenPersona {
   puntoNombre: string;
   nPedidos: number;
   kilos: number;
+  entero: number;
+  relajado: number;
+  molida: number;
+  montoMinimo: number;
+  montoKilos: number;
+  montoEntero: number;
+  montoRelajado: number;
+  montoMolida: number;
   monto: number;
   minimoAplicado: boolean;
 }
@@ -149,6 +166,11 @@ function kilosDe(p: Pedido): number {
     const esKg = (i.producto?.um ?? "").trim().toUpperCase() === "KG";
     return s + (esKg ? Number(i.cantidad) || 0 : 0);
   }, 0);
+}
+
+/** Suma de unidades del carrito preparadas con una preparación dada (Entero/Relajado/Molida). */
+function cantidadPreparacionDe(p: Pedido, preparacion: "ENTERO" | "RELAJADO" | "MOLIDA"): number {
+  return (p.carrito ?? []).reduce((s, i) => s + (i.preparacion === preparacion ? Number(i.cantidad) || 0 : 0), 0);
 }
 
 const norm = (v?: string | null) => (v ?? "").trim();
@@ -201,6 +223,9 @@ export function calcularLiquidacion(
       puntoNombre,
       fecha: p.fecha,
       kilos,
+      entero: 0,
+      relajado: 0,
+      molida: 0,
       prepMs,
       prepATiempo,
       entregaATiempo,
@@ -228,14 +253,19 @@ export function calcularLiquidacion(
     };
 
     // Porcionador: si el alistamiento fue SEGMENTADO (varios porcionadores,
-    // uno por producto), cada quien se liquida por SU parte (kilos y tiempo de
-    // SU segmento), no por el pedido completo — así no se le paga a uno el
-    // trabajo del otro. El override manual (pagar sí/no) sigue siendo por
-    // pedido: afecta a todos los porcionadores de ese pedido por igual.
+    // uno por producto), cada quien se liquida por SU parte (kilos/unidades y
+    // tiempo de SU segmento), no por el pedido completo — así no se le paga a
+    // uno el trabajo del otro. El override manual (pagar sí/no) sigue siendo
+    // por pedido: afecta a todos los porcionadores de ese pedido por igual.
     if (m.segmentado && m.segmentos && m.segmentos.length > 0) {
       for (const seg of m.segmentos) {
         if (!norm(seg.porcionador)) continue;
-        const segKilos = String(seg.um ?? "").trim().toUpperCase() === "KG" ? Number(seg.cantidad) || 0 : 0;
+        const segEsKg = String(seg.um ?? "").trim().toUpperCase() === "KG";
+        const segKilos = segEsKg ? Number(seg.cantidad) || 0 : 0;
+        const segCantidad = !segEsKg ? Number(seg.cantidad) || 0 : 0;
+        const segEntero = seg.preparacion === "ENTERO" ? segCantidad : 0;
+        const segRelajado = seg.preparacion === "RELAJADO" ? segCantidad : 0;
+        const segMolida = seg.preparacion === "MOLIDA" ? segCantidad : 0;
         const segFinMs = seg.fin ? new Date(seg.fin).getTime() : null;
         const segInicioMs = seg.inicio ? new Date(seg.inicio).getTime() : null;
         const segPrepMs = segFinMs != null && segInicioMs != null ? segFinMs - segInicioMs : null;
@@ -243,8 +273,8 @@ export function calcularLiquidacion(
         const segRazonable =
           segPrepATiempo &&
           segPrepMs != null &&
-          segKilos > 0 &&
-          segPrepMs >= segKilos * cfg.porcionador_seg_por_kg * 1000;
+          (segKilos > 0 || segCantidad > 0) &&
+          (segKilos === 0 || segPrepMs >= segKilos * cfg.porcionador_seg_por_kg * 1000);
         const ov = overrides[`porcionador|${p.id}`];
         const pagar = ov ?? segRazonable;
         detalle.porcionador.push({
@@ -254,6 +284,9 @@ export function calcularLiquidacion(
           puntoNombre,
           fecha: p.fecha,
           kilos: segKilos,
+          entero: segEntero,
+          relajado: segRelajado,
+          molida: segMolida,
           prepMs: segPrepMs,
           prepATiempo: segPrepATiempo,
           entregaATiempo,
@@ -262,11 +295,39 @@ export function calcularLiquidacion(
           elegible: segRazonable,
           pagar,
           overridden: ov !== undefined && ov !== segRazonable,
-          monto: segKilos * cfg.porcionador_por_kg,
+          monto:
+            segKilos * cfg.porcionador_por_kg +
+            segEntero * cfg.porcionador_entero +
+            segRelajado * cfg.porcionador_relajado +
+            segMolida * cfg.porcionador_molida,
         });
       }
     } else {
-      agregar("porcionador", m.porcionador ?? "", razonable, kilos * cfg.porcionador_por_kg, razonable);
+      const entero = cantidadPreparacionDe(p, "ENTERO");
+      const relajado = cantidadPreparacionDe(p, "RELAJADO");
+      const molida = cantidadPreparacionDe(p, "MOLIDA");
+      const monto =
+        kilos * cfg.porcionador_por_kg +
+        entero * cfg.porcionador_entero +
+        relajado * cfg.porcionador_relajado +
+        molida * cfg.porcionador_molida;
+      const persona = m.porcionador ?? "";
+      if (norm(persona)) {
+        const ov = overrides[`porcionador|${p.id}`];
+        const pagar = ov ?? razonable;
+        detalle.porcionador.push({
+          ...base,
+          entero,
+          relajado,
+          molida,
+          persona: norm(persona),
+          razonable,
+          elegible: razonable,
+          pagar,
+          overridden: ov !== undefined && ov !== razonable,
+          monto,
+        });
+      }
     }
     agregar("televentas", p.vendedorNombre ?? "", prepATiempo, cfg.televentas_por_pedido);
     agregar("caja", m.despachadoPor ?? "", prepATiempo, cfg.caja_por_pedido);
@@ -287,6 +348,14 @@ export function calcularLiquidacion(
           puntoNombre: it.puntoNombre,
           nPedidos: 0,
           kilos: 0,
+          entero: 0,
+          relajado: 0,
+          molida: 0,
+          montoMinimo: 0,
+          montoKilos: 0,
+          montoEntero: 0,
+          montoRelajado: 0,
+          montoMolida: 0,
           monto: 0,
           minimoAplicado: false,
         };
@@ -295,15 +364,23 @@ export function calcularLiquidacion(
       if (it.pagar) {
         g.nPedidos += 1;
         g.kilos += it.kilos;
+        g.entero += it.entero;
+        g.relajado += it.relajado;
+        g.molida += it.molida;
       }
     }
     // Aplica la fórmula de cada rol.
     for (const g of grupos.values()) {
       const cfg = configs[g.puntoId] ?? CONFIG_DEFECTO;
       if (rol === "porcionador") {
-        const porKilos = g.kilos * cfg.porcionador_por_kg;
-        g.monto = Math.max(cfg.porcionador_minimo, porKilos);
-        g.minimoAplicado = porKilos < cfg.porcionador_minimo;
+        g.montoKilos = g.kilos * cfg.porcionador_por_kg;
+        g.montoEntero = g.entero * cfg.porcionador_entero;
+        g.montoRelajado = g.relajado * cfg.porcionador_relajado;
+        g.montoMolida = g.molida * cfg.porcionador_molida;
+        const porTrabajo = g.montoKilos + g.montoEntero + g.montoRelajado + g.montoMolida;
+        g.minimoAplicado = porTrabajo < cfg.porcionador_minimo;
+        g.montoMinimo = g.minimoAplicado ? cfg.porcionador_minimo : 0;
+        g.monto = Math.max(cfg.porcionador_minimo, porTrabajo);
       } else {
         const valor =
           rol === "televentas"
@@ -316,7 +393,11 @@ export function calcularLiquidacion(
     }
     const resumen = Array.from(grupos.values())
       .filter((g) => g.nPedidos > 0 || rol === "porcionador")
-      .sort((a, b) => b.monto - a.monto);
+      .sort((a, b) =>
+        rol === "porcionador"
+          ? a.puntoNombre.localeCompare(b.puntoNombre, "es") || b.monto - a.monto
+          : b.monto - a.monto,
+      );
     resultado[rol] = {
       detalle: items.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()),
       resumen,

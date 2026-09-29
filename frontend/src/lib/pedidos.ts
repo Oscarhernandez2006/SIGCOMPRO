@@ -14,6 +14,8 @@ export interface SegmentoAlistamiento {
   porcionador?: string;
   inicio?: string;
   fin?: string;
+  /** Preparación del ítem (solo productos de unidad: Entero/Relajado/Molida). */
+  preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
 }
 
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */

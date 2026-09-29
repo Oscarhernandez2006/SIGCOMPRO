@@ -11,8 +11,14 @@ import { PG_POOL } from '../database/database.module';
 export interface ConfigLiquidacion {
   /** Mínimo garantizado por quincena para porcionadores. */
   porcionador_minimo: number;
-  /** Pago por kilo procesado (porcionadores). */
+  /** Pago por kilo procesado (porcionadores, productos por kg = "Porcionado"). */
   porcionador_por_kg: number;
+  /** Pago por unidad preparada "Entero" (productos de unidad). */
+  porcionador_entero: number;
+  /** Pago por unidad preparada "Relajado" (productos de unidad). */
+  porcionador_relajado: number;
+  /** Pago por unidad preparada "Molida" (productos de unidad). */
+  porcionador_molida: number;
   /** Segundos mínimos por kilo para que un alistado sea "razonable". */
   porcionador_seg_por_kg: number;
   /** Valor por pedido preparado a tiempo (televentas). */
@@ -26,6 +32,9 @@ export interface ConfigLiquidacion {
 export const CONFIG_LIQUIDACION_DEFECTO: ConfigLiquidacion = {
   porcionador_minimo: 150000,
   porcionador_por_kg: 100,
+  porcionador_entero: 0,
+  porcionador_relajado: 0,
+  porcionador_molida: 0,
   porcionador_seg_por_kg: 20,
   televentas_por_pedido: 0,
   caja_por_pedido: 0,
@@ -72,6 +81,9 @@ export class LiquidacionVariableService implements OnModuleInit {
     return {
       porcionador_minimo: num(o.porcionador_minimo, CONFIG_LIQUIDACION_DEFECTO.porcionador_minimo),
       porcionador_por_kg: num(o.porcionador_por_kg, CONFIG_LIQUIDACION_DEFECTO.porcionador_por_kg),
+      porcionador_entero: num(o.porcionador_entero, CONFIG_LIQUIDACION_DEFECTO.porcionador_entero),
+      porcionador_relajado: num(o.porcionador_relajado, CONFIG_LIQUIDACION_DEFECTO.porcionador_relajado),
+      porcionador_molida: num(o.porcionador_molida, CONFIG_LIQUIDACION_DEFECTO.porcionador_molida),
       porcionador_seg_por_kg: num(o.porcionador_seg_por_kg, CONFIG_LIQUIDACION_DEFECTO.porcionador_seg_por_kg),
       televentas_por_pedido: num(o.televentas_por_pedido, CONFIG_LIQUIDACION_DEFECTO.televentas_por_pedido),
       caja_por_pedido: num(o.caja_por_pedido, CONFIG_LIQUIDACION_DEFECTO.caja_por_pedido),

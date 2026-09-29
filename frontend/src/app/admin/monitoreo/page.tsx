@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
@@ -62,6 +62,38 @@ export default function MonitoreoPage() {
   const [ahora, setAhora] = useState(Date.now());
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [generandoImagen, setGenerandoImagen] = useState(false);
+  // Mientras se genera la imagen, las listas internas de cada punto se
+  // expanden por completo (sin scroll) para que salgan TODOS los pedidos.
+  const [expandidoParaImagen, setExpandidoParaImagen] = useState(false);
+  const contenedorRef = useRef<HTMLDivElement>(null);
+
+  /** Descarga una sola imagen con el resumen completo (todos los registros, sin recortar por scroll). */
+  async function descargarImagen() {
+    if (!contenedorRef.current || generandoImagen) return;
+    setGenerandoImagen(true);
+    setExpandidoParaImagen(true);
+    try {
+      // Espera a que React vuelva a renderizar sin los límites de altura antes de capturar.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(contenedorRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+      });
+      const link = document.createElement("a");
+      const marca = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      link.download = `monitoreo-${marca}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch {
+      alert("No se pudo generar la imagen. Intenta de nuevo.");
+    } finally {
+      setExpandidoParaImagen(false);
+      setGenerandoImagen(false);
+    }
+  }
 
   useEffect(() => {
     const u = getUsuario();
@@ -201,12 +233,27 @@ export default function MonitoreoPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-wine">Monitoreo</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
-          Pedidos retrasados o por vencerse en cada punto de venta, en tiempo
-          real (los mismos que avisa la alerta de Despacho).
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">Monitoreo</h1>
+          <p className="mt-1 text-sm text-brand-brown/70">
+            Pedidos retrasados o por vencerse en cada punto de venta, en tiempo
+            real (los mismos que avisa la alerta de Despacho).
+          </p>
+        </div>
+        {!cargando && totalPedidos > 0 && (
+          <button
+            onClick={descargarImagen}
+            disabled={generandoImagen}
+            title="Descarga una sola imagen con todos los pedidos de todos los puntos, para compartirla"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-brand-wine/30 bg-white px-3 py-2 text-sm font-semibold text-brand-wine shadow-sm transition hover:bg-brand-wine/5 disabled:opacity-50"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            {generandoImagen ? "Generando imagen…" : "Descargar imagen"}
+          </button>
+        )}
       </div>
 
       {!cargando && totalPedidos > 0 && (
@@ -271,9 +318,9 @@ export default function MonitoreoPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div ref={contenedorRef} className="grid grid-cols-1 gap-4 bg-white p-1 md:grid-cols-2 xl:grid-cols-3">
           {puntosFiltrados.map((g) => (
-            <PuntoCard key={g.id} nombre={g.nombre} pedidos={g.pedidos} meta={meta} ahora={ahora} />
+            <PuntoCard key={g.id} nombre={g.nombre} pedidos={g.pedidos} meta={meta} ahora={ahora} expandido={expandidoParaImagen} />
           ))}
         </div>
       )}
@@ -286,11 +333,14 @@ function PuntoCard({
   pedidos,
   meta,
   ahora,
+  expandido,
 }: {
   nombre: string;
   pedidos: (Pedido & { _restante: number })[];
   meta: Record<string, DespachoMeta>;
   ahora: number;
+  /** Si es true, muestra TODOS los pedidos sin recortar por scroll (para la imagen). */
+  expandido?: boolean;
 }) {
   const vencidos = pedidos.filter((p) => p._restante <= 0).length;
   return (
@@ -305,7 +355,7 @@ function PuntoCard({
           {pedidos.length} {pedidos.length === 1 ? "pedido" : "pedidos"}
         </span>
       </div>
-      <div className="max-h-96 space-y-2 overflow-y-auto p-3">
+      <div className={`space-y-2 p-3 ${expandido ? "" : "max-h-96 overflow-y-auto"}`}>
         {pedidos.map((p) => {
           const m = meta[p.id] ?? {};
           const restEntrega = objetivoDespacho(p, m.pagoConfirmado) - ahora;

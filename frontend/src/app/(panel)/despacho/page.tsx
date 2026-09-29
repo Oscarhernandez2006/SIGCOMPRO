@@ -103,6 +103,7 @@ function segmentosIniciales(p: Pedido): SegmentoAlistamiento[] {
     producto: i.producto?.producto ?? "—",
     um: i.producto?.um ?? "",
     cantidad: Number(i.cantidad) || 0,
+    preparacion: i.preparacion ?? "",
   }));
 }
 
@@ -2360,6 +2361,18 @@ export default function DespachoPage() {
                                 Segmentación
                               </button>
                             )}
+                            {(() => {
+                              const nPorcionado = (p.carrito ?? []).filter((i) => i.porcionado).length;
+                              const nAlVacio = (p.carrito ?? []).filter((i) => i.alVacio).length;
+                              if (nPorcionado === 0 && nAlVacio === 0) return null;
+                              return (
+                                <p className="mt-1 text-[10px] font-medium text-brand-brown/60">
+                                  {nPorcionado > 0 && `${nPorcionado} item${nPorcionado === 1 ? "" : "s"} con Porcionado`}
+                                  {nPorcionado > 0 && nAlVacio > 0 && " · "}
+                                  {nAlVacio > 0 && `${nAlVacio} item${nAlVacio === 1 ? "" : "s"} empacado${nAlVacio === 1 ? "" : "s"} al vacío`}
+                                </p>
+                              );
+                            })()}
                           </>
                         )}
                       </div>
