@@ -4662,9 +4662,8 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     const lineaPorc = i.porcionado
       ? `<div class="pn-nota">Porcionado: ${i.unidades} und x ${i.gramos} g${i.corte ? ` · ${i.corte}` : ""}</div>`
       : "";
-    const lineaPrep = i.preparacion
-      ? `<div class="pn-nota">Preparación: ${ETIQUETA_PREPARACION[i.preparacion]}</div>`
-      : "";
+    // La preparación (Entero/Relajado/Molida) es solo para calcular el pago del
+    // porcionador puertas adentro: NO se imprime en la comanda/factura.
     const lineaNota = i.notas && i.notas.trim()
       ? `<div class="pn-nota" style="font-weight:bold">Nota: ${i.notas}</div>`
       : "";
@@ -4673,7 +4672,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
         <div class="pn">${(i.producto.producto || "").toUpperCase()}</div>
         <div class="pl pl-peso">Cantidad/Peso: <b>${cantidadLabel(i.cantidad, i.producto.um)}${esKilo ? ` (${librasLabel(i.cantidad)})` : ""}</b></div>
         <div class="pl">Valor: <b>${formatoCOP(i.producto.precio * i.cantidad)}</b></div>
-        ${lineaVacio}${lineaPorc}${lineaPrep}${lineaNota}
+        ${lineaVacio}${lineaPorc}${lineaNota}
       </div>`;
   };
   // Agrupa los productos por categoría (conservando el orden de aparición):
