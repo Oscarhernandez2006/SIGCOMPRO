@@ -421,6 +421,14 @@ function ModalTodosPuntos({
     setForms((prev) => ({ ...prev, [pid]: { ...(prev[pid] ?? CONFIG_DEFECTO), [k]: v } }));
   }
 
+  // ¿La fila tiene cambios sin guardar respecto a lo que ya está en el servidor?
+  function tieneCambios(pid: string): boolean {
+    const form = forms[pid];
+    if (!form) return false;
+    const original = configs[pid] ?? CONFIG_DEFECTO;
+    return JSON.stringify(form) !== JSON.stringify(original);
+  }
+
   async function guardarFila(pid: string) {
     setGuardando((prev) => ({ ...prev, [pid]: true }));
     setErrores((prev) => ({ ...prev, [pid]: "" }));
@@ -471,11 +479,11 @@ function ModalTodosPuntos({
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-brand-cream-soft">
               <tr>
-                <th className="whitespace-nowrap border-b border-brand-brown/10 px-4 py-2.5 text-left font-semibold text-brand-brown/70">
+                <th className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5 text-left font-semibold text-brand-brown/70">
                   Punto de venta
                 </th>
                 {columnas.map((c) => (
-                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-1.5 py-2.5 text-center font-semibold text-brand-brown/70">
+                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-1 py-2 text-center font-semibold text-brand-brown/70">
                     {c.label}
                   </th>
                 ))}
@@ -489,10 +497,10 @@ function ModalTodosPuntos({
                 const ok = guardadoId === p.id;
                 return (
                   <tr key={p.id}>
-                    <td className="whitespace-nowrap px-4 py-1.5 font-medium text-brand-black">{p.nombre}</td>
+                    <td className="whitespace-nowrap px-3 py-1.5 font-medium text-brand-black">{p.nombre}</td>
                     {columnas.map((c) => (
-                      <td key={c.key} className="px-1 py-1">
-                        <div className="flex w-full items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-1.5 py-1.5">
+                      <td key={c.key} className="px-0.5 py-1">
+                        <div className="flex w-full items-center gap-0.5 rounded-lg border border-brand-brown/15 bg-white px-1 py-1">
                           {c.unidad !== "seg" && <span className="text-[11px] text-brand-brown/40">$</span>}
                           <input
                             type="number"
@@ -505,11 +513,11 @@ function ModalTodosPuntos({
                         </div>
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                    <td className="whitespace-nowrap px-2 py-1.5 text-right">
                       <button
                         onClick={() => guardarFila(p.id)}
-                        disabled={guardando[p.id]}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-50 ${
+                        disabled={guardando[p.id] || !tieneCambios(p.id)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
                           ok ? "bg-green-600" : "bg-brand-wine hover:bg-brand-wine/90"
                         }`}
                       >
