@@ -2621,7 +2621,7 @@ export interface ItemCarrito {
   unidades: number;
   notas: string;
   /** Preparación excluyente (solo productos por kg, alternativa a Porcionado). */
-  preparacion?: "" | "ENTERO" | "RELAJADO" | "MOLIDA";
+  preparacion?: "" | "ENTERO" | "RELAJADO" | "PICADO" | "MOLIDA";
 }
 
 function UltimosPedidosModal({
@@ -3184,13 +3184,14 @@ function ResumenPedido({
 /* ---------- Sub-panel: configurar producto ---------- */
 
 /** Preparaciones excluyentes entre sí (y con Porcionado), solo para productos por kg. */
-type Preparacion = "" | "ENTERO" | "RELAJADO" | "MOLIDA";
-const PREPARACIONES: Exclude<Preparacion, "">[] = ["ENTERO", "RELAJADO", "MOLIDA"];
-/** Etiqueta visible de cada preparación ("Relajado" también cubre "Picado"). */
+type Preparacion = "" | "ENTERO" | "RELAJADO" | "PICADO" | "MOLIDA";
+const PREPARACIONES: Exclude<Preparacion, "">[] = ["ENTERO", "RELAJADO", "PICADO", "MOLIDA"];
+/** Etiqueta visible de cada preparación (para liquidación, Relajado y Picado se pagan y suman igual). */
 const ETIQUETA_PREPARACION: Record<Exclude<Preparacion, "">, string> = {
   ENTERO: "Entero",
-  RELAJADO: "Relajado o Picado",
-  MOLIDA: "Molida",
+  RELAJADO: "Relajado",
+  PICADO: "Picado",
+  MOLIDA: "Molido",
 };
 
 /** Separa el prefijo de preparación ("ENTERO / ...") de las notas libres, si lo tiene. */
@@ -3242,6 +3243,23 @@ function ConfigProducto({
     : parsePreparacionDeNotas(inicial?.notas);
   const [preparacion, setPreparacion] = useState<Preparacion>(notasIniciales.preparacion);
   const [notas, setNotas] = useState(notasIniciales.resto);
+
+  // Al elegir una preparación, se escribe de una vez en las notas (ej. "Relajado/ ")
+  // para que la persona siga escribiendo ahí mismo; al cambiar o quitar la
+  // selección, se reemplaza/quita solo ese prefijo, sin tocar el resto del texto.
+  function elegirPreparacion(op: Exclude<Preparacion, "">) {
+    setPreparacion((actual) => {
+      const siguiente = actual === op ? "" : op;
+      setNotas((actuales) => {
+        const prefijoActual = actual ? `${ETIQUETA_PREPARACION[actual]}/ ` : "";
+        const sinPrefijo = prefijoActual && actuales.startsWith(prefijoActual)
+          ? actuales.slice(prefijoActual.length)
+          : actuales;
+        return siguiente ? `${ETIQUETA_PREPARACION[siguiente]}/ ${sinPrefijo}` : sinPrefijo;
+      });
+      return siguiente;
+    });
+  }
 
   useEffect(() => {
     obtenerTiposCorteCache().then(setCortes).catch(() => {});
@@ -3387,8 +3405,13 @@ function ConfigProducto({
                 puedePorcionar &&
                 setPorcionado((v) => {
                   const siguiente = !v;
-                  // Excluyente con Entero/Relajado/Molida.
-                  if (siguiente) setPreparacion("");
+                  // Excluyente con Entero/Relajado/Picado/Molido: al activar
+                  // Porcionado se limpia la preparación y su prefijo en notas.
+                  if (siguiente && preparacion) {
+                    const prefijo = `${ETIQUETA_PREPARACION[preparacion]}/ `;
+                    setNotas((actuales) => (actuales.startsWith(prefijo) ? actuales.slice(prefijo.length) : actuales));
+                    setPreparacion("");
+                  }
                   return siguiente;
                 })
               }
@@ -3406,13 +3429,13 @@ function ConfigProducto({
               <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">
                 Preparación (opcional, solo si aplica)
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {PREPARACIONES.map((op) => (
                   <button
                     key={op}
                     type="button"
-                    onClick={() => setPreparacion((v) => (v === op ? "" : op))}
-                    className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                    onClick={() => elegirPreparacion(op)}
+                    className={`rounded-lg border px-1.5 py-2 text-xs font-semibold transition ${
                       preparacion === op
                         ? "border-brand-wine bg-brand-wine text-white"
                         : "border-brand-brown/15 text-brand-brown hover:bg-brand-cream-soft"

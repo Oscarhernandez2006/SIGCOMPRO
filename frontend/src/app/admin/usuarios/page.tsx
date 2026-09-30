@@ -68,8 +68,11 @@ export default function AdminUsuariosPage() {
   const [porEliminar, setPorEliminar] = useState<Usuario | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
-  // Búsqueda de la tabla de usuarios.
+  // Búsqueda y filtros de la tabla de usuarios.
   const [busqueda, setBusqueda] = useState("");
+  const [filtroPunto, setFiltroPunto] = useState("");
+  const [filtroRol, setFiltroRol] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<"" | "activo" | "inactivo">("");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -278,19 +281,36 @@ export default function AdminUsuariosPage() {
     );
   }
 
-  // Usuarios filtrados por la búsqueda y ordenados alfabéticamente por nombre.
+  // Usuarios filtrados por la búsqueda y los filtros, ordenados por nombre.
   const usuariosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    const lista = q
-      ? usuarios.filter(
-          (u) =>
-            u.nombre.toLowerCase().includes(q) ||
-            u.cedula.toLowerCase().includes(q) ||
-            u.rol.toLowerCase().includes(q),
-        )
-      : usuarios;
-    return [...lista].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-  }, [usuarios, busqueda]);
+    return usuarios
+      .filter(
+        (u) =>
+          !q ||
+          u.nombre.toLowerCase().includes(q) ||
+          u.cedula.toLowerCase().includes(q) ||
+          u.rol.toLowerCase().includes(q),
+      )
+      .filter((u) => !filtroRol || u.rol === filtroRol)
+      .filter((u) => !filtroEstado || (filtroEstado === "activo" ? u.activo : !u.activo))
+      .filter((u) => !filtroPunto || (puntosPorUsuario[u.id] ?? []).includes(filtroPunto))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [usuarios, busqueda, filtroRol, filtroEstado, filtroPunto, puntosPorUsuario]);
+
+  // Roles realmente en uso (para el filtro), combinados con los sugeridos.
+  const rolesDisponibles = useMemo(() => {
+    const set = new Set<string>([...ROLES_SUGERIDOS, ...usuarios.map((u) => u.rol)].filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [usuarios]);
+
+  const hayFiltrosActivos = Boolean(busqueda || filtroRol || filtroEstado || filtroPunto);
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFiltroRol("");
+    setFiltroEstado("");
+    setFiltroPunto("");
+  }
 
   const puntosFiltrados = useMemo(() => {
     const q = buscarPunto.trim().toLowerCase();
@@ -408,6 +428,48 @@ export default function AdminUsuariosPage() {
             </button>
           )}
         </div>
+        <select
+          value={filtroPunto}
+          onChange={(e) => setFiltroPunto(e.target.value)}
+          title="Filtrar por punto de venta"
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        >
+          <option value="">Todos los puntos</option>
+          {puntos.map((p) => (
+            <option key={p.id} value={p.nombre}>{p.nombre}</option>
+          ))}
+        </select>
+        <select
+          value={filtroRol}
+          onChange={(e) => setFiltroRol(e.target.value)}
+          title="Filtrar por rol"
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        >
+          <option value="">Todos los roles</option>
+          {rolesDisponibles.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value as "" | "activo" | "inactivo")}
+          title="Filtrar por estado"
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        >
+          <option value="">Todos los estados</option>
+          <option value="activo">Activos</option>
+          <option value="inactivo">Inactivos</option>
+        </select>
+        {hayFiltrosActivos && (
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            title="Limpiar todos los filtros"
+            className="rounded-xl border border-brand-brown/15 px-3 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+          >
+            Limpiar filtros
+          </button>
+        )}
         <span className="text-xs text-brand-brown/50">
           {usuariosFiltrados.length} de {usuarios.length}
         </span>

@@ -177,14 +177,15 @@ function kilosDe(p: Pedido): number {
 
 /**
  * Kilos de productos por kg que NO están Porcionados, clasificados como
- * Entero/Relajado/Molida (si no se elige ninguno, se toma como Entero por
- * defecto). Se pagan a la tarifa de esa preparación, no a la de "Porcionado".
+ * Entero/Relajado/Picado/Molido (si no se elige ninguno, se toma como Entero
+ * por defecto). Relajado y Picado se pagan y suman en el mismo bucket. Se
+ * pagan a la tarifa de esa preparación, no a la de "Porcionado".
  */
-function cantidadPreparacionDe(p: Pedido, preparacion: "ENTERO" | "RELAJADO" | "MOLIDA"): number {
+function cantidadPreparacionDe(p: Pedido, tipos: Array<"ENTERO" | "RELAJADO" | "PICADO" | "MOLIDA">): number {
   return (p.carrito ?? []).reduce((s, i) => {
     if (!esKgSinPorcionar(i)) return s;
     const efectiva = i.preparacion || "ENTERO";
-    return s + (efectiva === preparacion ? Number(i.cantidad) || 0 : 0);
+    return s + (tipos.includes(efectiva) ? Number(i.cantidad) || 0 : 0);
   }, 0);
 }
 
@@ -213,9 +214,9 @@ export function calcularLiquidacion(
     const puntoNombre = p.punto?.nombre ?? "—";
     const cfg = configs[puntoId] ?? CONFIG_DEFECTO;
     const kilos = kilosDe(p);
-    const entero = cantidadPreparacionDe(p, "ENTERO");
-    const relajado = cantidadPreparacionDe(p, "RELAJADO");
-    const molida = cantidadPreparacionDe(p, "MOLIDA");
+    const entero = cantidadPreparacionDe(p, ["ENTERO"]);
+    const relajado = cantidadPreparacionDe(p, ["RELAJADO", "PICADO"]);
+    const molida = cantidadPreparacionDe(p, ["MOLIDA"]);
     const kilosTotal = kilos + entero + relajado + molida;
     const pc = m.pagoConfirmado ?? null;
 
@@ -282,11 +283,12 @@ export function calcularLiquidacion(
         if (!norm(seg.porcionador)) continue;
         const segEsKg = String(seg.um ?? "").trim().toUpperCase() === "KG";
         // Sin preparación = Porcionado (corte/gramos/porciones); con
-        // preparación (Entero/Relajado/Molida) se paga a esa tarifa por kg.
+        // preparación (Entero/Relajado/Picado/Molido) se paga a esa tarifa por
+        // kg. Relajado y Picado se pagan y suman en el mismo bucket.
         const segKilos = segEsKg && !seg.preparacion ? Number(seg.cantidad) || 0 : 0;
         const segKgPrep = segEsKg && seg.preparacion ? Number(seg.cantidad) || 0 : 0;
         const segEntero = seg.preparacion === "ENTERO" ? segKgPrep : 0;
-        const segRelajado = seg.preparacion === "RELAJADO" ? segKgPrep : 0;
+        const segRelajado = seg.preparacion === "RELAJADO" || seg.preparacion === "PICADO" ? segKgPrep : 0;
         const segMolida = seg.preparacion === "MOLIDA" ? segKgPrep : 0;
         const segFinMs = seg.fin ? new Date(seg.fin).getTime() : null;
         const segInicioMs = seg.inicio ? new Date(seg.inicio).getTime() : null;

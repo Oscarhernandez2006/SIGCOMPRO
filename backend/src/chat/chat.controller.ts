@@ -21,6 +21,13 @@ export class ChatController {
     return this.chat.contactos(req.user!.sub);
   }
 
+  /** "Ping" de presencia: el frontend lo llama periódicamente mientras la app está abierta. */
+  @Post('heartbeat')
+  async heartbeat(@Req() req: ReqAuth) {
+    await this.chat.heartbeat(req.user!.sub);
+    return { ok: true };
+  }
+
   @Get('no-leidos')
   async noLeidos(@Req() req: ReqAuth) {
     const total = await this.chat.noLeidosTotal(req.user!.sub);

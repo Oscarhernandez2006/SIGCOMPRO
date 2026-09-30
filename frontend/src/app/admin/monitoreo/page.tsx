@@ -63,25 +63,22 @@ export default function MonitoreoPage() {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [generandoImagen, setGenerandoImagen] = useState(false);
-  // Mientras se genera la imagen, las listas internas de cada punto se
-  // expanden por completo (sin scroll) para que salgan TODOS los pedidos.
-  const [expandidoParaImagen, setExpandidoParaImagen] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
+  // Tabla oculta (fuera de pantalla) que se usa SOLO para exportar la imagen:
+  // una lista simple en vez del tablero, para que sea fácil de leer al compartirla.
+  const tablaExportRef = useRef<HTMLDivElement>(null);
 
-  /** Descarga una sola imagen con el resumen completo (todos los registros, sin recortar por scroll). */
+  /** Descarga una sola imagen en forma de LISTA (no el tablero), con todos los pedidos filtrados. */
   async function descargarImagen() {
-    if (!contenedorRef.current || generandoImagen) return;
+    if (!tablaExportRef.current || generandoImagen) return;
     setGenerandoImagen(true);
-    setExpandidoParaImagen(true);
     try {
-      // Espera a que React vuelva a renderizar sin los límites de altura antes de capturar.
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       // html-to-image (no html2canvas): dibuja el DOM real vía <foreignObject>
       // de un SVG, así que soporta los colores modernos que genera Tailwind v4
       // (oklch/color-mix), que html2canvas no sabe interpretar y hacía fallar
       // la captura en esta página.
       const { toPng } = await import("html-to-image");
-      const dataUrl = await toPng(contenedorRef.current, {
+      const dataUrl = await toPng(tablaExportRef.current, {
         backgroundColor: "#ffffff",
         pixelRatio: 2,
       });
@@ -94,7 +91,6 @@ export default function MonitoreoPage() {
       console.error("No se pudo generar la imagen de Monitoreo:", e);
       alert("No se pudo generar la imagen. Intenta de nuevo.");
     } finally {
-      setExpandidoParaImagen(false);
       setGenerandoImagen(false);
     }
   }
@@ -221,6 +217,38 @@ export default function MonitoreoPage() {
     return puntosEnRiesgo.filter((g) => g.nombre.toLowerCase().includes(q));
   }, [puntosEnRiesgo, busqueda]);
 
+  // Misma información de los cards, aplanada en filas para la imagen-lista.
+  const filasTabla = useMemo(() => {
+    const filas: {
+      punto: string;
+      comanda: string;
+      cliente: string;
+      estado: string;
+      horaEntro: string;
+      alistamiento: string;
+      despacho: string;
+      vencido: boolean;
+    }[] = [];
+    for (const g of puntosFiltrados) {
+      for (const p of g.pedidos) {
+        const m = meta[p.id] ?? {};
+        const restEntrega = objetivoDespacho(p, m.pagoConfirmado) - ahora;
+        const restPrep = deadlinePreparacion(p, m.pagoConfirmado) - ahora;
+        filas.push({
+          punto: g.nombre,
+          comanda: p.comanda,
+          cliente: p.cliente?.nombre || p.cliente?.nit_cedula || "—",
+          estado: p.estado ?? "—",
+          horaEntro: fmtHora(p.fecha),
+          alistamiento: `${restPrep <= 0 ? "-" : ""}${fmtCronometro(restPrep)}`,
+          despacho: `${restEntrega <= 0 ? "-" : ""}${fmtCronometro(restEntrega)}`,
+          vencido: p._restante <= 0,
+        });
+      }
+    }
+    return filas;
+  }, [puntosFiltrados, meta, ahora]);
+
   // Cuántos pedidos en riesgo hay en cada paso del proceso (para la secuencia).
   const conteoPorEstado = useMemo(() => {
     const conteo = new Map<string, number>();
@@ -324,10 +352,52 @@ export default function MonitoreoPage() {
       ) : (
         <div ref={contenedorRef} className="grid grid-cols-1 gap-4 bg-white p-1 md:grid-cols-2 xl:grid-cols-3">
           {puntosFiltrados.map((g) => (
-            <PuntoCard key={g.id} nombre={g.nombre} pedidos={g.pedidos} meta={meta} ahora={ahora} expandido={expandidoParaImagen} />
+            <PuntoCard key={g.id} nombre={g.nombre} pedidos={g.pedidos} meta={meta} ahora={ahora} />
           ))}
         </div>
       )}
+
+      {/* Tabla oculta (fuera de pantalla), usada solo para exportar la imagen-lista. */}
+      <div className="pointer-events-none fixed left-[-99999px] top-0" aria-hidden="true">
+        <div ref={tablaExportRef} className="w-[1100px] bg-white p-6">
+          <h2 className="mb-3 font-serif text-xl font-bold text-brand-wine">
+            Monitoreo — pedidos retrasados o por vencerse
+          </h2>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b-2 border-brand-brown/20 text-left text-xs uppercase tracking-wide text-brand-brown/60">
+                <th className="px-2 py-2">Punto</th>
+                <th className="px-2 py-2">Comanda</th>
+                <th className="px-2 py-2">Cliente</th>
+                <th className="px-2 py-2">Estado</th>
+                <th className="px-2 py-2">Hora que entró</th>
+                <th className="px-2 py-2">Tiempo en Alistamiento</th>
+                <th className="px-2 py-2">Tiempo en Despacho</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filasTabla.map((f, i) => (
+                <tr
+                  key={i}
+                  className={`border-b border-brand-brown/10 ${f.vencido ? "bg-red-50" : "bg-amber-50/60"}`}
+                >
+                  <td className="px-2 py-1.5 font-medium text-brand-black">{f.punto}</td>
+                  <td className="px-2 py-1.5 text-brand-black">{f.comanda}</td>
+                  <td className="px-2 py-1.5 text-brand-brown/80">{f.cliente}</td>
+                  <td className="px-2 py-1.5 text-brand-brown/80">{f.estado}</td>
+                  <td className="px-2 py-1.5 text-brand-brown/80">{f.horaEntro}</td>
+                  <td className={`px-2 py-1.5 font-semibold ${f.alistamiento.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                    {f.alistamiento}
+                  </td>
+                  <td className={`px-2 py-1.5 font-semibold ${f.despacho.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                    {f.despacho}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -337,14 +407,11 @@ function PuntoCard({
   pedidos,
   meta,
   ahora,
-  expandido,
 }: {
   nombre: string;
   pedidos: (Pedido & { _restante: number })[];
   meta: Record<string, DespachoMeta>;
   ahora: number;
-  /** Si es true, muestra TODOS los pedidos sin recortar por scroll (para la imagen). */
-  expandido?: boolean;
 }) {
   const vencidos = pedidos.filter((p) => p._restante <= 0).length;
   return (
@@ -359,7 +426,7 @@ function PuntoCard({
           {pedidos.length} {pedidos.length === 1 ? "pedido" : "pedidos"}
         </span>
       </div>
-      <div className={`space-y-2 p-3 ${expandido ? "" : "max-h-96 overflow-y-auto"}`}>
+      <div className="space-y-2 p-3 max-h-96 overflow-y-auto">
         {pedidos.map((p) => {
           const m = meta[p.id] ?? {};
           const restEntrega = objetivoDespacho(p, m.pagoConfirmado) - ahora;

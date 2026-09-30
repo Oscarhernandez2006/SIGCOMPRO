@@ -84,9 +84,14 @@ export interface GrupoChatDetalle {
   miembros: MiembroGrupoChat[];
 }
 
-/** Lista de todos los usuarios con los que se puede chatear + resumen de la conversación. */
+/** Lista de todos los usuarios ACTIVOS ahora (logeados/con la app abierta) + resumen de la conversación. */
 export function listarContactosChat(): Promise<ContactoChat[]> {
   return apiFetch<ContactoChat[]>("/chat/contactos");
+}
+
+/** "Ping" de presencia: marca al usuario como activo ahora mismo. */
+export function enviarHeartbeatChat(): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>("/chat/heartbeat", { method: "POST" });
 }
 
 /** Total de mensajes sin leer (para el globo de la burbuja flotante). */

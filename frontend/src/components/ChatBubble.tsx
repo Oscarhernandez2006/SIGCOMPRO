@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getUsuario } from "@/lib/auth";
 import {
   listarContactosChat,
+  enviarHeartbeatChat,
   historialChat,
   enviarMensajeChat,
   listarGruposChat,
@@ -186,6 +187,7 @@ export default function ChatBubble() {
         const [datosContactos, datosGrupos] = await Promise.all([
           listarContactosChat(),
           listarGruposChat().catch(() => [] as GrupoChatResumen[]),
+          enviarHeartbeatChat().catch(() => null),
         ]);
         if (cancelado) return;
         setContactos(datosContactos);
@@ -435,7 +437,7 @@ export default function ChatBubble() {
               <div className="flex-1 overflow-y-auto">
                 {gruposFiltrados.length === 0 && contactosFiltrados.length === 0 && (
                   <p className="px-4 py-6 text-center text-sm text-brand-brown/50">
-                    Sin usuarios para mostrar.
+                    {busqueda ? "Sin usuarios para mostrar." : "Nadie más está conectado ahora mismo."}
                   </p>
                 )}
                 {gruposFiltrados.length > 0 && (
@@ -477,7 +479,7 @@ export default function ChatBubble() {
                 ))}
                 {contactosFiltrados.length > 0 && (
                   <p className="px-4 pt-2 text-[11px] font-bold uppercase tracking-wide text-brand-brown/40">
-                    Contactos
+                    Conectados ahora
                   </p>
                 )}
                 {contactosFiltrados.map((c) => (

@@ -168,9 +168,21 @@ export class ChatService implements OnModuleInit {
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_mensajes_chat_grupo ON mensajes_chat (grupo_id, creado_en)`,
     );
+
+    // Presencia: última vez que el usuario tuvo la app abierta (heartbeat del frontend).
+    await this.pool.query(
+      `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acceso timestamptz`,
+    );
   }
 
-  /** Todos los usuarios (menos yo) con su rol, puntos asignados y resumen de la conversación. */
+  /** Marca al usuario como activo ahora mismo (heartbeat de presencia). */
+  async heartbeat(usuarioId: string): Promise<void> {
+    await this.pool.query(`UPDATE usuarios SET ultimo_acceso = now() WHERE id = $1::bigint`, [
+      usuarioId,
+    ]);
+  }
+
+  /** Usuarios ACTIVOS ahora (heartbeat reciente) menos yo, con su resumen de conversación. */
   async contactos(usuarioId: string): Promise<ContactoChat[]> {
     const usuarios = await this.pool.query<{
       id: string;
@@ -185,6 +197,7 @@ export class ChatService implements OnModuleInit {
        LEFT JOIN usuario_punto_venta upv ON upv.usuario_id = u.id
        LEFT JOIN puntos_venta pv ON pv.id = upv.punto_venta_id
        WHERE u.id <> $1::bigint
+         AND u.ultimo_acceso > now() - interval '5 minutes'
        GROUP BY u.id, u.nombre, u.rol, u.activo
        ORDER BY u.nombre ASC`,
       [usuarioId],

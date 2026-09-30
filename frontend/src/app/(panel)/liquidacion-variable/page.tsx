@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
@@ -236,8 +236,8 @@ export default function LiquidacionVariablePage() {
                         <th className="px-3 py-2 text-right">Mínimo</th>
                         <th className="px-3 py-2 text-right">Porcionado (kg)</th>
                         <th className="px-3 py-2 text-right">Entero (kg)</th>
-                        <th className="px-3 py-2 text-right">Molida (kg)</th>
-                        <th className="px-3 py-2 text-right">Relajado (kg)</th>
+                        <th className="px-3 py-2 text-right">Relajado o Picado (kg)</th>
+                        <th className="px-3 py-2 text-right">Molido (kg)</th>
                       </>
                     ) : (
                       <th className="px-4 py-2 text-right">Pedidos pagados</th>
@@ -259,8 +259,8 @@ export default function LiquidacionVariablePage() {
                           </td>
                           <CeldaKgPlata kg={g.kilos} monto={g.montoKilos} />
                           <CeldaKgPlata kg={g.entero} monto={g.montoEntero} />
-                          <CeldaKgPlata kg={g.molida} monto={g.montoMolida} />
                           <CeldaKgPlata kg={g.relajado} monto={g.montoRelajado} />
+                          <CeldaKgPlata kg={g.molida} monto={g.montoMolida} />
                         </>
                       ) : (
                         <td className="px-4 py-2.5 text-right">{g.nPedidos}</td>
@@ -401,13 +401,13 @@ function ModalTodosPuntos({
   onGuardado: (puntoId: string, config: ConfigLiquidacion) => void;
 }) {
   const [forms, setForms] = useState<Record<string, ConfigLiquidacion>>({});
-  const [guardando, setGuardando] = useState<Record<string, boolean>>({});
-  const [errores, setErrores] = useState<Record<string, string>>({});
-  const [guardadoId, setGuardadoId] = useState<string | null>(null);
-  // Fila cuyo panel de "replicar a otros puntos" está abierto, y qué puntos
-  // adicionales tiene marcados cada fila para copiarle los mismos valores.
-  const [replicarAbierto, setReplicarAbierto] = useState<string | null>(null);
-  const [extra, setExtra] = useState<Record<string, Set<string>>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [guardadoFlash, setGuardadoFlash] = useState<Set<string>>(new Set());
+  // Punto desde el que se está replicando (null = modo normal) y los puntos
+  // destino marcados para recibir esos mismos valores.
+  const [replicarDesde, setReplicarDesde] = useState<string | null>(null);
+  const [seleccionReplicar, setSeleccionReplicar] = useState<Set<string>>(new Set());
 
   // Toma el valor de cada punto la primera vez que aparece, sin pisar lo que
   // la usuaria ya esté editando en la fila.
@@ -433,50 +433,63 @@ function ModalTodosPuntos({
     return JSON.stringify(form) !== JSON.stringify(original);
   }
 
-  function toggleExtra(pid: string, destinoId: string) {
-    setExtra((prev) => {
-      const set = new Set(prev[pid] ?? []);
-      if (set.has(destinoId)) set.delete(destinoId);
-      else set.add(destinoId);
-      return { ...prev, [pid]: set };
-    });
+  function iniciarReplicar(pid: string) {
+    setReplicarDesde(pid);
+    setSeleccionReplicar(new Set());
   }
 
-  /** Guarda los valores de la fila `pid` en ese punto y, opcionalmente, en `destinos` adicionales. */
-  async function guardarConDestinos(pid: string, destinos: string[]) {
-    const todos = [pid, ...destinos];
-    const form = forms[pid] ?? CONFIG_DEFECTO;
-    setGuardando((prev) => {
-      const next = { ...prev };
-      for (const id of todos) next[id] = true;
+  function cancelarReplicar() {
+    setReplicarDesde(null);
+    setSeleccionReplicar(new Set());
+  }
+
+  function toggleDestino(pid: string) {
+    setSeleccionReplicar((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
       return next;
     });
-    setErrores((prev) => ({ ...prev, [pid]: "" }));
-    try {
-      const resultados = await Promise.all(todos.map((id) => guardarConfigLiquidacion(id, form)));
-      setForms((prev) => {
-        const next = { ...prev };
-        todos.forEach((id, i) => { next[id] = resultados[i]; });
-        return next;
-      });
-      todos.forEach((id, i) => onGuardado(id, resultados[i]));
-      setGuardadoId(pid);
-      setTimeout(() => setGuardadoId((v) => (v === pid ? null : v)), 1500);
-      setReplicarAbierto(null);
-      setExtra((prev) => ({ ...prev, [pid]: new Set() }));
-    } catch (e) {
-      setErrores((prev) => ({ ...prev, [pid]: e instanceof Error ? e.message : "No se pudo guardar en uno o más puntos." }));
-    } finally {
-      setGuardando((prev) => {
-        const next = { ...prev };
-        for (const id of todos) next[id] = false;
-        return next;
-      });
-    }
   }
 
-  function guardarFila(pid: string) {
-    return guardarConDestinos(pid, []);
+  const hayCambiosSueltos = puntos.some((p) => tieneCambios(p.id));
+  const puedeGuardar = replicarDesde !== null || hayCambiosSueltos;
+
+  /** Botón único: si se está replicando, propaga esos valores; si no, guarda todas las filas modificadas. */
+  async function guardarGeneral() {
+    setGuardando(true);
+    setError(null);
+    try {
+      if (replicarDesde) {
+        const todos = [replicarDesde, ...Array.from(seleccionReplicar)];
+        const form = forms[replicarDesde] ?? CONFIG_DEFECTO;
+        const resultados = await Promise.all(todos.map((id) => guardarConfigLiquidacion(id, form)));
+        setForms((prev) => {
+          const next = { ...prev };
+          todos.forEach((id, i) => { next[id] = resultados[i]; });
+          return next;
+        });
+        todos.forEach((id, i) => onGuardado(id, resultados[i]));
+        setGuardadoFlash(new Set(todos));
+        cancelarReplicar();
+      } else {
+        const pendientes = puntos.map((p) => p.id).filter((id) => tieneCambios(id));
+        if (pendientes.length === 0) return;
+        const resultados = await Promise.all(pendientes.map((id) => guardarConfigLiquidacion(id, forms[id] ?? CONFIG_DEFECTO)));
+        setForms((prev) => {
+          const next = { ...prev };
+          pendientes.forEach((id, i) => { next[id] = resultados[i]; });
+          return next;
+        });
+        pendientes.forEach((id, i) => onGuardado(id, resultados[i]));
+        setGuardadoFlash(new Set(pendientes));
+      }
+      setTimeout(() => setGuardadoFlash(new Set()), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar en uno o más puntos.");
+    } finally {
+      setGuardando(false);
+    }
   }
 
   const columnas: { key: keyof ConfigLiquidacion; label: string; unidad?: "seg" }[] = [
@@ -484,8 +497,8 @@ function ModalTodosPuntos({
     { key: "porcionador_por_kg", label: "Porcionado (kg)" },
     { key: "porcionador_seg_por_kg", label: "Seg. mínimos/kg", unidad: "seg" },
     { key: "porcionador_entero", label: "Entero (kg)" },
-    { key: "porcionador_molida", label: "Molida (kg)" },
-    { key: "porcionador_relajado", label: "Relajado (kg)" },
+    { key: "porcionador_relajado", label: "Relajado o Picado (kg)" },
+    { key: "porcionador_molida", label: "Molido (kg)" },
     { key: "televentas_por_pedido", label: "Televentas" },
     { key: "caja_por_pedido", label: "Caja" },
     { key: "facturacion_por_pedido", label: "Facturación" },
@@ -501,12 +514,28 @@ function ModalTodosPuntos({
           <div>
             <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de liquidación</h3>
             <p className="text-xs text-brand-brown/50">
-              Todos los puntos en una sola pantalla: edita los valores de la fila y guarda con el botón de la derecha.
+              {replicarDesde
+                ? "Marca los puntos que también recibirán estos valores y guarda arriba."
+                : "Edita los valores y guarda con el botón de arriba. Usa \"Replicar\" para copiarlos a otros puntos."}
             </p>
           </div>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {error && <p className="max-w-xs text-right text-xs text-red-600">{error}</p>}
+            <button
+              onClick={guardarGeneral}
+              disabled={guardando || !puedeGuardar}
+              className="rounded-xl bg-brand-wine px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-wine/90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {guardando
+                ? "Guardando…"
+                : replicarDesde
+                  ? `Guardar (${seleccionReplicar.size + 1} puntos)`
+                  : "Guardar"}
+            </button>
+            <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -521,20 +550,18 @@ function ModalTodosPuntos({
                     {c.label}
                   </th>
                 ))}
-                <th className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5" />
+                <th className="whitespace-nowrap border-b border-brand-brown/10 px-2 py-2.5 text-center font-semibold text-brand-brown/70">
+                  Replicar
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-brown/5">
               {puntos.map((p) => {
                 const form = forms[p.id] ?? configs[p.id] ?? CONFIG_DEFECTO;
-                const err = errores[p.id];
-                const ok = guardadoId === p.id;
-                const otros = puntos.filter((o) => o.id !== p.id);
-                const seleccion = extra[p.id] ?? new Set<string>();
-                const abierto = replicarAbierto === p.id;
+                const esOrigen = replicarDesde === p.id;
+                const esDestinoPosible = replicarDesde !== null && !esOrigen;
                 return (
-                  <Fragment key={p.id}>
-                  <tr>
+                  <tr key={p.id} className={guardadoFlash.has(p.id) ? "bg-green-50" : undefined}>
                     <td className="whitespace-nowrap px-3 py-1.5 font-medium text-brand-black">{p.nombre}</td>
                     {columnas.map((c) => (
                       <td key={c.key} className="px-0.5 py-1">
@@ -551,97 +578,38 @@ function ModalTodosPuntos({
                         </div>
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-2 py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {otros.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setReplicarAbierto((v) => (v === p.id ? null : p.id))}
-                            title="Copiar estos valores a otros puntos de venta"
-                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                              abierto
-                                ? "border-brand-wine bg-brand-wine/10 text-brand-wine"
-                                : "border-brand-brown/15 text-brand-brown hover:bg-brand-cream-soft"
-                            }`}
-                          >
-                            Replicar
-                          </button>
-                        )}
+                    <td className="whitespace-nowrap px-2 py-1.5 text-center">
+                      {esOrigen && (
                         <button
-                          onClick={() => guardarFila(p.id)}
-                          disabled={guardando[p.id] || !tieneCambios(p.id)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                            ok ? "bg-green-600" : "bg-brand-wine hover:bg-brand-wine/90"
-                          }`}
+                          type="button"
+                          onClick={cancelarReplicar}
+                          title="Cancelar la replicación"
+                          className="rounded-lg border border-brand-wine bg-brand-wine/10 px-2 py-1.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/20"
                         >
-                          {guardando[p.id] ? "Guardando…" : ok ? "Guardado ✓" : "Guardar"}
+                          Replicando ✕
                         </button>
-                      </div>
-                      {err && <p className="mt-1 text-[10px] text-red-600">{err}</p>}
+                      )}
+                      {esDestinoPosible && (
+                        <input
+                          type="checkbox"
+                          checked={seleccionReplicar.has(p.id)}
+                          onChange={() => toggleDestino(p.id)}
+                          title="Recibir los valores del punto que se está replicando"
+                          className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
+                        />
+                      )}
+                      {replicarDesde === null && (
+                        <button
+                          type="button"
+                          onClick={() => iniciarReplicar(p.id)}
+                          title="Copiar estos valores a otros puntos de venta"
+                          className="rounded-lg border border-brand-brown/15 px-2 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
+                        >
+                          Replicar
+                        </button>
+                      )}
                     </td>
                   </tr>
-                  {abierto && (
-                    <tr className="bg-brand-cream-soft/50">
-                      <td colSpan={columnas.length + 2} className="px-4 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
-                            Copiar los valores de <span className="text-brand-wine">{p.nombre}</span> también a
-                          </p>
-                          <div className="flex gap-3 text-[11px] font-semibold text-brand-wine">
-                            <button
-                              type="button"
-                              onClick={() => setExtra((prev) => ({ ...prev, [p.id]: new Set(otros.map((o) => o.id)) }))}
-                              className="hover:underline"
-                            >
-                              Todos
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setExtra((prev) => ({ ...prev, [p.id]: new Set() }))}
-                              className="hover:underline"
-                            >
-                              Ninguno
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-2 grid max-h-40 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-xl border border-brand-brown/15 bg-white p-2 sm:grid-cols-3 lg:grid-cols-4">
-                          {otros.map((o) => (
-                            <label key={o.id} className="flex items-center gap-2 py-0.5 text-sm text-brand-black">
-                              <input
-                                type="checkbox"
-                                checked={seleccion.has(o.id)}
-                                onChange={() => toggleExtra(p.id, o.id)}
-                                className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
-                              />
-                              {o.nombre}
-                            </label>
-                          ))}
-                        </div>
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReplicarAbierto(null)}
-                            className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown hover:bg-brand-cream-soft"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => guardarConDestinos(p.id, Array.from(seleccion))}
-                            disabled={guardando[p.id]}
-                            className="rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
-                          >
-                            {guardando[p.id]
-                              ? "Guardando…"
-                              : seleccion.size > 0
-                                ? `Guardar en ${seleccion.size + 1} puntos`
-                                : "Guardar solo este punto"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
                 );
               })}
               {puntos.length === 0 && (
