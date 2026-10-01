@@ -32,11 +32,13 @@ export const RUTA_MODULO: Record<string, string> = {
   liquidacion_variable: "/liquidacion-variable",
   credito_empleados: "/credito-empleados",
   monitoreo: "/monitoreo",
+  run_errands: "/run-errands",
 };
 
 /** Apartado del catálogo que agrupa los módulos de negocio. */
 const APARTADO_OPERATIVO = "operativo";
 const APARTADO_CREDITO_EMPLEADOS = "credito_empleados";
+const APARTADO_RUN_ERRANDS = "run_errands";
 
 /** ¿El usuario puede ver un módulo concreto? */
 export function puedeVerModulo(
@@ -90,6 +92,29 @@ export function rutaOperativaInicial(usuario: Usuario | null): string | null {
 export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
   const paneles: PanelAccesible[] = [];
 
+  // Panel administrativo: exclusivo de los roles con acceso total -- al
+  // inicio de la lista, junto con Run Errands.
+  if (tieneAccesoAdministrativo(usuario?.rol)) {
+    paneles.push({
+      key: "administrativo",
+      label: "Panel Administrativo",
+      href: "/admin",
+    });
+  }
+
+  // Panel Run Errands (proceso de Carnes, migrado desde SIGROUTE) -- al
+  // inicio, al lado de Administrativo.
+  const inicioRunErrands = puedeAccederApartado(usuario, APARTADO_RUN_ERRANDS)
+    ? RUTA_MODULO.run_errands
+    : null;
+  if (inicioRunErrands) {
+    paneles.push({
+      key: "run_errands",
+      label: "Run Errands",
+      href: inicioRunErrands,
+    });
+  }
+
   // Panel operativo: visible si tiene algún módulo de negocio.
   const inicioOperativo = rutaOperativaInicial(usuario);
   if (inicioOperativo) {
@@ -97,15 +122,6 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
       key: "operativo",
       label: "Panel Operativo",
       href: inicioOperativo,
-    });
-  }
-
-  // Panel administrativo: exclusivo de los roles con acceso total.
-  if (tieneAccesoAdministrativo(usuario?.rol)) {
-    paneles.push({
-      key: "administrativo",
-      label: "Panel Administrativo",
-      href: "/admin",
     });
   }
 

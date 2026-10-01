@@ -163,6 +163,22 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
       },
     ],
   },
+  {
+    key: 'run_errands',
+    label: 'Panel Run Errands',
+    modulos: [
+      {
+        key: 'run_errands',
+        label: 'Run Errands',
+        acciones: [
+          {
+            key: 'run_errands.editar',
+            label: 'Crear/editar pedidos, clientes, domiciliarios y PDV',
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 /** Conjunto de claves de módulo válidas (controlan navegación/visibilidad). */

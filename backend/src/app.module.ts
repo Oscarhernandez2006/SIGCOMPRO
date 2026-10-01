@@ -20,6 +20,7 @@ import { TiendaEmpleadosModule } from './tienda-empleados/tienda-empleados.modul
 import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-variable.module';
 import { MachineLearningModule } from './machine-learning/machine-learning.module';
 import { ChatModule } from './chat/chat.module';
+import { RunErrandsModule } from './run-errands/run-errands.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ChatModule } from './chat/chat.module';
     LiquidacionVariableModule,
     MachineLearningModule,
     ChatModule,
+    RunErrandsModule,
   ],
   controllers: [AppController],
 })
