@@ -936,6 +936,29 @@ export class PedidosService implements OnModuleInit {
         }
       }
       const metaDestino: DespachoMeta = estaAnulandoAhora ? {} : metaActual;
+      // Red de seguridad: `meta.fin`/`meta.despachoFin` normalmente los guarda
+      // el frontend en una llamada APARTE (actualizarMeta). Si esa llamada
+      // falla en silencio (red, carrera con esta misma petición, etc.) el
+      // pedido avanza de estado pero se queda SIN el timestamp, y entonces el
+      // cálculo de "a tiempo"/el pago en Liquidación lo trata como si nunca
+      // hubiera terminado. Al llegar aquí a un estado que YA implica ese paso
+      // hecho, se completa el dato si todavía falta, para no perderlo.
+      if (!estaAnulandoAhora) {
+        const despachadoOMas = [
+          'despachado',
+          'en tránsito',
+          'en transito',
+          'entregado',
+        ].includes(nuevoEstadoNorm);
+        const facturadoOMas =
+          despachadoOMas || nuevoEstadoNorm === 'facturado';
+        if (facturadoOMas && !metaDestino.fin) {
+          metaDestino.fin = new Date().toISOString();
+        }
+        if (despachadoOMas && !metaDestino.despachoFin) {
+          metaDestino.despachoFin = new Date().toISOString();
+        }
+      }
 
       // Contenido comparable del pedido para detectar EDICIONES (campos que el
       // usuario puede cambiar). Orden fijo para no depender del orden de llaves.
