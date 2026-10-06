@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUsuario, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
@@ -40,6 +40,13 @@ function esDeHoy(p: Pedido): boolean {
 
 function fmtHora(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
+/** Fecha + hora, para que en la imagen quede claro de qué día es cada pedido. */
+function fmtFechaHora(iso: string): string {
+  const d = new Date(iso);
+  const fecha = d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" });
+  return `${fecha} ${fmtHora(iso)}`;
 }
 
 /** Formatea milisegundos como cronómetro "1:59:32" (h:mm:ss), valor absoluto. */
@@ -217,36 +224,26 @@ export default function MonitoreoPage() {
     return puntosEnRiesgo.filter((g) => g.nombre.toLowerCase().includes(q));
   }, [puntosEnRiesgo, busqueda]);
 
-  // Misma información de los cards, aplanada en filas para la imagen-lista.
-  const filasTabla = useMemo(() => {
-    const filas: {
-      punto: string;
-      comanda: string;
-      cliente: string;
-      estado: string;
-      horaEntro: string;
-      alistamiento: string;
-      despacho: string;
-      vencido: boolean;
-    }[] = [];
-    for (const g of puntosFiltrados) {
-      for (const p of g.pedidos) {
+  // Misma información de los cards, agrupada por punto de venta (con un
+  // encabezado por grupo) para la imagen-lista.
+  const gruposTabla = useMemo(() => {
+    return puntosFiltrados.map((g) => ({
+      punto: g.nombre,
+      filas: g.pedidos.map((p) => {
         const m = meta[p.id] ?? {};
         const restEntrega = objetivoDespacho(p, m.pagoConfirmado) - ahora;
         const restPrep = deadlinePreparacion(p, m.pagoConfirmado) - ahora;
-        filas.push({
-          punto: g.nombre,
+        return {
           comanda: p.comanda,
           cliente: p.cliente?.nombre || p.cliente?.nit_cedula || "—",
           estado: p.estado ?? "—",
-          horaEntro: fmtHora(p.fecha),
+          fechaHora: fmtFechaHora(p.fecha),
           alistamiento: `${restPrep <= 0 ? "-" : ""}${fmtCronometro(restPrep)}`,
           despacho: `${restEntrega <= 0 ? "-" : ""}${fmtCronometro(restEntrega)}`,
           vencido: p._restante <= 0,
-        });
-      }
-    }
-    return filas;
+        };
+      }),
+    }));
   }, [puntosFiltrados, meta, ahora]);
 
   // Cuántos pedidos en riesgo hay en cada paso del proceso (para la secuencia).
@@ -366,33 +363,40 @@ export default function MonitoreoPage() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b-2 border-brand-brown/20 text-left text-xs uppercase tracking-wide text-brand-brown/60">
-                <th className="px-2 py-2">Punto</th>
                 <th className="px-2 py-2">Comanda</th>
                 <th className="px-2 py-2">Cliente</th>
                 <th className="px-2 py-2">Estado</th>
-                <th className="px-2 py-2">Hora que entró</th>
+                <th className="px-2 py-2">Fecha y hora de entrada</th>
                 <th className="px-2 py-2">Tiempo en Alistamiento</th>
                 <th className="px-2 py-2">Tiempo en Despacho</th>
               </tr>
             </thead>
             <tbody>
-              {filasTabla.map((f, i) => (
-                <tr
-                  key={i}
-                  className={`border-b border-brand-brown/10 ${f.vencido ? "bg-red-50" : "bg-amber-50/60"}`}
-                >
-                  <td className="px-2 py-1.5 font-medium text-brand-black">{f.punto}</td>
-                  <td className="px-2 py-1.5 text-brand-black">{f.comanda}</td>
-                  <td className="px-2 py-1.5 text-brand-brown/80">{f.cliente}</td>
-                  <td className="px-2 py-1.5 text-brand-brown/80">{f.estado}</td>
-                  <td className="px-2 py-1.5 text-brand-brown/80">{f.horaEntro}</td>
-                  <td className={`px-2 py-1.5 font-semibold ${f.alistamiento.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
-                    {f.alistamiento}
-                  </td>
-                  <td className={`px-2 py-1.5 font-semibold ${f.despacho.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
-                    {f.despacho}
-                  </td>
-                </tr>
+              {gruposTabla.map((g) => (
+                <Fragment key={g.punto}>
+                  <tr>
+                    <td colSpan={6} className="border-b border-brand-brown/10 bg-brand-cream-soft px-2 py-2 font-serif text-base font-bold text-brand-wine">
+                      {g.punto}
+                    </td>
+                  </tr>
+                  {g.filas.map((f, i) => (
+                    <tr
+                      key={i}
+                      className={`border-b border-brand-brown/10 ${f.vencido ? "bg-red-50" : "bg-amber-50/60"}`}
+                    >
+                      <td className="px-2 py-1.5 text-brand-black">{f.comanda}</td>
+                      <td className="px-2 py-1.5 text-brand-brown/80">{f.cliente}</td>
+                      <td className="px-2 py-1.5 text-brand-brown/80">{f.estado}</td>
+                      <td className="px-2 py-1.5 text-brand-brown/80">{f.fechaHora}</td>
+                      <td className={`px-2 py-1.5 font-semibold ${f.alistamiento.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                        {f.alistamiento}
+                      </td>
+                      <td className={`px-2 py-1.5 font-semibold ${f.despacho.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                        {f.despacho}
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

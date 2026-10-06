@@ -442,12 +442,12 @@ export default function PedidosPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Pedidos
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-brown/85">
             Gestiona los pedidos de Carnes Santacruz.
           </p>
           {esSelector && puntosAsignados.length > 0 && (
             <label className="mt-2 inline-flex items-center gap-2">
-              <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+              <span className="text-xs font-semibold text-brand-brown/78">Punto:</span>
               <div className="relative">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
@@ -518,7 +518,7 @@ export default function PedidosPage() {
       {/* Barra de búsqueda y filtro por día */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/60">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
           </svg>
           <input
@@ -534,7 +534,7 @@ export default function PedidosPage() {
               onClick={() => setBusqueda("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -584,7 +584,7 @@ export default function PedidosPage() {
             Limpiar
           </button>
         )}
-        <span className="ml-auto text-xs font-medium text-brand-brown/60">
+        <span className="ml-auto text-xs font-medium text-brand-brown/78">
           {pedidosFiltrados.length} {pedidosFiltrados.length === 1 ? "pedido" : "pedidos"}
         </span>
       </div>
@@ -598,14 +598,14 @@ export default function PedidosPage() {
             </svg>
           </div>
           <p className="mt-4 font-medium text-brand-black">Aún no hay pedidos</p>
-          <p className="mt-1 max-w-sm text-sm text-brand-brown/60">
+          <p className="mt-1 max-w-sm text-sm text-brand-brown/78">
             Empieza creando tu primer pedido con el botón “Nuevo pedido”.
           </p>
         </div>
       ) : pedidosFiltrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center">
           <p className="font-medium text-brand-black">Sin resultados</p>
-          <p className="mt-1 max-w-sm text-sm text-brand-brown/60">
+          <p className="mt-1 max-w-sm text-sm text-brand-brown/78">
             No hay pedidos que coincidan con la búsqueda o el día seleccionado.
           </p>
         </div>
@@ -613,7 +613,7 @@ export default function PedidosPage() {
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
           <div className="max-h-[calc(100vh-300px)] overflow-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/70 shadow-sm">
                 <tr>
                   <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
@@ -635,7 +635,7 @@ export default function PedidosPage() {
                     <ReplicasEstado meta={meta[p.id]} />
                   </td>
                   <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
-                  <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
+                  <td className="px-4 py-3 text-brand-brown/85">{p.punto.nombre}</td>
                   <td className="px-4 py-3 font-medium">
                     <div>{formatoCOP(p.total)}</div>
                     {typeof meta[p.id]?.facturaValor === "number" &&
@@ -657,7 +657,7 @@ export default function PedidosPage() {
                       )}
                     </div>
                     {p.motivo && (
-                      <p className="mt-0.5 text-[11px] text-brand-brown/50">{p.motivo}</p>
+                      <p className="mt-0.5 text-[11px] text-brand-brown/70">{p.motivo}</p>
                     )}
                     {p.clonadoDe && (
                       <p className="mt-0.5 text-[11px] font-medium text-brand-amber">
@@ -670,7 +670,7 @@ export default function PedidosPage() {
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-brand-brown/60">
+                  <td className="px-4 py-3 text-brand-brown/78">
                     <div>{new Date(p.fecha).toLocaleString("es-CO")}</div>
                     {p.entregaProgramada && p.fechaProgramada && (
                       <div className="mt-0.5 text-[11px] font-semibold text-blue-600">
@@ -839,7 +839,7 @@ function ModalEditarNotas({
       <div className="relative z-10 flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h3 className="font-serif text-lg font-bold text-brand-wine">Editar notas</h3>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/40 hover:bg-brand-cream-soft">
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/60 hover:bg-brand-cream-soft">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -848,7 +848,7 @@ function ModalEditarNotas({
 
         {items.length > 0 && (
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/75">
               Notas por producto
             </p>
             <div className={`space-y-2 ${items.length > 3 ? "max-h-64 overflow-y-auto pr-1" : ""}`}>
@@ -856,7 +856,7 @@ function ModalEditarNotas({
                 <div key={idx} className="rounded-xl border border-brand-brown/15 px-3 py-2">
                   <p className="mb-1 text-xs font-medium text-brand-black">
                     {item.producto?.producto || item.producto?.referencia || "Producto"}{" "}
-                    <span className="text-brand-brown/50">({item.cantidad} {item.producto?.um ?? ""})</span>
+                    <span className="text-brand-brown/70">({item.cantidad} {item.producto?.um ?? ""})</span>
                   </p>
                   <textarea
                     rows={1}
@@ -876,7 +876,7 @@ function ModalEditarNotas({
         )}
 
         <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/55">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/75">
             Nota general del pedido
           </label>
           <textarea
@@ -942,7 +942,7 @@ function ModalMotivo({
           onClick={onCerrar}
           aria-label="Cerrar"
           title="Cerrar"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-brown/70 transition hover:bg-brand-cream-soft hover:text-brand-brown"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -951,7 +951,7 @@ function ModalMotivo({
         <h2 className="font-serif text-xl font-bold text-brand-wine">
           {esAnular ? "Anular pedido" : "Cancelar pedido"}
         </h2>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-brown/85">
           Pedido <b>{pedido.comanda}</b>. Elige el motivo. Esta acción no se
           puede deshacer.
         </p>
@@ -1028,13 +1028,13 @@ function ModalCongelados({
             <h2 className="font-serif text-xl font-bold text-brand-wine">
               Pedidos congelados
             </h2>
-            <p className="text-xs text-brand-brown/50">
+            <p className="text-xs text-brand-brown/70">
               Borradores en espera. Descongela uno para retomarlo por donde ibas.
             </p>
           </div>
           <button
             onClick={onCerrar}
-            className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+            className="rounded-lg p-1.5 text-brand-brown/70 transition hover:bg-brand-cream-soft hover:text-brand-brown"
             aria-label="Cerrar"
             title="Cerrar"
           >
@@ -1046,13 +1046,13 @@ function ModalCongelados({
 
         <div className="flex-1 overflow-auto">
           {congelados.length === 0 ? (
-            <p className="px-6 py-16 text-center text-sm text-brand-brown/50">
+            <p className="px-6 py-16 text-center text-sm text-brand-brown/70">
               No hay pedidos congelados en tus puntos de venta. Usa el botón
               “Congelar” dentro de un pedido para dejarlo en espera.
             </p>
           ) : (
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="sticky top-0 bg-brand-cream-soft/80 text-left text-xs uppercase tracking-wide text-brand-brown/50">
+              <thead className="sticky top-0 bg-brand-cream-soft/80 text-left text-xs uppercase tracking-wide text-brand-brown/70">
                 <tr>
                   <th className="px-4 py-3">Temporal</th>
                   <th className="px-4 py-3">Cliente</th>
@@ -1071,11 +1071,11 @@ function ModalCongelados({
                       CONG-{c.tempConsecutivo}
                     </td>
                     <td className="px-4 py-3">{c.clienteNombre}</td>
-                    <td className="px-4 py-3 text-brand-brown/70">{c.punto?.nombre ?? "—"}</td>
-                    <td className="px-4 py-3 text-brand-brown/70">{c.congeladoPor || "—"}</td>
-                    <td className="px-4 py-3 text-brand-brown/70">{c.numItems}</td>
+                    <td className="px-4 py-3 text-brand-brown/85">{c.punto?.nombre ?? "—"}</td>
+                    <td className="px-4 py-3 text-brand-brown/85">{c.congeladoPor || "—"}</td>
+                    <td className="px-4 py-3 text-brand-brown/85">{c.numItems}</td>
                     <td className="px-4 py-3 font-medium">{formatoCOP(c.totalParcial)}</td>
-                    <td className="px-4 py-3 text-brand-brown/60">
+                    <td className="px-4 py-3 text-brand-brown/78">
                       {new Date(c.creadoEn).toLocaleString("es-CO", {
                         day: "2-digit",
                         month: "2-digit",
@@ -1183,14 +1183,14 @@ function DetalleCongelado({
             <h3 className="font-serif text-lg font-bold text-brand-wine">
               Congelado CONG-{c.tempConsecutivo}
             </h3>
-            <p className="text-xs text-brand-brown/50">
+            <p className="text-xs text-brand-brown/70">
               {new Date(c.creadoEn).toLocaleString("es-CO")} ·{" "}
               {c.punto?.nombre ?? "Sin punto"}
             </p>
           </div>
           <button
             onClick={onCerrar}
-            className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+            className="rounded-lg p-1.5 text-brand-brown/70 hover:bg-brand-cream-soft"
             aria-label="Cerrar"
             title="Cerrar"
           >
@@ -1202,7 +1202,7 @@ function DetalleCongelado({
         <div className="flex-1 overflow-y-auto px-5 py-4 text-sm">
           {/* NIT/Cédula destacado */}
           <div className="mb-4 rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/50">NIT / Cédula</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/70">NIT / Cédula</p>
             <p className="text-2xl font-bold text-brand-wine">{cli?.nit_cedula || "—"}</p>
           </div>
           {/* Secciones en 2 columnas (van bajando) para ahorrar espacio */}
@@ -1219,8 +1219,8 @@ function DetalleCongelado({
             </Seccion>
           ) : (
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
-              <p className="text-xs italic text-brand-brown/40">Aún no se ha seleccionado un cliente.</p>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Cliente</p>
+              <p className="text-xs italic text-brand-brown/60">Aún no se ha seleccionado un cliente.</p>
             </div>
           )}
           {/* Borrador */}
@@ -1243,7 +1243,7 @@ function DetalleCongelado({
           </Seccion>
           {/* Productos */}
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
               Productos ({c.carrito.length})
             </p>
             {c.carrito.length > 0 ? (
@@ -1253,26 +1253,26 @@ function DetalleCongelado({
                     <div className="min-w-0">
                       <p className="font-medium text-brand-black break-words">
                         {i.producto.producto || i.producto.referencia}{" "}
-                        <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span>
+                        <span className="text-xs text-brand-brown/60">Ref {i.producto.referencia}</span>
                       </p>
-                      <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                      {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
-                      {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
-                      {i.preparacion && <p className="text-xs text-brand-brown/80">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
-                      {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
+                      <p className="text-xs text-brand-brown/90">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
+                      {i.alVacio && <p className="text-xs text-brand-brown/90">Empaque al vacío: Sí</p>}
+                      {i.porcionado && <p className="text-xs text-brand-brown/90">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                      {i.preparacion && <p className="text-xs text-brand-brown/90">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
+                      {i.notas && <p className="text-xs italic text-brand-brown/90">Nota: {i.notas}</p>}
                     </div>
                     <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs italic text-brand-brown/40">Sin productos todavía.</p>
+              <p className="text-xs italic text-brand-brown/60">Sin productos todavía.</p>
             )}
             {/* Totales */}
             <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
-              <span className="text-sm text-brand-brown/70">Subtotal: {formatoCOP(subtotal)}</span>
+              <span className="text-sm text-brand-brown/85">Subtotal: {formatoCOP(subtotal)}</span>
               {c.entrega === "domicilio" && (
-                <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(dom)}</span>
+                <span className="text-sm text-brand-brown/85">Domicilio: {formatoCOP(dom)}</span>
               )}
               <span className="text-base font-bold text-brand-wine">Total parcial: {formatoCOP(total)}</span>
             </div>
@@ -1690,7 +1690,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
               Autorización requerida
             </h3>
-            <p className="mt-1 text-center text-sm text-brand-brown/70">
+            <p className="mt-1 text-center text-sm text-brand-brown/85">
               Estás clonando este pedido a{" "}
               <b>{punto?.nombre}</b> (distinto al punto original
               {clon?.punto ? ` "${clon.punto.nombre}"` : ""}). Pídele a un
@@ -1744,7 +1744,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
             <h3 className="font-serif text-lg font-bold text-brand-wine">
               ¿Guardar este pedido?
             </h3>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-brown/85">
               Tienes información sin guardar. Puedes congelarlo para retomarlo
               luego o descartarlo sin guardar nada.
             </p>
@@ -1828,7 +1828,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
             )}
             <button
               onClick={intentarCerrar}
-              className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+              className="rounded-lg p-1.5 text-brand-brown/70 transition hover:bg-brand-cream-soft hover:text-brand-brown"
               aria-label="Cerrar"
               title="Cerrar"
             >
@@ -1848,11 +1848,11 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
                 </svg>
               </div>
               <h3 className="mt-4 font-serif text-2xl font-bold text-brand-wine">{inicial ? "Pedido actualizado" : clon ? "Pedido clonado" : "Pedido creado"}</h3>
-              <p className="mt-1 text-sm text-brand-brown/60">
+              <p className="mt-1 text-sm text-brand-brown/78">
                 Comanda <b>{pedidoCreado.comanda}</b> · Total {formatoCOP(pedidoCreado.total)}
               </p>
 
-              <p className="mt-4 max-w-sm text-sm text-brand-brown/60">
+              <p className="mt-4 max-w-sm text-sm text-brand-brown/78">
                 El pedido quedó guardado. Imprime la comanda ahora o vuelve a imprimirla cuando quieras desde la lista.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -2171,7 +2171,7 @@ function PasoPunto({
       <p className="mb-1 text-sm font-medium text-brand-black">
         ¿En qué punto de venta tomas el pedido?
       </p>
-      <p className="mb-4 text-xs text-brand-brown/60">
+      <p className="mb-4 text-xs text-brand-brown/78">
         Determina la lista de precios que se aplicará al pedido.
       </p>
 
@@ -2182,11 +2182,11 @@ function PasoPunto({
       )}
 
       {cargando ? (
-        <p className="py-10 text-center text-sm text-brand-brown/50">
+        <p className="py-10 text-center text-sm text-brand-brown/70">
           Cargando puntos de venta…
         </p>
       ) : puntos.length === 0 ? (
-        <p className="py-10 text-center text-sm text-brand-brown/50">
+        <p className="py-10 text-center text-sm text-brand-brown/70">
           No tienes puntos de venta asignados.
         </p>
       ) : (
@@ -2220,7 +2220,7 @@ function PasoPunto({
                       </span>
                     )}
                   </span>
-                  <span className="block truncate text-xs text-brand-brown/60">
+                  <span className="block truncate text-xs text-brand-brown/78">
                     {p.lista_precio
                       ? descripciones[p.lista_precio] ?? `Lista ${p.lista_precio}`
                       : "Sin lista asignada"}
@@ -2249,14 +2249,14 @@ function Stepper({ paso }: { paso: number }) {
                   ? "bg-brand-amber text-white"
                   : activo
                     ? "bg-brand-wine text-white"
-                    : "bg-brand-brown/10 text-brand-brown/50"
+                    : "bg-brand-brown/10 text-brand-brown/70"
               }`}
             >
               {hecho ? "✓" : i + 1}
             </span>
             <span
               className={`text-xs font-medium ${
-                activo ? "text-brand-wine" : "text-brand-brown/50"
+                activo ? "text-brand-wine" : "text-brand-brown/70"
               }`}
             >
               {label}
@@ -2381,7 +2381,7 @@ function PasoCliente({
 
       {/* Buscador */}
       <div className="relative mb-4">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/60">
           <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
         </svg>
         <input
@@ -2392,7 +2392,7 @@ function PasoCliente({
           className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-32 text-sm outline-none focus:border-brand-amber"
         />
         {buscando && (
-          <span className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium text-brand-brown/50">
+          <span className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium text-brand-brown/70">
             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
             Buscando cliente…
           </span>
@@ -2403,7 +2403,7 @@ function PasoCliente({
             onClick={() => setInput("")}
             title="Limpiar búsqueda"
             aria-label="Limpiar búsqueda"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -2421,12 +2421,12 @@ function PasoCliente({
       {/* Resultados */}
       <div className="space-y-2">
         {cargando && items.length === 0 ? (
-          <p className="py-10 text-center text-sm text-brand-brown/50">
+          <p className="py-10 text-center text-sm text-brand-brown/70">
             Cargando clientes…
           </p>
         ) : items.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="text-sm text-brand-brown/50">No se encontraron clientes.</p>
+            <p className="text-sm text-brand-brown/70">No se encontraron clientes.</p>
             <button
               onClick={() => setCreando(true)}
               title="Crear un nuevo cliente"
@@ -2445,10 +2445,13 @@ function PasoCliente({
             return (
               <div key={c.id} className="relative">
                 <button
-                  onClick={() => onSeleccionar(c)}
-                  title={`Seleccionar el cliente ${c.nombre || c.nit_cedula}`}
+                  onClick={() => c.activo && onSeleccionar(c)}
+                  disabled={!c.activo}
+                  title={!c.activo ? "Este cliente está inactivo: no se puede seleccionar" : `Seleccionar el cliente ${c.nombre || c.nit_cedula}`}
                   className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
-                    activo
+                    !c.activo
+                      ? "cursor-not-allowed border-brand-brown/10 bg-brand-cream-soft/40 opacity-60"
+                      : activo
                       ? "border-brand-amber bg-brand-amber/5 ring-1 ring-brand-amber"
                       : pedidosHoy.length > 0
                         ? "border-amber-300 bg-amber-50/40 hover:bg-amber-50"
@@ -2470,7 +2473,7 @@ function PasoCliente({
                       )}
                     </span>
 
-                    <span className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-brand-brown/70 sm:grid-cols-2">
+                    <span className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-brand-brown/85 sm:grid-cols-2">
                       <DatoCliente icono="id" valor={c.nit_cedula} />
                       {c.direccion && <DatoCliente icono="dir" valor={c.direccion} ancho />}
                       {c.referencia && <DatoCliente icono="ref" valor={c.referencia} ancho />}
@@ -2497,7 +2500,7 @@ function PasoCliente({
                       {c.horeca ? "HORECA" : "Hogar"}
                     </span>
                     {c.punto_venta && (
-                      <span className="text-brand-brown/60">
+                      <span className="text-brand-brown/78">
                         Asignado:{" "}
                         <span className="font-semibold text-brand-black">
                           {c.punto_venta}
@@ -2510,7 +2513,7 @@ function PasoCliente({
                       if (comprados.length === 0) return null;
                       return (
                         <span className="flex flex-col items-end gap-0.5">
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/60">
                             Últimas compras
                           </span>
                           <span className="flex flex-wrap justify-end gap-1">
@@ -2540,7 +2543,7 @@ function PasoCliente({
                   onClick={() => setOcultos((prev) => new Set(prev).add(c.id))}
                   title="Quitar esta sugerencia de la lista (solo temporal)"
                   aria-label="Quitar sugerencia"
-                  className="absolute right-2 top-2 rounded-md p-1 text-brand-brown/25 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                  className="absolute right-2 top-2 rounded-md p-1 text-brand-brown/45 transition hover:bg-brand-cream-soft hover:text-brand-wine"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -2660,14 +2663,14 @@ function UltimosPedidosModal({
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-brand-black">Últimos pedidos</h3>
-            <p className="text-xs text-brand-brown/60">
+            <p className="text-xs text-brand-brown/78">
               {cliente.nombre || cliente.nit_cedula} · elige uno y crea un pedido igual (espejo)
             </p>
           </div>
           <button
             onClick={onCerrar}
             aria-label="Cerrar"
-            className="rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-brand-cream-soft"
+            className="rounded-lg p-1.5 text-brand-brown/78 transition hover:bg-brand-cream-soft"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -2677,11 +2680,11 @@ function UltimosPedidosModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {cargando ? (
-            <p className="py-10 text-center text-sm text-brand-brown/50">Cargando pedidos…</p>
+            <p className="py-10 text-center text-sm text-brand-brown/70">Cargando pedidos…</p>
           ) : error ? (
             <p className="py-10 text-center text-sm text-red-600">{error}</p>
           ) : lista.length === 0 ? (
-            <p className="py-10 text-center text-sm text-brand-brown/50">
+            <p className="py-10 text-center text-sm text-brand-brown/70">
               Este cliente no tiene pedidos anteriores.
             </p>
           ) : (
@@ -2697,12 +2700,12 @@ function UltimosPedidosModal({
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-brand-black">{p.comanda}</span>
                         {p.estado && (
-                          <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold text-brand-brown/70">
+                          <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold text-brand-brown/85">
                             {p.estado}
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-brand-brown/60">
+                      <p className="mt-0.5 text-xs text-brand-brown/78">
                         {new Date(p.fecha).toLocaleString("es-CO")} · {items} ítem{items === 1 ? "" : "s"} · {formatoCOP(p.total)}
                       </p>
                     </div>
@@ -2873,7 +2876,7 @@ function PasoProductos({
                   <span className="line-clamp-2 text-xs font-medium text-brand-black">
                     {p.producto || "Sin nombre"}
                   </span>
-                  <span className="mt-0.5 text-[10px] text-brand-brown/50">
+                  <span className="mt-0.5 text-[10px] text-brand-brown/70">
                     {p.referencia} · {p.um || "U"}
                   </span>
                   <span className="mt-1 text-xs font-bold text-brand-wine">
@@ -2889,7 +2892,7 @@ function PasoProductos({
       {/* Catálogo */}
       <div className="min-w-0 flex-1">
         <div className="relative mb-3">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/60">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
           </svg>
           <input
@@ -2905,7 +2908,7 @@ function PasoProductos({
               onClick={() => setInput("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -2964,11 +2967,11 @@ function PasoProductos({
 
         <div className="grid max-h-[56vh] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
           {cargando ? (
-            <p className="col-span-full py-10 text-center text-sm text-brand-brown/50">
+            <p className="col-span-full py-10 text-center text-sm text-brand-brown/70">
               Cargando productos…
             </p>
           ) : items.length === 0 ? (
-            <p className="col-span-full py-10 text-center text-sm text-brand-brown/50">
+            <p className="col-span-full py-10 text-center text-sm text-brand-brown/70">
               No se encontraron productos.
             </p>
           ) : (
@@ -2986,7 +2989,7 @@ function PasoProductos({
                   <span className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-brand-black">
                     {p.producto || "Sin nombre"}
                   </span>
-                  <span className="mt-1 text-[11px] text-brand-brown/50">
+                  <span className="mt-1 text-[11px] text-brand-brown/70">
                     {p.referencia} · {p.um || "U"}
                   </span>
                   {p.categoria && (
@@ -3003,7 +3006,7 @@ function PasoProductos({
                   onClick={() => setOcultos((prev) => new Set(prev).add(p.id))}
                   title="Quitar esta sugerencia de la lista (solo temporal)"
                   aria-label="Quitar sugerencia"
-                  className="absolute right-1.5 top-1.5 rounded-md p-1 text-brand-brown/25 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                  className="absolute right-1.5 top-1.5 rounded-md p-1 text-brand-brown/45 transition hover:bg-brand-cream-soft hover:text-brand-wine"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -3070,7 +3073,7 @@ function ResumenPedido({
         <div className="shrink-0 space-y-3 p-4 pb-2">
           {/* Punto */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Punto de venta</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Punto de venta</p>
             <p className="font-medium text-brand-black">{punto?.nombre ?? "Sin asignar"}</p>
             <p className="mt-1 text-xs font-medium text-brand-wine">
               Ítems seleccionados: <span className="font-bold">{carrito.length}</span>
@@ -3078,7 +3081,7 @@ function ResumenPedido({
           </div>
           {/* Cliente */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Cliente</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Cliente</p>
             {cliente ? (
               <div className={`rounded-xl border bg-white px-3 py-2 ${cliente.horeca ? "border-orange-300 ring-1 ring-orange-200" : "border-brand-brown/10"}`}>
                 {/* Aviso prominente cuando el cliente es HORECA. */}
@@ -3107,27 +3110,27 @@ function ResumenPedido({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-brand-black">{cliente.nombre || "Sin nombre"}</p>
-                    <p className="text-xs text-brand-brown/60">{cliente.nit_cedula}</p>
+                    <p className="text-xs text-brand-brown/78">{cliente.nit_cedula}</p>
                   </div>
                 </div>
                 {(cliente.direccion || cliente.barrio) && (
-                  <p className="mt-0.5 text-xs text-brand-brown/60">
+                  <p className="mt-0.5 text-xs text-brand-brown/78">
                     {[cliente.direccion, cliente.barrio].filter(Boolean).join(" · ")}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="text-xs italic text-brand-brown/40">Sin seleccionar</p>
+              <p className="text-xs italic text-brand-brown/60">Sin seleccionar</p>
             )}
           </div>
         </div>
         {/* Productos (scroll interno) */}
         <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
-          <p className="shrink-0 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">
+          <p className="shrink-0 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
             Productos ({carrito.length})
           </p>
           {carrito.length === 0 ? (
-            <p className="text-xs italic text-brand-brown/40">Aún sin productos</p>
+            <p className="text-xs italic text-brand-brown/60">Aún sin productos</p>
           ) : (
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
               {carrito.map((i) => (
@@ -3152,7 +3155,7 @@ function ResumenPedido({
                         e.stopPropagation();
                         onQuitar(i.id);
                       }}
-                      className="shrink-0 text-brand-brown/30 hover:text-red-600"
+                      className="shrink-0 text-brand-brown/50 hover:text-red-600"
                       aria-label="Quitar"
                       title="Quitar el producto del pedido"
                     >
@@ -3161,7 +3164,7 @@ function ResumenPedido({
                       </svg>
                     </button>
                   </div>
-                  <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-brand-brown/60">
+                  <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-brand-brown/78">
                     <span>{cantidadLabel(i.cantidad, i.producto.um)} | {formatoCOP(i.producto.precio)}</span>
                     {i.alVacio && <Tag>Vacío</Tag>}
                     {i.porcionado && <Tag>Porciones {i.unidades} | Gramos {i.gramos} grs.</Tag>}
@@ -3174,7 +3177,7 @@ function ResumenPedido({
         </div>
       </div>
       <div className="flex items-center justify-between border-t border-brand-brown/10 px-4 py-3">
-        <span className="text-sm text-brand-brown/70">Total</span>
+        <span className="text-sm text-brand-brown/85">Total</span>
         <span className="text-lg font-bold text-brand-wine">{formatoCOP(total)}</span>
       </div>
     </aside>
@@ -3335,11 +3338,11 @@ function ConfigProducto({
             <h3 className="truncate font-serif text-lg font-bold text-brand-wine">
               {producto.producto || "Producto"}
             </h3>
-            <p className="text-xs text-brand-brown/50">
+            <p className="text-xs text-brand-brown/70">
               Ref {producto.referencia} · {formatoCOP(producto.precio)} / {producto.um || "U"}
             </p>
           </div>
-          <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+          <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/70 hover:bg-brand-cream-soft">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -3349,7 +3352,7 @@ function ConfigProducto({
         <div className="space-y-4 px-5 py-4">
           {/* Cantidad */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-brand-brown/70">
+            <label className="mb-1.5 block text-xs font-semibold text-brand-brown/85">
               Cantidad / peso ({producto.um || "U"})
             </label>
             <div className="flex items-center gap-3">
@@ -3381,8 +3384,8 @@ function ConfigProducto({
           {/* Empaque al vacío (solo productos por kg) */}
           <div className="flex items-center justify-between">
             <div>
-              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/40"}`}>Empaque al vacío</span>
-              {!puedePorcionar && <p className="text-[11px] text-brand-brown/40">Solo disponible para productos por kg</p>}
+              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/60"}`}>Empaque al vacío</span>
+              {!puedePorcionar && <p className="text-[11px] text-brand-brown/60">Solo disponible para productos por kg</p>}
             </div>
             <button
               onClick={() => puedePorcionar && setAlVacio((v) => !v)}
@@ -3397,8 +3400,8 @@ function ConfigProducto({
           {/* Porcionado (solo productos por kg) */}
           <div className="flex items-center justify-between">
             <div>
-              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/40"}`}>Porcionado</span>
-              {!puedePorcionar && <p className="text-[11px] text-brand-brown/40">Solo disponible para productos por kg</p>}
+              <span className={`text-sm font-medium ${puedePorcionar ? "text-brand-black" : "text-brand-brown/60"}`}>Porcionado</span>
+              {!puedePorcionar && <p className="text-[11px] text-brand-brown/60">Solo disponible para productos por kg</p>}
             </div>
             <button
               onClick={() =>
@@ -3426,7 +3429,7 @@ function ConfigProducto({
           {/* Preparación (solo productos por kg, cuando NO está Porcionado): excluyente entre sí y con Porcionado. */}
           {puedePorcionar && !porcionado && (
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-brand-brown/70">
+              <p className="mb-1.5 text-xs font-semibold text-brand-brown/85">
                 Preparación (opcional, solo si aplica)
               </p>
               <div className="grid grid-cols-4 gap-1.5">
@@ -3526,7 +3529,7 @@ function ConfigProducto({
 
                   {restoG > 0 && (
                     <>
-                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/85">
                         <span>
                           Para <b>{piezasG + 1}</b> porciones de {g} g (100%), sube
                           a <b>{kgParaExacto} kg</b>
@@ -3542,7 +3545,7 @@ function ConfigProducto({
                           Subir kilos
                         </button>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                      <div className="flex flex-wrap items-center gap-2 text-brand-brown/85">
                         <span>
                           O reparte los {cant} kg en <b>{piezasG + 1}</b> porciones
                           de ~<b>{gRedistribuido} g</b>
@@ -3562,7 +3565,7 @@ function ConfigProducto({
                   )}
 
                   {cortes500 > 0 && g !== 500 && (
-                    <div className="flex flex-wrap items-center gap-2 text-brand-brown/70">
+                    <div className="flex flex-wrap items-center gap-2 text-brand-brown/85">
                       <span>
                         A 500 g salen <b>{cortes500}</b> cortes
                         {resto500 > 0 ? ` · sobran ${resto500} g` : " · exacto ✓"}
@@ -3593,7 +3596,7 @@ function ConfigProducto({
                 </div>
                 <p
                   className={`mt-1.5 text-xs ${
-                    exacto ? "text-green-600" : fueraRango ? "text-red-600" : "text-brand-brown/60"
+                    exacto ? "text-green-600" : fueraRango ? "text-red-600" : "text-brand-brown/78"
                   }`}
                 >
                   {(cortesG / 1000).toFixed(2)} kg de {cantidad} kg
@@ -3781,7 +3784,7 @@ function PasoEntrega({
             </span>
             <span>
               <span className="block font-semibold text-brand-black">{o.titulo}</span>
-              <span className="block text-xs text-brand-brown/60">{o.desc}</span>
+              <span className="block text-xs text-brand-brown/78">{o.desc}</span>
             </span>
           </button>
         ))}
@@ -3790,7 +3793,7 @@ function PasoEntrega({
       {valor === "domicilio" && (
         <div className="mt-4 rounded-2xl border border-brand-amber/40 bg-brand-amber/5 p-4">
           <label className="mb-1.5 block text-sm font-semibold text-brand-wine">Valor del domicilio</label>
-          <p className="mb-2 text-xs text-brand-brown/60">Costo adicional del envío. Se suma al total del pedido.</p>
+          <p className="mb-2 text-xs text-brand-brown/78">Costo adicional del envío. Se suma al total del pedido.</p>
           {gratis && (
             <div className="mb-3 flex items-center gap-2 rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
@@ -3800,7 +3803,7 @@ function PasoEntrega({
             </div>
           )}
           <div className="flex items-center gap-2">
-            <span className="text-brand-brown/60">$</span>
+            <span className="text-brand-brown/78">$</span>
             <input
               type="text"
               inputMode="numeric"
@@ -3816,7 +3819,7 @@ function PasoEntrega({
           </div>
 
           {sugerido != null ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-brand-brown/70">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-brand-brown/85">
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-wine/10 px-2.5 py-1 font-medium text-brand-wine">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -3836,7 +3839,7 @@ function PasoEntrega({
               )}
             </div>
           ) : (
-            <p className="mt-3 text-xs text-brand-brown/50">
+            <p className="mt-3 text-xs text-brand-brown/70">
               {!punto?.lat || !punto?.lng
                 ? "El punto de venta no tiene ubicación configurada para calcular el domicilio."
                 : !cliente?.lat || !cliente?.lng
@@ -3927,13 +3930,13 @@ function PasoFechaEntrega({
             }`}
           >
             <span className="block font-semibold text-brand-black">{o.titulo}</span>
-            <span className="block text-xs text-brand-brown/60">{o.desc}</span>
+            <span className="block text-xs text-brand-brown/78">{o.desc}</span>
           </button>
         ))}
       </div>
       {programado && (
         <div className="mt-4">
-          <label className="mb-1.5 block text-xs font-medium text-brand-brown/70">
+          <label className="mb-1.5 block text-xs font-medium text-brand-brown/85">
             Día de entrega
           </label>
           <input
@@ -3946,7 +3949,7 @@ function PasoFechaEntrega({
         </div>
       )}
       <div className="mt-4">
-        <label className="mb-1.5 block text-xs font-medium text-brand-brown/70">
+        <label className="mb-1.5 block text-xs font-medium text-brand-brown/85">
           Hora de despacho (opcional)
         </label>
         <input
@@ -3955,7 +3958,7 @@ function PasoFechaEntrega({
           onChange={(e) => onHora(e.target.value)}
           className="w-full rounded-xl border border-brand-brown/15 bg-white px-4 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber sm:w-auto"
         />
-        <p className="mt-1 text-xs text-brand-brown/50">
+        <p className="mt-1 text-xs text-brand-brown/70">
           Si el cliente pide una hora (ej. 4:00 p. m.), la ventana de 2 horas se
           activa 2 horas antes para cumplir la promesa.
         </p>
@@ -4003,18 +4006,18 @@ function PasoConfirmar({
 
       <Bloque titulo="Cliente">
         <p className="font-medium text-brand-black">{cliente?.nombre || "—"}</p>
-        <p className="text-xs text-brand-brown/80">{cliente?.nit_cedula}</p>
-        {cliente?.direccion && <p className="text-xs text-brand-brown/80">{cliente.direccion}</p>}
+        <p className="text-xs text-brand-brown/90">{cliente?.nit_cedula}</p>
+        {cliente?.direccion && <p className="text-xs text-brand-brown/90">{cliente.direccion}</p>}
         {(cliente?.barrio || cliente?.ciudad) && (
-          <p className="text-xs text-brand-brown/80">
+          <p className="text-xs text-brand-brown/90">
             {[cliente.barrio, cliente.ciudad].filter(Boolean).join(", ")}
           </p>
         )}
-        {cliente?.telefono && <p className="text-xs text-brand-brown/80">Tel: {cliente.telefono}</p>}
+        {cliente?.telefono && <p className="text-xs text-brand-brown/90">Tel: {cliente.telefono}</p>}
       </Bloque>
 
       <div className="rounded-xl border border-brand-brown/10 bg-white">
-        <div className="border-b border-brand-brown/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/50">
+        <div className="border-b border-brand-brown/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand-brown/70">
           Productos
         </div>
         <div className="divide-y divide-brand-brown/5">
@@ -4024,31 +4027,31 @@ function PasoConfirmar({
                 <span className="font-medium text-brand-black">{i.producto.producto || i.producto.referencia}</span>
                 <span className="font-semibold text-brand-wine">{formatoCOP(i.producto.precio * i.cantidad)}</span>
               </div>
-              <p className="text-xs text-brand-brown/80">
+              <p className="text-xs text-brand-brown/90">
                 {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)}
                 {i.alVacio && " · Al vacío"}
                 {i.porcionado && ` · Porciones ${i.unidades} | Gramos ${i.gramos} grs.`}
                 {i.porcionado && i.corte && ` · ${i.corte}`}
                 {i.preparacion && ` · ${ETIQUETA_PREPARACION[i.preparacion]}`}
               </p>
-              {i.notas && <p className="text-xs italic text-brand-brown/80">“{i.notas}”</p>}
+              {i.notas && <p className="text-xs italic text-brand-brown/90">“{i.notas}”</p>}
             </div>
           ))}
         </div>
         <div className="flex items-center justify-between border-t border-brand-brown/10 px-4 py-3">
-          <span className="font-medium text-brand-brown/70">Total</span>
+          <span className="font-medium text-brand-brown/85">Total</span>
           <span className="text-lg font-bold text-brand-wine">{formatoCOP(total)}</span>
         </div>
       </div>
       {dom > 0 && (
-        <div className="flex justify-between rounded-xl bg-brand-cream-soft/60 px-4 py-2 text-sm text-brand-brown/70">
+        <div className="flex justify-between rounded-xl bg-brand-cream-soft/60 px-4 py-2 text-sm text-brand-brown/85">
           <span>Incluye domicilio</span><span className="font-semibold">{formatoCOP(dom)}</span>
         </div>
       )}
 
       {/* Observación general del pedido */}
       <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-brand-brown/50">
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-brand-brown/70">
           Observación general del pedido
         </label>
         <textarea
@@ -4067,7 +4070,7 @@ function PasoConfirmar({
 function Bloque({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-brand-brown/10 bg-white px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">{titulo}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">{titulo}</p>
       <div className="mt-0.5 text-brand-black">{children}</div>
     </div>
   );
@@ -4077,7 +4080,7 @@ function Bloque({ titulo, children }: { titulo: string; children: React.ReactNod
 function Dato({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/60">{label}</p>
       <div className="break-words text-brand-black">{children}</div>
     </div>
   );
@@ -4087,7 +4090,7 @@ function Dato({ label, children }: { label: string; children: React.ReactNode })
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">{titulo}</p>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">{titulo}</p>
       <div className="rounded-xl border border-brand-brown/10 bg-white p-3">
         <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
           {children}
@@ -4309,7 +4312,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
         <div className="flex items-start justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">Pedido {pedido.comanda}</h3>
-            <p className="text-xs text-brand-brown/50">{new Date(pedido.fecha).toLocaleString("es-CO")} · {pedido.punto.nombre}{pedido.anulado ? " · ANULADO" : ""}</p>
+            <p className="text-xs text-brand-brown/70">{new Date(pedido.fecha).toLocaleString("es-CO")} · {pedido.punto.nombre}{pedido.anulado ? " · ANULADO" : ""}</p>
             {pedido.clonadoDe && (
               <p className="mt-0.5 text-xs font-medium text-brand-amber">
                 Clonado del pedido #{pedido.clonadoDe}
@@ -4332,7 +4335,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
               </svg>
               Ver trazabilidad
             </button>
-            <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+            <button onClick={onCerrar} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/70 hover:bg-brand-cream-soft">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
             </button>
           </div>
@@ -4341,7 +4344,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
         <div className="flex-1 overflow-hidden px-5 py-4 text-sm">
           {/* NIT / Cédula destacado */}
           <div className="mb-4 rounded-xl border border-brand-wine/15 bg-brand-wine/5 px-4 py-3 text-center">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/50">NIT / Cédula</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-brown/70">NIT / Cédula</p>
             <p className="text-2xl font-bold text-brand-wine">{c.nit_cedula}</p>
           </div>
 
@@ -4394,17 +4397,17 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
 
           {/* Productos */}
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Productos ({pedido.carrito.length})</p>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Productos ({pedido.carrito.length})</p>
             <div className="grid max-h-[20rem] gap-2 overflow-y-auto rounded-xl border border-brand-brown/10 p-2 sm:grid-cols-2">
               {pedido.carrito.map((i) => (
                 <div key={i.id} className="flex justify-between gap-2 rounded-lg bg-brand-cream-soft/30 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-brand-black break-words">{i.producto.producto} <span className="text-xs text-brand-brown/40">Ref {i.producto.referencia}</span></p>
-                    <p className="text-xs text-brand-brown/80">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
-                    {i.alVacio && <p className="text-xs text-brand-brown/80">Empaque al vacío: Sí</p>}
-                    {i.porcionado && <p className="text-xs text-brand-brown/80">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
-                    {i.preparacion && <p className="text-xs text-brand-brown/80">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
-                    {i.notas && <p className="text-xs italic text-brand-brown/80">Nota: {i.notas}</p>}
+                    <p className="font-medium text-brand-black break-words">{i.producto.producto} <span className="text-xs text-brand-brown/60">Ref {i.producto.referencia}</span></p>
+                    <p className="text-xs text-brand-brown/90">Cantidad: {cantidadLabel(i.cantidad, i.producto.um)} · {formatoCOP(i.producto.precio)} c/u</p>
+                    {i.alVacio && <p className="text-xs text-brand-brown/90">Empaque al vacío: Sí</p>}
+                    {i.porcionado && <p className="text-xs text-brand-brown/90">Porcionado: {i.unidades} und x {i.gramos} g{i.corte ? ` · ${i.corte}` : ""}</p>}
+                    {i.preparacion && <p className="text-xs text-brand-brown/90">Preparación: {ETIQUETA_PREPARACION[i.preparacion]}</p>}
+                    {i.notas && <p className="text-xs italic text-brand-brown/90">Nota: {i.notas}</p>}
                   </div>
                   <span className="shrink-0 whitespace-nowrap font-medium">{formatoCOP(i.producto.precio * i.cantidad)}</span>
                 </div>
@@ -4412,7 +4415,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
               {pedido.entrega === "domicilio" && (
-                <span className="text-sm text-brand-brown/70">Domicilio: {formatoCOP(pedido.valorDomicilio ?? 0)}</span>
+                <span className="text-sm text-brand-brown/85">Domicilio: {formatoCOP(pedido.valorDomicilio ?? 0)}</span>
               )}
               <span className="text-base font-bold text-brand-wine">Total: {formatoCOP(pedido.total)}</span>
             </div>
@@ -4434,9 +4437,9 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
               <div>
                 <h3 className="font-serif text-lg font-bold text-brand-wine">Comprobante de pago</h3>
-                <p className="text-xs text-brand-brown/50">Pedido {pedido.comanda}</p>
+                <p className="text-xs text-brand-brown/70">Pedido {pedido.comanda}</p>
               </div>
-              <button onClick={() => setCompAbierto(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+              <button onClick={() => setCompAbierto(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/70 hover:bg-brand-cream-soft">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -4449,7 +4452,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   <img key={i} src={src} alt={`Comprobante ${i + 1}`} className="mx-auto max-h-[70vh] w-auto rounded-lg" />
                 ))
               ) : (
-                <p className="px-4 py-8 text-center text-sm font-medium text-brand-brown/60">
+                <p className="px-4 py-8 text-center text-sm font-medium text-brand-brown/78">
                   {compMsg ?? "No hay cargado comprobante de pago a este pedido."}
                 </p>
               )}
@@ -4494,9 +4497,9 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
               <div>
                 <h3 className="font-serif text-lg font-bold text-brand-wine">Trazabilidad del pedido</h3>
-                <p className="text-xs text-brand-brown/50">Pedido {pedido.comanda}</p>
+                <p className="text-xs text-brand-brown/70">Pedido {pedido.comanda}</p>
               </div>
-              <button onClick={() => setVerTraza(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+              <button onClick={() => setVerTraza(false)} title="Cerrar" className="rounded-lg p-1.5 text-brand-brown/70 hover:bg-brand-cream-soft">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -4518,7 +4521,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                     Pedido {pedido.estado === "Cancelado" ? "cancelado" : "anulado"}
                   </p>
                   {pedido.motivo && (
-                    <p className="mt-0.5 text-xs text-brand-brown/70">
+                    <p className="mt-0.5 text-xs text-brand-brown/85">
                       Motivo: <span className="font-semibold">{pedido.motivo}</span>
                     </p>
                   )}
@@ -4528,13 +4531,13 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
               {/* Historial: creación, cambios de estado y anulación (quién y cuándo).
                   Se carga bajo demanda (no viaja en el listado). */}
               {trazaCargando ? (
-                <div className="mb-4 flex items-center justify-center gap-2 py-6 text-brand-brown/50">
+                <div className="mb-4 flex items-center justify-center gap-2 py-6 text-brand-brown/70">
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
                   <span className="text-xs font-medium">Cargando historial…</span>
                 </div>
               ) : traza && traza.length > 0 ? (
                 <div className="mb-4">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Historial</p>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Historial</p>
                   <ol className="relative space-y-3 border-l border-brand-brown/15 pl-4">
                     {traza.map((ev, i) => {
                       const esAnul = ev.tipo === "anulacion";
@@ -4569,11 +4572,11 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                           <span className={`absolute -left-[1.30rem] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white ${color}`} />
                           <p className="font-semibold text-brand-black">{titulo}</p>
                           {(esAnul || esCancel) && motivoEv && (
-                            <p className="text-xs text-brand-brown/70">
+                            <p className="text-xs text-brand-brown/85">
                               Motivo: <span className="font-medium">{motivoEv}</span>
                             </p>
                           )}
-                          <p className="text-xs text-brand-brown/50">
+                          <p className="text-xs text-brand-brown/70">
                             {ev.usuarioNombre ? `Por ${ev.usuarioNombre}` : "Usuario no registrado"}
                             {ev.usuarioCedula ? ` · ${ev.usuarioCedula}` : ""}
                             {" · "}
@@ -4585,7 +4588,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   </ol>
                 </div>
               ) : (
-                <p className="mb-4 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/50">
+                <p className="mb-4 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/70">
                   Este pedido no tiene historial registrado.
                 </p>
               )}
@@ -4593,7 +4596,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
               {/* Despacho: personal y horas del proceso */}
               {hayDespacho ? (
                 <div className="mb-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/40">Despacho</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">Despacho</p>
                   <div className="rounded-xl border border-brand-brown/10 bg-white p-3">
                     <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
                       {meta?.porcionador && <Dato label="Porcionador">{meta.porcionador}</Dato>}
@@ -4621,7 +4624,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                             >
                               Réplica -{r.numero}
                               {r.domiciliario ? (
-                                <span className="font-normal text-brand-brown/60">· {r.domiciliario}</span>
+                                <span className="font-normal text-brand-brown/78">· {r.domiciliario}</span>
                               ) : null}
                             </span>
                           ))}
@@ -4630,7 +4633,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                   </div>
                 </div>
               ) : (
-                <p className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/50">
+                <p className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/30 px-3 py-4 text-center text-xs text-brand-brown/70">
                   Este pedido aún no tiene información de despacho.
                 </p>
               )}
@@ -4812,7 +4815,7 @@ function DatoCliente({
 }) {
   return (
     <span className={`flex items-start gap-1.5 ${ancho ? "sm:col-span-2" : ""}`}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-brown/40">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-brown/60">
         <path strokeLinecap="round" strokeLinejoin="round" d={ICONOS[icono]} />
       </svg>
       <span className="break-words">{valor}</span>

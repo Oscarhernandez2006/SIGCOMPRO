@@ -5,6 +5,7 @@ import { PedidosService } from './pedidos.service';
 import { PedidosController } from './pedidos.controller';
 import { UsersModule } from '../users/users.module';
 import { UbicacionesModule } from '../ubicaciones/ubicaciones.module';
+import { DrivinSyncJob } from '../jobs/drivin-sync.job';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { UbicacionesModule } from '../ubicaciones/ubicaciones.module';
     }),
   ],
   controllers: [PedidosController],
-  providers: [PedidosService],
+  providers: [PedidosService, DrivinSyncJob],
   exports: [PedidosService],
 })
 export class PedidosModule {}

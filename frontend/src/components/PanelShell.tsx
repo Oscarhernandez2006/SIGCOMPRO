@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, refrescarUsuario, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
+import { cargarResumenPedidos } from "@/lib/pedidos";
+import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
 
@@ -179,7 +181,26 @@ export default function PanelShell({ children }: { children: ReactNode }) {
     void refrescarUsuario();
   }, [router]);
 
-  function cerrarSesion() {
+  /** Facturador/Despacho: antes de salir, avisa si quedan pedidos de hoy sin terminar en Despacho. */
+  async function cerrarSesion() {
+    const rol = (usuario?.rol ?? "").trim().toLowerCase();
+    if (rol === "facturador" || rol === "despacho") {
+      try {
+        const { pedidos } = await cargarResumenPedidos({ rango: "hoy" });
+        const pendientes = pedidos.filter(
+          (p) => !p.anulado && !yaDespachado(p.estado) && (p.estado ?? "").trim().toLowerCase() !== "anulado",
+        );
+        if (pendientes.length > 0) {
+          const n = pendientes.length;
+          const continuar = confirm(
+            `Tienes ${n} pedido${n === 1 ? "" : "s"} pendiente${n === 1 ? "" : "s"} en Despacho. ¿Seguro que quieres cerrar sesión?`,
+          );
+          if (!continuar) return;
+        }
+      } catch {
+        /* si falla la consulta, no bloquea el cierre de sesión */
+      }
+    }
     limpiarSesion();
     router.replace("/");
   }

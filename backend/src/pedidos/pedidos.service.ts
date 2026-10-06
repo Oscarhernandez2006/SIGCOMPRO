@@ -1906,16 +1906,19 @@ export class PedidosService implements OnModuleInit {
 
   /**
    * Sincroniza desasignaciones de Drivin: si un pedido que tiene domiciliario
-   * asignado fue desasignado en Drivin (vehicle_code = null), lo devuelve a
-   * estado "En proceso" y limpia el domiciliario de la metadata.
-   * Útil para mantener SIGCOMPRO sincronizado con cambios en Drivin.
+   * asignado fue desasignado en Drivin (vehicle_code = null), lo devuelve al
+   * estado previo (Facturado si ya estaba Despachado; si no, En proceso) y
+   * limpia el domiciliario de la metadata. Así SIGCOMPRO queda sincronizado
+   * con Drivin incluso si nadie tiene Despacho abierto en el navegador (esa
+   * vista hace lo mismo pero solo mientras está activa).
    */
   async sincronizarDesasignacionesDrivin(): Promise<number> {
     let desasignados = 0;
     try {
       const asignaciones = await this.asignacionesDrivin();
       
-      // Busca pedidos EN PROCESO O FACTURADOS que tengan domiciliario asignado
+      // Busca pedidos con domiciliario asignado en cualquier paso donde eso
+      // ya aplica (incluido Despachado, que Drivin puede desasignar luego).
       const res = await this.pool.query<{
         id: string;
         comanda: string;
@@ -1924,7 +1927,7 @@ export class PedidosService implements OnModuleInit {
       }>(
         `SELECT id, comanda, estado, meta FROM pedidos
          WHERE anulado = false
-         AND LOWER(COALESCE(estado, '')) IN ('en proceso', 'en producción', 'alistado', 'facturado')
+         AND LOWER(COALESCE(estado, '')) IN ('en proceso', 'en producción', 'alistado', 'facturado', 'despachado')
          AND meta->>'domiciliario' IS NOT NULL`,
       );
 
@@ -1934,15 +1937,16 @@ export class PedidosService implements OnModuleInit {
         
         // Si la comanda no está en Drivin o está desasignada (null)
         if (asign === null || (asign === undefined && Object.keys(asignaciones).length > 0)) {
-          // Devuelve a "En proceso" para que pueda ser reasignado
-          await this.actualizarMeta(ped.id, { domiciliario: null });
+          const estabaDespachado = String(ped.estado ?? '').trim().toLowerCase() === 'despachado';
+          const nuevoEstado = estabaDespachado ? 'Facturado' : 'En proceso';
+          await this.actualizarMeta(ped.id, { domiciliario: null, domiciliarioCodigo: null });
           await this.pool.query(
             `UPDATE pedidos SET estado = $1, actualizado_en = now() WHERE id = $2`,
-            ['En proceso', ped.id],
+            [nuevoEstado, ped.id],
           );
           desasignados++;
           this.logger.log(
-            `Pedido desasignado en Drivin: ${comanda} (${ped.id}) → "En proceso"`,
+            `Pedido desasignado en Drivin: ${comanda} (${ped.id}) → "${nuevoEstado}"`,
           );
         }
       }
