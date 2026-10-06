@@ -109,7 +109,7 @@ export default function SeleccionarPanelPage() {
 
       {/* "relative" (sin z-index) para que pinte encima de los fondos
           absolutos de arriba; ya está en el mismo nivel de apilado. */}
-      <div className="relative w-full max-w-4xl">
+      <div className="relative w-full max-w-6xl">
         {/* Encabezado */}
         <div className="mb-8 flex flex-col items-center text-center">
           <Image
@@ -129,7 +129,7 @@ export default function SeleccionarPanelPage() {
         </div>
 
         {/* Tarjetas de selección (solo paneles accesibles) */}
-        <div className="flex flex-row gap-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {paneles.map((panel) => {
             const p = PRESENTACION[panel.key];
             if (!p) return null;
@@ -138,7 +138,7 @@ export default function SeleccionarPanelPage() {
                 key={panel.key}
                 onClick={() => router.push(panel.href)}
                 title={`Ingresar al panel ${panel.label}`}
-                className={`group flex flex-1 flex-col items-start rounded-3xl border border-white/30 bg-brand-cream/95 p-6 text-left shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md transition hover:-translate-y-1 ${p.hover}`}
+                className={`group flex flex-col items-start rounded-3xl border border-white/30 bg-brand-cream/95 p-6 text-left shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md transition hover:-translate-y-1 ${p.hover}`}
               >
                 <span
                   className={`flex h-12 w-12 items-center justify-center rounded-2xl ${p.acento}`}
