@@ -97,7 +97,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-base font-bold text-brand-black">Nuevo grupo</p>
-          <button onClick={onClose} className="rounded-full p-1 text-brand-brown/50 hover:bg-brand-cream-soft" title="Cerrar">
+          <button onClick={onClose} className="rounded-full p-1 text-brand-black hover:bg-brand-cream-soft" title="Cerrar">
             ×
           </button>
         </div>
@@ -109,7 +109,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
             <input type="file" accept="image/*" onChange={seleccionarImagen} className="hidden" />
           </label>
           {imagen && (
-            <button onClick={() => setImagen(null)} className="text-xs text-brand-brown/50 underline">
+            <button onClick={() => setImagen(null)} className="text-xs text-brand-black underline">
               Quitar
             </button>
           )}
@@ -123,7 +123,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
           className="mb-3 w-full rounded-lg border border-brand-brown/15 px-3 py-2 text-sm outline-none focus:border-brand-wine"
         />
 
-        <p className="mb-1 text-xs font-semibold text-brand-brown/60">
+        <p className="mb-1 text-xs font-semibold text-brand-black">
           Participantes {seleccionados.size > 0 ? `(${seleccionados.size})` : ""}
         </p>
         <input
@@ -134,7 +134,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
         />
         <div className="mb-3 max-h-56 overflow-y-auto rounded-lg border border-brand-brown/10">
           {contactosFiltrados.length === 0 && (
-            <p className="px-3 py-4 text-center text-xs text-brand-brown/40">Sin usuarios para mostrar.</p>
+            <p className="px-3 py-4 text-center text-xs text-brand-black">Sin usuarios para mostrar.</p>
           )}
           {contactosFiltrados.map((c) => {
             const marcado = seleccionados.has(c.id);
@@ -158,7 +158,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-brand-black">{c.nombre}</span>
-                  <span className="block truncate text-[11px] text-brand-brown/50">{c.rol}</span>
+                  <span className="block truncate text-[11px] text-brand-black">{c.rol}</span>
                 </span>
               </button>
             );
@@ -168,7 +168,7 @@ export function ModalCrearGrupo({ contactos, onClose, onCreado }: ModalCrearGrup
         {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
 
         <div className="flex items-center justify-end gap-2">
-          <button onClick={onClose} className="rounded-full px-4 py-1.5 text-sm font-semibold text-brand-brown/60 hover:bg-brand-cream-soft">
+          <button onClick={onClose} className="rounded-full px-4 py-1.5 text-sm font-semibold text-brand-black hover:bg-brand-cream-soft">
             Cancelar
           </button>
           <button
@@ -275,7 +275,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-base font-bold text-brand-black">Detalle del grupo</p>
-          <button onClick={onClose} className="rounded-full p-1 text-brand-brown/50 hover:bg-brand-cream-soft" title="Cerrar">
+          <button onClick={onClose} className="rounded-full p-1 text-brand-black hover:bg-brand-cream-soft" title="Cerrar">
             ×
           </button>
         </div>
@@ -288,7 +288,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
               <input type="file" accept="image/*" onChange={seleccionarImagen} className="hidden" />
             </label>
             {imagen && (
-              <button onClick={() => setImagen(null)} className="text-left text-xs text-brand-brown/50 underline">
+              <button onClick={() => setImagen(null)} className="text-left text-xs text-brand-black underline">
                 Quitar imagen
               </button>
             )}
@@ -312,7 +312,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
           </button>
         )}
 
-        <p className="mb-1 text-xs font-semibold text-brand-brown/60">Participantes ({grupo.miembros.length})</p>
+        <p className="mb-1 text-xs font-semibold text-brand-black">Participantes ({grupo.miembros.length})</p>
         <div className="mb-3 max-h-40 overflow-y-auto rounded-lg border border-brand-brown/10">
           {grupo.miembros.map((m) => (
             <div key={m.id} className="flex items-center justify-between gap-2 border-b border-brand-brown/5 px-3 py-2 last:border-b-0">
@@ -321,7 +321,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
                   {m.nombre}
                   {m.id === usuarioId ? " (Tú)" : ""}
                 </p>
-                <p className="truncate text-[11px] text-brand-brown/50">{m.rol}</p>
+                <p className="truncate text-[11px] text-brand-black">{m.rol}</p>
               </div>
               {m.id !== usuarioId && (
                 <button
@@ -336,7 +336,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
           ))}
         </div>
 
-        <p className="mb-1 text-xs font-semibold text-brand-brown/60">Agregar participantes</p>
+        <p className="mb-1 text-xs font-semibold text-brand-black">Agregar participantes</p>
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
@@ -345,13 +345,13 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
         />
         <div className="mb-3 max-h-40 overflow-y-auto rounded-lg border border-brand-brown/10">
           {disponibles.length === 0 && (
-            <p className="px-3 py-4 text-center text-xs text-brand-brown/40">No hay más usuarios para agregar.</p>
+            <p className="px-3 py-4 text-center text-xs text-brand-black">No hay más usuarios para agregar.</p>
           )}
           {disponibles.map((c) => (
             <div key={c.id} className="flex items-center justify-between gap-2 border-b border-brand-brown/5 px-3 py-2 last:border-b-0">
               <div className="min-w-0">
                 <p className="truncate text-sm text-brand-black">{c.nombre}</p>
-                <p className="truncate text-[11px] text-brand-brown/50">{c.rol}</p>
+                <p className="truncate text-[11px] text-brand-black">{c.rol}</p>
               </div>
               <button
                 onClick={() => agregarMiembro(c.id)}
@@ -367,7 +367,7 @@ export function ModalDetalleGrupo({ grupo, contactos, usuarioId, onClose, onActu
         {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
 
         <div className="flex items-center justify-end">
-          <button onClick={onClose} className="rounded-full px-4 py-1.5 text-sm font-semibold text-brand-brown/60 hover:bg-brand-cream-soft">
+          <button onClick={onClose} className="rounded-full px-4 py-1.5 text-sm font-semibold text-brand-black hover:bg-brand-cream-soft">
             Cerrar
           </button>
         </div>

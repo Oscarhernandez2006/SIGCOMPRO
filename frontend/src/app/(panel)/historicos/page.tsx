@@ -237,13 +237,13 @@ export default function HistoricosPage() {
     <div>
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">Históricos</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Pedidos ya despachados o anulados. Se retiran de Despacho para dar
           prioridad a los que están en proceso.
         </p>
         {puntosDisponibles.length > 0 && (
           <label className="mt-2 inline-flex items-center gap-2">
-            <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+            <span className="text-xs font-semibold text-brand-black">Punto:</span>
             <div className="relative">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
@@ -270,7 +270,7 @@ export default function HistoricosPage() {
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
           </svg>
           <input
@@ -286,7 +286,7 @@ export default function HistoricosPage() {
               onClick={() => setBusqueda("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -344,20 +344,20 @@ export default function HistoricosPage() {
             Limpiar
           </button>
         )}
-        <span className="ml-auto text-xs font-medium text-brand-brown/60">
+        <span className="ml-auto text-xs font-medium text-brand-black">
           {historicos.length} {historicos.length === 1 ? "pedido" : "pedidos"}
         </span>
       </div>
 
       {/* Tabla */}
       {cargando || !filtroListo ? (
-        <p className="text-sm text-brand-brown/60">Cargando…</p>
+        <p className="text-sm text-brand-black">Cargando…</p>
       ) : buscando && historicos.length === 0 ? (
-        <p className="text-sm text-brand-brown/60">Buscando en el historial…</p>
+        <p className="text-sm text-brand-black">Buscando en el historial…</p>
       ) : historicos.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center">
           <p className="font-medium text-brand-black">Sin resultados</p>
-          <p className="mt-1 max-w-sm text-sm text-brand-brown/60">
+          <p className="mt-1 max-w-sm text-sm text-brand-black">
             No hay pedidos despachados o anulados que coincidan con el filtro.
           </p>
         </div>
@@ -365,7 +365,7 @@ export default function HistoricosPage() {
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
           <div className="max-h-[calc(100vh-300px)] overflow-auto">
             <table className="w-full min-w-[820px] text-sm">
-              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-brown/50 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-left text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="px-4 py-3">Comanda / Factura</th>
                   <th className="px-4 py-3">Cliente</th>
@@ -400,7 +400,7 @@ export default function HistoricosPage() {
                         <ReplicasEstado meta={m} />
                       </td>
                       <td className="px-4 py-3">{p.cliente.nombre || p.cliente.nit_cedula}</td>
-                      <td className="px-4 py-3 text-brand-brown/70">{p.punto.nombre}</td>
+                      <td className="px-4 py-3 text-brand-black">{p.punto.nombre}</td>
                       <td className="px-4 py-3 align-top font-medium">
                         <div>{formatoCOP(p.total)}</div>
                         {typeof m?.facturaValor === "number" && m.facturaValor > 0 && (
@@ -412,7 +412,7 @@ export default function HistoricosPage() {
                           {p.estado || (anulado ? "Anulado" : "Despachado")}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-brand-brown/60">{new Date(p.fecha).toLocaleString("es-CO")}</td>
+                      <td className="px-4 py-3 text-brand-black">{new Date(p.fecha).toLocaleString("es-CO")}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
                           <button onClick={() => setDetalle(p)} aria-label="Ver detalle" title="Ver el detalle del pedido" className="rounded-lg border border-brand-brown/15 p-1.5 text-brand-brown transition hover:bg-brand-cream-soft">

@@ -80,7 +80,7 @@ export default function MiCreditoPage() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center space-y-3">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-3 border-brand-wine/20 border-t-brand-wine" />
-          <p className="text-sm text-brand-brown/50">Cargando tu estado de crédito…</p>
+          <p className="text-sm text-brand-black">Cargando tu estado de crédito…</p>
         </div>
       </div>
     );
@@ -97,7 +97,7 @@ export default function MiCreditoPage() {
             </svg>
           </div>
           <h2 className="mt-4 font-serif text-lg font-bold text-brand-wine">Sin información</h2>
-          <p className="mt-2 text-sm text-brand-brown/65">{error}</p>
+          <p className="mt-2 text-sm text-brand-black">{error}</p>
         </div>
       </div>
     );
@@ -187,8 +187,8 @@ export default function MiCreditoPage() {
               </svg>
             </div>
             <p className={`truncate text-sm font-bold tabular-nums leading-tight sm:text-base ${k.color}`} title={k.val}>{k.val}</p>
-            <p className="mt-0.5 truncate text-[11px] text-brand-brown/50">{k.label}</p>
-            <p className="truncate text-[10px] text-brand-brown/35">{k.sub}</p>
+            <p className="mt-0.5 truncate text-[11px] text-brand-black">{k.label}</p>
+            <p className="truncate text-[10px] text-brand-black">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -202,7 +202,7 @@ export default function MiCreditoPage() {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/50">Próximo descuento de nómina</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-black">Próximo descuento de nómina</p>
             <p className="text-sm font-bold capitalize text-brand-black leading-tight">{fechaLarga(trabajador.fecha_proximo_descuento)}</p>
           </div>
           {dias !== null && (
@@ -214,7 +214,7 @@ export default function MiCreditoPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-brand-brown/15 bg-neutral-50/60 px-5 py-4 text-center">
-          <p className="text-xs text-brand-brown/35 italic">Sin fecha de descuento registrada · Consulta con administración</p>
+          <p className="text-xs text-brand-black italic">Sin fecha de descuento registrada · Consulta con administración</p>
         </div>
       )}
 
@@ -228,14 +228,14 @@ export default function MiCreditoPage() {
             <p className="text-sm font-semibold text-brand-black">Últimas compras</p>
           </div>
           {pedidos.length > 0 && (
-            <span className="rounded-full bg-brand-brown/8 px-2.5 py-0.5 text-[11px] font-semibold text-brand-brown/60">
+            <span className="rounded-full bg-brand-brown/8 px-2.5 py-0.5 text-[11px] font-semibold text-brand-black">
               {pedidos.length} registros
             </span>
           )}
         </div>
         {pedidos.length === 0 ? (
           <div className="px-5 py-8 text-center">
-            <p className="text-sm text-brand-brown/40">No tienes compras registradas aún.</p>
+            <p className="text-sm text-brand-black">No tienes compras registradas aún.</p>
           </div>
         ) : (
           <div className="divide-y divide-brand-brown/6">
@@ -248,7 +248,7 @@ export default function MiCreditoPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-brand-black leading-tight">{p.punto_nombre}</p>
-                  <p className="text-[11px] text-brand-brown/50">{fechaCorta(p.creado_en)}</p>
+                  <p className="text-[11px] text-brand-black">{fechaCorta(p.creado_en)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold tabular-nums text-brand-black">{money(Number(p.total))}</p>
@@ -265,7 +265,7 @@ export default function MiCreditoPage() {
       {/* ── Siesa saldo si disponible ── */}
       {trabajador.siesa_saldo !== null && (
         <div className="flex items-center justify-between rounded-2xl border border-brand-brown/10 bg-white px-5 py-3.5 shadow-sm">
-          <div className="flex items-center gap-2 text-xs text-brand-brown/50">
+          <div className="flex items-center gap-2 text-xs text-brand-black">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
             </svg>

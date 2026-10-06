@@ -365,7 +365,7 @@ export default function ClientesPage() {
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
               Importando clientes
             </h3>
-            <p className="mt-1 text-center text-sm text-brand-brown/70">
+            <p className="mt-1 text-center text-sm text-brand-black">
               {faseImport === "subiendo"
                 ? `Subiendo el archivo… ${pctSubida}%`
                 : "Procesando en el servidor: leyendo el Excel, comparando y guardando…"}
@@ -383,7 +383,7 @@ export default function ClientesPage() {
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between text-xs text-brand-brown/60">
+            <div className="mt-3 flex items-center justify-between text-xs text-brand-black">
               <span>
                 {faseImport === "subiendo" ? "Subiendo archivo" : "Procesando"}
               </span>
@@ -391,7 +391,7 @@ export default function ClientesPage() {
                 {Math.floor(segImport / 60)}:{String(segImport % 60).padStart(2, "0")}
               </span>
             </div>
-            <p className="mt-3 text-center text-[11px] text-brand-brown/45">
+            <p className="mt-3 text-center text-[11px] text-brand-black">
               No cierres esta página mientras se importa.
             </p>
           </div>
@@ -404,7 +404,7 @@ export default function ClientesPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Clientes
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Directorio de clientes del negocio.
           </p>
         </div>
@@ -456,7 +456,7 @@ export default function ClientesPage() {
             </svg>
             {importando ? "Importando…" : "Importar DB"}
           </button>
-          <p className="text-xs text-brand-brown/70">
+          <p className="text-xs text-brand-black">
             Sube el Excel de clientes (.xlsx, .xlsm). Crea los nuevos y actualiza
             los que cambiaron, comparando por NIT/cédula.
           </p>
@@ -490,7 +490,7 @@ export default function ClientesPage() {
       {/* Estadísticas de calidad de datos */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-brand-brown/50">
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-black">
             Total clientes
           </p>
           <p className="mt-1 text-2xl font-bold text-brand-brown">
@@ -538,7 +538,7 @@ export default function ClientesPage() {
       {/* Buscador */}
       <div className="mb-4 max-w-md">
         <div className="relative">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
           </svg>
           <input
@@ -553,7 +553,7 @@ export default function ClientesPage() {
               onClick={() => setBusquedaInput("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -573,7 +573,7 @@ export default function ClientesPage() {
       <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
         <div className="max-h-[calc(100vh-300px)] overflow-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+            <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
               <tr>
                 <th className="px-4 py-3 font-semibold">Nombre</th>
                 <th className="px-4 py-3 font-semibold">NIT/Cédula</th>
@@ -588,13 +588,13 @@ export default function ClientesPage() {
             <tbody className="divide-y divide-brand-brown/5">
               {cargando ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-10 text-center text-brand-black">
                     Cargando clientes…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-10 text-center text-brand-black">
                     No se encontraron clientes.
                   </td>
                 </tr>
@@ -606,16 +606,16 @@ export default function ClientesPage() {
                         {c.nombre || "—"}
                       </span>
                       {c.direccion && (
-                        <span className="block text-xs text-brand-brown/50">
+                        <span className="block text-xs text-brand-black">
                           {c.direccion}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/80">{c.nit_cedula}</td>
-                    <td className="px-4 py-3 text-brand-brown/80">{c.telefono || "—"}</td>
-                    <td className="px-4 py-3 text-brand-brown/80">{c.barrio || "—"}</td>
-                    <td className="px-4 py-3 text-brand-brown/80">{c.ciudad || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-brand-brown/80">{c.punto_venta || "—"}</td>
+                    <td className="px-4 py-3 text-brand-black">{c.nit_cedula}</td>
+                    <td className="px-4 py-3 text-brand-black">{c.telefono || "—"}</td>
+                    <td className="px-4 py-3 text-brand-black">{c.barrio || "—"}</td>
+                    <td className="px-4 py-3 text-brand-black">{c.ciudad || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-brand-black">{c.punto_venta || "—"}</td>
                     <td className="px-4 py-3">
                       {(() => {
                         const estado = estadoUbicacion(c);
@@ -674,7 +674,7 @@ export default function ClientesPage() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={permite.editar ? () => abrirEditar(c) : sinPermiso.mostrar}
-                          className={`rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-brand-amber/10 hover:text-brand-amber ${permite.editar ? "" : "opacity-50"}`}
+                          className={`rounded-lg p-1.5 text-brand-black transition hover:bg-brand-amber/10 hover:text-brand-amber ${permite.editar ? "" : "opacity-50"}`}
                           aria-label="Editar"
                           title="Editar cliente"
                         >
@@ -684,7 +684,7 @@ export default function ClientesPage() {
                         </button>
                         <button
                           onClick={permite.eliminar ? () => setAEliminar(c) : sinPermiso.mostrar}
-                          className={`rounded-lg p-1.5 text-brand-brown/60 transition hover:bg-red-50 hover:text-red-600 ${permite.eliminar ? "" : "opacity-50"}`}
+                          className={`rounded-lg p-1.5 text-brand-black transition hover:bg-red-50 hover:text-red-600 ${permite.eliminar ? "" : "opacity-50"}`}
                           aria-label="Eliminar"
                           title="Eliminar cliente"
                         >
@@ -703,7 +703,7 @@ export default function ClientesPage() {
 
         {/* Paginación */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-brown/10 px-4 py-3 text-sm">
-          <span className="text-brand-brown/60">{rango}</span>
+          <span className="text-brand-black">{rango}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPagina((p) => Math.max(0, p - 1))}
@@ -713,7 +713,7 @@ export default function ClientesPage() {
             >
               Anterior
             </button>
-            <span className="text-brand-brown/60">
+            <span className="text-brand-black">
               {pagina + 1} / {totalPaginas}
             </span>
             <button
@@ -737,7 +737,7 @@ export default function ClientesPage() {
               disabled={guardando}
               aria-label="Cerrar"
               title="Cerrar sin guardar"
-              className="sticky top-0 z-20 float-right -mr-2 -mt-2 rounded-lg bg-white p-1.5 text-brand-brown/50 shadow-sm transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-50"
+              className="sticky top-0 z-20 float-right -mr-2 -mt-2 rounded-lg bg-white p-1.5 text-brand-black shadow-sm transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -768,7 +768,7 @@ export default function ClientesPage() {
                       />
                     </Campo>
                     <label
-                      className={`flex items-end gap-2 pb-2 text-sm text-brand-brown/80 ${permite.estado ? "" : "opacity-50"}`}
+                      className={`flex items-end gap-2 pb-2 text-sm text-brand-black ${permite.estado ? "" : "opacity-50"}`}
                       onClick={permite.estado ? undefined : (e) => { e.preventDefault(); sinPermiso.mostrar(); }}
                     >
                       <input
@@ -842,7 +842,7 @@ export default function ClientesPage() {
                 {/* Bloque: clasificación (debajo de contacto y referencia) */}
                 <Bloque titulo="Clasificación">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                    <label className="flex items-center gap-2 text-sm text-brand-black">
                       <input
                         type="radio"
                         name="tipo-cliente"
@@ -853,7 +853,7 @@ export default function ClientesPage() {
                       Cliente hogar
                     </label>
 
-                    <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                    <label className="flex items-center gap-2 text-sm text-brand-black">
                       <input
                         type="radio"
                         name="tipo-cliente"
@@ -866,7 +866,7 @@ export default function ClientesPage() {
                   </div>
 
                   {form.vendedor_asignado && (
-                    <p className="mt-2 text-xs text-brand-brown/60">
+                    <p className="mt-2 text-xs text-brand-black">
                       Vendedor asignado (Siesa): <span className="font-semibold text-brand-black">{form.vendedor_asignado}</span>
                     </p>
                   )}
@@ -874,7 +874,7 @@ export default function ClientesPage() {
                   {/* Días de despacho: solo para clientes HORECA. */}
                   {tipoCliente === "horeca" && (
                     <div className="mt-3 border-t border-brand-brown/10 pt-2">
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                         Días de despacho
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -904,7 +904,7 @@ export default function ClientesPage() {
                           );
                         })}
                       </div>
-                      <p className="mt-1 text-[11px] text-brand-brown/50">
+                      <p className="mt-1 text-[11px] text-brand-black">
                         Días en que se le puede despachar a este cliente.
                       </p>
                     </div>
@@ -973,7 +973,7 @@ export default function ClientesPage() {
                 onClick={() => setModalAbierto(false)}
                 disabled={guardando}
                 title="Cancelar y cerrar sin guardar"
-                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
+                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -997,7 +997,7 @@ export default function ClientesPage() {
             <h2 className="font-serif text-lg font-bold text-brand-wine">
               Eliminar cliente
             </h2>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-black">
               ¿Seguro que deseas eliminar a{" "}
               <span className="font-medium text-brand-black">
                 {aEliminar.nombre || aEliminar.nit_cedula}
@@ -1009,7 +1009,7 @@ export default function ClientesPage() {
                 onClick={() => setAEliminar(null)}
                 disabled={eliminando}
                 title="Cancelar"
-                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
+                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -1041,7 +1041,7 @@ function Campo({
 }) {
   return (
     <label className={`block ${full ? "sm:col-span-2" : ""}`}>
-      <span className="mb-1 block text-xs font-medium text-brand-brown/70">
+      <span className="mb-1 block text-xs font-medium text-brand-black">
         {label}
       </span>
       {children}

@@ -95,14 +95,14 @@ export default function AdminTiposCortePage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Tipos de corte
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Opciones que aparecen en el selector de corte al porcionar un
             producto en el pedido.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {guardando && (
-            <span className="text-xs font-medium text-brand-brown/60">
+            <span className="text-xs font-medium text-brand-black">
               Guardando…
             </span>
           )}
@@ -119,7 +119,7 @@ export default function AdminTiposCortePage() {
       )}
 
       {cargando ? (
-        <p className="text-sm text-brand-brown/60">Cargando…</p>
+        <p className="text-sm text-brand-black">Cargando…</p>
       ) : (
         <div className="max-w-2xl overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
           {/* Agregar nuevo corte */}
@@ -150,7 +150,7 @@ export default function AdminTiposCortePage() {
           </div>
 
           {cortes.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-brand-brown/50">
+            <p className="px-4 py-8 text-center text-sm text-brand-black">
               Aún no hay tipos de corte. Agrega el primero arriba.
             </p>
           ) : (

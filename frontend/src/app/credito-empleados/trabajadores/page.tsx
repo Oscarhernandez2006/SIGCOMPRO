@@ -128,12 +128,12 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
             <h2 className="font-serif text-lg font-bold text-brand-wine">
               {esEdicion ? "Editar trabajador" : "Nuevo trabajador"}
             </h2>
-            <p className="text-xs text-brand-brown/55">
+            <p className="text-xs text-brand-black">
               {esEdicion ? "Modifica los datos del colaborador o su cupo." : "Registra el colaborador para habilitar crédito."}
             </p>
           </div>
           <button type="button" onClick={onClose} disabled={guardando} aria-label="Cerrar"
-            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-40">
+            className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-40">
             <Icon d={Ico.xmark} cls="h-5 w-5" />
           </button>
         </div>
@@ -146,7 +146,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-brand-black">{form.nombre}</p>
-              {form.cedula && <p className="text-xs text-brand-brown/55">CC {form.cedula}</p>}
+              {form.cedula && <p className="text-xs text-brand-black">CC {form.cedula}</p>}
             </div>
             {form.cupo_asignado && Number(form.cupo_asignado) > 0 && (
               <span className="ml-auto rounded-full bg-brand-wine/10 px-2.5 py-0.5 text-xs font-bold text-brand-wine">
@@ -160,7 +160,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
         <form onSubmit={guardar} className="px-5 py-4 space-y-4">
           {/* Cédula */}
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
               <Icon d={Ico.idCard} cls="h-3.5 w-3.5" />Cédula
             </label>
             <input
@@ -175,17 +175,17 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               onBlur={(e) => { if (e.target.value.length >= 6) autocompletarSiesa(e.target.value); }}
               disabled={esEdicion}
               placeholder="Número de documento"
-              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine disabled:bg-neutral-50 disabled:text-brand-brown/50"
+              className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine disabled:bg-neutral-50 disabled:text-brand-black"
             />
-            {esEdicion && <p className="mt-1 text-xs text-brand-brown/35">La cédula no puede modificarse.</p>}
+            {esEdicion && <p className="mt-1 text-xs text-brand-black">La cédula no puede modificarse.</p>}
             {!esEdicion && buscandoSiesa && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-brand-brown/50">
+              <p className="mt-1 flex items-center gap-1 text-xs text-brand-black">
                 <span className="h-3 w-3 animate-spin rounded-full border border-brand-wine/30 border-t-brand-wine" />
                 Buscando en Siesa…
               </p>
             )}
             {!esEdicion && siesaMsg && !buscandoSiesa && (
-              <p className={`mt-1 text-xs ${siesaMsg.startsWith("✓") ? "text-brand-wine font-medium" : "text-brand-brown/40 italic"}`}>
+              <p className={`mt-1 text-xs ${siesaMsg.startsWith("✓") ? "text-brand-wine font-medium" : "text-brand-black italic"}`}>
                 {siesaMsg}
               </p>
             )}
@@ -193,7 +193,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
 
           {/* Nombre */}
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
               <Icon d={Ico.user} cls="h-3.5 w-3.5" />Nombre completo
             </label>
             <input
@@ -206,7 +206,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
 
           {/* Cupo */}
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
               <Icon d={Ico.money} cls="h-3.5 w-3.5" />Cupo asignado (COP)
             </label>
             <input
@@ -223,9 +223,9 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
           {/* Activo */}
           {/* Fecha próximo descuento */}
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-              Próximo descuento <span className="font-normal normal-case text-brand-brown/35">(opcional)</span>
+              Próximo descuento <span className="font-normal normal-case text-brand-black">(opcional)</span>
             </label>
             <input
               type="date"
@@ -233,7 +233,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
               onChange={(e) => setForm((f) => ({ ...f, fecha_proximo_descuento: e.target.value }))}
               className="h-11 w-full rounded-xl border border-brand-brown/25 px-3 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]"
             />
-            <p className="mt-1 text-xs text-brand-brown/40">Fecha en que se descontará de nómina</p>
+            <p className="mt-1 text-xs text-brand-black">Fecha en que se descontará de nómina</p>
           </div>
 
           {/* Activo */}
@@ -246,7 +246,7 @@ function ModalTrabajador({ inicial, esEdicion, onClose, onGuardado }: {
             />
             <div className="flex-1">
               <p className="text-sm font-medium text-brand-black">Trabajador activo</p>
-              <p className="text-xs text-brand-brown/55">Solo los activos pueden realizar compras a crédito</p>
+              <p className="text-xs text-brand-black">Solo los activos pueden realizar compras a crédito</p>
             </div>
             <div className={`h-2.5 w-2.5 rounded-full ${form.activo ? "bg-brand-wine" : "bg-neutral-300"}`} />
           </label>
@@ -361,7 +361,7 @@ export default function TrabajadoresCreditoPage() {
   const kpis = [
     { label: "Total",     val: String(total),              color: "text-brand-black",   bg: "bg-brand-brown/8",  ico: Ico.users     },
     { label: "Activos",   val: String(activosTotal),        color: "text-brand-wine",   bg: "bg-brand-wine/5",     ico: Ico.userCheck },
-    { label: "Inactivos", val: String(inactivosTotal),      color: "text-brand-brown/60", bg: "bg-neutral-100",   ico: Ico.userX     },
+    { label: "Inactivos", val: String(inactivosTotal),      color: "text-brand-black", bg: "bg-neutral-100",   ico: Ico.userX     },
   ];
 
   return (
@@ -370,7 +370,7 @@ export default function TrabajadoresCreditoPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl font-bold text-brand-wine">Trabajadores y cupos</h1>
-          <p className="mt-0.5 text-sm text-brand-brown/60">Gestiona los colaboradores habilitados para compras a crédito.</p>
+          <p className="mt-0.5 text-sm text-brand-black">Gestiona los colaboradores habilitados para compras a crédito.</p>
         </div>
         {puedeGestionar && (
           <div className="flex flex-wrap gap-2">
@@ -425,7 +425,7 @@ export default function TrabajadoresCreditoPage() {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-brand-brown/55">{k.label}</p>
+              <p className="text-xs text-brand-black">{k.label}</p>
               <p className={`mt-0.5 text-xl font-bold ${k.color}`}>{k.val}</p>
             </div>
           </div>
@@ -435,7 +435,7 @@ export default function TrabajadoresCreditoPage() {
       {/* Buscador */}
       <div className="flex gap-2 rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
         <div className="relative flex-1">
-          <Icon d={Ico.search} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35" />
+          <Icon d={Ico.search} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black" />
           <input
             value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
@@ -449,7 +449,7 @@ export default function TrabajadoresCreditoPage() {
         </button>
         {busqueda && (
           <button type="button" onClick={() => { setBusqueda(""); setPagina(1); }}
-            className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/55 transition hover:bg-brand-cream-soft">
+            className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-black transition hover:bg-brand-cream-soft">
             Limpiar
           </button>
         )}
@@ -468,7 +468,7 @@ export default function TrabajadoresCreditoPage() {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                 <th className="px-4 py-3">Colaborador</th>
                 <th className="px-4 py-3 text-right">Cupo</th>
                 <th className="px-4 py-3 text-right">Deuda</th>
@@ -480,7 +480,7 @@ export default function TrabajadoresCreditoPage() {
             <tbody>
               {cargando ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-brand-brown/50">
+                  <td colSpan={6} className="px-4 py-12 text-center text-brand-black">
                     <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Cargando…</span>
                   </td>
@@ -488,12 +488,12 @@ export default function TrabajadoresCreditoPage() {
               ) : trabajadores.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-14 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-brown/8 text-brand-brown/30">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-brown/8 text-brand-black">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
                         {Ico.users}
                       </svg>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-brand-brown/50">
+                    <p className="mt-3 text-sm font-medium text-brand-black">
                       {busqueda ? "No se encontraron colaboradores." : "Aún no hay colaboradores registrados."}
                     </p>
                     {!busqueda && puedeGestionar && (
@@ -516,11 +516,11 @@ export default function TrabajadoresCreditoPage() {
                           </div>
                           <div>
                             <p className="font-medium text-brand-black leading-tight">{t.nombre}</p>
-                            <p className="text-[11px] text-brand-brown/50">CC {t.cedula}</p>
+                            <p className="text-[11px] text-brand-black">CC {t.cedula}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-brand-brown/75">{money(Number(t.cupo_asignado) || 0)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-brand-black">{money(Number(t.cupo_asignado) || 0)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-amber-700">{money(Number(t.deuda_vigente) || 0)}</td>
                       <td className={`px-4 py-3 text-right font-semibold tabular-nums ${disponible > 0 ? "text-brand-wine" : "text-rose-600"}`}>
                         {money(disponible)}
@@ -551,7 +551,7 @@ export default function TrabajadoresCreditoPage() {
       {/* Paginación */}
       {!cargando && total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
-          <p className="text-xs text-brand-brown/55">
+          <p className="text-xs text-brand-black">
             Mostrando {(pagina - 1) * PAGE_SIZE + 1}–{Math.min(pagina * PAGE_SIZE, total)} de {total}
           </p>
           <div className="flex items-center gap-2">
@@ -562,7 +562,7 @@ export default function TrabajadoresCreditoPage() {
               </svg>
               Anterior
             </button>
-            <span className="text-xs font-medium text-brand-brown/60">Página {pagina} de {totalPaginas}</span>
+            <span className="text-xs font-medium text-brand-black">Página {pagina} de {totalPaginas}</span>
             <button type="button" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={pagina >= totalPaginas}
               className="flex h-8 items-center gap-1 rounded-lg border border-brand-brown/20 px-3 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-40 disabled:hover:bg-transparent">
               Siguiente
@@ -596,20 +596,20 @@ export default function TrabajadoresCreditoPage() {
               </div>
               <div className="flex-1">
                 <h2 className="font-serif text-lg font-bold text-brand-wine">Importar trabajadores</h2>
-                <p className="text-xs text-brand-brown/55">Pega aquí una lista: cédula, nombre, cupo (opcional)</p>
+                <p className="text-xs text-brand-black">Pega aquí una lista: cédula, nombre, cupo (opcional)</p>
               </div>
               <button onClick={() => setModalImportar(false)} disabled={importando}
-                className="rounded-lg p-1.5 text-brand-brown/40 hover:bg-brand-cream-soft disabled:opacity-40">
+                className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft disabled:opacity-40">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
-              <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/50 p-3 text-xs text-brand-brown/60 space-y-1">
+              <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/50 p-3 text-xs text-brand-black space-y-1">
                 <p className="font-semibold">Formato aceptado (una fila por trabajador):</p>
                 <p className="font-mono">cédula, nombre completo, cupo_asignado</p>
-                <p className="font-mono text-brand-brown/40">1234567890, Juan Pérez Gómez, 500000</p>
+                <p className="font-mono text-brand-black">1234567890, Juan Pérez Gómez, 500000</p>
                 <p>Separador: coma (,) punto y coma (;) o tabulador. El cupo es opcional.</p>
               </div>
               <textarea

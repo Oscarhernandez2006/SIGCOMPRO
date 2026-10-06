@@ -324,7 +324,7 @@ export default function TiendaEmpleadosStore({
 
             <div className="rounded-3xl bg-white p-7 shadow-xl ring-1 ring-brand-brown/5">
               <TiendaAcceso onAutenticado={onAutenticado} />
-              <Link href="/tienda-empleados" className="mt-5 inline-block text-xs font-semibold text-brand-brown/50 underline">
+              <Link href="/tienda-empleados" className="mt-5 inline-block text-xs font-semibold text-brand-black underline">
                 Volver al inicio
               </Link>
             </div>
@@ -410,7 +410,7 @@ export default function TiendaEmpleadosStore({
                 className={`inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
                   catFiltro === ""
                     ? "bg-brand-wine text-white shadow-sm"
-                    : "bg-white text-brand-brown/70 ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
+                    : "bg-white text-brand-black ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
                 }`}
               >
                 Todas
@@ -424,10 +424,10 @@ export default function TiendaEmpleadosStore({
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide transition ${
                       activa
                         ? "bg-brand-wine text-white shadow-sm"
-                        : "bg-white text-brand-brown/70 ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
+                        : "bg-white text-brand-black ring-1 ring-brand-brown/10 hover:bg-brand-cream-soft"
                     }`}
                   >
-                    <span className={activa ? "text-brand-amber" : "text-brand-brown/40"}>
+                    <span className={activa ? "text-brand-amber" : "text-brand-black"}>
                       {iconoCategoria(limpiarCategoria(cat.categoria), "h-4 w-4")}
                     </span>
                     {limpiarCategoria(cat.categoria)}
@@ -459,9 +459,9 @@ export default function TiendaEmpleadosStore({
           <div className="sticky top-28 mt-6 space-y-3">
             {/* Buscador */}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
-              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Buscar producto</label>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-brand-black">Buscar producto</label>
               <div className="relative">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
                 </svg>
                 <input
@@ -475,16 +475,16 @@ export default function TiendaEmpleadosStore({
 
             {/* Categorías */}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
-              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Categorías</p>
+              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-black">Categorías</p>
               <div className="space-y-0.5">
                 <button
                   onClick={() => setCatFiltro("")}
                   className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm font-semibold transition ${
-                    catFiltro === "" ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
+                    catFiltro === "" ? "bg-brand-wine text-white" : "text-brand-black hover:bg-brand-cream-soft"
                   }`}
                 >
                   <span className="flex-1">Todas</span>
-                  <span className={`text-[11px] font-bold ${catFiltro === "" ? "text-white/70" : "text-brand-brown/40"}`}>{tienda?.categorias?.reduce((s, c) => s + c.productos.length, 0) ?? 0}</span>
+                  <span className={`text-[11px] font-bold ${catFiltro === "" ? "text-white/70" : "text-brand-black"}`}>{tienda?.categorias?.reduce((s, c) => s + c.productos.length, 0) ?? 0}</span>
                 </button>
                 {(tienda?.categorias ?? []).map((cat) => {
                   const activa = catFiltro === cat.categoria;
@@ -493,11 +493,11 @@ export default function TiendaEmpleadosStore({
                       key={cat.categoria}
                       onClick={() => setCatFiltro(activa ? "" : cat.categoria)}
                       className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm font-semibold transition ${
-                        activa ? "bg-brand-wine text-white" : "text-brand-brown/70 hover:bg-brand-cream-soft"
+                        activa ? "bg-brand-wine text-white" : "text-brand-black hover:bg-brand-cream-soft"
                       }`}
                     >
                       <span className="flex-1 truncate">{limpiarCategoria(cat.categoria)}</span>
-                      <span className={`text-[11px] font-bold ${activa ? "text-white/70" : "text-brand-brown/40"}`}>{cat.productos.length}</span>
+                      <span className={`text-[11px] font-bold ${activa ? "text-white/70" : "text-brand-black"}`}>{cat.productos.length}</span>
                     </button>
                   );
                 })}
@@ -506,14 +506,14 @@ export default function TiendaEmpleadosStore({
 
             {/* Ordenar por precio */}
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-brand-brown/5">
-              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Ordenar por precio</p>
+              <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-brand-black">Ordenar por precio</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {([["asc", "Menor"], ["desc", "Mayor"]] as const).map(([val, lbl]) => (
                   <button
                     key={val}
                     onClick={() => setOrdenPrecio((prev) => (prev === val ? "" : val))}
                     className={`rounded-xl px-2 py-2 text-xs font-bold transition ${
-                      ordenPrecio === val ? "bg-brand-amber text-white" : "bg-brand-cream-soft text-brand-brown/60 hover:bg-brand-cream"
+                      ordenPrecio === val ? "bg-brand-amber text-white" : "bg-brand-cream-soft text-brand-black hover:bg-brand-cream"
                     }`}
                   >
                     {lbl}
@@ -525,7 +525,7 @@ export default function TiendaEmpleadosStore({
             {hayFiltros && (
               <button
                 onClick={() => { setBusqueda(""); setCatFiltro(""); setOrdenPrecio(""); }}
-                className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-xs font-semibold text-brand-brown/60 transition hover:bg-brand-cream-soft"
+                className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-xs font-semibold text-brand-black transition hover:bg-brand-cream-soft"
               >
                 Limpiar filtros
               </button>
@@ -537,7 +537,7 @@ export default function TiendaEmpleadosStore({
         <div className="min-w-0 flex-1">
           {/* Buscador (móvil) */}
           <div className="relative mt-4 lg:hidden">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>
             <input
@@ -552,8 +552,8 @@ export default function TiendaEmpleadosStore({
           <div className="py-6">
             {categoriasFiltradas.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-brand-brown/20 bg-white/60 px-6 py-16 text-center">
-                <p className="text-sm font-semibold text-brand-brown/55">No se encontraron productos</p>
-                <p className="mt-1 text-xs text-brand-brown/40">Prueba con otro nombre o quita los filtros.</p>
+                <p className="text-sm font-semibold text-brand-black">No se encontraron productos</p>
+                <p className="mt-1 text-xs text-brand-black">Prueba con otro nombre o quita los filtros.</p>
                 {hayFiltros && (
                   <button
                     onClick={() => { setBusqueda(""); setCatFiltro(""); setOrdenPrecio(""); }}
@@ -571,7 +571,7 @@ export default function TiendaEmpleadosStore({
                     <div className="mb-4 flex items-center gap-3">
                       <h2 className={`${playfair.className} text-xl font-extrabold uppercase tracking-wide text-brand-wine`}>{nombreCat}</h2>
                       <span className="h-1 flex-1 rounded-full bg-gradient-to-r from-brand-amber/50 to-transparent" />
-                      <span className="whitespace-nowrap rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-brown/50">{cat.productos.length} productos</span>
+                      <span className="whitespace-nowrap rounded-full bg-brand-cream-soft px-2.5 py-1 text-[11px] font-bold text-brand-black">{cat.productos.length} productos</span>
                     </div>
                     <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                       {cat.productos.map((p) => {
@@ -598,7 +598,7 @@ export default function TiendaEmpleadosStore({
                               </span>
                               <span className="mt-1.5 flex flex-wrap items-center gap-2">
                                 <span className="text-lg font-extrabold text-brand-wine">{copTienda(p.precio)}</span>
-                                <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-brown/55">{p.um || "UND"}</span>
+                                <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-black">{p.um || "UND"}</span>
                               </span>
                             </span>
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-amber text-white shadow-sm shadow-brand-amber/30 transition group-hover:bg-brand-amber-light">
@@ -643,11 +643,11 @@ export default function TiendaEmpleadosStore({
             <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
               <div className="min-w-0">
                 <p className={`${playfair.className} text-lg font-extrabold text-brand-wine`}>Elige tu punto</p>
-                <p className="text-xs text-brand-brown/55">Cambia a la tienda de otro punto de venta.</p>
+                <p className="text-xs text-brand-black">Cambia a la tienda de otro punto de venta.</p>
               </div>
               <button
                 onClick={() => setModalPdv(false)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-brand-brown/50 transition hover:bg-brand-cream-soft"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-brand-black transition hover:bg-brand-cream-soft"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -657,7 +657,7 @@ export default function TiendaEmpleadosStore({
 
             <div className="border-b border-brand-brown/10 px-5 py-3">
               <div className="relative">
-                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-brown/40">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-black">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
                   </svg>
@@ -667,17 +667,17 @@ export default function TiendaEmpleadosStore({
                   value={buscarPdv}
                   onChange={(e) => setBuscarPdv(e.target.value)}
                   placeholder="Buscar punto de venta…"
-                  className="w-full rounded-2xl bg-brand-cream-soft py-2.5 pl-10 pr-4 text-sm font-medium text-brand-black outline-none ring-1 ring-brand-brown/10 transition placeholder:text-brand-brown/40 focus:ring-2 focus:ring-brand-wine/30"
+                  className="w-full rounded-2xl bg-brand-cream-soft py-2.5 pl-10 pr-4 text-sm font-medium text-brand-black outline-none ring-1 ring-brand-brown/10 transition placeholder:text-brand-black focus:ring-2 focus:ring-brand-wine/30"
                 />
               </div>
             </div>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
               {tiendas.length === 0 && (
-                <p className="py-8 text-center text-sm text-brand-brown/50">Cargando puntos de venta…</p>
+                <p className="py-8 text-center text-sm text-brand-black">Cargando puntos de venta…</p>
               )}
               {tiendas.length > 0 && tiendasFiltradas.length === 0 && (
-                <p className="py-8 text-center text-sm text-brand-brown/50">
+                <p className="py-8 text-center text-sm text-brand-black">
                   No encontramos puntos que coincidan con “{buscarPdv}”.
                 </p>
               )}
@@ -700,7 +700,7 @@ export default function TiendaEmpleadosStore({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-extrabold text-brand-black">{t.nombre}</span>
-                      {t.ciudad && <span className="block truncate text-xs font-medium text-brand-brown/50">{t.ciudad}</span>}
+                      {t.ciudad && <span className="block truncate text-xs font-medium text-brand-black">{t.ciudad}</span>}
                     </span>
                     {actual ? (
                       <span className="shrink-0 rounded-full bg-brand-wine px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Aquí</span>
@@ -765,7 +765,7 @@ export default function TiendaEmpleadosStore({
               <h3 className={`${playfair.className} text-xl font-extrabold text-brand-wine`}>
                 {modal === "carrito" ? "Tu carrito" : "Datos de entrega"}
               </h3>
-              <button onClick={() => setModal("cerrado")} className="flex h-8 w-8 items-center justify-center rounded-full text-brand-brown/50 transition hover:bg-brand-cream-soft">
+              <button onClick={() => setModal("cerrado")} className="flex h-8 w-8 items-center justify-center rounded-full text-brand-black transition hover:bg-brand-cream-soft">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                 </svg>
@@ -779,8 +779,8 @@ export default function TiendaEmpleadosStore({
                     <div key={l.referencia} className="flex items-center gap-3 rounded-2xl bg-brand-cream-soft/60 p-3 ring-1 ring-brand-brown/5">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-brand-black">{l.producto || l.referencia}</p>
-                        <p className="text-[11px] font-medium text-brand-brown/50">{copTienda(l.precio)} · {l.um || "UND"}</p>
-                        {l.observacion && <p className="truncate text-[11px] italic text-brand-brown/50">“{l.observacion}”</p>}
+                        <p className="text-[11px] font-medium text-brand-black">{copTienda(l.precio)} · {l.um || "UND"}</p>
+                        {l.observacion && <p className="truncate text-[11px] italic text-brand-black">“{l.observacion}”</p>}
                       </div>
                       <div className="flex items-center gap-1 rounded-full bg-brand-amber p-1">
                         <button onClick={() => setCantidad(l, l.cantidad - 1)} className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-base font-bold text-white active:scale-90">−</button>
@@ -794,11 +794,11 @@ export default function TiendaEmpleadosStore({
                   ))}
                 </div>
                 <div className="mt-4 space-y-1.5 rounded-2xl bg-brand-cream-soft/60 p-4 text-sm ring-1 ring-brand-brown/5">
-                  <div className="flex justify-between text-brand-brown/70">
+                  <div className="flex justify-between text-brand-black">
                     <span>Total del pedido</span>
                     <span className="font-extrabold text-brand-black">{copTienda(total)}</span>
                   </div>
-                  <div className="flex justify-between text-brand-brown/70">
+                  <div className="flex justify-between text-brand-black">
                     <span>Saldo disponible</span>
                     <span className="font-semibold">{copTienda(disponible)}</span>
                   </div>
@@ -823,14 +823,14 @@ export default function TiendaEmpleadosStore({
 
             {modal === "datos" && (
               <>
-                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-brown/50">¿Cómo recibes tu pedido?</p>
+                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-black">¿Cómo recibes tu pedido?</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(["recoge", "domicilio"] as const).map((op) => (
                     <button
                       key={op}
                       onClick={() => setEntrega(op)}
                       className={`rounded-2xl border-2 p-3.5 text-sm font-bold transition ${
-                        entrega === op ? "border-brand-amber bg-brand-amber/10 text-brand-wine" : "border-brand-brown/10 bg-white text-brand-brown/60"
+                        entrega === op ? "border-brand-amber bg-brand-amber/10 text-brand-wine" : "border-brand-brown/10 bg-white text-brand-black"
                       }`}
                     >
                       {op === "recoge" ? "Recoger en el punto" : "Domicilio"}
@@ -839,13 +839,13 @@ export default function TiendaEmpleadosStore({
                 </div>
 
                 {entrega === "recoge" ? (
-                  <p className="mt-3 rounded-2xl bg-brand-cream-soft/60 p-3.5 text-xs text-brand-brown/70 ring-1 ring-brand-brown/5">
+                  <p className="mt-3 rounded-2xl bg-brand-cream-soft/60 p-3.5 text-xs text-brand-black ring-1 ring-brand-brown/5">
                     Recoges en <b className="text-brand-wine">{tienda?.nombre}</b>. Presenta tu cédula física para reclamar.
                   </p>
                 ) : (
                   <div className="mt-3 space-y-2">
                     <div className="rounded-2xl border border-brand-brown/15 bg-brand-cream-soft/60 p-3">
-                      <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-brand-brown/50">Dirección de entrega</p>
+                      <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-brand-black">Dirección de entrega</p>
                       <DireccionInput value={direccion} onChange={setDireccion} />
                     </div>
                     <input
@@ -870,14 +870,14 @@ export default function TiendaEmpleadosStore({
                   <span className="text-sm font-medium text-brand-cream/80">Total a crédito</span>
                   <span className="text-xl font-extrabold">{copTienda(total)}</span>
                 </div>
-                <p className="mt-1.5 text-center text-[11px] font-medium text-brand-brown/50">
+                <p className="mt-1.5 text-center text-[11px] font-medium text-brand-black">
                   Se descuenta de tu nómina.
                 </p>
 
                 {error && <p className="mt-2 text-sm font-medium text-red-600">{error}</p>}
 
                 <div className="mt-4 flex gap-2">
-                  <button onClick={() => setModal("carrito")} className="rounded-2xl border border-brand-brown/15 px-5 py-3.5 text-sm font-bold text-brand-brown/70 transition hover:bg-brand-cream-soft">
+                  <button onClick={() => setModal("carrito")} className="rounded-2xl border border-brand-brown/15 px-5 py-3.5 text-sm font-bold text-brand-black transition hover:bg-brand-cream-soft">
                     Atrás
                   </button>
                   <button
@@ -904,7 +904,7 @@ export default function TiendaEmpleadosStore({
               </svg>
             </div>
             <h3 className={`${playfair.className} mt-4 text-2xl font-extrabold text-brand-wine`}>¡Pedido confirmado!</h3>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-black">
               Tu pedido por <b className="text-brand-black">{copTienda(exito.total)}</b> quedó registrado en{" "}
               <b className="text-brand-black">{exito.punto_nombre}</b>.
             </p>
@@ -915,7 +915,7 @@ export default function TiendaEmpleadosStore({
                 <>Para reclamar tus productos, acércate al punto y <b className="text-brand-wine">presenta tu cédula física</b>.</>
               )}
             </div>
-            <p className="mt-3 text-xs font-medium text-brand-brown/45">Se descontará de tu nómina.</p>
+            <p className="mt-3 text-xs font-medium text-brand-black">Se descontará de tu nómina.</p>
             <div className="mt-5 flex gap-2">
               <button
                 onClick={() => setExito(null)}
@@ -923,7 +923,7 @@ export default function TiendaEmpleadosStore({
               >
                 Seguir comprando
               </button>
-              <Link href="/tienda-empleados" className="rounded-2xl border border-brand-brown/15 px-5 py-3.5 text-sm font-bold text-brand-brown/70 transition hover:bg-brand-cream-soft">
+              <Link href="/tienda-empleados" className="rounded-2xl border border-brand-brown/15 px-5 py-3.5 text-sm font-bold text-brand-black transition hover:bg-brand-cream-soft">
                 Salir
               </Link>
             </div>
@@ -985,12 +985,12 @@ function ProductoModal({
           </h3>
           <div className="mt-1 flex items-center gap-2">
             <span className="text-xl font-extrabold text-brand-wine">{copTienda(producto.precio)}</span>
-            <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+            <span className="rounded-full bg-brand-cream-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
               {producto.um || "UND"}
             </span>
           </div>
 
-          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-brown/50">
+          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-black">
             {esKg ? "¿Cuántos kilos?" : "Cantidad"}
           </label>
           <div className="mt-1.5 flex items-center gap-3">
@@ -1004,10 +1004,10 @@ function ProductoModal({
               />
               <button onClick={() => cambiar(cantidad + paso)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white transition active:scale-90">+</button>
             </div>
-            {esKg && <span className="text-xs font-medium text-brand-brown/50">Puedes pedir medios kilos (0.5)</span>}
+            {esKg && <span className="text-xs font-medium text-brand-black">Puedes pedir medios kilos (0.5)</span>}
           </div>
 
-          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-brown/50">
+          <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-brand-black">
             Observación (opcional)
           </label>
           <textarea

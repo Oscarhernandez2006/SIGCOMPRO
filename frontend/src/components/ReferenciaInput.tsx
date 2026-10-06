@@ -272,7 +272,7 @@ export default function ReferenciaInput({
           className={`campo ${
             partes.tipoConjunto
               ? ""
-              : "cursor-not-allowed bg-brand-cream-soft/40 placeholder:text-brand-brown/40"
+              : "cursor-not-allowed bg-brand-cream-soft/40 placeholder:text-brand-black"
           }`}
         />
       </div>
@@ -290,11 +290,11 @@ export default function ReferenciaInput({
 
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <div className="w-36">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Apartamento
           </span>
           <div className="flex items-center">
-            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+            <span className="mr-1 text-sm font-semibold text-brand-black">
               Apto
             </span>
             <input
@@ -311,11 +311,11 @@ export default function ReferenciaInput({
           </div>
         </div>
         <div className="w-24">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Bloque
           </span>
           <div className="flex items-center">
-            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+            <span className="mr-1 text-sm font-semibold text-brand-black">
               B
             </span>
             <input
@@ -332,11 +332,11 @@ export default function ReferenciaInput({
           </div>
         </div>
         <div className="w-24">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Torre
           </span>
           <div className="flex items-center">
-            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+            <span className="mr-1 text-sm font-semibold text-brand-black">
               T
             </span>
             <input
@@ -348,11 +348,11 @@ export default function ReferenciaInput({
           </div>
         </div>
         <div className="w-20">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Piso
           </span>
           <div className="flex items-center">
-            <span className="mr-1 text-sm font-semibold text-brand-brown/50">
+            <span className="mr-1 text-sm font-semibold text-brand-black">
               P
             </span>
             <input
@@ -367,7 +367,7 @@ export default function ReferenciaInput({
       </div>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <span className="text-xs text-brand-brown/50">
+        <span className="text-xs text-brand-black">
           {componer(partes) ? (
             <>
               Se guardará como:{" "}
@@ -383,7 +383,7 @@ export default function ReferenciaInput({
           type="button"
           onClick={activarModoLibre}
           title="Cambiar al formato libre"
-          className="shrink-0 text-xs font-medium text-brand-brown/50 hover:text-brand-amber hover:underline"
+          className="shrink-0 text-xs font-medium text-brand-black hover:text-brand-amber hover:underline"
         >
           Formato libre
         </button>

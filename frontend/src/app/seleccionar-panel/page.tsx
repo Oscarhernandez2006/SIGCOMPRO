@@ -148,7 +148,7 @@ export default function SeleccionarPanelPage() {
                 <h2 className="mt-4 font-serif text-xl font-bold text-brand-black">
                   {panel.label}
                 </h2>
-                <p className="mt-1 text-sm text-brand-brown/70">
+                <p className="mt-1 text-sm text-brand-black">
                   {p.descripcion}
                 </p>
                 <span

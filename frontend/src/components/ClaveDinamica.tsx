@@ -119,7 +119,7 @@ export default function ClaveDinamica() {
               <button
                 type="button"
                 onClick={cerrar}
-                className="rounded-lg p-1 text-brand-brown/50 hover:bg-brand-brown/5"
+                className="rounded-lg p-1 text-brand-black hover:bg-brand-brown/5"
                 aria-label="Cerrar"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -138,7 +138,7 @@ export default function ClaveDinamica() {
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="Buscar punto de venta…"
-                  className="w-full rounded-xl border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-3 text-sm text-brand-black placeholder:text-brand-brown/40 focus:border-brand-wine/40 focus:outline-none"
+                  className="w-full rounded-xl border border-brand-wine/20 bg-brand-wine/5 py-1.5 pl-8 pr-3 text-sm text-brand-black placeholder:text-brand-black focus:border-brand-wine/40 focus:outline-none"
                 />
               </div>
             </div>
@@ -146,7 +146,7 @@ export default function ClaveDinamica() {
             <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
               {error && <p className="text-sm text-red-600">No se pudieron cargar las claves.</p>}
               {!error && !cargando && clavesFiltradas.length === 0 && (
-                <p className="text-sm text-brand-brown/60">
+                <p className="text-sm text-brand-black">
                   {claves.length === 0 ? "No hay puntos de venta activos." : "Ningún punto coincide con la búsqueda."}
                 </p>
               )}
@@ -187,7 +187,7 @@ export default function ClaveDinamica() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-brand-brown/70">{c.puntoVentaNombre}</p>
+                      <p className="truncate text-xs font-semibold text-brand-black">{c.puntoVentaNombre}</p>
                       <p className="font-mono text-lg font-bold tracking-[0.15em] text-brand-wine tabular-nums">
                         {fmt}
                       </p>
@@ -218,7 +218,7 @@ export default function ClaveDinamica() {
               })}
             </div>
 
-            <p className="border-t border-brand-brown/10 px-5 py-3 text-[11px] leading-snug text-brand-brown/50">
+            <p className="border-t border-brand-brown/10 px-5 py-3 text-[11px] leading-snug text-brand-black">
               Cada código es de un solo uso y solo sirve en su punto de venta. Cambia automáticamente al usarse o tras 5 minutos sin usarse.
             </p>
           </div>

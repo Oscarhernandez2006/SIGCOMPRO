@@ -436,12 +436,12 @@ export default function ChatBubble() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {gruposFiltrados.length === 0 && contactosFiltrados.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-brand-brown/50">
+                  <p className="px-4 py-6 text-center text-sm text-brand-black">
                     {busqueda ? "Sin usuarios para mostrar." : "Nadie más está conectado ahora mismo."}
                   </p>
                 )}
                 {gruposFiltrados.length > 0 && (
-                  <p className="px-4 pt-2 text-[11px] font-bold uppercase tracking-wide text-brand-brown/40">
+                  <p className="px-4 pt-2 text-[11px] font-bold uppercase tracking-wide text-brand-black">
                     Grupos
                   </p>
                 )}
@@ -467,9 +467,9 @@ export default function ChatBubble() {
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-[11px] text-brand-brown/50">{g.subtitulo}</p>
+                      <p className="truncate text-[11px] text-brand-black">{g.subtitulo}</p>
                       {g.ultimoMensaje && (
-                        <p className="truncate text-xs text-brand-brown/60">
+                        <p className="truncate text-xs text-brand-black">
                           {g.ultimoMensajeEsMio ? "Tú: " : ""}
                           {g.ultimoMensaje}
                         </p>
@@ -478,7 +478,7 @@ export default function ChatBubble() {
                   </button>
                 ))}
                 {contactosFiltrados.length > 0 && (
-                  <p className="px-4 pt-2 text-[11px] font-bold uppercase tracking-wide text-brand-brown/40">
+                  <p className="px-4 pt-2 text-[11px] font-bold uppercase tracking-wide text-brand-black">
                     Conectados ahora
                   </p>
                 )}
@@ -500,9 +500,9 @@ export default function ChatBubble() {
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-[11px] text-brand-brown/50">{c.subtitulo}</p>
+                      <p className="truncate text-[11px] text-brand-black">{c.subtitulo}</p>
                       {c.ultimoMensaje && (
-                        <p className="truncate text-xs text-brand-brown/60">
+                        <p className="truncate text-xs text-brand-black">
                           {c.ultimoMensajeEsMio ? "Tú: " : ""}
                           {c.ultimoMensaje}
                         </p>
@@ -516,7 +516,7 @@ export default function ChatBubble() {
             <>
               <div ref={listaRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
                 {mensajes.length === 0 && (
-                  <p className="mt-4 text-center text-xs text-brand-brown/40">
+                  <p className="mt-4 text-center text-xs text-brand-black">
                     Aún no hay mensajes. ¡Escribe el primero!
                   </p>
                 )}
@@ -529,7 +529,7 @@ export default function ChatBubble() {
                     <button
                       onClick={() => setRespondiendoA(m)}
                       title="Responder"
-                      className="mb-1 shrink-0 self-end rounded-full p-1 text-brand-brown/30 opacity-0 transition group-hover:opacity-100 hover:bg-brand-cream-soft hover:text-brand-wine"
+                      className="mb-1 shrink-0 self-end rounded-full p-1 text-brand-black opacity-0 transition group-hover:opacity-100 hover:bg-brand-cream-soft hover:text-brand-wine"
                     >
                       ↩
                     </button>
@@ -554,7 +554,7 @@ export default function ChatBubble() {
                             className={`mb-1 rounded-lg border-l-2 px-2 py-1 text-xs ${
                               esMio
                                 ? "border-white/60 bg-white/10 text-white/80"
-                                : "border-brand-wine/60 bg-black/5 text-brand-brown/70"
+                                : "border-brand-wine/60 bg-black/5 text-brand-black"
                             }`}
                           >
                             <p className="font-semibold">
@@ -596,7 +596,7 @@ export default function ChatBubble() {
                         {m.contenido && (
                           <p className="whitespace-pre-wrap break-words">{m.contenido}</p>
                         )}
-                        <p className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${esMio ? "text-white/60" : "text-brand-brown/40"}`}>
+                        <p className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${esMio ? "text-white/60" : "text-brand-black"}`}>
                           {new Date(m.creado_en).toLocaleTimeString("es-CO", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -615,11 +615,11 @@ export default function ChatBubble() {
                     <p className="text-xs font-semibold text-brand-wine">
                       {nombreDeRemitente(respondiendoA.remitente_id, respondiendoA.remitente_nombre)}
                     </p>
-                    <p className="truncate text-xs text-brand-brown/60">{respondiendoA.contenido}</p>
+                    <p className="truncate text-xs text-brand-black">{respondiendoA.contenido}</p>
                   </div>
                   <button
                     onClick={() => setRespondiendoA(null)}
-                    className="shrink-0 rounded-full p-1 text-brand-brown/50 transition hover:bg-brand-brown/10"
+                    className="shrink-0 rounded-full p-1 text-brand-black transition hover:bg-brand-brown/10"
                     title="Cancelar respuesta"
                   >
                     ×
@@ -650,10 +650,10 @@ export default function ChatBubble() {
                   ) : (
                     <span className="text-2xl">📎</span>
                   )}
-                  <p className="min-w-0 flex-1 truncate text-xs text-brand-brown/70">{adjuntoPendiente.nombre}</p>
+                  <p className="min-w-0 flex-1 truncate text-xs text-brand-black">{adjuntoPendiente.nombre}</p>
                   <button
                     onClick={() => setAdjuntoPendiente(null)}
-                    className="shrink-0 rounded-full p-1 text-brand-brown/50 transition hover:bg-brand-brown/10"
+                    className="shrink-0 rounded-full p-1 text-brand-black transition hover:bg-brand-brown/10"
                     title="Quitar adjunto"
                   >
                     ×
@@ -671,7 +671,7 @@ export default function ChatBubble() {
                   onClick={() => archivoInputRef.current?.click()}
                   disabled={enviando}
                   title="Adjuntar foto o video"
-                  className="shrink-0 rounded-full p-2 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-40"
+                  className="shrink-0 rounded-full p-2 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-40"
                 >
                   📎
                 </button>
@@ -723,7 +723,7 @@ export default function ChatBubble() {
                 Nuevo
               </span>
             </span>
-            <span className="mt-0.5 line-clamp-2 block text-xs text-brand-brown/70">{preview.texto}</span>
+            <span className="mt-0.5 line-clamp-2 block text-xs text-brand-black">{preview.texto}</span>
           </span>
           <span
             role="button"
@@ -734,7 +734,7 @@ export default function ChatBubble() {
               if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
             }}
             title="Cerrar"
-            className="shrink-0 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+            className="shrink-0 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

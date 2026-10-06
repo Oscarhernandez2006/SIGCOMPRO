@@ -265,7 +265,7 @@ export default function MonitoreoPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold text-brand-wine">Monitoreo</h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Pedidos retrasados o por vencerse en cada punto de venta, en tiempo
             real (los mismos que avisa la alerta de Despacho).
           </p>
@@ -293,7 +293,7 @@ export default function MonitoreoPage() {
               <div key={estado} className="flex items-center gap-1">
                 <div
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                    n > 0 ? colorEstado(estado) : "border-brand-brown/10 bg-brand-cream-soft/60 text-brand-brown/40"
+                    n > 0 ? colorEstado(estado) : "border-brand-brown/10 bg-brand-cream-soft/60 text-brand-black"
                   }`}
                 >
                   <span>{estado}</span>
@@ -306,7 +306,7 @@ export default function MonitoreoPage() {
                   </span>
                 </div>
                 {i < SECUENCIA_ESTADOS.length - 1 && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-brand-brown/30">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-brand-black">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5 15.75 12l-7.5 7.5" />
                   </svg>
                 )}
@@ -319,21 +319,21 @@ export default function MonitoreoPage() {
       {!cargando && totalPedidos > 0 && (
         <div className="mb-4 max-w-sm">
           <div className="flex items-center gap-2 rounded-xl border border-brand-brown/20 bg-white px-3 py-2 shadow-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-brand-brown/50">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-brand-black">
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
             </svg>
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar punto de venta…"
-              className="w-full text-sm text-brand-black outline-none placeholder:text-brand-brown/40"
+              className="w-full text-sm text-brand-black outline-none placeholder:text-brand-black"
             />
           </div>
         </div>
       )}
 
       {cargando ? (
-        <p className="text-sm text-brand-brown/60">Cargando…</p>
+        <p className="text-sm text-brand-black">Cargando…</p>
       ) : totalPedidos === 0 ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-8 text-center">
           <p className="font-semibold text-emerald-700">
@@ -342,7 +342,7 @@ export default function MonitoreoPage() {
         </div>
       ) : puntosFiltrados.length === 0 ? (
         <div className="rounded-2xl border border-brand-brown/10 bg-white px-5 py-8 text-center">
-          <p className="text-sm text-brand-brown/60">
+          <p className="text-sm text-brand-black">
             Ningún punto de venta coincide con “{busqueda}”.
           </p>
         </div>
@@ -362,7 +362,7 @@ export default function MonitoreoPage() {
           </h2>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b-2 border-brand-brown/20 text-left text-xs uppercase tracking-wide text-brand-brown/60">
+              <tr className="border-b-2 border-brand-brown/20 text-left text-xs uppercase tracking-wide text-brand-black">
                 <th className="px-2 py-2">Comanda</th>
                 <th className="px-2 py-2">Cliente</th>
                 <th className="px-2 py-2">Estado</th>
@@ -385,13 +385,13 @@ export default function MonitoreoPage() {
                       className={`border-b border-brand-brown/10 ${f.vencido ? "bg-red-50" : "bg-amber-50/60"}`}
                     >
                       <td className="px-2 py-1.5 text-brand-black">{f.comanda}</td>
-                      <td className="px-2 py-1.5 text-brand-brown/80">{f.cliente}</td>
-                      <td className="px-2 py-1.5 text-brand-brown/80">{f.estado}</td>
-                      <td className="px-2 py-1.5 text-brand-brown/80">{f.fechaHora}</td>
-                      <td className={`px-2 py-1.5 font-semibold ${f.alistamiento.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                      <td className="px-2 py-1.5 text-brand-black">{f.cliente}</td>
+                      <td className="px-2 py-1.5 text-brand-black">{f.estado}</td>
+                      <td className="px-2 py-1.5 text-brand-black">{f.fechaHora}</td>
+                      <td className={`px-2 py-1.5 font-semibold ${f.alistamiento.startsWith("-") ? "text-red-600" : "text-brand-black"}`}>
                         {f.alistamiento}
                       </td>
-                      <td className={`px-2 py-1.5 font-semibold ${f.despacho.startsWith("-") ? "text-red-600" : "text-brand-brown/80"}`}>
+                      <td className={`px-2 py-1.5 font-semibold ${f.despacho.startsWith("-") ? "text-red-600" : "text-brand-black"}`}>
                         {f.despacho}
                       </td>
                     </tr>
@@ -447,13 +447,13 @@ function PuntoCard({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-brand-black">Pedido #{p.comanda}</p>
-                  <p className="mt-0.5 break-words text-brand-brown/80">
+                  <p className="mt-0.5 break-words text-brand-black">
                     {p.cliente?.nombre || p.cliente?.nit_cedula}
                   </p>
-                  <p className="mt-0.5 break-words text-xs text-brand-brown/60">
+                  <p className="mt-0.5 break-words text-xs text-brand-black">
                     Televenta: <span className="font-bold">{p.vendedorNombre || "—"}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-brand-brown/60">
+                  <p className="mt-0.5 text-xs text-brand-black">
                     Creado: <span className="font-bold">{fmtHora(p.fecha)}</span>
                   </p>
                 </div>
@@ -466,7 +466,7 @@ function PuntoCard({
                 <div className="flex gap-2">
                   <span
                     className={`rounded-md border px-1.5 py-0.5 font-semibold ${
-                      restPrep <= 0 ? "border-red-300 bg-red-100 text-red-600" : "border-brand-brown/20 bg-white text-brand-brown/70"
+                      restPrep <= 0 ? "border-red-300 bg-red-100 text-red-600" : "border-brand-brown/20 bg-white text-brand-black"
                     }`}
                     title="Tiempo restante de alistamiento"
                   >
@@ -474,7 +474,7 @@ function PuntoCard({
                   </span>
                   <span
                     className={`rounded-md border px-1.5 py-0.5 font-semibold ${
-                      restEntrega <= 0 ? "border-red-300 bg-red-100 text-red-600" : "border-brand-brown/20 bg-white text-brand-brown/70"
+                      restEntrega <= 0 ? "border-red-300 bg-red-100 text-red-600" : "border-brand-brown/20 bg-white text-brand-black"
                     }`}
                     title="Tiempo restante de despacho"
                   >

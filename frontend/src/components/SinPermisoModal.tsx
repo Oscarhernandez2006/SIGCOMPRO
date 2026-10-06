@@ -32,7 +32,7 @@ export function ModalSinPermiso({
         <h2 className="mt-4 font-serif text-xl font-bold text-brand-wine">
           Acción no permitida
         </h2>
-        <p className="mt-2 text-sm text-brand-brown/70">{mensaje}</p>
+        <p className="mt-2 text-sm text-brand-black">{mensaje}</p>
         <button
           onClick={onCerrar}
           title="Entendido, cerrar"

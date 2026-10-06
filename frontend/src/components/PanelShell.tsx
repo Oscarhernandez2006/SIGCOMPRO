@@ -181,7 +181,15 @@ export default function PanelShell({ children }: { children: ReactNode }) {
     void refrescarUsuario();
   }, [router]);
 
-  /** Facturador/Despacho: antes de salir, avisa si quedan pedidos de hoy sin terminar en Despacho. */
+  // Facturador/Despacho: si quedan pedidos de hoy sin terminar en Despacho, se
+  // muestra un modal de aviso antes de salir (en vez de confirm() nativo).
+  const [avisoPendientes, setAvisoPendientes] = useState<number | null>(null);
+
+  function salirAhora() {
+    limpiarSesion();
+    router.replace("/");
+  }
+
   async function cerrarSesion() {
     const rol = (usuario?.rol ?? "").trim().toLowerCase();
     if (rol === "facturador" || rol === "despacho") {
@@ -191,18 +199,14 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           (p) => !p.anulado && !yaDespachado(p.estado) && (p.estado ?? "").trim().toLowerCase() !== "anulado",
         );
         if (pendientes.length > 0) {
-          const n = pendientes.length;
-          const continuar = confirm(
-            `Tienes ${n} pedido${n === 1 ? "" : "s"} pendiente${n === 1 ? "" : "s"} en Despacho. ¿Seguro que quieres cerrar sesión?`,
-          );
-          if (!continuar) return;
+          setAvisoPendientes(pendientes.length);
+          return;
         }
       } catch {
         /* si falla la consulta, no bloquea el cierre de sesión */
       }
     }
-    limpiarSesion();
-    router.replace("/");
+    salirAhora();
   }
 
   if (!ready) {
@@ -404,7 +408,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
               <p className="text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}
               </p>
-              <p className="text-xs capitalize text-brand-brown/60">
+              <p className="text-xs capitalize text-brand-black">
                 {usuario?.rol ?? ""}
               </p>
             </div>
@@ -416,6 +420,39 @@ export default function PanelShell({ children }: { children: ReactNode }) {
 
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
       </div>
+
+      {avisoPendientes !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4" onClick={() => setAvisoPendientes(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <h3 className="mt-3 font-serif text-lg font-bold text-brand-wine">Tienes pedidos pendientes</h3>
+            <p className="mt-1.5 text-sm text-brand-black">
+              Hay {avisoPendientes} pedido{avisoPendientes === 1 ? "" : "s"} sin terminar en Despacho. ¿Seguro que quieres cerrar sesión?
+            </p>
+            <div className="mt-5 flex justify-center gap-2">
+              <button
+                onClick={() => setAvisoPendientes(null)}
+                className="rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-black transition hover:bg-brand-cream-soft"
+              >
+                Seguir trabajando
+              </button>
+              <button
+                onClick={salirAhora}
+                className="rounded-xl bg-brand-wine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-wine/90"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ChatBubble />
     </div>
   );

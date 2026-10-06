@@ -386,7 +386,7 @@ export default function ListaPreciosPage() {
   }, [punto, seleccion]);
 
   if (cargando) {
-    return <p className="text-sm text-brand-brown/60">Cargando…</p>;
+    return <p className="text-sm text-brand-black">Cargando…</p>;
   }
 
   const origen = typeof window !== "undefined" ? window.location.origin : "";
@@ -397,7 +397,7 @@ export default function ListaPreciosPage() {
         <h1 className="font-serif text-3xl font-bold text-brand-wine">
           Lista de Precios
         </h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Arma la lista de precios del punto: busca artículos por código o
           categoría y ajusta el precio. Con <b>Guardar menú</b> se publica lo que
           verá el cliente en el link público; con <b>Descargar PDF</b> obtienes
@@ -414,7 +414,7 @@ export default function ListaPreciosPage() {
       {/* Punto de venta */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2">
-          <span className="text-xs font-semibold text-brand-brown/60">
+          <span className="text-xs font-semibold text-brand-black">
             Punto:
           </span>
           <select
@@ -435,7 +435,7 @@ export default function ListaPreciosPage() {
             Este punto no tiene lista de precios configurada.
           </span>
         )}
-        <span className="ml-auto text-xs font-medium text-brand-brown/60">
+        <span className="ml-auto text-xs font-medium text-brand-black">
           {seleccion.length}{" "}
           {seleccion.length === 1 ? "artículo elegido" : "artículos elegidos"}
         </span>
@@ -468,7 +468,7 @@ export default function ListaPreciosPage() {
       {punto?.lista_precio && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-brown/15 bg-brand-cream-soft/40 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold text-brand-brown/60">
+            <div className="text-xs font-semibold text-brand-black">
               Menú público de esta tienda
             </div>
             <div className="truncate text-sm text-brand-wine">
@@ -508,7 +508,7 @@ export default function ListaPreciosPage() {
         <div className="rounded-2xl border border-brand-brown/10 bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="relative min-w-[200px] flex-1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
               </svg>
               <input
@@ -524,7 +524,7 @@ export default function ListaPreciosPage() {
                   onClick={() => setBusqueda("")}
                   title="Limpiar búsqueda"
                   aria-label="Limpiar búsqueda"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -547,11 +547,11 @@ export default function ListaPreciosPage() {
           </div>
 
           {cargandoCat ? (
-            <p className="py-8 text-center text-sm text-brand-brown/60">
+            <p className="py-8 text-center text-sm text-brand-black">
               Cargando catálogo…
             </p>
           ) : catalogoPorCategoria.length === 0 ? (
-            <p className="py-8 text-center text-sm text-brand-brown/60">
+            <p className="py-8 text-center text-sm text-brand-black">
               {punto?.lista_precio
                 ? "Sin productos que coincidan."
                 : "Selecciona un punto con lista de precios."}
@@ -577,7 +577,7 @@ export default function ListaPreciosPage() {
                       <button
                         type="button"
                         onClick={() => agregarCategoria(cat)}
-                        className="text-[11px] font-semibold text-brand-brown/60 hover:text-brand-wine"
+                        className="text-[11px] font-semibold text-brand-black hover:text-brand-wine"
                       >
                         + Toda la categoría
                       </button>
@@ -594,7 +594,7 @@ export default function ListaPreciosPage() {
                               <div className="truncate text-sm text-brand-black">
                                 {(p.producto || p.referencia).toUpperCase()}
                               </div>
-                              <div className="text-[11px] text-brand-brown/50">
+                              <div className="text-[11px] text-brand-black">
                                 {p.referencia} · {precioCOP(Number(p.precio) || 0)}
                                 {umLabel(p.um) ? ` ${umLabel(p.um)}` : ""}
                               </div>
@@ -628,7 +628,7 @@ export default function ListaPreciosPage() {
               <button
                 type="button"
                 onClick={() => setSeleccion([])}
-                className="text-xs font-semibold text-brand-brown/60 hover:text-brand-wine"
+                className="text-xs font-semibold text-brand-black hover:text-brand-wine"
               >
                 Limpiar
               </button>
@@ -636,7 +636,7 @@ export default function ListaPreciosPage() {
           </div>
 
           {seleccion.length === 0 ? (
-            <p className="py-8 text-center text-sm text-brand-brown/60">
+            <p className="py-8 text-center text-sm text-brand-black">
               Agrega artículos desde el catálogo para armar la lista.
             </p>
           ) : (
@@ -656,12 +656,12 @@ export default function ListaPreciosPage() {
                           <div className="truncate text-sm text-brand-black">
                             {(it.producto || it.referencia).toUpperCase()}
                           </div>
-                          <div className="text-[11px] text-brand-brown/50">
+                          <div className="text-[11px] text-brand-black">
                             {it.referencia}
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-sm text-brand-brown/60">$</span>
+                          <span className="text-sm text-brand-black">$</span>
                           <input
                             type="number"
                             min={0}
@@ -676,7 +676,7 @@ export default function ListaPreciosPage() {
                             className="w-24 rounded-lg border border-brand-brown/15 bg-white px-2 py-1 text-right text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
                           />
                           {umLabel(it.um) && (
-                            <span className="w-8 text-[11px] text-brand-brown/50">
+                            <span className="w-8 text-[11px] text-brand-black">
                               {umLabel(it.um)}
                             </span>
                           )}
@@ -686,7 +686,7 @@ export default function ListaPreciosPage() {
                           onClick={() => quitar(it.referencia)}
                           aria-label="Quitar"
                           title="Quitar de la lista"
-                          className="shrink-0 rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-red-50 hover:text-red-600"
+                          className="shrink-0 rounded-lg p-1.5 text-brand-black transition hover:bg-red-50 hover:text-red-600"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

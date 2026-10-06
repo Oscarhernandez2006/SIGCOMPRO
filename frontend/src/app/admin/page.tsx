@@ -68,7 +68,7 @@ export default function AdminInicioPage() {
         <h1 className="font-serif text-3xl font-bold text-brand-wine">
           Administración
         </h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Gestiona los módulos del sistema, los usuarios y sus permisos.
         </p>
       </div>
@@ -86,7 +86,7 @@ export default function AdminInicioPage() {
             <h2 className="mt-4 font-serif text-lg font-bold text-brand-black">
               {a.titulo}
             </h2>
-            <p className="mt-1 text-sm text-brand-brown/70">{a.descripcion}</p>
+            <p className="mt-1 text-sm text-brand-black">{a.descripcion}</p>
           </Link>
         ))}
       </div>

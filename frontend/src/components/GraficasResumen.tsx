@@ -29,7 +29,7 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-3">
       <span className="h-4 w-1 rounded-full bg-brand-amber" />
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-brown/60">{children}</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-black">{children}</h2>
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function CardHead({ titulo, desc }: { titulo: string; desc?: string }) {
   return (
     <div className="mb-4">
       <h3 className="font-display text-base font-bold tracking-tight text-brand-black">{titulo}</h3>
-      {desc && <p className="mt-0.5 text-xs text-brand-brown/55">{desc}</p>}
+      {desc && <p className="mt-0.5 text-xs text-brand-black">{desc}</p>}
     </div>
   );
 }
@@ -61,7 +61,7 @@ export function DonutLeyenda({
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) {
-    return <div className="flex h-40 items-center justify-center text-sm text-brand-brown/40">Sin datos.</div>;
+    return <div className="flex h-40 items-center justify-center text-sm text-brand-black">Sin datos.</div>;
   }
   const R = 42;
   const C = 2 * Math.PI * R;
@@ -93,16 +93,16 @@ export function DonutLeyenda({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-display text-xl font-extrabold tabular-nums text-brand-black">{num(total)}</span>
-          <span className="text-[11px] uppercase tracking-wide text-brand-brown/50">{totalLabel}</span>
+          <span className="text-[11px] uppercase tracking-wide text-brand-black">{totalLabel}</span>
         </div>
       </div>
       <ul className="w-full min-w-0 space-y-1.5 sm:flex-1">
         {data.map((d) => (
           <li key={d.label} className="flex items-center gap-2 text-sm">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-            <span className="min-w-0 flex-1 truncate text-brand-brown/80">{d.label}</span>
+            <span className="min-w-0 flex-1 truncate text-brand-black">{d.label}</span>
             <span className="shrink-0 font-display font-bold tabular-nums text-brand-black">{num(d.value)}</span>
-            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-brand-brown/50">
+            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-brand-black">
               {((d.value / total) * 100).toFixed(0)}%
             </span>
           </li>
@@ -134,7 +134,7 @@ export function AnilloCumplimiento({
     <Panel>
       <CardHead titulo={titulo} desc={desc} />
       {total === 0 ? (
-        <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-brown/50">
+        <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-black">
           Sin datos en el periodo.
         </p>
       ) : (
@@ -160,9 +160,9 @@ export function AnilloCumplimiento({
           <div className="min-w-0">
             <p className="font-display text-2xl font-bold tabular-nums text-brand-black">
               {num(aTiempo)}
-              <span className="ml-1.5 text-sm font-semibold text-brand-brown/50">de {num(total)}</span>
+              <span className="ml-1.5 text-sm font-semibold text-brand-black">de {num(total)}</span>
             </p>
-            <p className="mt-1 text-xs text-brand-brown/60">a tiempo</p>
+            <p className="mt-1 text-xs text-brand-black">a tiempo</p>
             {total - aTiempo > 0 && (
               <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-500">
                 {num(total - aTiempo)} fuera de tiempo
@@ -198,7 +198,7 @@ export function TablaTopBarras({
 }) {
   if (filas.length === 0) {
     return (
-      <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-brown/50">
+      <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-black">
         Sin datos en el periodo.
       </p>
     );
@@ -207,7 +207,7 @@ export function TablaTopBarras({
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-brown/50">
+        <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-black">
           <th className="pb-2 font-semibold">{col1}</th>
           <th className="whitespace-nowrap pb-2 pl-3 text-right font-semibold">{colValor}</th>
         </tr>
@@ -217,7 +217,7 @@ export function TablaTopBarras({
           <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 last:border-0">
             <td className="w-full max-w-0 py-2 pr-3">
               <div className="flex items-center gap-2">
-                <span className="w-4 shrink-0 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>
+                <span className="w-4 shrink-0 text-right text-xs font-bold tabular-nums text-brand-black">{i + 1}</span>
                 <span className="truncate font-medium text-brand-black">{f.nombre}</span>
               </div>
               <div className="mt-1 ml-6 h-1.5 overflow-hidden rounded-full bg-brand-cream-soft">
@@ -230,7 +230,7 @@ export function TablaTopBarras({
             <td className="whitespace-nowrap py-2 pl-3 text-right">
               <span className="inline-flex items-baseline justify-end gap-3">
                 {f.sub && (
-                  <span className="w-16 text-right text-[11px] tabular-nums text-brand-brown/50">{f.sub}</span>
+                  <span className="w-16 text-right text-[11px] tabular-nums text-brand-black">{f.sub}</span>
                 )}
                 <span className="w-28 text-right font-display font-bold tabular-nums text-brand-black">
                   {formatoValor(f.valor)}
@@ -259,13 +259,13 @@ export function BarrasPorDia({
 }) {
   const max = Math.max(1, ...datos.map((d) => d.valor));
   if (!datos.length) {
-    return <p className="text-sm text-brand-brown/50">Sin datos en el periodo.</p>;
+    return <p className="text-sm text-brand-black">Sin datos en el periodo.</p>;
   }
   return (
     <div className="space-y-1.5">
       {datos.map((d) => (
         <div key={d.dia} className="flex items-center gap-2">
-          <span className="w-20 shrink-0 text-[11px] text-brand-brown/60">{d.dia}</span>
+          <span className="w-20 shrink-0 text-[11px] text-brand-black">{d.dia}</span>
           <div className="h-4 flex-1 overflow-hidden rounded bg-brand-cream-soft">
             <div className="h-full rounded bg-gradient-to-r from-brand-wine to-brand-wine/70" style={{ width: `${(d.valor / max) * 100}%` }} />
           </div>

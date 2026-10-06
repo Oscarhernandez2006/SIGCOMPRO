@@ -101,7 +101,7 @@ export default function PedidosTiendaPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold text-brand-wine">Pedidos a crédito</h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Compras de empleados (panel y tienda online). Prepáralas y ciérralas con la foto de la factura al entregar.
           </p>
         </div>
@@ -120,9 +120,9 @@ export default function PedidosTiendaPage() {
       <div className="mb-4 rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-end gap-2 px-4 py-3">
           <div className="min-w-[160px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Buscar</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Buscar</label>
             <div className="relative">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-black">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
               </svg>
               <input value={busq} onChange={(e) => setBusq(e.target.value)}
@@ -131,7 +131,7 @@ export default function PedidosTiendaPage() {
             </div>
           </div>
           <div className="min-w-[130px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Estado</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Estado</label>
             <select value={filtro} onChange={(e) => setFiltro(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
@@ -143,7 +143,7 @@ export default function PedidosTiendaPage() {
           </div>
           {puntosUnicos.length > 1 && (
             <div className="min-w-[140px]">
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Punto</label>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Punto</label>
               <select value={fPunto} onChange={(e) => setFPunto(e.target.value)}
                 className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
                 <option value="">Todos</option>
@@ -152,7 +152,7 @@ export default function PedidosTiendaPage() {
             </div>
           )}
           <div className="min-w-[120px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Origen</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Origen</label>
             <select value={fOrigen} onChange={(e) => setFOrigen(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
@@ -161,18 +161,18 @@ export default function PedidosTiendaPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Desde</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Desde</label>
             <input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Hasta</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Hasta</label>
             <input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           {hayFiltros && (
             <button type="button" onClick={() => { setBusq(""); setFiltro(""); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
-              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
+              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-black transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
           )}
@@ -184,9 +184,9 @@ export default function PedidosTiendaPage() {
       )}
 
       {cargando && pedidos.length === 0 ? (
-        <p className="py-10 text-center text-sm text-brand-brown/60">Cargando pedidos…</p>
+        <p className="py-10 text-center text-sm text-brand-black">Cargando pedidos…</p>
       ) : visibles.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center text-sm text-brand-brown/60">
+        <div className="rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center text-sm text-brand-black">
           No hay pedidos para los filtros aplicados.
         </div>
       ) : (
@@ -194,7 +194,7 @@ export default function PedidosTiendaPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+                <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3">Colaborador</th>
                   <th className="px-4 py-3">Punto</th>
@@ -212,7 +212,7 @@ export default function PedidosTiendaPage() {
                   return (
                     <tr key={p.id} onClick={() => setDetalleId(p.id)}
                       className="cursor-pointer border-b border-brand-brown/8 transition hover:bg-brand-cream-soft/50">
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
                         {new Date(p.creado_en).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td className="px-4 py-3">
@@ -222,30 +222,30 @@ export default function PedidosTiendaPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="truncate font-medium leading-tight text-brand-black">{p.trabajador_nombre}</p>
-                            <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
+                            <p className="text-[11px] text-brand-black">CC {p.trabajador_cedula}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-brand-brown/75">{puntoCorto(p.punto_nombre)}</td>
-                      <td className="px-4 py-3 text-xs text-brand-brown/70">{p.entrega === "domicilio" ? "Domicilio" : "Recoge"}</td>
+                      <td className="px-4 py-3 text-brand-black">{puntoCorto(p.punto_nombre)}</td>
+                      <td className="px-4 py-3 text-xs text-brand-black">{p.entrega === "domicilio" ? "Domicilio" : "Recoge"}</td>
                       <td className="px-4 py-3 text-right">
                         <p className="font-semibold tabular-nums text-brand-black">{copTienda(p.total)}</p>
                         {p.items.length > 0 && (
-                          <p className="mt-0.5 text-[11px] text-brand-brown/45">{p.items.length} {p.items.length === 1 ? "producto" : "productos"}</p>
+                          <p className="mt-0.5 text-[11px] text-brand-black">{p.items.length} {p.items.length === 1 ? "producto" : "productos"}</p>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(p.estado)}`}>{labelEstado(p.estado)}</span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                        <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-black"}`}>
                           {esTienda ? "Tienda online" : "Panel"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
                         {p.nomina_fecha
                           ? new Date(`${p.nomina_fecha}T00:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })
-                          : <span className="italic text-brand-brown/25">—</span>}
+                          : <span className="italic text-brand-black">—</span>}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
@@ -331,17 +331,17 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
         <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle del pedido</h2>
-            <p className="text-xs text-brand-brown/55">Información completa</p>
+            <p className="text-xs text-brand-black">Información completa</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar"
-            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown">
+            className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
           {cargando ? (
-            <div className="flex items-center justify-center py-12 text-brand-brown/50">
+            <div className="flex items-center justify-center py-12 text-brand-black">
               <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
             </div>
           ) : error ? (
@@ -351,11 +351,11 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-brand-black">{pedido.trabajador_nombre}</p>
-                  <p className="text-xs text-brand-brown/55">CC {pedido.trabajador_cedula}</p>
+                  <p className="text-xs text-brand-black">CC {pedido.trabajador_cedula}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${chipEstado(pedido.estado)}`}>{labelEstado(pedido.estado)}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-black"}`}>
                     {esTienda ? "Tienda online" : "Panel"}
                   </span>
                 </div>
@@ -375,16 +375,16 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
 
               {items.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Productos</p>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-black">Productos</p>
                   <div className="divide-y divide-brand-brown/8 rounded-xl border border-brand-brown/10">
                     {items.map((it, idx) => (
                       <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
                         <span className="flex h-6 min-w-[2rem] items-center justify-center rounded-md bg-brand-wine/8 px-1 text-xs font-bold text-brand-wine">{it.cantidad}</span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-brand-black">{it.nombre}</p>
-                          {it.obs && <p className="text-[11px] italic text-brand-brown/50">“{it.obs}”</p>}
+                          {it.obs && <p className="text-[11px] italic text-brand-black">“{it.obs}”</p>}
                         </div>
-                        <span className="text-[11px] text-brand-brown/45">{it.um}</span>
+                        <span className="text-[11px] text-brand-black">{it.um}</span>
                         <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{copTienda(it.total)}</span>
                       </div>
                     ))}
@@ -396,7 +396,7 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
 
               {pedido.factura_imagen && (
                 <div>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Comprobante (factura + cédula)</p>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-black">Comprobante (factura + cédula)</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={pedido.factura_imagen} alt="Comprobante" className="w-full rounded-xl border border-brand-brown/15" />
                 </div>
@@ -417,7 +417,7 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
 function Dato({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/45">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-black">{label}</p>
       <p className="mt-0.5 text-sm text-brand-black">{children}</p>
     </div>
   );
@@ -457,15 +457,15 @@ function EntregarModal({ pedido, onClose, onEntregado }: {
       <div className="relative z-10 w-full max-w-md rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="border-b border-brand-brown/10 px-5 py-4">
           <h2 className="font-serif text-lg font-bold text-brand-wine">Cerrar venta y entregar</h2>
-          <p className="text-xs text-brand-brown/55">
+          <p className="text-xs text-brand-black">
             {pedido.trabajador_nombre} · C.C. {pedido.trabajador_cedula} · {copTienda(pedido.total)}
           </p>
         </div>
 
         <div className="space-y-3 px-5 py-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-              Foto de la factura <span className="normal-case text-brand-brown/40">(con la cédula al lado)</span>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-black">
+              Foto de la factura <span className="normal-case text-brand-black">(con la cédula al lado)</span>
             </label>
             <input
               ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden"
@@ -490,7 +490,7 @@ function EntregarModal({ pedido, onClose, onEntregado }: {
               </div>
             ) : (
               <button type="button" onClick={() => inputRef.current?.click()}
-                className="flex h-24 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-brown/30 text-sm text-brand-brown/55 transition hover:border-brand-wine/40 hover:text-brand-wine/70">
+                className="flex h-24 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-brand-brown/30 text-sm text-brand-black transition hover:border-brand-wine/40 hover:text-brand-wine/70">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
@@ -501,8 +501,8 @@ function EntregarModal({ pedido, onClose, onEntregado }: {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
-              N° de factura <span className="normal-case text-brand-brown/40">(opcional)</span>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-brand-black">
+              N° de factura <span className="normal-case text-brand-black">(opcional)</span>
             </label>
             <input value={numFactura} onChange={(e) => setNumFactura(e.target.value)}
               placeholder="Ej: CE1C11433"

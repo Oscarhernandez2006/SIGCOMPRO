@@ -196,7 +196,7 @@ export default function DireccionInput({
     <div>
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[7.5rem] flex-1">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Tipo de vía
           </span>
           <select
@@ -214,7 +214,7 @@ export default function DireccionInput({
         </div>
 
         <div className="w-16">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Vía
           </span>
           <input
@@ -226,12 +226,12 @@ export default function DireccionInput({
           />
         </div>
 
-        <span className="pb-2.5 text-base font-semibold text-brand-brown/50">
+        <span className="pb-2.5 text-base font-semibold text-brand-black">
           #
         </span>
 
         <div className="w-16">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Cruce
           </span>
           <input
@@ -243,12 +243,12 @@ export default function DireccionInput({
           />
         </div>
 
-        <span className="pb-2.5 text-base font-semibold text-brand-brown/50">
+        <span className="pb-2.5 text-base font-semibold text-brand-black">
           –
         </span>
 
         <div className="w-16">
-          <span className="mb-1 block text-[0.7rem] font-medium text-brand-brown/50">
+          <span className="mb-1 block text-[0.7rem] font-medium text-brand-black">
             Placa
           </span>
           <input
@@ -262,7 +262,7 @@ export default function DireccionInput({
       </div>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <span className="text-xs text-brand-brown/50">
+        <span className="text-xs text-brand-black">
           {componer(partes) ? (
             <>
               Se guardará como:{" "}
@@ -282,7 +282,7 @@ export default function DireccionInput({
           type="button"
           onClick={activarModoLibre}
           title="Cambiar al formato libre"
-          className="shrink-0 text-xs font-medium text-brand-brown/50 hover:text-brand-amber hover:underline"
+          className="shrink-0 text-xs font-medium text-brand-black hover:text-brand-amber hover:underline"
         >
           Formato libre
         </button>

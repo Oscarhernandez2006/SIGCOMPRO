@@ -161,7 +161,7 @@ export default function CatalogoTiendaPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold text-brand-wine">Catálogo de la tienda online</h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Elige qué productos y precios ven los empleados en la tienda de cada punto.
           </p>
         </div>
@@ -216,11 +216,11 @@ export default function CatalogoTiendaPage() {
       )}
 
       {!puntoId ? (
-        <div className="rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center text-sm text-brand-brown/60">
+        <div className="rounded-2xl border border-dashed border-brand-brown/20 bg-white px-6 py-16 text-center text-sm text-brand-black">
           Selecciona un punto de venta para editar su catálogo.
         </div>
       ) : cargando ? (
-        <p className="py-10 text-center text-sm text-brand-brown/60">Cargando productos…</p>
+        <p className="py-10 text-center text-sm text-brand-black">Cargando productos…</p>
       ) : (
         <>
           <div className="mb-3 flex gap-2">
@@ -235,7 +235,7 @@ export default function CatalogoTiendaPage() {
           <div className="space-y-5 pb-24">
             {porCategoria.map(({ categoria, items }) => (
               <div key={categoria} className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
-                <div className="bg-brand-cream-soft px-4 py-2 text-xs font-bold uppercase tracking-wide text-brand-brown/60">
+                <div className="bg-brand-cream-soft px-4 py-2 text-xs font-bold uppercase tracking-wide text-brand-black">
                   {categoria}
                 </div>
                 <table className="w-full text-sm">
@@ -252,11 +252,11 @@ export default function CatalogoTiendaPage() {
                         </td>
                         <td className="px-2 py-2.5">
                           <p className="font-medium text-brand-black">{f.producto || f.referencia}</p>
-                          <p className="text-[11px] text-brand-brown/40">Ref {f.referencia} · {f.um || "—"}</p>
+                          <p className="text-[11px] text-brand-black">Ref {f.referencia} · {f.um || "—"}</p>
                         </td>
                         <td className="w-40 px-4 py-2.5 text-right">
                           <div className="inline-flex items-center gap-1 rounded-lg border border-brand-brown/15 bg-white px-2 py-1">
-                            <span className="text-brand-brown/40">$</span>
+                            <span className="text-brand-black">$</span>
                             <input
                               type="number"
                               min="0"
@@ -277,7 +277,7 @@ export default function CatalogoTiendaPage() {
           {/* Barra de guardar */}
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-brown/10 bg-white/95 px-4 py-3 backdrop-blur lg:left-64">
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-              <span className="text-sm text-brand-brown/70">
+              <span className="text-sm text-brand-black">
                 {nIncluidos} producto{nIncluidos === 1 ? "" : "s"} en la tienda de <b className="text-brand-wine">{punto?.nombre}</b>
               </span>
               <button

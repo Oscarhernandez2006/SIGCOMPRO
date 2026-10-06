@@ -168,7 +168,7 @@ export default function ReporteProductosPage() {
       {/* Encabezado */}
       <div>
         <h1 className="font-serif text-2xl font-bold text-brand-wine">Reporte de productos por cliente</h1>
-        <p className="mt-0.5 text-sm text-brand-brown/60">
+        <p className="mt-0.5 text-sm text-brand-black">
           Consulta qué clientes han comprado un producto. Filtra por punto de venta, por código específico o consúltalo general.
         </p>
       </div>
@@ -177,13 +177,13 @@ export default function ReporteProductosPage() {
       <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-end gap-2 px-4 py-3">
           <div className="min-w-[150px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Código del producto</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Código del producto</label>
             <input value={codigo} onChange={(e) => setCodigo(e.target.value.trim())}
               placeholder="Ej: 9016 (vacío = todos)"
               className="h-9 w-full rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine" />
           </div>
           <div className="min-w-[170px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Punto de venta</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Punto de venta</label>
             <select value={puntoId} onChange={(e) => setPuntoId(e.target.value)}
               className="h-9 w-full rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
@@ -191,12 +191,12 @@ export default function ReporteProductosPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Desde</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Desde</label>
             <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Hasta</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Hasta</label>
             <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
@@ -207,7 +207,7 @@ export default function ReporteProductosPage() {
           </button>
           {hayFiltros && (
             <button type="button" onClick={() => { setCodigo(""); setPuntoId(""); setDesde(""); setHasta(""); }}
-              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
+              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-black transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
           )}
@@ -224,7 +224,7 @@ export default function ReporteProductosPage() {
             { label: "Monto total", val: money(data.resumen.monto) },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs text-brand-brown/55">{k.label}</p>
+              <p className="text-xs text-brand-black">{k.label}</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-black">{k.val}</p>
             </div>
           ))}
@@ -235,7 +235,7 @@ export default function ReporteProductosPage() {
       <div className="flex-1 overflow-hidden rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-brand-brown/8 px-4 py-3">
           <div className="relative min-w-[200px] flex-1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-black">
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>
             <input value={busq} onChange={(e) => setBusq(e.target.value)}
@@ -256,7 +256,7 @@ export default function ReporteProductosPage() {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Punto</th>
                 <th className="px-4 py-3">Código</th>
@@ -270,14 +270,14 @@ export default function ReporteProductosPage() {
             <tbody>
               {cargando ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-12 text-center text-brand-black">
                     <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Generando…</span>
                   </td>
                 </tr>
               ) : filas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center text-sm text-brand-brown/50">
+                  <td colSpan={8} className="px-4 py-14 text-center text-sm text-brand-black">
                     No hay compras para los filtros aplicados.
                   </td>
                 </tr>
@@ -286,15 +286,15 @@ export default function ReporteProductosPage() {
                   <tr key={`${f.nit}-${f.codigo}-${f.punto}-${idx}`} className="border-b border-brand-brown/8 transition hover:bg-neutral-50/60">
                     <td className="px-4 py-3">
                       <p className="font-medium leading-tight text-brand-black">{f.cliente}</p>
-                      <p className="text-[11px] text-brand-brown/50">{f.nit}</p>
+                      <p className="text-[11px] text-brand-black">{f.nit}</p>
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/75">{f.punto || "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-brand-brown/80">{f.codigo}</td>
+                    <td className="px-4 py-3 text-brand-black">{f.punto || "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-brand-black">{f.codigo}</td>
                     <td className="px-4 py-3 text-brand-black">{f.producto || "—"}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-brand-black">{fmtNum.format(f.cantidad)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-brand-brown/70">{f.n_pedidos}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-brand-black">{f.n_pedidos}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-brand-black">{money(f.monto)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
                       {f.ultima_compra
                         ? new Date(`${f.ultima_compra}T00:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })
                         : "—"}

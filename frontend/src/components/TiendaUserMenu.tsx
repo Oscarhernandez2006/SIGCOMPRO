@@ -51,7 +51,7 @@ export default function TiendaUserMenu({
             <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-brand-brown/10">
               <div className="border-b border-brand-brown/10 px-4 py-3">
                 <p className="truncate text-sm font-bold text-brand-black">{sesion.nombre}</p>
-                <p className="text-[11px] text-brand-brown/50">C.C. {sesion.cedula}</p>
+                <p className="text-[11px] text-brand-black">C.C. {sesion.cedula}</p>
               </div>
               <div className="p-1.5">
                 <MenuItem onClick={() => { setModal("clave"); setAbierto(false); }} label="Cambiar contraseña"
@@ -79,8 +79,8 @@ export default function TiendaUserMenu({
 function MenuItem({ onClick, label, d }: { onClick: () => void; label: string; d: string }) {
   return (
     <button onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-brand-brown/80 transition hover:bg-brand-cream-soft">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4 text-brand-brown/50"><path strokeLinecap="round" strokeLinejoin="round" d={d} /></svg>
+      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4 text-brand-black"><path strokeLinecap="round" strokeLinejoin="round" d={d} /></svg>
       {label}
     </button>
   );

@@ -125,7 +125,7 @@ export default function LiquidacionVariablePage() {
     <div>
       <div className="mb-5">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">Liquidación variable</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Informe quincenal de liquidación por cumplimiento de tiempos (promesa de Drivin).
           Revisa y decide manualmente qué pedidos se pagan.
         </p>
@@ -211,23 +211,23 @@ export default function LiquidacionVariablePage() {
       </div>
 
       {cargando ? (
-        <p className="py-10 text-center text-sm text-brand-brown/60">Cargando pedidos de la quincena…</p>
+        <p className="py-10 text-center text-sm text-brand-black">Cargando pedidos de la quincena…</p>
       ) : (
         <div className="space-y-6">
           {/* Resumen por persona */}
           <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
             <div className="flex items-center justify-between border-b border-brand-brown/10 bg-brand-cream-soft px-4 py-2.5">
-              <p className="text-xs font-bold uppercase tracking-wide text-brand-brown/60">
+              <p className="text-xs font-bold uppercase tracking-wide text-brand-black">
                 Resumen a pagar · {ROLES_LIQUIDACION.find((r) => r.key === rol)?.label}
               </p>
               <p className="text-sm font-bold text-brand-wine">Total {copLiq(rolData.total)}</p>
             </div>
             {rolData.resumen.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-brand-brown/50">Sin personas en este periodo.</p>
+              <p className="px-4 py-8 text-center text-sm text-brand-black">Sin personas en este periodo.</p>
             ) : (
               <div className="max-h-[calc(100vh-320px)] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-brown/45 shadow-sm">
+                <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-black shadow-sm">
                   <tr>
                     <th className="px-4 py-2">Punto</th>
                     <th className="px-4 py-2">Persona</th>
@@ -250,11 +250,11 @@ export default function LiquidacionVariablePage() {
                     const cfgPunto = configs[g.puntoId] ?? CONFIG_DEFECTO;
                     return (
                     <tr key={`${g.persona}|${g.puntoId}`} className="border-t border-brand-brown/5">
-                      <td className="px-4 py-2.5 text-brand-brown/70">{g.puntoNombre}</td>
+                      <td className="px-4 py-2.5 text-brand-black">{g.puntoNombre}</td>
                       <td className="px-4 py-2.5 font-semibold text-brand-black">{g.persona}</td>
                       {rol === "porcionador" ? (
                         <>
-                          <td className="px-3 py-2.5 text-right text-xs text-brand-brown/70">
+                          <td className="px-3 py-2.5 text-right text-xs text-brand-black">
                             {copLiq(cfgPunto.porcionador_minimo)}
                           </td>
                           <CeldaKgPlata kg={g.kilos} monto={g.montoKilos} />
@@ -287,13 +287,13 @@ export default function LiquidacionVariablePage() {
               <p className="text-sm font-bold text-brand-wine">
                 Detalle — {ROLES_LIQUIDACION.find((r) => r.key === rol)?.label} · decide qué se paga
               </p>
-              <button onClick={() => setModalDetalle(false)} className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-white">
+              <button onClick={() => setModalDetalle(false)} className="rounded-lg p-1.5 text-brand-black transition hover:bg-white">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="flex-1 overflow-auto">
               <table className="w-full min-w-[820px] text-sm">
-                <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-brown/45 shadow-sm">
+                <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-brand-black shadow-sm">
                   <tr>
                     <th className="px-4 py-2">Comanda</th>
                     <th className="px-4 py-2">Persona</th>
@@ -308,7 +308,7 @@ export default function LiquidacionVariablePage() {
                 <tbody>
                   {rolData.detalle.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-brand-brown/50">
+                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-brand-black">
                         No hay pedidos con persona asignada para este rol en la quincena.
                       </td>
                     </tr>
@@ -319,11 +319,11 @@ export default function LiquidacionVariablePage() {
                         <tr key={`${d.pedidoId}|${d.persona}`} className="border-t border-brand-brown/5 hover:bg-brand-cream-soft/30">
                           <td className="px-4 py-2 font-semibold text-brand-wine">{d.comanda}</td>
                           <td className="px-4 py-2 text-brand-black">{d.persona}</td>
-                          <td className="px-4 py-2 text-brand-brown/60">{d.puntoNombre}</td>
-                          <td className="px-4 py-2 text-right text-brand-brown/70">
+                          <td className="px-4 py-2 text-brand-black">{d.puntoNombre}</td>
+                          <td className="px-4 py-2 text-right text-brand-black">
                             {d.kilos % 1 === 0 ? d.kilos : d.kilos.toFixed(1)}
                           </td>
-                          <td className="px-4 py-2 text-right text-brand-brown/70">{duracionLiq(d.prepMs)}</td>
+                          <td className="px-4 py-2 text-right text-brand-black">{duracionLiq(d.prepMs)}</td>
                           <td className="px-4 py-2 text-center">
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${aTiempo ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
                               {aTiempo ? "Sí" : "No"}
@@ -375,11 +375,11 @@ export default function LiquidacionVariablePage() {
 
 /** Celda de la tabla de porcionadores: kg y plata en líneas separadas. */
 function CeldaKgPlata({ kg, monto }: { kg: number; monto: number }) {
-  if (kg <= 0) return <td className="px-3 py-2.5 text-right text-xs text-brand-brown/30">—</td>;
+  if (kg <= 0) return <td className="px-3 py-2.5 text-right text-xs text-brand-black">—</td>;
   return (
     <td className="px-3 py-2.5 text-right text-xs">
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-brand-brown/60">{kg % 1 === 0 ? kg : kg.toFixed(1)} kg</span>
+        <span className="text-brand-black">{kg % 1 === 0 ? kg : kg.toFixed(1)} kg</span>
         <span className="font-semibold text-brand-black">{copLiq(monto)}</span>
       </div>
     </td>
@@ -513,7 +513,7 @@ function ModalTodosPuntos({
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-6 py-4">
           <div>
             <h3 className="font-serif text-xl font-bold text-brand-wine">Configuración de liquidación</h3>
-            <p className="text-xs text-brand-brown/50">
+            <p className="text-xs text-brand-black">
               {replicarDesde
                 ? "Marca los puntos que también recibirán estos valores y guarda arriba."
                 : "Edita los valores y guarda con el botón de arriba. Usa \"Replicar\" para copiarlos a otros puntos."}
@@ -532,7 +532,7 @@ function ModalTodosPuntos({
                   ? `Guardar (${seleccionReplicar.size + 1} puntos)`
                   : "Guardar"}
             </button>
-            <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft">
+            <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
             </button>
           </div>
@@ -542,15 +542,15 @@ function ModalTodosPuntos({
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-brand-cream-soft">
               <tr>
-                <th className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5 text-left font-semibold text-brand-brown/70">
+                <th className="whitespace-nowrap border-b border-brand-brown/10 px-3 py-2.5 text-left font-semibold text-brand-black">
                   Punto de venta
                 </th>
                 {columnas.map((c) => (
-                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-1 py-2 text-center font-semibold text-brand-brown/70">
+                  <th key={c.key} className="whitespace-nowrap border-b border-brand-brown/10 px-1 py-2 text-center font-semibold text-brand-black">
                     {c.label}
                   </th>
                 ))}
-                <th className="whitespace-nowrap border-b border-brand-brown/10 px-2 py-2.5 text-center font-semibold text-brand-brown/70">
+                <th className="whitespace-nowrap border-b border-brand-brown/10 px-2 py-2.5 text-center font-semibold text-brand-black">
                   Replicar
                 </th>
               </tr>
@@ -566,7 +566,7 @@ function ModalTodosPuntos({
                     {columnas.map((c) => (
                       <td key={c.key} className="px-0.5 py-1">
                         <div className="flex w-full items-center gap-0.5 rounded-lg border border-brand-brown/15 bg-white px-1 py-1">
-                          {c.unidad !== "seg" && <span className="text-[11px] text-brand-brown/40">$</span>}
+                          {c.unidad !== "seg" && <span className="text-[11px] text-brand-black">$</span>}
                           <input
                             type="number"
                             min="0"
@@ -574,7 +574,7 @@ function ModalTodosPuntos({
                             onChange={(e) => setCampo(p.id, c.key, Number(e.target.value) || 0)}
                             className="w-full min-w-0 flex-1 bg-transparent text-right text-xs font-semibold text-brand-black outline-none"
                           />
-                          {c.unidad === "seg" && <span className="text-[11px] text-brand-brown/40">s</span>}
+                          {c.unidad === "seg" && <span className="text-[11px] text-brand-black">s</span>}
                         </div>
                       </td>
                     ))}
@@ -614,7 +614,7 @@ function ModalTodosPuntos({
               })}
               {puntos.length === 0 && (
                 <tr>
-                  <td colSpan={columnas.length + 2} className="px-4 py-6 text-center text-sm italic text-brand-brown/40">
+                  <td colSpan={columnas.length + 2} className="px-4 py-6 text-center text-sm italic text-brand-black">
                     No hay puntos de venta para mostrar.
                   </td>
                 </tr>

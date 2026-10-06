@@ -67,7 +67,7 @@ export default function MachineLearningPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Machine Learning
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Importa un Excel de clientes, lo procesamos (normalizamos direcciones y
             capitalizamos los datos) y lo exportamos corregido en el mismo formato.
           </p>
@@ -129,7 +129,7 @@ export default function MachineLearningPage() {
         <p className="text-sm font-semibold text-brand-black">
           {archivo ? archivo.name : "Arrastra el Excel aquí o haz clic para elegirlo"}
         </p>
-        <p className="mt-1 text-xs text-brand-brown/50">
+        <p className="mt-1 text-xs text-brand-black">
           Formatos: .xlsx, .xls, .xlsm, .csv (máx. 30 MB)
         </p>
         <input
@@ -191,21 +191,21 @@ export default function MachineLearningPage() {
         <h2 className="mb-2 font-serif text-lg font-bold text-brand-wine">
           Formato esperado del Excel
         </h2>
-        <p className="mb-3 text-brand-brown/70">
+        <p className="mb-3 text-brand-black">
           La primera fila es el encabezado. Las columnas se leen por posición:
         </p>
         <ul className="grid gap-1.5 sm:grid-cols-2">
-          <li><b>A</b> · Código <span className="text-brand-brown/50">(no se toca)</span></li>
-          <li><b>B</b> · Razón social <span className="text-brand-brown/50">(se capitaliza)</span></li>
-          <li><b>C</b> · Ciudad <span className="text-brand-brown/50">(no se toca)</span></li>
-          <li><b>D</b> · Celular <span className="text-brand-brown/50">(no se toca)</span></li>
-          <li><b>E</b> · Contacto <span className="text-brand-brown/50">(se capitaliza)</span></li>
-          <li><b>F</b> · Barrio <span className="text-brand-brown/50">(se capitaliza)</span></li>
-          <li><b>G</b> · Dirección 1 <span className="text-brand-brown/50">(se normaliza)</span></li>
-          <li><b>H</b> · Dirección 2 <span className="text-brand-brown/50">(no se toca)</span></li>
-          <li><b>I</b> · Dirección 3 <span className="text-brand-brown/50">(no se toca)</span></li>
+          <li><b>A</b> · Código <span className="text-brand-black">(no se toca)</span></li>
+          <li><b>B</b> · Razón social <span className="text-brand-black">(se capitaliza)</span></li>
+          <li><b>C</b> · Ciudad <span className="text-brand-black">(no se toca)</span></li>
+          <li><b>D</b> · Celular <span className="text-brand-black">(no se toca)</span></li>
+          <li><b>E</b> · Contacto <span className="text-brand-black">(se capitaliza)</span></li>
+          <li><b>F</b> · Barrio <span className="text-brand-black">(se capitaliza)</span></li>
+          <li><b>G</b> · Dirección 1 <span className="text-brand-black">(se normaliza)</span></li>
+          <li><b>H</b> · Dirección 2 <span className="text-brand-black">(no se toca)</span></li>
+          <li><b>I</b> · Dirección 3 <span className="text-brand-black">(no se toca)</span></li>
         </ul>
-        <p className="mt-3 text-brand-brown/70">
+        <p className="mt-3 text-brand-black">
           Se agrega una columna <b>Información adicional</b> (J) con todo lo que no
           es parte de la dirección (piso, apto, torre, barrio, referencias, etc.).
           No se pierde ni se inventa información.

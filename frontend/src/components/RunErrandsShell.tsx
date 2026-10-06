@@ -45,7 +45,7 @@ const IcoLogout = (
 
 const navItems = [
   { label: "Dashboard", href: "/run-errands/dashboard", icon: IcoDashboard },
-  { label: "Pedidos", href: "/run-errands/pedidos", icon: IcoPedidos },
+  { label: "Mandados", href: "/run-errands/pedidos", icon: IcoPedidos },
   { label: "Domiciliarios", href: "/run-errands/domiciliarios", icon: IcoUsers },
   { label: "Clientes", href: "/run-errands/clientes", icon: IcoCliente },
   { label: "Puntos de venta", href: "/run-errands/pdv", icon: IcoStore },

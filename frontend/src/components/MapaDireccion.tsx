@@ -12,7 +12,7 @@ import { getUsuario, puedeSeleccionarPuntoVenta } from "@/lib/auth";
 const MapaLeaflet = dynamic(() => import("./MapaLeaflet"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[260px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-brown/50">
+    <div className="flex h-[260px] items-center justify-center rounded-xl bg-brand-cream-soft text-sm text-brand-black">
       Cargando mapa…
     </div>
   ),
@@ -386,7 +386,7 @@ export default function MapaDireccion({
   return (
     <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium text-brand-brown/70">
+        <span className="text-xs font-medium text-brand-black">
           Ubicación en el mapa
         </span>
         <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function MapaDireccion({
               type="button"
               onClick={quitarUbicacion}
               title="Quitar la ubicación del mapa"
-              className="text-xs font-medium text-brand-brown/50 hover:text-red-600 hover:underline"
+              className="text-xs font-medium text-brand-black hover:text-red-600 hover:underline"
             >
               Quitar
             </button>
@@ -458,16 +458,16 @@ export default function MapaDireccion({
               setEstado({ tipo: "ok", msg: "Ubicación ajustada manualmente. Presiona Guardar." });
             }}
           />
-          <p className="mt-1 text-[0.7rem] text-brand-brown/50">
+          <p className="mt-1 text-[0.7rem] text-brand-black">
             Arrastra el pin o haz clic en el mapa para ajustar la ubicación exacta.
           </p>
           {sugerencia && (
-            <p className="mt-1 line-clamp-1 text-[0.7rem] text-brand-brown/60">
+            <p className="mt-1 line-clamp-1 text-[0.7rem] text-brand-black">
               <span className="font-medium">Mapa:</span> {sugerencia}
             </p>
           )}
           {tieneUbicacion && (
-            <p className="mt-0.5 text-[0.7rem] text-brand-brown/40">
+            <p className="mt-0.5 text-[0.7rem] text-brand-black">
               Lat {lat!.toFixed(6)}, Lng {lng!.toFixed(6)}
             </p>
           )}
@@ -481,7 +481,7 @@ export default function MapaDireccion({
             // COMPACTO (dev/admin app): elegir a qué punto asignar, apilado.
             // Orden: Seleccionar punto → Recomendado. "Donde se creó" es solo texto.
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-medium text-brand-brown/60">Asignar a:</span>
+              <span className="text-[11px] font-medium text-brand-black">Asignar a:</span>
               {/* 1. Seleccionar punto (desplegable) */}
               <select
                 value=""
@@ -517,7 +517,7 @@ export default function MapaDireccion({
                   Recomendado ({recomendado.punto.nombre} · {recomendado.km.toFixed(1)} km)
                 </button>
               )}
-              <span className="text-[11px] text-brand-brown/60">
+              <span className="text-[11px] text-brand-black">
                 Actual: <b className="text-brand-wine">{puntoVenta?.trim() || "Sin asignar"}</b>
               </span>
             </div>
@@ -526,7 +526,7 @@ export default function MapaDireccion({
             <div className="flex flex-wrap items-stretch gap-2">
               {puntoVenta?.trim() && (
                 <div className="flex-1 rounded-md border border-brand-brown/15 bg-white px-2 py-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-black">
                     {horeca ? "Punto asignado HORECA" : "Punto asignado"}
                   </p>
                   <p className="font-semibold text-brand-wine">{puntoVenta}</p>
@@ -540,12 +540,12 @@ export default function MapaDireccion({
                       : "border-brand-amber/40 bg-brand-amber/10"
                   }`}
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-black">
                     Recomendado (más cercano)
                   </p>
                   <p className="font-semibold text-brand-black">
                     {recomendado.punto.nombre}
-                    <span className="ml-1 font-normal text-brand-brown/50">
+                    <span className="ml-1 font-normal text-brand-black">
                       · {recomendado.km.toFixed(1)} km
                     </span>
                   </p>
@@ -564,14 +564,14 @@ export default function MapaDireccion({
                 <h3 className="font-serif text-lg font-bold text-brand-wine">
                   Sugerencias de dirección
                 </h3>
-                <p className="text-xs text-brand-brown/50">
+                <p className="text-xs text-brand-black">
                   Elige la que más se parezca; se corregirá barrio, ciudad y ubicación.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setModalSug(false)}
-                className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+                className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft"
                 aria-label="Cerrar"
                 title="Cerrar"
               >
@@ -583,24 +583,24 @@ export default function MapaDireccion({
 
             {/* Lo que escribió la persona, para comparar con las sugerencias. */}
             <div className="border-b border-brand-brown/10 bg-brand-cream-soft/40 px-5 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-brand-brown/50">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-brand-black">
                 Lo que escribiste
               </p>
               <p className="mt-0.5 text-sm font-semibold text-brand-black">
                 {direccion.trim() || "—"}
               </p>
-              <p className="text-xs text-brand-brown/60">
+              <p className="text-xs text-brand-black">
                 {[barrio, ciudad].filter((x) => x.trim()).join(" · ") ||
                   "Sin barrio ni ciudad"}
               </p>
-              <p className="mt-1 text-[11px] text-brand-brown/45">
+              <p className="mt-1 text-[11px] text-brand-black">
                 Compara con cada sugerencia para ver qué cambió (número, barrio o ciudad).
               </p>
             </div>
 
             <div className="flex-1 overflow-y-auto px-3 py-2">
               {sugerencias.length === 0 ? (
-                <p className="px-2 py-8 text-center text-sm text-brand-brown/50">
+                <p className="px-2 py-8 text-center text-sm text-brand-black">
                   No se encontraron sugerencias para esa dirección.
                 </p>
               ) : (
@@ -646,7 +646,7 @@ export default function MapaDireccion({
                           igual={Boolean(ciudadIgual)}
                           distinto={Boolean(ciSug) && !ciudadIgual && Boolean(ciudad.trim())}
                         />
-                        <span className="mt-0.5 block text-[10px] leading-snug text-brand-brown/40">
+                        <span className="mt-0.5 block text-[10px] leading-snug text-brand-black">
                           {s.display_name}
                         </span>
                       </span>
@@ -688,7 +688,7 @@ function CampoSugerencia({
 }) {
   return (
     <span className="flex items-center gap-1.5 text-[12px] leading-tight">
-      <span className="w-11 shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+      <span className="w-11 shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand-black">
         {etiqueta}
       </span>
       <span

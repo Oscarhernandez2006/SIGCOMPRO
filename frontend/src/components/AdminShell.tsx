@@ -515,7 +515,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               <p className="text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}
               </p>
-              <p className="text-xs capitalize text-brand-brown/60">
+              <p className="text-xs capitalize text-brand-black">
                 {usuario?.rol ?? ""}
               </p>
             </div>

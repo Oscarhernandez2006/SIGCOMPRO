@@ -115,7 +115,7 @@ export default function AdminPermisosPage() {
     <div>
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">Permisos</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Selecciona un usuario y define los módulos que puede ver y las acciones
           que puede realizar.
         </p>
@@ -145,7 +145,7 @@ export default function AdminPermisosPage() {
                   onClick={() => setBusqueda("")}
                   title="Limpiar búsqueda"
                   aria-label="Limpiar búsqueda"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -159,7 +159,7 @@ export default function AdminPermisosPage() {
               <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
             </div>
           ) : usuariosFiltrados.length === 0 ? (
-            <div className="py-16 text-center text-sm text-brand-brown/60">
+            <div className="py-16 text-center text-sm text-brand-black">
               No hay usuarios.
             </div>
           ) : (
@@ -181,7 +181,7 @@ export default function AdminPermisosPage() {
                         <span className="block truncate text-sm font-medium text-brand-black">
                           {u.nombre}
                         </span>
-                        <span className="block truncate text-xs capitalize text-brand-brown/60">
+                        <span className="block truncate text-xs capitalize text-brand-black">
                           {u.rol || "sin rol"}
                         </span>
                       </span>
@@ -201,7 +201,7 @@ export default function AdminPermisosPage() {
         {/* ---------- Editor de permisos ---------- */}
         <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
           {!seleccionado ? (
-            <div className="flex h-full min-h-[300px] items-center justify-center text-center text-sm text-brand-brown/60">
+            <div className="flex h-full min-h-[300px] items-center justify-center text-center text-sm text-brand-black">
               Selecciona un usuario de la lista para gestionar sus permisos.
             </div>
           ) : (
@@ -211,7 +211,7 @@ export default function AdminPermisosPage() {
                   <h2 className="font-serif text-xl font-bold text-brand-wine">
                     {seleccionado.nombre}
                   </h2>
-                  <p className="text-sm capitalize text-brand-brown/60">
+                  <p className="text-sm capitalize text-brand-black">
                     {seleccionado.rol || "sin rol"} · {seleccionado.cedula}
                   </p>
                 </div>
@@ -242,7 +242,7 @@ export default function AdminPermisosPage() {
               )}
 
               {accesoTotal ? (
-                <p className="rounded-xl bg-brand-amber/10 px-4 py-3 text-sm text-brand-brown/80">
+                <p className="rounded-xl bg-brand-amber/10 px-4 py-3 text-sm text-brand-black">
                   El rol{" "}
                   <strong className="capitalize">{seleccionado.rol}</strong>{" "}
                   tiene acceso total a todos los módulos. No es necesario asignar
@@ -276,7 +276,7 @@ export default function AdminPermisosPage() {
                                   className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
                                 />
                                 {modulo.label}
-                                <span className="text-xs font-normal text-brand-brown/50">
+                                <span className="text-xs font-normal text-brand-black">
                                   (ver / navegar)
                                 </span>
                               </label>
@@ -288,7 +288,7 @@ export default function AdminPermisosPage() {
                                       className={`flex items-center gap-2 text-sm ${
                                         moduloActivo
                                           ? "text-brand-black"
-                                          : "text-brand-brown/40"
+                                          : "text-brand-black"
                                       }`}
                                     >
                                       <input

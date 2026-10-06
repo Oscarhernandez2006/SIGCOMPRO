@@ -207,7 +207,7 @@ export default function AdminConfiguracionPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Gestión de recursos
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Personal de despacho: porcionadores y domiciliarios, con sus puntos
             de venta asignados.
           </p>
@@ -227,7 +227,7 @@ export default function AdminConfiguracionPage() {
       {/* Toolbar: buscar + filtro por rol + contadores */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
           </svg>
           <input
@@ -243,7 +243,7 @@ export default function AdminConfiguracionPage() {
               onClick={() => setBusqueda("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -272,7 +272,7 @@ export default function AdminConfiguracionPage() {
           ))}
         </div>
         {guardando && (
-          <span className="text-xs font-medium text-brand-brown/60">Guardando…</span>
+          <span className="text-xs font-medium text-brand-black">Guardando…</span>
         )}
         {errorGuardar && (
           <span className="text-xs font-semibold text-red-600">{errorGuardar}</span>
@@ -287,12 +287,12 @@ export default function AdminConfiguracionPage() {
 
       {/* Tabla */}
       {cargando ? (
-        <p className="text-sm text-brand-brown/60">Cargando…</p>
+        <p className="text-sm text-brand-black">Cargando…</p>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
                   <th className="px-4 py-3 font-semibold">Rol</th>
@@ -304,7 +304,7 @@ export default function AdminConfiguracionPage() {
               <tbody className="divide-y divide-brand-brown/5">
                 {filtradas.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-brand-brown/50">
+                    <td colSpan={5} className="px-4 py-10 text-center text-brand-black">
                       {personas.length === 0
                         ? "Aún no hay personas. Agrega la primera con “Nueva persona”."
                         : "No se encontraron resultados."}
@@ -323,7 +323,7 @@ export default function AdminConfiguracionPage() {
                       </td>
                       <td className="px-4 py-3">
                         {p.puntos.length === 0 ? (
-                          <span className="text-xs text-brand-brown/40">Sin puntos asignados</span>
+                          <span className="text-xs text-brand-black">Sin puntos asignados</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {p.puntos.map((id) => (
@@ -349,7 +349,7 @@ export default function AdminConfiguracionPage() {
                           >
                             <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${activo ? "translate-x-4" : "translate-x-1"}`} />
                           </button>
-                          <span className={`text-[10px] font-semibold ${activo ? "text-emerald-600" : "text-brand-brown/40"}`}>
+                          <span className={`text-[10px] font-semibold ${activo ? "text-emerald-600" : "text-brand-black"}`}>
                             {activo ? "Activo" : "Inactivo"}
                           </span>
                         </div>
@@ -455,7 +455,7 @@ function ModalNuevaPersona({
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
           <h2 className="font-serif text-lg font-bold text-brand-wine">Nueva persona</h2>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -548,11 +548,11 @@ function ModalAsignarPuntos({
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h2 className="font-serif text-lg font-bold text-brand-wine">Asignar puntos de venta</h2>
-            <p className="text-xs text-brand-brown/50">
+            <p className="text-xs text-brand-black">
               {persona.nombre} · {ETIQUETA_ROL[persona.rol]}
             </p>
           </div>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -574,7 +574,7 @@ function ModalAsignarPuntos({
                 onClick={() => setBusca("")}
                 title="Limpiar búsqueda"
                 aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -586,7 +586,7 @@ function ModalAsignarPuntos({
 
         <div className="flex-1 overflow-y-auto px-3 py-2">
           {filtrados.length === 0 ? (
-            <p className="px-2 py-6 text-center text-sm text-brand-brown/50">
+            <p className="px-2 py-6 text-center text-sm text-brand-black">
               No se encontraron puntos de venta.
             </p>
           ) : (
@@ -606,7 +606,7 @@ function ModalAsignarPuntos({
                   />
                   <span className="min-w-0 truncate">
                     {pv.nombre}
-                    {pv.codigo ? <span className="text-brand-brown/40"> ({pv.codigo})</span> : null}
+                    {pv.codigo ? <span className="text-brand-black"> ({pv.codigo})</span> : null}
                   </span>
                 </label>
               );
@@ -615,7 +615,7 @@ function ModalAsignarPuntos({
         </div>
 
         <div className="flex items-center justify-between border-t border-brand-brown/10 px-5 py-4">
-          <span className="text-xs font-medium text-brand-brown/60">
+          <span className="text-xs font-medium text-brand-black">
             {seleccion.length} seleccionado{seleccion.length === 1 ? "" : "s"}
           </span>
           <div className="flex gap-2">
@@ -662,7 +662,7 @@ function ModalEditarPersona({
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
           <h2 className="font-serif text-lg font-bold text-brand-wine">Editar persona</h2>
-          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
+          <button onClick={onCerrar} className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft" aria-label="Cerrar" title="Cerrar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>

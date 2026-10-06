@@ -123,7 +123,7 @@ export default function AutocompleteInput({
         style={{ paddingRight: "2.25rem" }}
       />
       {cargando && (
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.7rem] text-brand-brown/40">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.7rem] text-brand-black">
           …
         </span>
       )}
@@ -140,7 +140,7 @@ export default function AutocompleteInput({
           }}
           title="Limpiar"
           aria-label="Limpiar"
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -160,7 +160,7 @@ export default function AutocompleteInput({
               >
                 <span className="text-brand-black">{o.value}</span>
                 {o.hint && (
-                  <span className="shrink-0 text-xs text-brand-brown/50">
+                  <span className="shrink-0 text-xs text-brand-black">
                     {o.hint}
                   </span>
                 )}
@@ -171,7 +171,7 @@ export default function AutocompleteInput({
                 onClick={() => setOcultas((prev) => new Set(prev).add(o.value))}
                 title="Quitar esta sugerencia de la lista (solo temporal)"
                 aria-label="Quitar sugerencia"
-                className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                className="flex shrink-0 items-center px-2 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

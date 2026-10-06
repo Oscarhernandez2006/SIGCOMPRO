@@ -110,12 +110,12 @@ export default function AdminProductosPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Productos y precios
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Lista de precios por punto de venta (compañía 4). Sincroniza para
             traer nuevos productos o cambios de precio.
           </p>
           {ultima && (
-            <p className="mt-1 text-xs text-brand-brown/50">
+            <p className="mt-1 text-xs text-brand-black">
               Última sincronización: {fmtFecha(ultima)}
             </p>
           )}
@@ -175,7 +175,7 @@ export default function AdminProductosPage() {
               onClick={() => setBuscar("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -191,13 +191,13 @@ export default function AdminProductosPage() {
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
           </div>
         ) : filtrados.length === 0 ? (
-          <div className="py-16 text-center text-sm text-brand-brown/60">
+          <div className="py-16 text-center text-sm text-brand-black">
             No hay productos. Pulsa «Sincronizar» para traerlos de la API.
           </div>
         ) : (
           <div className="max-h-[calc(100vh-340px)] overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Referencia</th>
                   <th className="px-4 py-3 font-semibold">Producto</th>
@@ -208,13 +208,13 @@ export default function AdminProductosPage() {
               <tbody className="divide-y divide-brand-brown/5">
                 {filtrados.map((p) => (
                   <tr key={p.id} className="transition hover:bg-brand-cream-soft/60">
-                    <td className="px-4 py-3 font-mono text-xs text-brand-brown/80">
+                    <td className="px-4 py-3 font-mono text-xs text-brand-black">
                       {p.referencia}
                     </td>
                     <td className="px-4 py-3 font-medium text-brand-black">
                       {p.producto ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/70">{p.um ?? "—"}</td>
+                    <td className="px-4 py-3 text-brand-black">{p.um ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-brand-wine">
                       {fmtPrecio.format(p.precio)}
                     </td>

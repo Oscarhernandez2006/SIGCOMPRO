@@ -77,7 +77,7 @@ export default function PedidosPage() {
   }
 
   async function cancelar(p: Pedido) {
-    if (!confirm(`¿Cancelar el pedido ${p.numeroPedido}? Si ya se envió a Drivin, también se intentará cancelar allá.`)) return;
+    if (!confirm(`¿Cancelar el mandado ${p.numeroPedido}? Si ya se envió a Drivin, también se intentará cancelar allá.`)) return;
     await cambiarEstado(p, "CANCELADO");
   }
 
@@ -93,7 +93,7 @@ export default function PedidosPage() {
       const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
       const r = await syncDrivin(hace30, hoy);
       cargarPedidos();
-      alert(`${r.actualizados} pedido(s) actualizados desde Drivin.`);
+      alert(`${r.actualizados} mandado(s) actualizados desde Drivin.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo sincronizar con Drivin");
     } finally {
@@ -105,7 +105,7 @@ export default function PedidosPage() {
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-brand-wine">Pedidos</h1>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">Mandados</h1>
           <p className="mt-1 text-sm text-brand-black/60">Mandados de Run Errands, enviados a Drivin.</p>
         </div>
         <div className="flex gap-2">
@@ -116,7 +116,7 @@ export default function PedidosPage() {
           )}
           {puedeEditar && (
             <button onClick={abrirCrear} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
-              Nuevo pedido
+              Nuevo mandado
             </button>
           )}
         </div>
@@ -135,12 +135,12 @@ export default function PedidosPage() {
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
         ) : items.length === 0 ? (
-          <div className="p-6 text-center text-sm text-brand-black/50">Sin pedidos.</div>
+          <div className="p-6 text-center text-sm text-brand-black/50">Sin mandados.</div>
         ) : (
           <table className="w-full text-left text-sm">
             <thead className="bg-brand-cream-soft text-xs font-semibold uppercase tracking-wide text-brand-black/50">
               <tr>
-                <th className="px-4 py-2.5">N° Pedido</th>
+                <th className="px-4 py-2.5">N° Mandado</th>
                 <th className="px-4 py-2.5">Cliente</th>
                 <th className="px-4 py-2.5">PDV</th>
                 <th className="px-4 py-2.5">Domiciliario</th>
@@ -360,7 +360,7 @@ function ModalPedido({
         });
         onGuardado();
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : "No se pudo guardar el pedido");
+        setError(e instanceof ApiError ? e.message : "No se pudo guardar el mandado");
       } finally {
         setGuardando(false);
       }
@@ -378,7 +378,7 @@ function ModalPedido({
       await crearPedidosLote(filas.map(filaAPayload));
       onGuardado();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudieron guardar los pedidos");
+      setError(e instanceof ApiError ? e.message : "No se pudieron guardar los mandados");
     } finally {
       setGuardando(false);
     }
@@ -394,7 +394,7 @@ function ModalPedido({
       >
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-xl font-bold text-brand-wine">
-            {editando ? `Editar pedido ${editando.numeroPedido}` : "Nuevo mandado"}
+            {editando ? `Editar mandado ${editando.numeroPedido}` : "Nuevo mandado"}
           </h2>
           <button onClick={onCerrar} className="text-sm text-brand-black/40 hover:text-brand-black">✕</button>
         </div>

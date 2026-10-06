@@ -390,7 +390,7 @@ export default function CotizacionesPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Cotizaciones
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Crea cotizaciones con precios editables, genera el PDF y conviértelas
             en pedido cuando el cliente autorice.
           </p>
@@ -427,14 +427,14 @@ export default function CotizacionesPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
         </div>
       ) : cotizaciones.length === 0 ? (
-        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
           Aún no hay cotizaciones. Crea la primera con “Nueva cotización”.
         </div>
       ) : (
         <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="sticky top-0 z-10">
-              <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[11px] font-bold uppercase tracking-wide text-brand-brown/60">
+              <tr className="border-b border-brand-brown/10 bg-brand-cream-soft/50 text-left text-[11px] font-bold uppercase tracking-wide text-brand-black">
                 <th className="px-4 py-3">N°</th>
                 <th className="px-4 py-3">Fecha</th>
                 <th className="px-4 py-3">Cliente</th>
@@ -455,7 +455,7 @@ export default function CotizacionesPage() {
                     <td className="px-4 py-3 font-semibold text-brand-wine">
                       COT-{String(cot.numero ?? 0).padStart(5, "0")}
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/70">
+                    <td className="px-4 py-3 text-brand-black">
                       {cot.fecha
                         ? new Date(cot.fecha).toLocaleDateString("es-CO")
                         : "—"}
@@ -464,11 +464,11 @@ export default function CotizacionesPage() {
                       <div className="font-medium text-brand-black">
                         {cot.cliente?.nombre || cot.cliente?.nit_cedula || "—"}
                       </div>
-                      <div className="text-xs text-brand-brown/50">
+                      <div className="text-xs text-brand-black">
                         {cot.cliente?.nit_cedula}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/70">
+                    <td className="px-4 py-3 text-brand-black">
                       {cot.punto?.nombre || "—"}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-brand-black">
@@ -565,7 +565,7 @@ export default function CotizacionesPage() {
             <h2 className="font-serif text-lg font-bold text-brand-wine">
               Borrar cotización
             </h2>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-black">
               ¿Seguro que deseas borrar la cotización{" "}
               <b>COT-{String(aBorrar.numero ?? 0).padStart(5, "0")}</b>? Esta
               acción no se puede deshacer.
@@ -573,7 +573,7 @@ export default function CotizacionesPage() {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => setABorrar(null)}
-                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft"
+                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft"
               >
                 Cancelar
               </button>
@@ -864,7 +864,7 @@ function EditorCotizacion({
             <button
               onClick={onCerrar}
               aria-label="Cerrar"
-              className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -887,7 +887,7 @@ function EditorCotizacion({
                     <p className="truncate font-semibold text-brand-black">
                       {cliente.nombre || cliente.nit_cedula}
                     </p>
-                    <p className="text-xs text-brand-brown/60">
+                    <p className="text-xs text-brand-black">
                       {cliente.nit_cedula}
                       {cliente.direccion ? ` · ${cliente.direccion}` : ""}
                     </p>
@@ -910,7 +910,7 @@ function EditorCotizacion({
                     </svg>
                     Cotizar a Consumidor final
                   </button>
-                  <div className="mb-1 text-center text-[10px] uppercase tracking-wide text-brand-brown/40">
+                  <div className="mb-1 text-center text-[10px] uppercase tracking-wide text-brand-black">
                     o busca un cliente
                   </div>
                   <div className="relative">
@@ -926,7 +926,7 @@ function EditorCotizacion({
                         onClick={() => setBusCli("")}
                         title="Limpiar búsqueda"
                         aria-label="Limpiar búsqueda"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -936,12 +936,12 @@ function EditorCotizacion({
                   </div>
                   <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                     {cargandoCli ? (
-                      <p className="py-3 text-center text-xs text-brand-brown/50">
+                      <p className="py-3 text-center text-xs text-brand-black">
                         Buscando…
                       </p>
                     ) : clientes.length === 0 ? (
                       <div className="py-3 text-center">
-                        <p className="text-xs text-brand-brown/50">
+                        <p className="text-xs text-brand-black">
                           Sin resultados.
                         </p>
                         <button
@@ -964,7 +964,7 @@ function EditorCotizacion({
                             <span className="font-medium text-brand-black">
                               {c.nombre || c.nit_cedula}
                             </span>
-                            <span className="ml-1 text-xs text-brand-brown/50">
+                            <span className="ml-1 text-xs text-brand-black">
                               · {c.nit_cedula}
                             </span>
                           </button>
@@ -973,7 +973,7 @@ function EditorCotizacion({
                             onClick={() => setCliOcultos((prev) => new Set(prev).add(c.id))}
                             title="Quitar esta sugerencia de la lista (solo temporal)"
                             aria-label="Quitar sugerencia"
-                            className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                            className="flex shrink-0 items-center px-2 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -993,7 +993,7 @@ function EditorCotizacion({
                 Agregar productos
               </h3>
               {!punto ? (
-                <p className="py-3 text-center text-xs text-brand-brown/50">
+                <p className="py-3 text-center text-xs text-brand-black">
                   Selecciona primero el punto de venta.
                 </p>
               ) : (
@@ -1011,7 +1011,7 @@ function EditorCotizacion({
                         onClick={() => setBusProd("")}
                         title="Limpiar búsqueda"
                         aria-label="Limpiar búsqueda"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1021,11 +1021,11 @@ function EditorCotizacion({
                   </div>
                   <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
                     {cargandoProd ? (
-                      <p className="py-3 text-center text-xs text-brand-brown/50">
+                      <p className="py-3 text-center text-xs text-brand-black">
                         Cargando…
                       </p>
                     ) : productos.length === 0 ? (
-                      <p className="py-3 text-center text-xs text-brand-brown/50">
+                      <p className="py-3 text-center text-xs text-brand-black">
                         Sin productos.
                       </p>
                     ) : (
@@ -1043,7 +1043,7 @@ function EditorCotizacion({
                               <span className="block truncate font-medium text-brand-black">
                                 {(p.producto || "").toUpperCase()}
                               </span>
-                              <span className="text-xs text-brand-brown/50">
+                              <span className="text-xs text-brand-black">
                                 Ref {p.referencia} · {p.um || "U"}
                               </span>
                             </span>
@@ -1063,7 +1063,7 @@ function EditorCotizacion({
                             onClick={() => setProdOcultos((prev) => new Set(prev).add(p.id))}
                             title="Quitar esta sugerencia de la lista (solo temporal)"
                             aria-label="Quitar sugerencia"
-                            className="flex shrink-0 items-center rounded-md px-1.5 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                            className="flex shrink-0 items-center rounded-md px-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1087,12 +1087,12 @@ function EditorCotizacion({
                   </span>
                 )}
               </h3>
-              <p className="mb-2 text-[11px] text-brand-brown/55">
+              <p className="mb-2 text-[11px] text-brand-black">
                 Productos que saldrán como lista de precios en una segunda hoja del
                 PDF. Agrégalos con “+ Lista” desde el buscador de arriba.
               </p>
               {listaPrecios.length === 0 ? (
-                <p className="py-3 text-center text-xs text-brand-brown/50">
+                <p className="py-3 text-center text-xs text-brand-black">
                   Sin productos en la lista de precios.
                 </p>
               ) : (
@@ -1106,12 +1106,12 @@ function EditorCotizacion({
                         <span className="block truncate font-medium text-brand-black">
                           {(pr.producto || "").toUpperCase()}
                         </span>
-                        <span className="text-[10px] text-brand-brown/50">
+                        <span className="text-[10px] text-brand-black">
                           Ref {pr.referencia} · {pr.um || "U"}
                         </span>
                       </span>
                       <div className="flex shrink-0 items-center gap-1">
-                        <span className="text-[10px] text-brand-brown/40">$</span>
+                        <span className="text-[10px] text-brand-black">$</span>
                         <input
                           inputMode="numeric"
                           value={String(Number(pr.precio) || 0)}
@@ -1122,7 +1122,7 @@ function EditorCotizacion({
                         <button
                           onClick={() => quitarDeListaPrecios(pr.id)}
                           title="Quitar de la lista"
-                          className="rounded-md p-1 text-brand-brown/40 transition hover:bg-red-50 hover:text-red-600"
+                          className="rounded-md p-1 text-brand-black transition hover:bg-red-50 hover:text-red-600"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1150,7 +1150,7 @@ function EditorCotizacion({
                 )}
               </h3>
               {items.length === 0 ? (
-                <p className="py-8 text-center text-sm text-brand-brown/50">
+                <p className="py-8 text-center text-sm text-brand-black">
                   Agrega productos desde el panel izquierdo. Puedes editar el
                   precio de cada uno.
                 </p>
@@ -1159,7 +1159,7 @@ function EditorCotizacion({
                   <div className="min-h-0 flex-1 overflow-auto">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 z-10 bg-white">
-                        <tr className="border-b border-brand-brown/10 text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/50">
+                        <tr className="border-b border-brand-brown/10 text-left text-[10px] font-bold uppercase tracking-wide text-brand-black">
                           <th className="py-2 pr-2">Ref.</th>
                           <th className="py-2 pr-2">Descripción</th>
                           <th className="py-2 pr-2 text-center">Cant./Kilos</th>
@@ -1181,14 +1181,14 @@ function EditorCotizacion({
                               <span className="block max-w-[14rem] truncate">
                                 {(i.producto.producto || "").toUpperCase()}
                               </span>
-                              <span className="text-[10px] text-brand-brown/50">
+                              <span className="text-[10px] text-brand-black">
                                 {esKilo(i.producto.um) ? "por kilo" : "por unidad"}
                               </span>
                               <input
                                 value={i.notas}
                                 onChange={(e) => cambiarNota(i.id, e.target.value)}
                                 placeholder="Nota del producto (opcional)"
-                                className="mt-1 w-full max-w-[16rem] rounded-md border border-brand-brown/15 bg-white px-1.5 py-0.5 text-[11px] text-brand-brown/80 outline-none focus:border-brand-amber"
+                                className="mt-1 w-full max-w-[16rem] rounded-md border border-brand-brown/15 bg-white px-1.5 py-0.5 text-[11px] text-brand-black outline-none focus:border-brand-amber"
                               />
                             </td>
                             <td className="py-2 pr-2">
@@ -1241,7 +1241,7 @@ function EditorCotizacion({
                               <button
                                 onClick={() => quitar(i.id)}
                                 title="Quitar"
-                                className="rounded p-1 text-brand-brown/40 transition hover:bg-red-50 hover:text-red-600"
+                                className="rounded p-1 text-brand-black transition hover:bg-red-50 hover:text-red-600"
                               >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1274,7 +1274,7 @@ function EditorCotizacion({
               />
             </section>
 
-            <div className="shrink-0 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2 text-[11px] leading-relaxed text-brand-brown/70">
+            <div className="shrink-0 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2 text-[11px] leading-relaxed text-brand-black">
               Nota: el total es una <b>cotización</b> y puede variar según precios
               de mercado, el peso real facturado (kilos) e impuestos de los
               productos.
@@ -1290,7 +1290,7 @@ function EditorCotizacion({
               <button
                 onClick={onCerrar}
                 disabled={guardando}
-                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
+                className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft disabled:opacity-50"
               >
                 Cancelar
               </button>

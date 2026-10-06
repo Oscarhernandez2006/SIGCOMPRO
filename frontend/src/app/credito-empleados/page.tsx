@@ -197,10 +197,10 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
           </div>
           <div className="flex-1">
             <h2 className="font-serif text-lg font-bold text-brand-wine">Nueva compra a crédito</h2>
-            <p className="text-xs text-brand-brown/55">Busca el colaborador y registra el valor</p>
+            <p className="text-xs text-brand-black">Busca el colaborador y registra el valor</p>
           </div>
           <button type="button" onClick={onClose} disabled={guardando} aria-label="Cerrar"
-            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-40">
+            className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-40">
             <Icon d={Ico.xmark} cls="h-5 w-5" />
           </button>
         </div>
@@ -211,11 +211,11 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
           <div>
             <div className="mb-2 flex items-center gap-2">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-wine text-[10px] font-bold text-white">1</span>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Buscar colaborador</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-black">Buscar colaborador</p>
             </div>
             <form onSubmit={buscar} className="flex gap-2">
               <div className="relative flex-1">
-                <Icon d={Ico.user} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35" />
+                <Icon d={Ico.user} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black" />
                 <input ref={inputRef} value={cedula}
                   onChange={(e) => { setCedula(e.target.value.replace(/\D/g, "")); setTrabajador(null); setErrorBuscar(null); }}
                   placeholder="Número de cédula"
@@ -274,17 +274,17 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                   { label: "Disponible",  val: money(disponible), color: disponible > 0 ? "text-brand-wine" : "text-rose-600" },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="px-3 py-2.5 text-center">
-                    <p className="text-[10px] uppercase tracking-wide text-brand-brown/50">{label}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-brand-black">{label}</p>
                     <p className={`mt-0.5 text-sm font-bold ${color}`}>{val}</p>
                   </div>
                 ))}
               </div>
               {trabajador.siesa_saldo !== null && (
                 <div className="flex items-center gap-2 border-t border-brand-brown/10 bg-neutral-50 px-4 py-2">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5 shrink-0 text-brand-brown/40">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5 shrink-0 text-brand-black">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
                   </svg>
-                  <span className="text-[11px] text-brand-brown/55">Saldo en Siesa (cartera ERP)</span>
+                  <span className="text-[11px] text-brand-black">Saldo en Siesa (cartera ERP)</span>
                   <span className={`ml-auto text-xs font-bold ${trabajador.siesa_saldo > 0 ? "text-rose-600" : "text-brand-wine"}`}>
                     {money(trabajador.siesa_saldo)}
                   </span>
@@ -298,12 +298,12 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-wine text-[10px] font-bold text-white">2</span>
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Detalle de la compra</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-black">Detalle de la compra</p>
               </div>
               <form onSubmit={registrar} className="space-y-3">
                 {/* Punto */}
                 <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
                     <Icon d={Ico.store} cls="h-3.5 w-3.5" />Punto de venta
                   </label>
                   <select value={puntoSel} onChange={(e) => setPuntoSel(e.target.value)}
@@ -318,7 +318,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     {(["productos", "manual"] as const).map((m) => (
                       <button key={m} type="button" onClick={() => setModo(m)}
                         className={`flex items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2 text-xs font-bold transition ${
-                          modo === m ? "border-brand-wine bg-brand-wine/10 text-brand-wine" : "border-brand-brown/15 bg-white text-brand-brown/55"
+                          modo === m ? "border-brand-wine bg-brand-wine/10 text-brand-wine" : "border-brand-brown/15 bg-white text-brand-black"
                         }`}>
                         {m === "productos" ? "Elegir productos" : "Valor manual"}
                       </button>
@@ -329,7 +329,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                     <div className="space-y-2">
                       {/* Buscador de productos */}
                       <div className="relative">
-                        <Icon d={Ico.search} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/35" />
+                        <Icon d={Ico.search} cls="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black" />
                         <input value={busquedaProd} onChange={(e) => setBusquedaProd(e.target.value)}
                           placeholder="Buscar producto…"
                           className="h-10 w-full rounded-xl border border-brand-brown/25 pl-9 pr-3 text-sm outline-none transition focus:border-brand-wine" />
@@ -337,11 +337,11 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
 
                       {/* Lista del catálogo */}
                       {cargandoCat ? (
-                        <div className="flex items-center justify-center py-6 text-sm text-brand-brown/50">
+                        <div className="flex items-center justify-center py-6 text-sm text-brand-black">
                           <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
                         </div>
                       ) : catalogo.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-brand-brown/20 px-3 py-4 text-center text-xs text-brand-brown/50">
+                        <p className="rounded-xl border border-dashed border-brand-brown/20 px-3 py-4 text-center text-xs text-brand-black">
                           Este punto no tiene catálogo configurado. Usa «Valor manual» o carga el catálogo en «Catálogo tienda».
                         </p>
                       ) : (
@@ -351,7 +351,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-brand-cream-soft">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium text-brand-black">{c.producto}</p>
-                                <p className="text-[11px] text-brand-brown/50">{c.categoria} · {c.um}</p>
+                                <p className="text-[11px] text-brand-black">{c.categoria} · {c.um}</p>
                               </div>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-brand-wine">{money(Number(c.precio))}</span>
                               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-brand-wine">
@@ -360,7 +360,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                             </button>
                           ))}
                           {catalogoFiltrado.length === 0 && (
-                            <p className="px-2.5 py-3 text-center text-xs text-brand-brown/40">Sin resultados</p>
+                            <p className="px-2.5 py-3 text-center text-xs text-brand-black">Sin resultados</p>
                           )}
                         </div>
                       )}
@@ -372,16 +372,16 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                             <div key={l.item.referencia} className="flex items-center gap-2">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-xs font-medium text-brand-black">{l.item.producto}</p>
-                                <p className="text-[10px] text-brand-brown/50">{money(Number(l.item.precio))} · {l.item.um}</p>
+                                <p className="text-[10px] text-brand-black">{money(Number(l.item.precio))} · {l.item.um}</p>
                               </div>
                               <div className="flex items-center gap-1">
                                 <button type="button" onClick={() => setCantidadProducto(l.item.referencia, l.cantidad - 1)}
-                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown/70 hover:bg-white">−</button>
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-black hover:bg-white">−</button>
                                 <input value={l.cantidad}
                                   onChange={(e) => setCantidadProducto(l.item.referencia, Number(e.target.value.replace(/[^\d.]/g, "")) || 0)}
                                   className="h-6 w-11 rounded-md border border-brand-brown/20 text-center text-xs outline-none focus:border-brand-wine" />
                                 <button type="button" onClick={() => setCantidadProducto(l.item.referencia, l.cantidad + 1)}
-                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-brown/70 hover:bg-white">+</button>
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-brand-brown/20 text-brand-black hover:bg-white">+</button>
                               </div>
                               <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums text-brand-black">
                                 {money(Number(l.item.precio) * l.cantidad)}
@@ -392,7 +392,7 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                       )}
 
                       <div className={`flex items-center justify-between rounded-xl px-3 py-2 ${superaCupo ? "bg-rose-50" : "bg-brand-wine/5"}`}>
-                        <span className="text-xs font-semibold uppercase tracking-wide text-brand-brown/55">Total</span>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-brand-black">Total</span>
                         <span className={`text-base font-bold tabular-nums ${superaCupo ? "text-rose-600" : "text-brand-wine"}`}>{money(totalCarrito)}</span>
                       </div>
                       {superaCupo && <p className="text-xs font-medium text-rose-600">Supera el cupo disponible ({money(disponible)})</p>}
@@ -411,9 +411,9 @@ function ModalNuevaCompra({ puntos, usuario, onClose, onCreado }: { puntos: Punt
                 </div>
                 {/* Observación */}
                 <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-brown/60">
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-black">
                     <Icon d={Ico.note} cls="h-3.5 w-3.5" />
-                    Observación <span className="font-normal normal-case text-brand-brown/35">(opcional)</span>
+                    Observación <span className="font-normal normal-case text-brand-black">(opcional)</span>
                   </label>
                   <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)}
                     rows={2} placeholder="Detalle o notas de cartera…"
@@ -476,10 +476,10 @@ function ModalConfirm({ pedido, nuevoEstado, onClose, onConfirmar }: {
       <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !ejecutando && onClose()} />
       <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
         <h2 className="font-serif text-lg font-bold text-brand-black">{cfg.titulo}</h2>
-        <p className="mt-1 text-sm text-brand-brown/70">{cfg.desc}</p>
+        <p className="mt-1 text-sm text-brand-black">{cfg.desc}</p>
         <div className="mt-4 rounded-xl border border-brand-brown/10 bg-brand-cream-soft px-4 py-3 text-sm space-y-0.5">
           <p className="font-semibold text-brand-black">{pedido.trabajador_nombre}</p>
-          <p className="text-brand-brown/65 text-xs">CC {pedido.trabajador_cedula} · {pedido.punto_nombre}</p>
+          <p className="text-brand-black text-xs">CC {pedido.trabajador_cedula} · {pedido.punto_nombre}</p>
           <p className="font-bold text-brand-black pt-1">{money(Number(pedido.total))}</p>
         </div>
         {error && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
@@ -535,17 +535,17 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle de la compra</h2>
-            <p className="text-xs text-brand-brown/55">Información completa del pedido</p>
+            <p className="text-xs text-brand-black">Información completa del pedido</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar"
-            className="rounded-lg p-1.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-brown">
+            className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown">
             <Icon d={Ico.xmark} cls="h-5 w-5" />
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
           {cargando ? (
-            <div className="flex items-center justify-center py-12 text-brand-brown/50">
+            <div className="flex items-center justify-center py-12 text-brand-black">
               <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-wine border-t-transparent" />
             </div>
           ) : error ? (
@@ -556,11 +556,11 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-brand-black">{pedido.trabajador_nombre}</p>
-                  <p className="text-xs text-brand-brown/55">CC {pedido.trabajador_cedula}</p>
+                  <p className="text-xs text-brand-black">CC {pedido.trabajador_cedula}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <EstadoBadge estado={pedido.estado} />
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-black"}`}>
                     {esTienda ? "Tienda online" : "Panel"}
                   </span>
                 </div>
@@ -584,7 +584,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
               {/* Productos */}
               {items.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Productos</p>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-black">Productos</p>
                   <div className="divide-y divide-brand-brown/8 rounded-xl border border-brand-brown/10">
                     {items.map((it, idx) => (
                       <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
@@ -593,9 +593,9 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-brand-black">{it.nombre}</p>
-                          {it.obs && <p className="text-[11px] italic text-brand-brown/50">“{it.obs}”</p>}
+                          {it.obs && <p className="text-[11px] italic text-brand-black">“{it.obs}”</p>}
                         </div>
-                        <span className="text-[11px] text-brand-brown/45">{it.um}</span>
+                        <span className="text-[11px] text-brand-black">{it.um}</span>
                         <span className="w-24 text-right font-semibold tabular-nums text-brand-black">{money(it.total)}</span>
                       </div>
                     ))}
@@ -611,7 +611,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
               {/* Comprobante */}
               {pedido.factura_imagen && (
                 <div>
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-brown/45">Comprobante (factura + cédula)</p>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-brand-black">Comprobante (factura + cédula)</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={pedido.factura_imagen} alt="Comprobante" className="w-full rounded-xl border border-brand-brown/15" />
                 </div>
@@ -633,7 +633,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
 function Dato({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-brown/45">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-black">{label}</p>
       <p className="mt-0.5 text-sm text-brand-black">{children}</p>
     </div>
   );
@@ -706,7 +706,7 @@ export default function CreditoEmpleadosPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl font-bold text-brand-wine">Compras a crédito</h1>
-          <p className="mt-0.5 text-sm text-brand-brown/60">Registro de compras de colaboradores contra su cupo asignado.</p>
+          <p className="mt-0.5 text-sm text-brand-black">Registro de compras de colaboradores contra su cupo asignado.</p>
         </div>
         {puedeCrear && (
           <button type="button" onClick={() => setModalNueva(true)}
@@ -727,7 +727,7 @@ export default function CreditoEmpleadosPage() {
               </svg>
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-brand-brown/55">{k.label}</p>
+              <p className="text-xs text-brand-black">{k.label}</p>
               <p className={`mt-0.5 text-base font-bold tabular-nums truncate ${k.color}`}>{k.val}</p>
             </div>
           </div>
@@ -741,8 +741,8 @@ export default function CreditoEmpleadosPage() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4 text-brand-wine">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
             </svg>
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/50">Cobros por nómina</p>
-            <span className="ml-auto text-[11px] text-brand-brown/35">Días de pago: 13 y 27 de cada mes</span>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-black">Cobros por nómina</p>
+            <span className="ml-auto text-[11px] text-brand-black">Días de pago: 13 y 27 de cada mes</span>
           </div>
           <div className="flex flex-wrap gap-3 px-4 py-3">
             {resumen.map((r) => {
@@ -772,7 +772,7 @@ export default function CreditoEmpleadosPage() {
                   <p className={`text-lg font-bold tabular-nums ${esPasado ? 'text-neutral-600' : 'text-brand-black'}`}>
                     {money(r.total)}
                   </p>
-                  <p className="text-[11px] text-brand-brown/50">
+                  <p className="text-[11px] text-brand-black">
                     {r.n_pedidos} {r.n_pedidos === 1 ? 'compra' : 'compras'} · {r.trabajadores} {r.trabajadores === 1 ? 'colaborador' : 'colaboradores'}
                   </p>
                 </div>
@@ -785,15 +785,15 @@ export default function CreditoEmpleadosPage() {
       {/* Filtros */}
       <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex items-center gap-2 border-b border-brand-brown/8 px-4 py-3">
-          <Icon d={Ico.filter} cls="h-4 w-4 text-brand-brown/40" />
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-brown/50">Filtros</p>
+          <Icon d={Ico.filter} cls="h-4 w-4 text-brand-black" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-black">Filtros</p>
         </div>
         <div className="flex flex-wrap items-end gap-2 px-4 py-3">
           {/* Cédula */}
           <div className="min-w-[130px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Cédula</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Cédula</label>
             <div className="relative">
-              <Icon d={Ico.user} cls="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35" />
+              <Icon d={Ico.user} cls="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-black" />
               <input value={filtroCedula} onChange={(e) => setFiltroCedula(e.target.value.replace(/\D/g, ""))}
                 placeholder="Filtrar por cédula"
                 className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
@@ -801,7 +801,7 @@ export default function CreditoEmpleadosPage() {
           </div>
           {/* Estado */}
           <div className="min-w-[110px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Estado</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Estado</label>
             <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
@@ -812,7 +812,7 @@ export default function CreditoEmpleadosPage() {
           </div>
           {/* Desde */}
           <div>
-            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
               <Icon d={Ico.calendar} cls="h-3 w-3" />Desde
             </label>
             <input type="date" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)}
@@ -820,7 +820,7 @@ export default function CreditoEmpleadosPage() {
           </div>
           {/* Hasta */}
           <div>
-            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
               <Icon d={Ico.calendar} cls="h-3 w-3" />Hasta
             </label>
             <input type="date" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)}
@@ -829,7 +829,7 @@ export default function CreditoEmpleadosPage() {
           {/* Punto */}
           {puntos.length > 1 && (
             <div className="min-w-[130px]">
-              <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+              <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                 <Icon d={Ico.store} cls="h-3 w-3" />Punto
               </label>
               <select value={filtroPunto} onChange={(e) => setFiltroPunto(e.target.value)}
@@ -841,7 +841,7 @@ export default function CreditoEmpleadosPage() {
           )}
           {/* Origen */}
           <div className="min-w-[120px]">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">Origen</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Origen</label>
             <select value={filtroOrigen} onChange={(e) => setFiltroOrigen(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
               <option value="">Todos</option>
@@ -855,7 +855,7 @@ export default function CreditoEmpleadosPage() {
           </button>
           {(filtroCedula || filtroEstado || filtroDesde || filtroHasta || filtroPunto || filtroOrigen) && (
             <button type="button" onClick={() => { setFiltroCedula(""); setFiltroEstado(""); setFiltroDesde(""); setFiltroHasta(""); setFiltroPunto(""); setFiltroOrigen(""); }}
-              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-brown/60 transition hover:bg-brand-cream-soft">
+              className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-black transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
           )}
@@ -875,7 +875,7 @@ export default function CreditoEmpleadosPage() {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">
+              <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                 <th className="px-4 py-3">Fecha</th>
                 <th className="px-4 py-3">Colaborador</th>
                 <th className="px-4 py-3">Punto</th>
@@ -889,7 +889,7 @@ export default function CreditoEmpleadosPage() {
             <tbody>
               {cargando ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-brand-brown/50">
+                  <td colSpan={7} className="px-4 py-12 text-center text-brand-black">
                     <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Cargando…</span>
                   </td>
@@ -897,11 +897,11 @@ export default function CreditoEmpleadosPage() {
               ) : pedidos.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-14 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-brown/8 text-brand-brown/30">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-brown/8 text-brand-black">
                       <Icon d={Ico.wallet} cls="h-7 w-7" />
                     </div>
-                    <p className="mt-3 text-sm font-medium text-brand-brown/50">No hay compras para los filtros aplicados</p>
-                    <p className="mt-1 text-xs text-brand-brown/35">Ajusta los filtros o registra una nueva compra</p>
+                    <p className="mt-3 text-sm font-medium text-brand-black">No hay compras para los filtros aplicados</p>
+                    <p className="mt-1 text-xs text-brand-black">Ajusta los filtros o registra una nueva compra</p>
                   </td>
                 </tr>
               ) : (
@@ -911,7 +911,7 @@ export default function CreditoEmpleadosPage() {
                   return (
                   <tr key={p.id} onClick={() => setDetalleId(p.id)}
                     className="cursor-pointer border-b border-brand-brown/8 transition hover:bg-brand-cream-soft/50">
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">{fechaCorta(p.creado_en)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">{fechaCorta(p.creado_en)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-[10px] font-bold text-brand-wine">
@@ -919,25 +919,25 @@ export default function CreditoEmpleadosPage() {
                         </div>
                         <div>
                           <p className="font-medium text-brand-black leading-tight">{p.trabajador_nombre}</p>
-                          <p className="text-[11px] text-brand-brown/50">CC {p.trabajador_cedula}</p>
+                          <p className="text-[11px] text-brand-black">CC {p.trabajador_cedula}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-brand-brown/75">{p.punto_nombre}</td>
+                    <td className="px-4 py-3 text-brand-black">{p.punto_nombre}</td>
                     <td className="px-4 py-3 text-right">
                       <p className="font-semibold tabular-nums text-brand-black">{money(Number(p.total) || 0)}</p>
                       {nItems > 0 && (
-                        <p className="mt-0.5 text-[11px] text-brand-brown/45">{nItems} {nItems === 1 ? "producto" : "productos"}</p>
+                        <p className="mt-0.5 text-[11px] text-brand-black">{nItems} {nItems === 1 ? "producto" : "productos"}</p>
                       )}
                     </td>
                     <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-brown/65">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
                       {p.nomina_fecha
                         ? new Date(p.nomina_fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
-                        : <span className="italic text-brand-brown/25">—</span>}
+                        : <span className="italic text-brand-black">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-brown/60"}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${esTienda ? "bg-amber-100 text-amber-700" : "bg-brand-brown/8 text-brand-black"}`}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3 w-3">
                           {esTienda
                             ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />

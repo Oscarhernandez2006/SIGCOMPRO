@@ -362,7 +362,7 @@ export default function DashboardPage() {
 
   if (sinAcceso) {
     return (
-      <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+      <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
         No tienes acceso al Dashboard.
       </div>
     );
@@ -580,11 +580,11 @@ export default function DashboardPage() {
                 <CardHead titulo="Despachados" desc="Pedidos entregados en el periodo" />
                 <p className="font-display text-3xl font-extrabold tabular-nums text-brand-black">
                   {num(m.despachados)}
-                  <span className="ml-2 text-base font-bold text-brand-brown/50">
+                  <span className="ml-2 text-base font-bold text-brand-black">
                     de {num(m.numPedidos)}
                   </span>
                 </p>
-                <p className="mt-1 text-sm text-brand-brown/60">
+                <p className="mt-1 text-sm text-brand-black">
                   {m.pctDespachados.toFixed(1)}% del total · {cop(m.valorDespachado)}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-brand-cream-soft">
@@ -616,7 +616,7 @@ export default function DashboardPage() {
                 <CardHead titulo="Hogar" desc="Clientes residenciales" />
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="text-brand-black">Pedidos</span>
                     <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
                       {num(m.hogarVsHoreca.hogar.pedidos)}
                       <span className="ml-1 text-xs font-semibold text-blue-700">
@@ -625,7 +625,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="text-brand-black">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
                       {m.hogarVsHoreca.hogar.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-blue-700">
@@ -634,7 +634,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="text-brand-black">Valor total</span>
                     <span className="font-display text-lg font-extrabold text-blue-900 tabular-nums">
                       {cop(m.hogarVsHoreca.hogar.valor)}
                       <span className="ml-1 text-xs font-semibold text-blue-700">
@@ -648,7 +648,7 @@ export default function DashboardPage() {
                 <CardHead titulo="HORECA" desc="Hoteles, restaurantes, cafés" />
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="text-brand-black">Pedidos</span>
                     <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
                       {num(m.hogarVsHoreca.horeca.pedidos)}
                       <span className="ml-1 text-xs font-semibold text-orange-700">
@@ -657,7 +657,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="text-brand-black">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
                       {m.hogarVsHoreca.horeca.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-orange-700">
@@ -666,7 +666,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="text-brand-black">Valor total</span>
                     <span className="font-display text-lg font-extrabold text-orange-900 tabular-nums">
                       {cop(m.hogarVsHoreca.horeca.valor)}
                       <span className="ml-1 text-xs font-semibold text-orange-700">
@@ -680,21 +680,21 @@ export default function DashboardPage() {
                 <CardHead titulo="Total" desc="Suma de ambos segmentos" />
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Pedidos</span>
+                    <span className="text-brand-black">Pedidos</span>
                     <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
                       {num(m.hogarVsHoreca.total.pedidos)}
                       <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Kilos vendidos</span>
+                    <span className="text-brand-black">Kilos vendidos</span>
                     <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
                       {m.hogarVsHoreca.total.kilos.toFixed(1)}
                       <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-brand-brown/60">Valor total</span>
+                    <span className="text-brand-black">Valor total</span>
                     <span className="font-display text-lg font-extrabold text-purple-900 tabular-nums">
                       {cop(m.hogarVsHoreca.total.valor)}
                       <span className="ml-1 text-xs font-semibold text-purple-700">(100%)</span>
@@ -723,7 +723,7 @@ export default function DashboardPage() {
                 <CardHead titulo="Métodos de pago" desc="Por número de pedidos válidos" />
                 <DonutLeyenda data={m.porPago} totalLabel="pedidos" />
                 <div className="mt-16 border-t border-brand-brown/10 pt-6">
-                  <h4 className="mb-4 text-[11px] font-bold uppercase tracking-wide text-brand-brown/55">
+                  <h4 className="mb-4 text-[11px] font-bold uppercase tracking-wide text-brand-black">
                     Tipo de entrega
                   </h4>
                   <DonutLeyenda
@@ -742,7 +742,7 @@ export default function DashboardPage() {
                   col1="Producto"
                   render={(f) => (
                     <>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
@@ -765,7 +765,7 @@ export default function DashboardPage() {
                   col1="Televendedora"
                   render={(f) => (
                     <>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(f.unidades)}</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-emerald-700">{cop(f.facturado ?? 0)}</td>
                     </>
@@ -782,8 +782,8 @@ export default function DashboardPage() {
                   col1="Cliente"
                   render={(f) => (
                     <>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
@@ -799,10 +799,10 @@ export default function DashboardPage() {
                   col1="Porcionador"
                   render={(f) => (
                     <>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilosPorcionados ?? 0))} kg</td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(Math.round(f.kilosPorcionados ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{f.prepCount ? fmtPromDuracion((f.prepMs ?? 0) / f.prepCount) : "\u2014"}</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
@@ -818,8 +818,8 @@ export default function DashboardPage() {
                   col1="Domiciliario"
                   render={(f) => (
                     <>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(f.unidades)}</td>
-                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-brown/70">{num(Math.round(f.kilos ?? 0))} kg</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(f.unidades)}</td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-brand-black">{num(Math.round(f.kilos ?? 0))} kg</td>
                       <td className="whitespace-nowrap py-2 pl-3 text-right font-display font-bold tabular-nums text-brand-black">{cop(f.total)}</td>
                     </>
                   )}
@@ -1193,7 +1193,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-3">
       <span className="h-4 w-1 rounded-full bg-brand-amber" />
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-brown/60">
+      <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-black">
         {children}
       </h2>
     </div>
@@ -1214,7 +1214,7 @@ function CardHead({ titulo, desc }: { titulo: string; desc?: string }) {
   return (
     <div className="mb-4">
       <h3 className="font-display text-base font-bold tracking-tight text-brand-black">{titulo}</h3>
-      {desc && <p className="mt-0.5 text-xs text-brand-brown/55">{desc}</p>}
+      {desc && <p className="mt-0.5 text-xs text-brand-black">{desc}</p>}
     </div>
   );
 }
@@ -1241,7 +1241,7 @@ function Cumplimiento({
     <Panel>
       <CardHead titulo={titulo} desc={desc} />
       {total === 0 ? (
-        <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-brown/50">
+        <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-black">
           Sin datos en el periodo.
         </p>
       ) : (
@@ -1269,9 +1269,9 @@ function Cumplimiento({
           <div className="min-w-0">
             <p className="font-display text-2xl font-bold tabular-nums text-brand-black">
               {num(aTiempo)}
-              <span className="ml-1.5 text-sm font-semibold text-brand-brown/50">de {num(total)}</span>
+              <span className="ml-1.5 text-sm font-semibold text-brand-black">de {num(total)}</span>
             </p>
-            <p className="mt-1 text-xs text-brand-brown/60">a tiempo</p>
+            <p className="mt-1 text-xs text-brand-black">a tiempo</p>
             {total - aTiempo > 0 && (
               <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-500">
                 {num(total - aTiempo)} fuera de tiempo
@@ -1310,7 +1310,7 @@ function Kpi({
     <div className="group relative overflow-hidden rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm transition hover:shadow-md">
       <span className={`absolute inset-y-0 left-0 w-1 ${c.barra}`} />
       <div className="flex items-start justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">{titulo}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-black">{titulo}</p>
         <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${c.chip}`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
             <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
@@ -1318,15 +1318,15 @@ function Kpi({
         </span>
       </div>
       {labelPrincipal && (
-        <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-brand-brown/45">{labelPrincipal}</p>
+        <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-brand-black">{labelPrincipal}</p>
       )}
       <p className={`${labelPrincipal ? "mt-0" : "mt-2"} font-display text-[1.7rem] font-extrabold leading-tight tracking-tight text-brand-black tabular-nums`}>
         {valor}
       </p>
       {valorSec !== undefined && (
         <p className="mt-1 flex items-baseline gap-1.5 text-xs">
-          {labelSec && <span className="font-medium uppercase tracking-wide text-brand-brown/45">{labelSec}</span>}
-          <span className="font-display text-sm font-bold tabular-nums text-brand-brown/75">{valorSec}</span>
+          {labelSec && <span className="font-medium uppercase tracking-wide text-brand-black">{labelSec}</span>}
+          <span className="font-display text-sm font-bold tabular-nums text-brand-black">{valorSec}</span>
         </p>
       )}
       <div className="mt-1.5 flex items-center gap-2 text-xs">
@@ -1343,9 +1343,9 @@ function Kpi({
           </span>
         )}
         {sub ? (
-          <span className="text-brand-brown/50">{sub}</span>
+          <span className="text-brand-black">{sub}</span>
         ) : delta ? (
-          <span className="text-brand-brown/40">vs periodo anterior</span>
+          <span className="text-brand-black">vs periodo anterior</span>
         ) : null}
       </div>
     </div>
@@ -1366,7 +1366,7 @@ function MovCard({ label, sub, value, color, icon }: { label: string; sub: strin
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-tight text-brand-black">{label}</p>
-        <p className="truncate text-[11px] text-brand-brown/50">{sub}</p>
+        <p className="truncate text-[11px] text-brand-black">{sub}</p>
       </div>
       <p className="shrink-0 font-display text-xl font-extrabold tabular-nums text-brand-black">{num(value)}</p>
     </div>
@@ -1382,10 +1382,10 @@ function MiniStat({ titulo, valor, sub, icon }: { titulo: string; valor: string;
         </svg>
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">{titulo}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-black">{titulo}</p>
         <p className="truncate font-display text-lg font-bold tabular-nums text-brand-black">
           {valor}
-          {sub && <span className="ml-1.5 text-xs font-medium text-brand-brown/50">{sub}</span>}
+          {sub && <span className="ml-1.5 text-xs font-medium text-brand-black">{sub}</span>}
         </p>
       </div>
     </div>
@@ -1395,7 +1395,7 @@ function MiniStat({ titulo, valor, sub, icon }: { titulo: string; valor: string;
 function LineChart({ data }: { data: { dia: string; valor: number }[] }) {
   if (data.length === 0) {
     return (
-      <div className="flex h-56 items-center justify-center text-sm text-brand-brown/40">
+      <div className="flex h-56 items-center justify-center text-sm text-brand-black">
         Sin ventas en el periodo.
       </div>
     );
@@ -1447,7 +1447,7 @@ function LineChart({ data }: { data: { dia: string; valor: number }[] }) {
           i % mostrarCada === 0 ? (
             <span
               key={p.dia}
-              className="absolute -translate-x-1/2 text-[10px] tabular-nums text-brand-brown/50"
+              className="absolute -translate-x-1/2 text-[10px] tabular-nums text-brand-black"
               style={{ left: `${p.x}%` }}
             >
               {new Date(p.dia + "T00:00").getDate()}
@@ -1469,7 +1469,7 @@ function DonutLeyenda({
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) {
     return (
-      <div className="flex h-40 items-center justify-center text-sm text-brand-brown/40">Sin datos.</div>
+      <div className="flex h-40 items-center justify-center text-sm text-brand-black">Sin datos.</div>
     );
   }
   const R = 42;
@@ -1502,16 +1502,16 @@ function DonutLeyenda({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-display text-xl font-extrabold tabular-nums text-brand-black">{num(total)}</span>
-          <span className="text-[11px] uppercase tracking-wide text-brand-brown/50">{totalLabel}</span>
+          <span className="text-[11px] uppercase tracking-wide text-brand-black">{totalLabel}</span>
         </div>
       </div>
       <ul className="w-full min-w-0 space-y-1.5 sm:flex-1">
         {data.map((d) => (
           <li key={d.label} className="flex items-center gap-2 text-sm">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-            <span className="min-w-0 flex-1 truncate text-brand-brown/80">{d.label}</span>
+            <span className="min-w-0 flex-1 truncate text-brand-black">{d.label}</span>
             <span className="shrink-0 font-display font-bold tabular-nums text-brand-black">{num(d.value)}</span>
-            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-brand-brown/50">
+            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-brand-black">
               {((d.value / total) * 100).toFixed(0)}%
             </span>
           </li>
@@ -1538,7 +1538,7 @@ function TablaTop({
 }) {
   if (filas.length === 0) {
     return (
-      <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-brown/50">
+      <p className="rounded-xl bg-brand-cream-soft px-3 py-6 text-center text-sm text-brand-black">
         Sin datos en el periodo.
       </p>
     );
@@ -1547,7 +1547,7 @@ function TablaTop({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[36rem] text-sm">
         <thead>
-          <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-brown/50">
+          <tr className="border-b border-brand-brown/10 text-left text-[11px] uppercase tracking-wide text-brand-black">
             <th className="pb-2 font-semibold">{col1}</th>
             {cabeceras.map((c) => (
               <th key={c} className="whitespace-nowrap pb-2 pl-3 text-right font-semibold">
@@ -1561,7 +1561,7 @@ function TablaTop({
             <tr key={`${f.nombre}-${i}`} className="border-b border-brand-brown/5 align-top last:border-0">
               <td className="min-w-[9rem] max-w-[14rem] py-2 pr-3 align-top">
                 <div className="flex items-start gap-2">
-                  <span className="w-4 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-brand-brown/40">{i + 1}</span>
+                  <span className="w-4 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-brand-black">{i + 1}</span>
                   <span className="break-words font-medium text-brand-black">{f.nombre}</span>
                 </div>
                 <div className="mt-1 ml-6 h-1.5 overflow-hidden rounded-full bg-brand-cream-soft">

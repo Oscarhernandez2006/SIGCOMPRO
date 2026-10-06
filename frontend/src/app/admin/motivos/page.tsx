@@ -153,7 +153,7 @@ export default function AdminMotivosPage() {
             <h2 className="font-serif text-lg font-bold text-brand-wine">
               {TITULOS[tipo]}
             </h2>
-            <p className="mt-0.5 text-xs text-brand-brown/60">
+            <p className="mt-0.5 text-xs text-brand-black">
               {DESCRIPCIONES[tipo]}
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function AdminMotivosPage() {
 
         <div className="mt-4 space-y-2">
           {lista.length === 0 ? (
-            <p className="rounded-xl bg-brand-cream-soft px-3 py-3 text-center text-sm text-brand-brown/50">
+            <p className="rounded-xl bg-brand-cream-soft px-3 py-3 text-center text-sm text-brand-black">
               Sin motivos. Agrega el primero.
             </p>
           ) : (
@@ -174,11 +174,11 @@ export default function AdminMotivosPage() {
                 className="flex items-center justify-between gap-2 rounded-xl border border-brand-brown/10 px-3 py-2.5"
               >
                 <div className="min-w-0">
-                  <p className={`truncate text-sm font-medium ${m.activo ? "text-brand-black" : "text-brand-brown/40 line-through"}`}>
+                  <p className={`truncate text-sm font-medium ${m.activo ? "text-brand-black" : "text-brand-black line-through"}`}>
                     {m.nombre}
                   </p>
                   {!m.activo && (
-                    <p className="text-[11px] text-brand-brown/40">Inactivo</p>
+                    <p className="text-[11px] text-brand-black">Inactivo</p>
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -186,7 +186,7 @@ export default function AdminMotivosPage() {
                     onClick={() => alternarActivo(m)}
                     title={m.activo ? "Desactivar" : "Activar"}
                     aria-label={m.activo ? "Desactivar" : "Activar"}
-                    className={`rounded-lg border p-1.5 transition ${m.activo ? "border-green-200 text-green-600 hover:bg-green-50" : "border-brand-brown/15 text-brand-brown/40 hover:bg-brand-cream-soft"}`}
+                    className={`rounded-lg border p-1.5 transition ${m.activo ? "border-green-200 text-green-600 hover:bg-green-50" : "border-brand-brown/15 text-brand-black hover:bg-brand-cream-soft"}`}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                       {m.activo ? (
@@ -239,7 +239,7 @@ export default function AdminMotivosPage() {
     <div>
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">Motivos</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Administra los motivos de anulación y cancelación de pedidos. Los
           motivos activos aparecen al anular o cancelar un pedido.
         </p>
@@ -276,7 +276,7 @@ export default function AdminMotivosPage() {
               disabled={guardando}
               aria-label="Cerrar"
               title="Cerrar"
-              className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-50"
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

@@ -169,7 +169,7 @@ export default function AdminDomiciliosPage() {
         <h1 className="font-serif text-3xl font-bold text-brand-wine">
           Valor domicilio
         </h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Ubica cada punto de venta en el mapa y configura su tarifa de
           domicilio. El sistema usa estas coordenadas para sugerir el punto más
           cercano y calcular el valor del domicilio por distancia.
@@ -184,7 +184,7 @@ export default function AdminDomiciliosPage() {
 
       {!cargando && puntos.length > 0 && (
         <div className="relative mb-4 max-w-md">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
           </svg>
           <input
@@ -199,7 +199,7 @@ export default function AdminDomiciliosPage() {
               onClick={() => setBusqueda("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -214,11 +214,11 @@ export default function AdminDomiciliosPage() {
           <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
         </div>
       ) : puntos.length === 0 ? (
-        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
           No hay puntos de venta registrados.
         </div>
       ) : puntosFiltrados.length === 0 ? (
-        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
           No se encontraron puntos que coincidan con “{busqueda}”.
         </div>
       ) : (
@@ -236,7 +236,7 @@ export default function AdminDomiciliosPage() {
                       {p.nombre}
                     </h2>
                     {p.codigo && (
-                      <p className="font-mono text-xs text-brand-brown/60">
+                      <p className="font-mono text-xs text-brand-black">
                         {p.codigo}
                       </p>
                     )}
@@ -254,19 +254,19 @@ export default function AdminDomiciliosPage() {
                   )}
                 </div>
 
-                <p className="mt-2 text-sm text-brand-brown/70">
+                <p className="mt-2 text-sm text-brand-black">
                   {p.direccion || "Sin dirección"}
                 </p>
 
                 <dl className="mt-4 space-y-1.5 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-brand-brown/60">Base ({p.dom_km_base} km)</dt>
+                    <dt className="text-brand-black">Base ({p.dom_km_base} km)</dt>
                     <dd className="font-medium text-brand-black">
                       {fmtMoneda(p.dom_valor_base)}
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-brand-brown/60">Km adicional</dt>
+                    <dt className="text-brand-black">Km adicional</dt>
                     <dd className="font-medium text-brand-black">
                       {fmtMoneda(p.dom_valor_km)}
                     </dd>
@@ -303,7 +303,7 @@ export default function AdminDomiciliosPage() {
               disabled={guardando}
               aria-label="Cerrar"
               title="Cerrar"
-              className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-50"
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -312,7 +312,7 @@ export default function AdminDomiciliosPage() {
             <h2 className="font-serif text-xl font-bold text-brand-wine">
               {editando.nombre}
             </h2>
-            <p className="mt-1 text-sm text-brand-brown/70">
+            <p className="mt-1 text-sm text-brand-black">
               Ubica el punto y define la tarifa de domicilio.
             </p>
 
@@ -370,7 +370,7 @@ export default function AdminDomiciliosPage() {
                     <label className="mb-1 block text-sm font-medium text-brand-brown">
                       Ubicación en el mapa
                     </label>
-                    <p className="mb-1.5 text-xs text-brand-brown/60">
+                    <p className="mb-1.5 text-xs text-brand-black">
                       Escribe la ciudad y usa “Ver sugerencias” para ubicar el
                       punto con precisión. La ubicación en el mapa es la que se
                       usa para calcular el domicilio.
@@ -499,7 +499,7 @@ export default function AdminDomiciliosPage() {
                     </p>
                   )}
 
-                  <p className="rounded-xl bg-brand-cream-soft px-3 py-2.5 text-xs text-brand-brown/70">
+                  <p className="rounded-xl bg-brand-cream-soft px-3 py-2.5 text-xs text-brand-black">
                     El valor base cubre los primeros {form.dom_km_base || 0} km.
                     Cada km adicional suma{" "}
                     {fmtMoneda(Number(form.dom_valor_km) || 0)}.

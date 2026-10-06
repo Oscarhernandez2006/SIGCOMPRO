@@ -65,7 +65,7 @@ function colorMetodo(pago?: string | null): string {
     case "mixto":
       return "bg-fuchsia-50 text-fuchsia-700";
     default:
-      return "bg-brand-cream-soft text-brand-brown/70";
+      return "bg-brand-cream-soft text-brand-black";
   }
 }
 
@@ -786,7 +786,7 @@ export default function CuadreCajaPage() {
   const sinAcceso = usuario && !puedeVerModulo(usuario, "cuadre_caja");
   if (sinAcceso) {
     return (
-      <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+      <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
         No tienes acceso al Cuadre de caja.
       </div>
     );
@@ -797,12 +797,12 @@ export default function CuadreCajaPage() {
       {/* Encabezado + filtros */}
       <div className="mb-6">
         <h1 className="font-serif text-3xl font-bold text-brand-wine">Cuadre de caja</h1>
-        <p className="mt-1 text-sm text-brand-brown/70">
+        <p className="mt-1 text-sm text-brand-black">
           Liquida los pedidos <b>despachados</b> de {nombrePunto}. La diferencia debe quedar en <b>$ 0</b>.
         </p>
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Punto de venta
             <select
               value={puntoSel}
@@ -817,7 +817,7 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
-          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Fecha
             <input
               type="date"
@@ -826,7 +826,7 @@ export default function CuadreCajaPage() {
               className="mt-1 rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-black outline-none focus:border-brand-wine"
             />
           </label>
-          <div className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <div className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Método de pago
             <div className="mt-1 inline-flex rounded-xl border border-brand-brown/15 bg-brand-cream-soft/60 p-0.5">
               {(
@@ -843,7 +843,7 @@ export default function CuadreCajaPage() {
                   className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
                     filtroPago === v
                       ? "bg-brand-wine text-white shadow-sm"
-                      : "text-brand-brown/70 hover:bg-white"
+                      : "text-brand-black hover:bg-white"
                   }`}
                 >
                   {lbl}
@@ -851,7 +851,7 @@ export default function CuadreCajaPage() {
               ))}
             </div>
           </div>
-          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Domiciliario
             <select
               value={filtroDomiciliario}
@@ -867,7 +867,7 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
-          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Facturador
             <select
               value={filtroFacturador}
@@ -883,7 +883,7 @@ export default function CuadreCajaPage() {
               ))}
             </select>
           </label>
-          <div className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+          <div className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-brand-black">
             Liquidación
             <div className="mt-1 inline-flex rounded-xl border border-brand-brown/15 bg-brand-cream-soft/60 p-0.5">
               {(
@@ -900,7 +900,7 @@ export default function CuadreCajaPage() {
                   className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
                     filtroLiquidacion === v
                       ? "bg-brand-wine text-white shadow-sm"
-                      : "text-brand-brown/70 hover:bg-white"
+                      : "text-brand-black hover:bg-white"
                   }`}
                 >
                   {lbl}
@@ -922,7 +922,7 @@ export default function CuadreCajaPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
         </div>
       ) : filas.length === 0 ? (
-        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
           No hay pedidos despachados para el día y punto seleccionados.
         </div>
       ) : (
@@ -930,7 +930,7 @@ export default function CuadreCajaPage() {
           <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
             <table className="w-full min-w-[880px] table-fixed text-xs">
               <thead className="sticky top-0 z-20">
-                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-brown/60 shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+                <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-black shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                   <th className="w-[9%] px-2 py-2.5">No. Factura</th>
                   <th className="w-[10%] px-2 py-2.5">Consecutivo</th>
                   <th className="w-[15%] px-2 py-2.5">Cliente</th>
@@ -949,7 +949,7 @@ export default function CuadreCajaPage() {
                   const dif = diferenciaFila(p);
                   const difColor =
                     dif === 0
-                      ? "text-brand-brown/40"
+                      ? "text-brand-black"
                       : dif < 0
                         ? "text-red-600"
                         : "text-emerald-600";
@@ -980,7 +980,7 @@ export default function CuadreCajaPage() {
                           <span className="truncate">{meta[p.id]?.facturaNumero || "—"}</span>
                         </span>
                       </td>
-                      <td className="relative px-2 py-2 tabular-nums text-brand-brown/80">
+                      <td className="relative px-2 py-2 tabular-nums text-brand-black">
                         <button
                           type="button"
                           onClick={() => setDetalleId((prev) => (prev === p.id ? null : p.id))}
@@ -990,7 +990,7 @@ export default function CuadreCajaPage() {
                           <span className="underline decoration-brand-brown/20 decoration-dotted underline-offset-2 group-hover:decoration-brand-wine">
                             {p.comanda || p.consecutivo}
                           </span>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-brown/40 transition ${detalleId === p.id ? "rotate-180" : ""}`}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-black transition ${detalleId === p.id ? "rotate-180" : ""}`}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                           </svg>
                         </button>
@@ -1002,7 +1002,7 @@ export default function CuadreCajaPage() {
                                 type="button"
                                 onClick={() => setDetalleId(null)}
                                 title="Cerrar"
-                                className="shrink-0 rounded p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                                className="shrink-0 rounded p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                               >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1010,16 +1010,16 @@ export default function CuadreCajaPage() {
                               </button>
                             </div>
                             <div className="space-y-1">
-                              <p className="text-brand-brown/80">
+                              <p className="text-brand-black">
                                 <span className="font-semibold text-brand-black">Creó el pedido:</span> {p.vendedorNombre || "—"}
                               </p>
-                              <p className="text-brand-brown/80">
+                              <p className="text-brand-black">
                                 <span className="font-semibold text-brand-black">Alistador:</span> {meta[p.id]?.porcionador || "—"}
                               </p>
-                              <p className="text-brand-brown/80">
+                              <p className="text-brand-black">
                                 <span className="font-semibold text-brand-black">Domiciliario:</span> {meta[p.id]?.domiciliario || "—"}
                               </p>
-                              <p className="text-brand-brown/80">
+                              <p className="text-brand-black">
                                 <span className="font-semibold text-brand-black">Facturó:</span> {meta[p.id]?.facturadoPor || "—"}
                               </p>
                             </div>
@@ -1029,7 +1029,7 @@ export default function CuadreCajaPage() {
                       <td className="truncate px-2 py-2 font-medium text-brand-black">
                         {p.cliente?.nombre || p.cliente?.nit_cedula || "—"}
                       </td>
-                      <td className="truncate px-2 py-2 tabular-nums text-brand-brown/70">
+                      <td className="truncate px-2 py-2 tabular-nums text-brand-black">
                         {p.cliente?.nit_cedula || "—"}
                       </td>
                       <td className="px-2 py-2">
@@ -1050,7 +1050,7 @@ export default function CuadreCajaPage() {
                           ))}
                         </select>
                       </td>
-                      <td className="truncate px-2 py-2 text-brand-brown/70">
+                      <td className="truncate px-2 py-2 text-brand-black">
                         {despachadoPorNombre(p) || meta[p.id]?.despachadoPor || "—"}
                       </td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums text-brand-black">
@@ -1060,7 +1060,7 @@ export default function CuadreCajaPage() {
                         {ajena ? (
                           <div
                             title={`Facturado por ${meta[p.id]?.facturadoPor || "otra persona"}. Solo quien facturó este pedido puede cuadrarlo.`}
-                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-brown/40"
+                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-black"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -1093,7 +1093,7 @@ export default function CuadreCajaPage() {
                               setDesbloqueadoId((c) => (c === p.id ? null : c));
                             }}
                             placeholder={efectivoActivo ? "0" : "—"}
-                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
+                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-black"
                           />
                         )}
                       </td>
@@ -1101,7 +1101,7 @@ export default function CuadreCajaPage() {
                         {ajena ? (
                           <div
                             title={`Facturado por ${meta[p.id]?.facturadoPor || "otra persona"}. Solo quien facturó este pedido puede cuadrarlo.`}
-                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-brown/40"
+                            className="inline-flex w-full cursor-not-allowed items-center justify-end gap-1 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/70 px-1.5 py-1 text-right text-xs font-semibold tabular-nums text-brand-black"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3 shrink-0 opacity-70">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -1134,7 +1134,7 @@ export default function CuadreCajaPage() {
                               setDesbloqueadoId((c) => (c === p.id ? null : c));
                             }}
                             placeholder={ompActivo ? "0" : "—"}
-                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-brown/40"
+                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60 disabled:text-brand-black"
                           />
                         )}
                       </td>
@@ -1190,7 +1190,7 @@ export default function CuadreCajaPage() {
               {cerrado && (
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    bloqueado ? "bg-brand-brown/10 text-brand-brown/70" : "bg-amber-50 text-amber-700"
+                    bloqueado ? "bg-brand-brown/10 text-brand-black" : "bg-amber-50 text-amber-700"
                   }`}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
@@ -1203,7 +1203,7 @@ export default function CuadreCajaPage() {
                 <span className="text-sm font-medium text-emerald-600">Cuadre guardado ✓</span>
               )}
               {!guardadoOk && (
-                <span className="text-xs font-medium text-brand-brown/50">
+                <span className="text-xs font-medium text-brand-black">
                   {autoguardando ? "Guardando…" : "Guardado automático"}
                 </span>
               )}
@@ -1258,7 +1258,7 @@ export default function CuadreCajaPage() {
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
               {authCeldaId ? "Modificar liquidación" : "Autorización requerida"}
             </h3>
-            <p className="mt-1 text-center text-sm text-brand-brown/70">
+            <p className="mt-1 text-center text-sm text-brand-black">
               {authCeldaId ? (
                 <>
                   Esta liquidación ya fue guardada y está <b>bloqueada</b>. Para

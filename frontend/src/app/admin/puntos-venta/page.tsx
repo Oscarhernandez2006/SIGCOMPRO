@@ -261,7 +261,7 @@ export default function AdminPuntosVentaPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Puntos de venta
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Gestiona los puntos de venta y asigna los usuarios que trabajan en
             cada uno.
           </p>
@@ -290,13 +290,13 @@ export default function AdminPuntosVentaPage() {
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
           </div>
         ) : puntos.length === 0 ? (
-          <div className="py-16 text-center text-sm text-brand-brown/60">
+          <div className="py-16 text-center text-sm text-brand-black">
             No hay puntos de venta registrados.
           </div>
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Código</th>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
@@ -308,7 +308,7 @@ export default function AdminPuntosVentaPage() {
               <tbody className="divide-y divide-brand-brown/5">
                 {puntos.map((p) => (
                   <tr key={p.id} className="transition hover:bg-brand-cream-soft/60">
-                    <td className="px-4 py-3 font-mono text-xs text-brand-brown/80">
+                    <td className="px-4 py-3 font-mono text-xs text-brand-black">
                       {p.codigo ?? "—"}
                     </td>
                     <td className="px-4 py-3 font-medium text-brand-black">
@@ -326,7 +326,7 @@ export default function AdminPuntosVentaPage() {
                           Activo
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-brown/10 px-2.5 py-0.5 text-xs font-medium text-brand-brown/60">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-brown/10 px-2.5 py-0.5 text-xs font-medium text-brand-black">
                           <span className="h-1.5 w-1.5 rounded-full bg-brand-brown/40" />
                           Inactivo
                         </span>
@@ -345,7 +345,7 @@ export default function AdminPuntosVentaPage() {
                               /* portapapeles no disponible */
                             }
                           }}
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-wine/10 hover:text-brand-wine"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-wine/10 hover:text-brand-wine"
                           aria-label={`Copiar link del menú de ${p.nombre}`}
                           title={copiadoId === p.id ? "¡Link copiado!" : "Copiar link del menú público"}
                         >
@@ -363,7 +363,7 @@ export default function AdminPuntosVentaPage() {
                           href={`/tienda/${slugTienda(p)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-amber/10 hover:text-brand-amber"
                           aria-label={`Abrir menú de ${p.nombre}`}
                           title="Abrir menú público"
                         >
@@ -373,7 +373,7 @@ export default function AdminPuntosVentaPage() {
                         </a>
                         <button
                           onClick={() => abrirEditar(p)}
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-amber/10 hover:text-brand-amber"
                           aria-label={`Editar ${p.nombre}`}
                           title="Editar"
                         >
@@ -383,7 +383,7 @@ export default function AdminPuntosVentaPage() {
                         </button>
                         <button
                           onClick={() => setPorEliminar(p)}
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-wine/10 hover:text-brand-wine"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-wine/10 hover:text-brand-wine"
                           aria-label={`Eliminar ${p.nombre}`}
                           title="Eliminar"
                         >
@@ -409,7 +409,7 @@ export default function AdminPuntosVentaPage() {
             <h2 className="font-serif text-xl font-bold text-brand-wine">
               {editando ? "Editar punto de venta" : "Nuevo punto de venta"}
             </h2>
-            <p className="mt-1 text-sm text-brand-brown/60">
+            <p className="mt-1 text-sm text-brand-black">
               El código identifica la localidad ante el software de pedidos.
             </p>
 
@@ -493,7 +493,7 @@ export default function AdminPuntosVentaPage() {
                         </option>
                       ))}
                     </select>
-                    <p className="mt-1 text-xs text-brand-brown/50">
+                    <p className="mt-1 text-xs text-brand-black">
                       Define los productos y precios que ve este punto en pedidos.
                     </p>
                   </div>
@@ -508,7 +508,7 @@ export default function AdminPuntosVentaPage() {
                       />
                       Integrar con Drivin
                     </label>
-                    <p className="mt-1 text-xs text-brand-brown/50">
+                    <p className="mt-1 text-xs text-brand-black">
                       Si está activo, este punto sube los pedidos a Drivin y baja los
                       domiciliarios/entregas. Si no, sigue un flujo manual.
                     </p>
@@ -525,7 +525,7 @@ export default function AdminPuntosVentaPage() {
                             placeholder="Ej: 01"
                             className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
                           />
-                          <p className="mt-1 text-xs text-brand-brown/50">Gestor de órdenes al que se suben los pedidos.</p>
+                          <p className="mt-1 text-xs text-brand-black">Gestor de órdenes al que se suben los pedidos.</p>
                         </div>
                         <div>
                           <label className="mb-1.5 block text-sm font-medium text-brand-brown">
@@ -538,7 +538,7 @@ export default function AdminPuntosVentaPage() {
                             placeholder="Ej: La 93"
                             className="w-full rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
                           />
-                          <p className="mt-1 text-xs text-brand-brown/50">Flota &quot;Domiciliarios PDV &lt;localidad&gt;&quot; para bajar domiciliarios.</p>
+                          <p className="mt-1 text-xs text-brand-black">Flota &quot;Domiciliarios PDV &lt;localidad&gt;&quot; para bajar domiciliarios.</p>
                         </div>
                       </div>
                     )}
@@ -559,7 +559,7 @@ export default function AdminPuntosVentaPage() {
                   <label className="mb-1.5 block text-sm font-medium text-brand-brown">
                     Ubicación en el mapa
                   </label>
-                  <p className="mb-2 text-xs text-brand-brown/60">
+                  <p className="mb-2 text-xs text-brand-black">
                     Ubica el punto con precisión (latitud/longitud) para recomendar
                     correctamente el punto más cercano a cada cliente.
                   </p>
@@ -597,7 +597,7 @@ export default function AdminPuntosVentaPage() {
           <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !guardandoAsign && setAsignando(null)} />
           <div className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <h2 className="font-serif text-xl font-bold text-brand-wine">Asignar usuarios</h2>
-            <p className="mt-1 text-sm text-brand-brown/60">{asignando.nombre}</p>
+            <p className="mt-1 text-sm text-brand-black">{asignando.nombre}</p>
 
             {errorAsign && (
               <div className="mt-4 rounded-xl border border-brand-wine/30 bg-brand-wine/10 px-4 py-2.5 text-sm text-brand-wine">
@@ -626,7 +626,7 @@ export default function AdminPuntosVentaPage() {
                         onClick={() => setBuscarUsuario("")}
                         title="Limpiar búsqueda"
                         aria-label="Limpiar búsqueda"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -637,7 +637,7 @@ export default function AdminPuntosVentaPage() {
                 </div>
                 <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto rounded-xl border border-brand-brown/10 bg-brand-cream-soft/60 p-3">
                   {usuariosFiltrados.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-brand-brown/60">
+                    <p className="py-6 text-center text-sm text-brand-black">
                       {usuarios.length === 0
                         ? "No hay usuarios."
                         : "Sin resultados."}
@@ -652,12 +652,12 @@ export default function AdminPuntosVentaPage() {
                           className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
                         />
                         <span className="flex-1">{u.nombre}</span>
-                        <span className="text-xs text-brand-brown/50">{u.cedula}</span>
+                        <span className="text-xs text-brand-black">{u.cedula}</span>
                       </label>
                     ))
                   )}
                 </div>
-                <p className="mt-2 text-xs text-brand-brown/50">
+                <p className="mt-2 text-xs text-brand-black">
                   {seleccion.length} usuario(s) seleccionado(s)
                 </p>
               </>
@@ -682,7 +682,7 @@ export default function AdminPuntosVentaPage() {
           <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={() => !eliminando && setPorEliminar(null)} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
             <h2 className="font-serif text-xl font-bold text-brand-wine">Eliminar punto</h2>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-black">
               ¿Seguro que deseas eliminar <strong>{porEliminar.nombre}</strong>? Se quitarán sus asignaciones de usuarios.
             </p>
             <div className="mt-5 flex justify-end gap-2">

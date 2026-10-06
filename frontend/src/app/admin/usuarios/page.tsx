@@ -377,7 +377,7 @@ export default function AdminUsuariosPage() {
           <h1 className="font-serif text-3xl font-bold text-brand-wine">
             Administración de usuarios
           </h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Crea un usuario y, en el mismo asistente, define sus permisos y sus
             puntos de venta.
           </p>
@@ -404,7 +404,7 @@ export default function AdminUsuariosPage() {
       {/* Buscador */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
           </svg>
           <input
@@ -420,7 +420,7 @@ export default function AdminUsuariosPage() {
               onClick={() => setBusqueda("")}
               title="Limpiar búsqueda"
               aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -470,7 +470,7 @@ export default function AdminUsuariosPage() {
             Limpiar filtros
           </button>
         )}
-        <span className="text-xs text-brand-brown/50">
+        <span className="text-xs text-brand-black">
           {usuariosFiltrados.length} de {usuarios.length}
         </span>
       </div>
@@ -482,17 +482,17 @@ export default function AdminUsuariosPage() {
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
           </div>
         ) : usuarios.length === 0 ? (
-          <div className="py-16 text-center text-sm text-brand-brown/60">
+          <div className="py-16 text-center text-sm text-brand-black">
             No hay usuarios registrados.
           </div>
         ) : usuariosFiltrados.length === 0 ? (
-          <div className="py-16 text-center text-sm text-brand-brown/60">
+          <div className="py-16 text-center text-sm text-brand-black">
             No se encontraron usuarios.
           </div>
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[720px] table-fixed text-left text-sm">
-              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-brown/60 shadow-sm">
+              <thead className="sticky top-0 z-10 border-b border-brand-brown/10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="w-[20%] whitespace-nowrap px-4 py-3 font-semibold">Nombre</th>
                   <th className="w-[12%] whitespace-nowrap px-4 py-3 font-semibold">Cédula</th>
@@ -509,7 +509,7 @@ export default function AdminUsuariosPage() {
                     <td className="truncate whitespace-nowrap px-4 py-3 font-medium text-brand-black">
                       {u.nombre}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-brand-brown/80">{u.cedula}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-brand-black">{u.cedula}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span className="inline-block whitespace-nowrap rounded-full bg-brand-wine/10 px-2.5 py-0.5 text-xs font-medium capitalize text-brand-wine">
                         {u.rol}
@@ -517,7 +517,7 @@ export default function AdminUsuariosPage() {
                     </td>
                     <td className="px-4 py-3">
                       {tieneAccesoAdministrativo(u.rol) ? (
-                        <span className="text-xs font-medium text-brand-brown/50">Todos</span>
+                        <span className="text-xs font-medium text-brand-black">Todos</span>
                       ) : (puntosPorUsuario[u.id]?.length ?? 0) > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {puntosPorUsuario[u.id].map((nombre) => (
@@ -530,7 +530,7 @@ export default function AdminUsuariosPage() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-brand-brown/40">—</span>
+                        <span className="text-xs text-brand-black">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -540,20 +540,20 @@ export default function AdminUsuariosPage() {
                           Activo
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-brown/10 px-2.5 py-0.5 text-xs font-medium text-brand-brown/60">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-brown/10 px-2.5 py-0.5 text-xs font-medium text-brand-black">
                           <span className="h-1.5 w-1.5 rounded-full bg-brand-brown/40" />
                           Inactivo
                         </span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-brand-brown/70">
+                    <td className="whitespace-nowrap px-4 py-3 text-brand-black">
                       {formatearFecha(u.creado_en)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => abrirEditar(u)}
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-amber/10 hover:text-brand-amber"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-amber/10 hover:text-brand-amber"
                           aria-label={`Editar ${u.nombre}`}
                           title="Editar"
                         >
@@ -563,7 +563,7 @@ export default function AdminUsuariosPage() {
                         </button>
                         <button
                           onClick={() => setPorEliminar(u)}
-                          className="rounded-lg p-2 text-brand-brown/70 transition hover:bg-brand-wine/10 hover:text-brand-wine"
+                          className="rounded-lg p-2 text-brand-black transition hover:bg-brand-wine/10 hover:text-brand-wine"
                           aria-label={`Eliminar ${u.nombre}`}
                           title="Eliminar"
                         >
@@ -596,7 +596,7 @@ export default function AdminUsuariosPage() {
                   <h2 className="font-serif text-xl font-bold text-brand-wine">
                     {editando ? "Editar usuario" : "Nuevo usuario"}
                   </h2>
-                  <p className="mt-0.5 text-sm text-brand-brown/60">
+                  <p className="mt-0.5 text-sm text-brand-black">
                     {usuarioActual
                       ? usuarioActual.nombre
                       : "Completa los datos para registrar un usuario."}
@@ -605,7 +605,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={cerrarWizard}
                   title="Cerrar"
-                  className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+                  className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -622,14 +622,14 @@ export default function AdminUsuariosPage() {
                           ? "bg-green-500 text-white"
                           : i === paso
                             ? "bg-brand-wine text-white"
-                            : "bg-brand-brown/10 text-brand-brown/50"
+                            : "bg-brand-brown/10 text-brand-black"
                       }`}
                     >
                       {i < paso ? "✓" : i + 1}
                     </div>
                     <span
                       className={`whitespace-nowrap text-xs font-semibold ${
-                        i === paso ? "text-brand-wine" : "text-brand-brown/50"
+                        i === paso ? "text-brand-wine" : "text-brand-black"
                       }`}
                     >
                       {etiqueta}
@@ -708,7 +708,7 @@ export default function AdminUsuariosPage() {
                     <label className="mb-1.5 block text-sm font-medium text-brand-brown">
                       Contraseña{" "}
                       {usuarioActual && (
-                        <span className="font-normal text-brand-brown/50">
+                        <span className="font-normal text-brand-black">
                           (dejar vacío para no cambiarla)
                         </span>
                       )}
@@ -740,7 +740,7 @@ export default function AdminUsuariosPage() {
               {paso === 1 && (
                 <div>
                   {accesoTotal ? (
-                    <p className="rounded-xl bg-brand-amber/10 px-4 py-3 text-sm text-brand-brown/80">
+                    <p className="rounded-xl bg-brand-amber/10 px-4 py-3 text-sm text-brand-black">
                       El rol{" "}
                       <strong className="capitalize">{form.rol || usuarioActual?.rol}</strong>{" "}
                       tiene acceso total a todos los módulos. No necesita permisos
@@ -773,7 +773,7 @@ export default function AdminUsuariosPage() {
                               onClick={() => { setBuscarCopiar(""); setCopiarAbierto(false); }}
                               title="Limpiar búsqueda"
                               aria-label="Limpiar búsqueda"
-                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -783,7 +783,7 @@ export default function AdminUsuariosPage() {
                           {copiarAbierto && (
                             <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-brand-brown/15 bg-white shadow-lg">
                               {candidatosCopiar.length === 0 ? (
-                                <p className="px-3 py-2 text-sm text-brand-brown/50">
+                                <p className="px-3 py-2 text-sm text-brand-black">
                                   Sin resultados.
                                 </p>
                               ) : (
@@ -800,7 +800,7 @@ export default function AdminUsuariosPage() {
                                       className="flex flex-1 items-center justify-between gap-2 px-3 py-2 text-left text-sm transition hover:bg-brand-cream-soft"
                                     >
                                       <span className="text-brand-black">{u.nombre}</span>
-                                      <span className="text-xs capitalize text-brand-brown/50">
+                                      <span className="text-xs capitalize text-brand-black">
                                         {u.rol}
                                       </span>
                                     </button>
@@ -810,7 +810,7 @@ export default function AdminUsuariosPage() {
                                       onClick={() => setCopiarOcultos((prev) => new Set(prev).add(u.id))}
                                       title="Quitar esta sugerencia de la lista (solo temporal)"
                                       aria-label="Quitar sugerencia"
-                                      className="flex shrink-0 items-center px-2 text-brand-brown/30 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                                      className="flex shrink-0 items-center px-2 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                                     >
                                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -853,7 +853,7 @@ export default function AdminUsuariosPage() {
                                       className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
                                     />
                                     {modulo.label}
-                                    <span className="text-xs font-normal text-brand-brown/50">
+                                    <span className="text-xs font-normal text-brand-black">
                                       (ver / navegar)
                                     </span>
                                   </label>
@@ -863,7 +863,7 @@ export default function AdminUsuariosPage() {
                                         <label
                                           key={accion.key}
                                           className={`flex items-center gap-2 text-sm ${
-                                            moduloActivo ? "text-brand-black" : "text-brand-brown/40"
+                                            moduloActivo ? "text-brand-black" : "text-brand-black"
                                           }`}
                                         >
                                           <input
@@ -891,7 +891,7 @@ export default function AdminUsuariosPage() {
               {/* Paso 3: puntos de venta */}
               {paso === 2 && (
                 <div>
-                  <p className="mb-3 text-sm text-brand-brown/70">
+                  <p className="mb-3 text-sm text-brand-black">
                     Selecciona los puntos de venta donde trabajará este usuario.
                   </p>
                   <div className="relative">
@@ -908,7 +908,7 @@ export default function AdminUsuariosPage() {
                         onClick={() => setBuscarPunto("")}
                         title="Limpiar búsqueda"
                         aria-label="Limpiar búsqueda"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-brown/40 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -918,7 +918,7 @@ export default function AdminUsuariosPage() {
                   </div>
                   <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto rounded-xl border border-brand-brown/10 bg-brand-cream-soft/60 p-3">
                     {puntosFiltrados.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-brand-brown/60">
+                      <p className="py-6 text-center text-sm text-brand-black">
                         {puntos.length === 0 ? "No hay puntos de venta." : "Sin resultados."}
                       </p>
                     ) : (
@@ -934,14 +934,14 @@ export default function AdminUsuariosPage() {
                             className="h-4 w-4 rounded border-brand-brown/30 text-brand-amber focus:ring-brand-amber/30"
                           />
                           <span className="flex-1">{p.nombre}</span>
-                          <span className="text-xs text-brand-brown/50">
+                          <span className="text-xs text-brand-black">
                             {p.codigo ?? p.ciudad ?? ""}
                           </span>
                         </label>
                       ))
                     )}
                   </div>
-                  <p className="mt-2 text-xs text-brand-brown/50">
+                  <p className="mt-2 text-xs text-brand-black">
                     {puntosSel.length} punto(s) seleccionado(s)
                   </p>
                 </div>
@@ -1014,7 +1014,7 @@ export default function AdminUsuariosPage() {
             <h2 className="font-serif text-xl font-bold text-brand-wine">
               Eliminar usuario
             </h2>
-            <p className="mt-2 text-sm text-brand-brown/70">
+            <p className="mt-2 text-sm text-brand-black">
               ¿Seguro que deseas eliminar a{" "}
               <strong className="text-brand-black">{porEliminar.nombre}</strong>?
               Esta acción no se puede deshacer.

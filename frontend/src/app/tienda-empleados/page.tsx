@@ -31,7 +31,7 @@ export default function TiendaEmpleadosIndex() {
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-cream-soft px-5 text-center text-brand-black">
       {sinTiendas ? (
         <>
-          <p className="text-lg font-semibold text-brand-brown/70">Aún no hay tiendas publicadas.</p>
+          <p className="text-lg font-semibold text-brand-black">Aún no hay tiendas publicadas.</p>
           <Link href="/" className="rounded-2xl bg-brand-amber px-5 py-2.5 font-extrabold text-white shadow-md shadow-brand-amber/30">
             Volver al inicio
           </Link>

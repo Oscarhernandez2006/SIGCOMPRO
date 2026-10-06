@@ -76,16 +76,16 @@ export default function DashboardComprasPage() {
     <div className="flex flex-col gap-5 p-5">
       <div>
         <h1 className="font-serif text-2xl font-bold text-brand-wine">Dashboard de compras</h1>
-        <p className="mt-0.5 text-sm text-brand-brown/60">Métricas y tendencias de las compras de colaboradores.</p>
+        <p className="mt-0.5 text-sm text-brand-black">Métricas y tendencias de las compras de colaboradores.</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {kpiCards.map((k) => (
           <div key={k.label} className="rounded-2xl border border-brand-brown/10 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs text-brand-brown/55">{k.label}</p>
+            <p className="text-xs text-brand-black">{k.label}</p>
             <p className={`mt-0.5 truncate text-lg font-bold tabular-nums ${k.color}`}>{k.val}</p>
-            <p className="mt-0.5 text-[10px] text-brand-brown/40">{k.sub}</p>
+            <p className="mt-0.5 text-[10px] text-brand-black">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -96,7 +96,7 @@ export default function DashboardComprasPage() {
         <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
           <p className="mb-4 text-sm font-semibold text-brand-black">Tendencia mensual (últimos 6 meses)</p>
           {por_mes.length === 0 ? (
-            <p className="text-xs italic text-brand-brown/40">Sin datos de los últimos 6 meses.</p>
+            <p className="text-xs italic text-brand-black">Sin datos de los últimos 6 meses.</p>
           ) : (
             <div className="flex items-end gap-2 h-36">
               {por_mes.map((m) => {
@@ -107,8 +107,8 @@ export default function DashboardComprasPage() {
                     <div className="w-full rounded-t-lg bg-brand-wine/20 transition-all" style={{ height: `${pct}%` }}>
                       <div className="w-full rounded-t-lg bg-brand-wine" style={{ height: "100%" }} />
                     </div>
-                    <p className="text-[10px] text-brand-brown/55">{mesLabel(m.mes)}</p>
-                    <p className="text-[9px] text-brand-brown/35">{m.n} ped.</p>
+                    <p className="text-[10px] text-brand-black">{mesLabel(m.mes)}</p>
+                    <p className="text-[9px] text-brand-black">{m.n} ped.</p>
                   </div>
                 );
               })}
@@ -134,9 +134,9 @@ export default function DashboardComprasPage() {
             {por_estado.map((e) => (
               <div key={e.estado} className="flex items-center gap-3">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${ESTADO_COLOR[e.estado] ?? "bg-brand-brown/30"}`} />
-                <span className="flex-1 text-sm text-brand-brown/70">{ESTADO_LABEL[e.estado] ?? e.estado}</span>
+                <span className="flex-1 text-sm text-brand-black">{ESTADO_LABEL[e.estado] ?? e.estado}</span>
                 <span className={`text-sm font-semibold ${ESTADO_TEXT[e.estado] ?? "text-brand-brown"}`}>{e.n} pedidos</span>
-                <span className="text-xs text-brand-brown/50 tabular-nums">{money(e.total)}</span>
+                <span className="text-xs text-brand-black tabular-nums">{money(e.total)}</span>
               </div>
             ))}
           </div>
@@ -149,12 +149,12 @@ export default function DashboardComprasPage() {
         <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
           <p className="mb-4 text-sm font-semibold text-brand-black">Top 10 colaboradores por monto</p>
           {top_compradores.length === 0 ? (
-            <p className="text-xs italic text-brand-brown/40">Sin datos.</p>
+            <p className="text-xs italic text-brand-black">Sin datos.</p>
           ) : (
             <div className="space-y-2.5">
               {top_compradores.map((c, i) => (
                 <div key={c.cedula} className="flex items-center gap-3">
-                  <span className="w-5 shrink-0 text-right text-xs font-bold text-brand-brown/30">{i + 1}</span>
+                  <span className="w-5 shrink-0 text-right text-xs font-bold text-brand-black">{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-brand-black">{c.nombre}</p>
                     <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-brand-brown/10">
@@ -163,7 +163,7 @@ export default function DashboardComprasPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold tabular-nums text-brand-wine">{money(c.total)}</p>
-                    <p className="text-[10px] text-brand-brown/45">{c.n} compra{c.n !== 1 ? "s" : ""}</p>
+                    <p className="text-[10px] text-brand-black">{c.n} compra{c.n !== 1 ? "s" : ""}</p>
                   </div>
                 </div>
               ))}
@@ -175,7 +175,7 @@ export default function DashboardComprasPage() {
         <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
           <p className="mb-4 text-sm font-semibold text-brand-black">Compras por punto de venta</p>
           {por_punto.length === 0 ? (
-            <p className="text-xs italic text-brand-brown/40">Sin datos.</p>
+            <p className="text-xs italic text-brand-black">Sin datos.</p>
           ) : (
             <div className="space-y-2.5">
               {por_punto.map((p) => (
@@ -188,7 +188,7 @@ export default function DashboardComprasPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold tabular-nums text-brand-amber">{money(p.total)}</p>
-                    <p className="text-[10px] text-brand-brown/45">{p.n} compra{p.n !== 1 ? "s" : ""}</p>
+                    <p className="text-[10px] text-brand-black">{p.n} compra{p.n !== 1 ? "s" : ""}</p>
                   </div>
                 </div>
               ))}
@@ -201,20 +201,20 @@ export default function DashboardComprasPage() {
       <div className="rounded-2xl border border-brand-brown/10 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-brand-black">Productos más comprados</p>
-          <span className="rounded-full bg-brand-brown/8 px-2.5 py-1 text-[11px] text-brand-brown/55">
+          <span className="rounded-full bg-brand-brown/8 px-2.5 py-1 text-[11px] text-brand-black">
             Panel y tienda online
           </span>
         </div>
         {top_productos.length === 0 ? (
           <div className="rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 px-4 py-8 text-center">
-            <p className="text-sm text-brand-brown/50">Sin datos de productos aún.</p>
-            <p className="mt-1 text-xs text-brand-brown/35">Los productos aparecen cuando se eligen del catálogo al registrar compras o desde la tienda online.</p>
+            <p className="text-sm text-brand-black">Sin datos de productos aún.</p>
+            <p className="mt-1 text-xs text-brand-black">Los productos aparecen cuando se eligen del catálogo al registrar compras o desde la tienda online.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-brand-brown/10 text-left text-[11px] font-bold uppercase tracking-wide text-brand-brown/50">
+                <tr className="border-b border-brand-brown/10 text-left text-[11px] font-bold uppercase tracking-wide text-brand-black">
                   <th className="py-2 pr-4">#</th>
                   <th className="py-2 pr-4">Producto</th>
                   <th className="py-2 pr-4 text-right">Pedidos</th>
@@ -225,10 +225,10 @@ export default function DashboardComprasPage() {
               <tbody className="divide-y divide-brand-brown/5">
                 {top_productos.map((p, i) => (
                   <tr key={i} className="hover:bg-brand-cream-soft/30">
-                    <td className="py-2.5 pr-4 font-bold text-brand-brown/30">{i + 1}</td>
+                    <td className="py-2.5 pr-4 font-bold text-brand-black">{i + 1}</td>
                     <td className="py-2.5 pr-4 font-medium text-brand-black">{p.descripcion}</td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-brand-brown/70">{p.n_pedidos}</td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-brand-brown/70">
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-brand-black">{p.n_pedidos}</td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-brand-black">
                       {Number.isInteger(p.cantidad_total) ? p.cantidad_total : p.cantidad_total.toFixed(2)}
                     </td>
                     <td className="py-2.5 text-right font-semibold tabular-nums text-brand-wine">{money(p.monto_total)}</td>

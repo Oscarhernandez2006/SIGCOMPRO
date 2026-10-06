@@ -50,9 +50,9 @@ function Stat({
 }) {
   return (
     <div className="rounded-2xl border border-brand-brown/10 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-brown/55">{titulo}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-black">{titulo}</p>
       <p className={`mt-1 text-2xl font-extrabold leading-tight ${color}`}>{valor}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-brand-brown/55">{sub}</p>}
+      {sub && <p className="mt-0.5 text-[11px] text-brand-black">{sub}</p>}
     </div>
   );
 }
@@ -107,7 +107,7 @@ function SelectorVendedora({
         <div className="absolute left-0 top-full z-50 mt-1 w-64 overflow-hidden rounded-xl border border-brand-brown/15 bg-white normal-case shadow-xl">
           <div className="border-b border-brand-brown/10 p-2">
             <div className="relative">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-brown/35">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-black">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
               </svg>
               <input
@@ -128,7 +128,7 @@ function SelectorVendedora({
               Todos (resumen general)
             </button>
             {filtradas.length === 0 && (
-              <p className="px-3 py-2 text-xs text-brand-brown/45">Sin resultados para “{busqueda}”.</p>
+              <p className="px-3 py-2 text-xs text-brand-black">Sin resultados para “{busqueda}”.</p>
             )}
             {filtradas.map((v) => (
               <button
@@ -151,13 +151,13 @@ function SelectorVendedora({
 function BarrasPorDia({ datos, formato }: { datos: { dia: string; valor: number }[]; formato: (n: number) => string }) {
   const max = Math.max(1, ...datos.map((d) => d.valor));
   if (!datos.length) {
-    return <p className="text-sm text-brand-brown/50">Sin datos en el periodo.</p>;
+    return <p className="text-sm text-brand-black">Sin datos en el periodo.</p>;
   }
   return (
     <div className="space-y-1.5">
       {datos.map((d) => (
         <div key={d.dia} className="flex items-center gap-2">
-          <span className="w-20 shrink-0 text-[11px] text-brand-brown/60">{d.dia}</span>
+          <span className="w-20 shrink-0 text-[11px] text-brand-black">{d.dia}</span>
           <div className="h-4 flex-1 overflow-hidden rounded bg-brand-cream-soft">
             <div
               className="h-full rounded bg-brand-wine/70"
@@ -671,7 +671,7 @@ export default function MiResumenPage() {
       ) : error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 py-10 text-center text-sm text-red-600">{error}</div>
       ) : !tieneVentas && !tieneDespacho ? (
-        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-brown/60 shadow-sm">
+        <div className="rounded-2xl border border-brand-brown/10 bg-white py-16 text-center text-sm text-brand-black shadow-sm">
           {esVistaGlobal
             ? `No hay actividad registrada en ${periodoLabel}.`
             : puedeVerTodos && vendedoraSel
@@ -855,7 +855,7 @@ export default function MiResumenPage() {
                   }
                   color={
                     despacho.entregasConDato === 0
-                      ? "text-brand-brown/50"
+                      ? "text-brand-black"
                       : despacho.pctEntrega >= 90
                         ? "text-emerald-600"
                         : despacho.pctEntrega >= 70
@@ -875,7 +875,7 @@ export default function MiResumenPage() {
               </h2>
               <div className="max-h-[75vh] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
                 <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead className="sticky top-0 z-10 bg-brand-cream-soft/95 text-[11px] uppercase tracking-wide text-brand-brown/60 backdrop-blur">
+                  <thead className="sticky top-0 z-10 bg-brand-cream-soft/95 text-[11px] uppercase tracking-wide text-brand-black backdrop-blur">
                     <tr>
                       <th className="px-4 py-2.5">Factura / Comanda</th>
                       <th className="px-4 py-2.5">Cliente</th>
@@ -891,7 +891,7 @@ export default function MiResumenPage() {
                           {meta[p.id]?.facturaNumero?.trim() ? (
                             <>
                               <div className="text-green-600">Fact. {meta[p.id]!.facturaNumero}</div>
-                              <div className="text-[11px] font-semibold text-brand-brown/60">{p.comanda}</div>
+                              <div className="text-[11px] font-semibold text-brand-black">{p.comanda}</div>
                             </>
                           ) : (
                             <div>{p.comanda}</div>
@@ -913,13 +913,13 @@ export default function MiResumenPage() {
                           {typeof meta[p.id]?.facturaValor === "number" && (meta[p.id]!.facturaValor as number) > 0 ? (
                             <>
                               <div className="font-semibold text-green-600">{cop(meta[p.id]!.facturaValor as number)}</div>
-                              <div className="text-[11px] text-brand-brown/55">{cop(p.total)}</div>
+                              <div className="text-[11px] text-brand-black">{cop(p.total)}</div>
                             </>
                           ) : (
                             <div>{cop(p.total)}</div>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-brand-brown/60">{new Date(p.fecha).toLocaleDateString("es-CO")}</td>
+                        <td className="px-4 py-2.5 text-brand-black">{new Date(p.fecha).toLocaleDateString("es-CO")}</td>
                       </tr>
                     ))}
                   </tbody>

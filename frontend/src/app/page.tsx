@@ -111,7 +111,7 @@ export default function LoginPage() {
           <h2 className="font-serif text-2xl font-bold text-brand-black">
             Bienvenido
           </h2>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Ingresa tus credenciales para acceder al sistema.
           </p>
         </div>
@@ -144,7 +144,7 @@ export default function LoginPage() {
                 Cédula
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-brown/40">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-black">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
@@ -183,7 +183,7 @@ export default function LoginPage() {
                 Contraseña
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-brown/40">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-black">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
@@ -220,7 +220,7 @@ export default function LoginPage() {
                   title={
                     showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
                   }
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-brand-brown/40 transition hover:text-brand-amber"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-brand-black transition hover:text-brand-amber"
                 >
                   {showPassword ? (
                     <svg
@@ -274,7 +274,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-        <p className="mt-5 text-center text-xs text-brand-brown/50">
+        <p className="mt-5 text-center text-xs text-brand-black">
           ¿Problemas para acceder? Contacta al administrador del sistema.
         </p>
       </div>

@@ -1719,12 +1719,12 @@ export default function DespachoPage() {
       <div className="mb-3 grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <div className="col-span-2 flex flex-col justify-center sm:col-span-1 lg:col-span-2 xl:col-span-3">
           <h1 className="font-serif text-3xl font-bold text-brand-wine">Despacho</h1>
-          <p className="mt-1 text-sm text-brand-brown/70">
+          <p className="mt-1 text-sm text-brand-black">
             Seguimiento de los pedidos del día en Carnes Santacruz.
           </p>
           {esSelector && puntosAsignados.length > 0 && (
             <label className="mt-2 inline-flex items-center gap-2">
-              <span className="text-xs font-semibold text-brand-brown/60">Punto:</span>
+              <span className="text-xs font-semibold text-brand-black">Punto:</span>
               <div className="relative">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-wine">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5h-3V21M3 9.75 12 3l9 6.75M5.25 8.25V21h13.5V8.25" />
@@ -1767,7 +1767,7 @@ export default function DespachoPage() {
           </span>
           <div className="min-w-0 pr-1">
             <p className="text-xs font-semibold text-brand-black">Total</p>
-            <p className="text-[10px] text-brand-brown/55">Activos de hoy</p>
+            <p className="text-[10px] text-brand-black">Activos de hoy</p>
             <p className="text-[10px] font-semibold text-brand-wine">
               {vista === "total" ? "Mostrando · clic para ocultar" : "Clic para ver"}
             </p>
@@ -1794,7 +1794,7 @@ export default function DespachoPage() {
           </span>
           <div className="min-w-0 pr-1">
             <p className="text-xs font-semibold text-brand-black">Entregados</p>
-            <p className="text-[10px] text-brand-brown/55">Entregados (Drivin)</p>
+            <p className="text-[10px] text-brand-black">Entregados (Drivin)</p>
             <p className="text-[10px] font-semibold text-brand-wine">
               {vista === "entregados" ? "Mostrando · clic para ocultar" : "Clic para ver"}
             </p>
@@ -1848,7 +1848,7 @@ export default function DespachoPage() {
                 </span>
                 <div className="min-w-0 pr-1">
                   <p className="text-xs font-semibold text-brand-black">{e.label}</p>
-                  {e.sub && <p className="text-[10px] text-brand-brown/55">{e.sub}</p>}
+                  {e.sub && <p className="text-[10px] text-brand-black">{e.sub}</p>}
                   <p className="text-[10px] font-semibold text-brand-wine">
                     {activo ? "Mostrando · clic para ocultar" : "Clic para ver"}
                   </p>
@@ -1866,7 +1866,7 @@ export default function DespachoPage() {
         <div className="flex shrink-0 flex-col gap-3 border-b border-brand-brown/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <h2 className="font-serif text-lg font-bold text-brand-wine">Pedidos</h2>
-            <span className="rounded-full bg-brand-cream-soft px-2.5 py-0.5 text-xs font-semibold text-brand-brown/60">
+            <span className="rounded-full bg-brand-cream-soft px-2.5 py-0.5 text-xs font-semibold text-brand-black">
               {pedidosFiltrados.length}
             </span>
             {noImpresos > 0 && (
@@ -1887,7 +1887,7 @@ export default function DespachoPage() {
               fill="none"
               stroke="currentColor"
               strokeWidth="1.8"
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-brown/40"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>
@@ -1903,7 +1903,7 @@ export default function DespachoPage() {
                 onClick={() => setBusqueda("")}
                 aria-label="Limpiar búsqueda"
                 title="Limpiar la búsqueda"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-brand-brown/50 hover:bg-brand-cream-soft"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-brand-black hover:bg-brand-cream-soft"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -1914,7 +1914,7 @@ export default function DespachoPage() {
         </div>
 
         {pedidosFiltrados.length === 0 ? (
-          <p className="px-4 py-12 text-center text-sm text-brand-brown/50">
+          <p className="px-4 py-12 text-center text-sm text-brand-black">
             {pedidosOrdenados.length === 0
               ? "Aún no hay pedidos. Los pedidos creados aparecerán aquí."
               : "No se encontraron pedidos para la búsqueda."}
@@ -1933,7 +1933,7 @@ export default function DespachoPage() {
               <col className="w-[14%]" />
               <col className="w-[10%]" />
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-brand-cream-soft text-center text-[11px] uppercase tracking-wide text-brand-brown/50 shadow-sm">
+            <thead className="sticky top-0 z-10 bg-brand-cream-soft text-center text-[11px] uppercase tracking-wide text-brand-black shadow-sm">
               <tr>
                 <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Cliente / info. del pedido</th>
                 <th className="border-r border-brand-brown/10 px-3 py-2.5 font-semibold">Estado actual del pedido</th>
@@ -2026,18 +2026,18 @@ export default function DespachoPage() {
                             <span className="underline decoration-brand-brown/20 decoration-dotted underline-offset-2 group-hover:decoration-brand-wine">
                               {p.cliente.nombre || p.cliente.nit_cedula}
                             </span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-brown/50 transition ${clienteAbierto === p.id ? "rotate-180" : ""}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={`h-3 w-3 shrink-0 text-brand-black transition ${clienteAbierto === p.id ? "rotate-180" : ""}`}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                             </svg>
                           </button>
                           {p.cliente.direccion && (
-                            <p className="text-xs text-brand-brown/60">{p.cliente.direccion}</p>
+                            <p className="text-xs text-brand-black">{p.cliente.direccion}</p>
                           )}
                           {p.cliente.barrio && (
-                            <p className="text-xs text-brand-brown/60">{p.cliente.barrio}</p>
+                            <p className="text-xs text-brand-black">{p.cliente.barrio}</p>
                           )}
                           {p.cliente.telefono && (
-                            <p className="text-xs text-brand-brown/60">Tel: {p.cliente.telefono}</p>
+                            <p className="text-xs text-brand-black">Tel: {p.cliente.telefono}</p>
                           )}
                           {clienteAbierto === p.id && (
                             <div className="absolute left-0 top-6 z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
@@ -2049,7 +2049,7 @@ export default function DespachoPage() {
                                   type="button"
                                   onClick={() => setClienteAbierto(null)}
                                   title="Cerrar"
-                                  className="shrink-0 rounded p-0.5 text-brand-brown/60 transition hover:bg-brand-cream-soft hover:text-brand-wine"
+                                  className="shrink-0 rounded p-0.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-wine"
                                 >
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -2057,31 +2057,31 @@ export default function DespachoPage() {
                                 </button>
                               </div>
                               <div className="space-y-0.5">
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">NIT/Cédula:</span> {p.cliente.nit_cedula || "—"}
                                 </p>
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">Dirección:</span> {p.cliente.direccion || "—"}
                                 </p>
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">Referencia:</span> {p.cliente.referencia || "—"}
                                 </p>
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">Barrio:</span> {p.cliente.barrio || "—"}
                                 </p>
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">Ciudad:</span> {p.cliente.ciudad || "—"}
                                 </p>
-                                <p className="text-brand-brown/80">
+                                <p className="text-brand-black">
                                   <span className="font-semibold text-brand-black">Teléfono:</span> {p.cliente.telefono || "—"}
                                 </p>
-                                <p className="break-all text-brand-brown/80">
+                                <p className="break-all text-brand-black">
                                   <span className="font-semibold text-brand-black">Correo:</span> {p.cliente.correo || "—"}
                                 </p>
                               </div>
                             </div>
                           )}
-                          <p className="text-xs text-brand-brown/50">
+                          <p className="text-xs text-brand-black">
                             <span className="font-semibold text-brand-black">Despacho:</span> {fmtFecha(fechaEntregaISO(p))}
                           </p>
                           <div className="mt-1.5 flex flex-col items-start gap-1">
@@ -2133,7 +2133,7 @@ export default function DespachoPage() {
                           {p.vendedorNombre && (
                             <div className="mt-1.5">
                               <p className="text-xs font-semibold text-brand-black">Televentas</p>
-                              <p className="text-xs text-brand-brown/70">
+                              <p className="text-xs text-brand-black">
                                 {p.vendedorNombre}
                               </p>
                             </div>
@@ -2167,7 +2167,7 @@ export default function DespachoPage() {
                               )
                             )}
                           </div>
-                          <p className="mt-1.5 whitespace-nowrap text-[11px] text-brand-brown/50">
+                          <p className="mt-1.5 whitespace-nowrap text-[11px] text-brand-black">
                             Recibido: {fmtHora(p.fecha)}
                           </p>
                           <p className="mt-1 whitespace-nowrap text-sm font-bold text-brand-wine">
@@ -2224,7 +2224,7 @@ export default function DespachoPage() {
                           Motivo: {p.motivo}
                         </div>
                       )}
-                      <div className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-1.5 text-center text-xs font-semibold text-brand-brown/70">
+                      <div className="mt-1.5 rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-1.5 text-center text-xs font-semibold text-brand-black">
                         ENTREGA: {fmtFecha(fechaEntregaISO(p))}
                       </div>
                       {esArrastrado && (
@@ -2233,7 +2233,7 @@ export default function DespachoPage() {
                         </div>
                       )}
                       {!anulado && norm(estado) === "despachado" ? (
-                        <div className="mt-1.5 space-y-0.5 rounded-lg border border-brand-wine/20 bg-brand-wine/5 px-3 py-1.5 text-[11px] font-semibold text-brand-brown/70">
+                        <div className="mt-1.5 space-y-0.5 rounded-lg border border-brand-wine/20 bg-brand-wine/5 px-3 py-1.5 text-[11px] font-semibold text-brand-black">
                           <p className="whitespace-nowrap">
                             Recibido: <span className="text-brand-wine">{fmtHora(p.fecha)}</span>
                           </p>
@@ -2248,7 +2248,7 @@ export default function DespachoPage() {
                               </p>
                             </>
                           ) : (
-                            <p className="text-brand-brown/50">Despachado (hora no registrada)</p>
+                            <p className="text-brand-black">Despachado (hora no registrada)</p>
                           )}
                         </div>
                       ) : (
@@ -2261,7 +2261,7 @@ export default function DespachoPage() {
                       </div>
                       {puedeCambiarEstadoManual && !anulado && (
                         <div className="absolute inset-x-3 bottom-3">
-                          <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-brown/40">
+                          <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-black">
                             Cambiar estado
                           </label>
                           <select
@@ -2291,7 +2291,7 @@ export default function DespachoPage() {
                               setErrorReset(null);
                             }}
                             title="Clic para reiniciar los tiempos de alistamiento (requiere clave dinámica)"
-                            className="space-y-0.5 rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold text-brand-brown/60 transition hover:bg-brand-amber/10"
+                            className="space-y-0.5 rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold text-brand-black transition hover:bg-brand-amber/10"
                           >
                             <p>
                               Inicio: <span className="text-brand-wine">{fmtHora(m.inicio)}</span>
@@ -2459,7 +2459,7 @@ export default function DespachoPage() {
                           </p>
                         )}
                         {m.facturadoPor && (
-                          <p className="text-[11px] font-medium text-brand-brown/60">
+                          <p className="text-[11px] font-medium text-brand-black">
                             Facturó: {m.facturadoPor}
                           </p>
                         )}
@@ -2573,7 +2573,7 @@ export default function DespachoPage() {
                             {!pedidoEsDrivin && !despachado && (
                               <button
                                 onClick={() => actualizarMeta(p.id, { domiciliario: "", domiciliarioCodigo: "" })}
-                                className="mt-1 text-[10px] font-semibold text-brand-brown/50 underline hover:text-brand-brown"
+                                className="mt-1 text-[10px] font-semibold text-brand-black underline hover:text-brand-brown"
                               >
                                 Cambiar
                               </button>
@@ -2582,7 +2582,7 @@ export default function DespachoPage() {
                         ) : !pedidoEsDrivin ? (
                           // Punto MANUAL (sin Drivin): el domiciliario se asigna a mano.
                           <div className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold uppercase tracking-wide text-brand-brown/50">
+                            <p className="text-[9px] font-bold uppercase tracking-wide text-brand-black">
                               Domiciliario (manual)
                             </p>
                             <select
@@ -2599,7 +2599,7 @@ export default function DespachoPage() {
                               ))}
                             </select>
                             {domiciliarios.length === 0 && (
-                              <p className="mt-1 text-[10px] text-brand-brown/50">
+                              <p className="mt-1 text-[10px] text-brand-black">
                                 Sin domiciliarios en Gestión de recursos.
                               </p>
                             )}
@@ -2612,7 +2612,7 @@ export default function DespachoPage() {
                               : "En espera de domiciliario…"}
                           </div>
                         ) : (
-                          <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-brown/50">
+                          <div className="rounded-lg border border-brand-brown/15 bg-brand-cream-soft/40 px-2.5 py-1.5 text-xs text-brand-black">
                             {esRecoge
                               ? "Factura el pedido y asígnalo en Drivin como recoge en punto de venta."
                               : "Factura el pedido y asigna en Drivin el domiciliario."}
@@ -2621,7 +2621,7 @@ export default function DespachoPage() {
 
                         {/* Réplicas del pedido: el mismo pedido enviado por partes */}
                         <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
-                          <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                          <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-brand-black">
                             Réplicas (mismo pedido por partes)
                           </p>
                           <div className="flex items-center gap-1">
@@ -2655,7 +2655,7 @@ export default function DespachoPage() {
                                       ? "border-brand-wine bg-brand-wine text-white hover:bg-brand-wine/90"
                                       : esSiguiente
                                         ? "border-brand-wine/40 bg-white text-brand-wine hover:bg-brand-wine/10"
-                                        : "border-brand-brown/15 bg-white text-brand-brown/30"
+                                        : "border-brand-brown/15 bg-white text-brand-black"
                                   }`}
                                 >
                                   {n}
@@ -2673,12 +2673,12 @@ export default function DespachoPage() {
                                   const ev = estadoReplicaVista(r);
                                   return (
                                     <div key={r.numero} className="flex items-center gap-1.5 text-[10px]">
-                                      <span className="font-bold text-brand-brown/60">{r.numero} -</span>
+                                      <span className="font-bold text-brand-black">{r.numero} -</span>
                                       <span className={`rounded px-1.5 py-0.5 font-semibold ${ev.chip}`}>
                                         {ev.label}
                                       </span>
                                       {ev.domiciliario && (
-                                        <span className="truncate text-brand-brown/60">{ev.domiciliario}</span>
+                                        <span className="truncate text-brand-black">{ev.domiciliario}</span>
                                       )}
                                     </div>
                                   );
@@ -2842,13 +2842,13 @@ export default function DespachoPage() {
                             return (
                               <div className="space-y-2">
                                 <div>
-                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-black">
                                     Producción (1h)
                                   </p>
                                   {prepT}
                                 </div>
                                 <div>
-                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                  <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-black">
                                     Entrega
                                   </p>
                                   {entregaT}
@@ -2926,13 +2926,13 @@ export default function DespachoPage() {
                           return (
                             <div className="space-y-2">
                               <div>
-                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-black">
                                   {esPequeno ? "Alistar (40 min)" : esRecoge ? "Alistar (2h)" : "Preparación (1h)"}
                                 </p>
                                 {prep}
                               </div>
                               <div>
-                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-brown/40">
+                                <p className="mb-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-brand-black">
                                   {esRecoge ? "Entrega (hasta 6:00 pm)" : "Entrega (2h)"}
                                 </p>
                                 {entrega}
@@ -2983,7 +2983,7 @@ export default function DespachoPage() {
               </div>
               <button
                 onClick={() => setAlertaCerrada(true)}
-                className="rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-white hover:text-brand-brown"
+                className="rounded-lg p-1.5 text-brand-black transition hover:bg-white hover:text-brand-brown"
                 aria-label="Cerrar"
                 title="Cerrar alerta"
               >
@@ -3007,7 +3007,7 @@ export default function DespachoPage() {
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
                           Pedido #{p.comanda}
-                          <span className="ml-1 font-normal text-brand-brown/60">
+                          <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
                         </span>
@@ -3033,7 +3033,7 @@ export default function DespachoPage() {
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
                           Pedido #{p.comanda}
-                          <span className="ml-1 font-normal text-brand-brown/60">
+                          <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
                         </span>
@@ -3048,7 +3048,7 @@ export default function DespachoPage() {
             </div>
 
             <div className="flex items-center justify-between border-t border-brand-brown/10 px-5 py-3">
-              <span className="text-xs font-semibold text-brand-brown/60">
+              <span className="text-xs font-semibold text-brand-black">
                 {vencidos.length} vencido{vencidos.length === 1 ? "" : "s"} ·{" "}
                 {porVencer.length} por vencer
               </span>
@@ -3129,7 +3129,7 @@ export default function DespachoPage() {
                 <h3 className="mt-4 font-serif text-xl font-bold text-brand-wine">
                   Enviando a Drivin…
                 </h3>
-                <p className="mt-1 text-sm text-brand-brown/60">
+                <p className="mt-1 text-sm text-brand-black">
                   Pedido <b>{drivinModal.comanda}</b>
                 </p>
               </>
@@ -3144,7 +3144,7 @@ export default function DespachoPage() {
                 <h3 className="mt-4 font-serif text-xl font-bold text-green-700">
                   Envío a Drivin exitoso
                 </h3>
-                <p className="mt-1 text-sm text-brand-brown/60">
+                <p className="mt-1 text-sm text-brand-black">
                   El pedido <b>{drivinModal.comanda}</b> se envió correctamente a Drivin.
                 </p>
                 <button
@@ -3165,7 +3165,7 @@ export default function DespachoPage() {
                 <h3 className="mt-4 font-serif text-xl font-bold text-red-700">
                   El pedido se despachó, pero falló el envío a Drivin
                 </h3>
-                <p className="mt-1 text-sm text-brand-brown/60">
+                <p className="mt-1 text-sm text-brand-black">
                   Pedido <b>{drivinModal.comanda}</b>. Un administrador puede reversar y volver a despachar para reintentar.
                 </p>
                 {drivinModal.msg && (
@@ -3200,7 +3200,7 @@ export default function DespachoPage() {
               <h3 className="font-serif text-xl font-bold text-brand-wine">
                 Domiciliario manual
               </h3>
-              <p className="mt-1 text-sm text-brand-brown/60">
+              <p className="mt-1 text-sm text-brand-black">
                 Drivin no asignó domiciliario al pedido <b>{ped?.comanda ?? ""}</b>.
                 Selecciona uno de la Gestión de recursos para cerrar el ciclo a
                 Despachado.
@@ -3225,7 +3225,7 @@ export default function DespachoPage() {
               <div className="mt-5 flex justify-end gap-2">
                 <button
                   onClick={() => setDespachoManual(null)}
-                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-brand-brown/70 transition hover:bg-brand-cream"
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-brand-black transition hover:bg-brand-cream"
                 >
                   Cancelar
                 </button>
@@ -3257,7 +3257,7 @@ export default function DespachoPage() {
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
               Reiniciar tiempos
             </h3>
-            <p className="mt-1 text-center text-sm text-brand-brown/70">
+            <p className="mt-1 text-center text-sm text-brand-black">
               Para reiniciar los tiempos de alistamiento de este pedido, ingresa
               la <b>clave dinámica</b>. El alistador podrá iniciar de nuevo.
             </p>
@@ -3361,7 +3361,7 @@ export default function DespachoPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-serif text-base font-bold text-brand-wine">Comprobante de pago</h3>
                   {total > 1 && (
-                    <span className="rounded-full bg-brand-brown/10 px-2 py-0.5 text-[10px] font-bold text-brand-brown/70">
+                    <span className="rounded-full bg-brand-brown/10 px-2 py-0.5 text-[10px] font-bold text-brand-black">
                       {idx + 1}/{total}
                     </span>
                   )}
@@ -3376,7 +3376,7 @@ export default function DespachoPage() {
                 <button
                   type="button"
                   onClick={() => setCompModal(null)}
-                  className="rounded-lg p-1 text-brand-brown/50 transition hover:bg-brand-cream-soft hover:text-brand-brown"
+                  className="rounded-lg p-1 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -3491,7 +3491,7 @@ export default function DespachoPage() {
             <h3 className="mt-4 text-center font-serif text-xl font-bold text-brand-wine">
               Modificar comprobante
             </h3>
-            <p className="mt-1 text-center text-sm text-brand-brown/70">
+            <p className="mt-1 text-center text-sm text-brand-black">
               Este comprobante ya fue <b>confirmado</b>. Para reemplazarlo o
               eliminarlo, ingresa la <b>clave dinámica</b>.
             </p>
@@ -3572,7 +3572,7 @@ function ModalSegmentacion({
         <div className="flex items-start justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">Segmentación del alistamiento</h3>
-            <p className="mt-0.5 text-xs text-brand-brown/60">
+            <p className="mt-0.5 text-xs text-brand-black">
               Comanda #{pedido.comanda} · {pedido.cliente?.nombre || pedido.cliente?.nit_cedula} · Asigna un
               porcionador por producto; el pedido queda &quot;Alistado&quot; cuando TODOS terminen.
             </p>
@@ -3580,7 +3580,7 @@ function ModalSegmentacion({
           <button
             type="button"
             onClick={onCerrar}
-            className="shrink-0 rounded-lg p-1.5 text-brand-brown/50 transition hover:bg-brand-cream-soft"
+            className="shrink-0 rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft"
             aria-label="Cerrar"
             title="Cerrar"
           >
@@ -3610,11 +3610,11 @@ function ModalSegmentacion({
               <div key={s.itemId} className="flex flex-wrap items-center gap-3 px-5 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-brand-black">{s.producto}</p>
-                  <p className="text-xs text-brand-brown/55">
+                  <p className="text-xs text-brand-black">
                     {s.cantidad} {s.um || ""} {s.referencia ? `· Ref. ${s.referencia}` : ""}
                   </p>
                   {s.inicio && (
-                    <p className="mt-0.5 text-[11px] font-medium text-brand-brown/60">
+                    <p className="mt-0.5 text-[11px] font-medium text-brand-black">
                       Inicio: <span className="text-brand-wine">{fmtHora(s.inicio)}</span>
                       {s.fin && (
                         <>
@@ -3667,7 +3667,7 @@ function ModalSegmentacion({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-brand-brown/10 px-5 py-3.5">
-          <p className="text-xs text-brand-brown/50">
+          <p className="text-xs text-brand-black">
             {finalizado
               ? "El alistamiento ya quedó cerrado."
               : listos === segmentos.length
@@ -3884,7 +3884,7 @@ function ModalReplica({
           </h2>
           <button
             onClick={onCerrar}
-            className="rounded-lg p-1.5 text-brand-brown/50 hover:bg-brand-cream-soft"
+            className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft"
             aria-label="Cerrar"
             title="Cerrar"
           >
@@ -3896,20 +3896,20 @@ function ModalReplica({
 
         <div className="space-y-3 px-5 py-4">
           <div className="rounded-lg border border-brand-brown/10 bg-brand-cream-soft/40 px-3 py-2 text-sm">
-            <p className="text-brand-brown/70">
+            <p className="text-brand-black">
               {modo === "crear"
                 ? "Estás haciendo una réplica del pedido"
                 : "Este pedido es una réplica del pedido"}{" "}
               <span className="font-bold text-brand-wine">#{pedido.comanda}</span>
             </p>
             {pedido.cliente?.nombre && (
-              <p className="mt-0.5 text-xs text-brand-brown/50">{pedido.cliente.nombre}</p>
+              <p className="mt-0.5 text-xs text-brand-black">{pedido.cliente.nombre}</p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-black">
                 Consecutivo del pedido
               </p>
               <p className="font-bold text-brand-black">
@@ -3917,7 +3917,7 @@ function ModalReplica({
               </p>
             </div>
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-black">
                 Consecutivo de la réplica
               </p>
               <p className="font-bold text-brand-black">{codigoReplica}</p>
@@ -4087,7 +4087,7 @@ function ModalReplica({
             ) : null
           ) : (
             <div className="rounded-lg border border-brand-brown/10 px-3 py-2">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-brown/40">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-brand-black">
                 Domiciliario (Drivin)
               </p>
               <p className="font-bold text-brand-black">{domiciliarioAsignado || "Esperando asignación…"}</p>

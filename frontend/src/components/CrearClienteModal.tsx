@@ -177,7 +177,7 @@ export default function CrearClienteModal({
           disabled={guardando}
           aria-label="Cerrar"
           title="Cerrar"
-          className="sticky top-0 z-20 float-right -mr-2 -mt-2 rounded-lg bg-white p-1.5 text-brand-brown/50 shadow-sm transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-50"
+          className="sticky top-0 z-20 float-right -mr-2 -mt-2 rounded-lg bg-white p-1.5 text-brand-black shadow-sm transition hover:bg-brand-cream-soft hover:text-brand-wine disabled:opacity-50"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -204,7 +204,7 @@ export default function CrearClienteModal({
                     className="campo"
                   />
                 </Campo>
-                <label className="flex items-end gap-2 pb-2 text-sm text-brand-brown/80">
+                <label className="flex items-end gap-2 pb-2 text-sm text-brand-black">
                   <input
                     type="checkbox"
                     checked={form.activo ?? true}
@@ -272,7 +272,7 @@ export default function CrearClienteModal({
 
             <Bloque titulo="Clasificación">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                <label className="flex items-center gap-2 text-sm text-brand-black">
                   <input
                     type="radio"
                     name="tipo-cliente"
@@ -282,7 +282,7 @@ export default function CrearClienteModal({
                   />
                   Cliente hogar
                 </label>
-                <label className="flex items-center gap-2 text-sm text-brand-brown/80">
+                <label className="flex items-center gap-2 text-sm text-brand-black">
                   <input
                     type="radio"
                     name="tipo-cliente"
@@ -297,7 +297,7 @@ export default function CrearClienteModal({
               {/* Días de despacho: solo para clientes HORECA. */}
               {tipoCliente === "horeca" && (
                 <div className="mt-2 border-t border-brand-brown/10 pt-2">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-brown/60">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-black">
                     Días de despacho
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -327,7 +327,7 @@ export default function CrearClienteModal({
                       );
                     })}
                   </div>
-                  <p className="mt-1 text-[11px] text-brand-brown/50">
+                  <p className="mt-1 text-[11px] text-brand-black">
                     Días en que se le puede despachar a este cliente.
                   </p>
                 </div>
@@ -392,7 +392,7 @@ export default function CrearClienteModal({
             onClick={onCerrar}
             disabled={guardando}
             title="Cancelar"
-            className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-brown/70 transition hover:bg-brand-cream-soft disabled:opacity-50"
+            className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -421,7 +421,7 @@ function Campo({
 }) {
   return (
     <label className={`block ${full ? "sm:col-span-2" : ""}`}>
-      <span className="mb-0.5 block text-xs font-medium text-brand-brown/70">{label}</span>
+      <span className="mb-0.5 block text-xs font-medium text-brand-black">{label}</span>
       {children}
     </label>
   );
