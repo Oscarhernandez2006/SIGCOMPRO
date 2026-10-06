@@ -151,6 +151,11 @@ export const crearPedido = (data: {
   clienteId: string; puntoVentaId?: string | null; domiciliarioId?: string | null;
   kilos?: number; estado?: string; observaciones?: string; schemaName?: string;
 }) => apiFetch<Pedido>(`${base}/pedidos`, { method: "POST", body: JSON.stringify(data) });
+/** Crea varios mandados de una vez (se guardan y se envían todos a Drivin). */
+export const crearPedidosLote = (pedidos: {
+  clienteId: string; puntoVentaId?: string | null; domiciliarioId?: string | null;
+  kilos?: number; estado?: string; observaciones?: string; schemaName?: string;
+}[]) => apiFetch<{ creados: Pedido[] }>(`${base}/pedidos`, { method: "POST", body: JSON.stringify({ pedidos }) });
 export const actualizarPedido = (
   id: string,
   data: Partial<{

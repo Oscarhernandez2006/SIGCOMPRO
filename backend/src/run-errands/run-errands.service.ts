@@ -705,9 +705,33 @@ export class RunErrandsService implements OnModuleInit {
 
   async cambiarEstadoPedido(id: string, estado: string): Promise<RunErrandsPedido> {
     if (!ESTADOS_PEDIDO.includes(estado)) throw new BadRequestException('Estado inválido');
+    const previo = await this.obtenerPedido(id).catch(() => null);
     const r = await this.pool.query(`UPDATE run_errands_pedidos SET estado = $2 WHERE id = $1`, [id, estado]);
     if (r.rowCount === 0) throw new NotFoundException('Pedido no encontrado');
+    // Si ya se había enviado a Drivin, intenta cancelarlo allá también
+    // (best-effort: no bloquea si Drivin falla, igual que al enviarlo).
+    if (estado === 'CANCELADO' && previo?.drivinEstadoEnvio === 'ENVIADO') {
+      this.cancelarPedidoDrivin(previo).catch(() => { /* ya quedó logueado adentro */ });
+    }
     return this.obtenerPedido(id);
+  }
+
+  /** Cancela el pedido en Drivin (best-effort, no bloquea el cambio de estado en SIGCOMPRO). */
+  private async cancelarPedidoDrivin(pedido: RunErrandsPedido): Promise<void> {
+    try {
+      const esquemas = await this.listarEsquemasDrivin();
+      const schemaCode = esquemas.find((e) => e.name === pedido.drivinSchemaName)?.code ?? pedido.drivinSchemaName;
+      if (!schemaCode) return;
+      const path = `/orders/${encodeURIComponent(pedido.numeroPedido)}?schema_code=${encodeURIComponent(schemaCode)}`;
+      const { status } = await this.drivinRequest('PUT', path, JSON.stringify({ status: 'cancelled' }));
+      if (status < 200 || status >= 300) {
+        this.logger.warn(`No se pudo cancelar en Drivin el pedido ${pedido.numeroPedido} (status ${status})`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Error cancelando en Drivin el pedido ${pedido.numeroPedido}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   async reenviarDrivin(id: string): Promise<RunErrandsPedido> {

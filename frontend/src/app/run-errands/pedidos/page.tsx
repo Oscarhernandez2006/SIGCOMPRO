@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ApiError } from "@/lib/api";
 import {
-  getPedidos, crearPedido, cambiarEstadoPedido, reenviarDrivin, syncDrivin,
+  getPedidos, crearPedidosLote, actualizarPedido, cambiarEstadoPedido, reenviarDrivin, syncDrivin,
   getClientes, getPuntosVenta, getDomiciliarios, getEsquemasDrivin,
   type Pedido, type Cliente, type PuntoVenta, type Domiciliario, type EsquemaDrivin,
 } from "@/lib/runErrandsApi";
@@ -19,6 +19,16 @@ const ESTADO_COLOR: Record<string, string> = {
   CANCELADO: "bg-rose-50 text-rose-700",
 };
 
+interface FilaForm {
+  clienteId: string;
+  puntoVentaId: string;
+  domiciliarioId: string;
+  kilos: string;
+  observaciones: string;
+  schemaName: string;
+}
+const FILA_VACIA: FilaForm = { clienteId: "", puntoVentaId: "", domiciliarioId: "", kilos: "1", observaciones: "", schemaName: "" };
+
 export default function PedidosPage() {
   const usuario = getUsuario();
   const puedeEditar = puedeAccion(usuario, "run_errands.editar");
@@ -30,13 +40,9 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState("");
-  const [mostrarForm, setMostrarForm] = useState(false);
-  const [guardando, setGuardando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
-
-  const [form, setForm] = useState({
-    clienteId: "", puntoVentaId: "", domiciliarioId: "", kilos: "1", observaciones: "", schemaName: "",
-  });
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [editando, setEditando] = useState<Pedido | null>(null);
 
   function cargarListas() {
     Promise.all([getClientes("", false), getPuntosVenta(false), getDomiciliarios({}), getEsquemasDrivin()])
@@ -55,37 +61,24 @@ export default function PedidosPage() {
   useEffect(() => { cargarListas(); }, []);
   useEffect(() => { cargarPedidos(); }, [filtroEstado]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const domiciliariosFiltrados = useMemo(
-    () => (form.puntoVentaId ? domiciliarios.filter((d) => d.puntoVentaId === form.puntoVentaId) : domiciliarios),
-    [domiciliarios, form.puntoVentaId],
-  );
+  function abrirCrear() {
+    setEditando(null);
+    setModalAbierto(true);
+  }
 
-  async function crear() {
-    if (!form.clienteId) return;
-    setGuardando(true);
-    setError(null);
-    try {
-      await crearPedido({
-        clienteId: form.clienteId,
-        puntoVentaId: form.puntoVentaId || null,
-        domiciliarioId: form.domiciliarioId || null,
-        kilos: Number(form.kilos) || 1,
-        observaciones: form.observaciones.trim() || undefined,
-        schemaName: form.schemaName || undefined,
-      });
-      setForm({ clienteId: "", puntoVentaId: "", domiciliarioId: "", kilos: "1", observaciones: "", schemaName: "" });
-      setMostrarForm(false);
-      cargarPedidos();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo crear el pedido");
-    } finally {
-      setGuardando(false);
-    }
+  function abrirEditar(p: Pedido) {
+    setEditando(p);
+    setModalAbierto(true);
   }
 
   async function cambiarEstado(p: Pedido, estado: string) {
     await cambiarEstadoPedido(p.id, estado);
     cargarPedidos();
+  }
+
+  async function cancelar(p: Pedido) {
+    if (!confirm(`¿Cancelar el pedido ${p.numeroPedido}? Si ya se envió a Drivin, también se intentará cancelar allá.`)) return;
+    await cambiarEstado(p, "CANCELADO");
   }
 
   async function reintentar(p: Pedido) {
@@ -122,42 +115,14 @@ export default function PedidosPage() {
             </button>
           )}
           {puedeEditar && (
-            <button onClick={() => setMostrarForm((v) => !v)} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
-              {mostrarForm ? "Cerrar" : "Nuevo pedido"}
+            <button onClick={abrirCrear} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
+              Nuevo pedido
             </button>
           )}
         </div>
       </div>
 
       {error && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
-
-      {mostrarForm && puedeEditar && (
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-brand-brown/10 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
-          <select value={form.clienteId} onChange={(e) => setForm({ ...form, clienteId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Cliente…</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>)}
-          </select>
-          <select value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value, domiciliarioId: "" })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Punto de venta…</option>
-            {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <select value={form.domiciliarioId} onChange={(e) => setForm({ ...form, domiciliarioId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Domiciliario…</option>
-            {domiciliariosFiltrados.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-          </select>
-          <input type="number" step="0.1" min="0.1" placeholder="Kilos" value={form.kilos} onChange={(e) => setForm({ ...form, kilos: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <select value={form.schemaName} onChange={(e) => setForm({ ...form, schemaName: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Esquema Drivin (auto por PDV)…</option>
-            {esquemas.map((e) => <option key={e.code} value={e.name}>{e.name}</option>)}
-          </select>
-          <input placeholder="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <div className="lg:col-span-3">
-            <button onClick={crear} disabled={guardando || !form.clienteId} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              {guardando ? "Enviando…" : "Crear y enviar a Drivin"}
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="mt-4 flex gap-2">
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
@@ -213,10 +178,16 @@ export default function PedidosPage() {
                     </span>
                   </td>
                   {puedeEditar && (
-                    <td className="px-4 py-2 text-right">
-                      {p.drivinEstadoEnvio === "ERROR" && (
-                        <button onClick={() => reintentar(p)} className="text-xs font-medium text-brand-amber hover:underline">Reintentar Drivin</button>
-                      )}
+                    <td className="px-4 py-2">
+                      <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+                        {p.drivinEstadoEnvio === "ERROR" && (
+                          <button onClick={() => reintentar(p)} className="text-xs font-medium text-brand-amber hover:underline">Reintentar Drivin</button>
+                        )}
+                        <button onClick={() => abrirEditar(p)} className="text-xs font-medium text-brand-black/60 hover:underline">Editar</button>
+                        {p.estado !== "CANCELADO" && p.estado !== "ENTREGADO" && (
+                          <button onClick={() => cancelar(p)} className="text-xs font-medium text-rose-600 hover:underline">Cancelar</button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -225,6 +196,270 @@ export default function PedidosPage() {
           </table>
         )}
       </div>
+
+      {modalAbierto && puedeEditar && (
+        <ModalPedido
+          clientes={clientes}
+          pdvs={pdvs}
+          domiciliarios={domiciliarios}
+          esquemas={esquemas}
+          editando={editando}
+          onCerrar={() => setModalAbierto(false)}
+          onGuardado={() => { setModalAbierto(false); cargarPedidos(); }}
+        />
+      )}
     </div>
   );
 }
+
+/** Combobox con buscador: escribe para filtrar clientes por nombre o código. */
+function ClienteCombo({
+  clientes,
+  value,
+  onChange,
+}: {
+  clientes: Cliente[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  const cerrarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seleccionado = clientes.find((c) => c.id === value);
+
+  const filtrados = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const lista = !q
+      ? clientes
+      : clientes.filter((c) => c.nombre.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q));
+    return lista.slice(0, 50);
+  }, [clientes, query]);
+
+  return (
+    <div className="relative">
+      <input
+        value={abierto ? query : seleccionado ? `${seleccionado.codigo} — ${seleccionado.nombre}` : ""}
+        onChange={(e) => { setQuery(e.target.value); setAbierto(true); }}
+        onFocus={() => { setQuery(""); setAbierto(true); }}
+        onBlur={() => { cerrarTimeout.current = setTimeout(() => setAbierto(false), 150); }}
+        placeholder="Buscar cliente por nombre…"
+        className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber"
+      />
+      {abierto && (
+        <div
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-brand-brown/20 bg-white shadow-lg"
+        >
+          {filtrados.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-brand-black/40">Sin resultados.</div>
+          ) : (
+            filtrados.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => { onChange(c.id); setQuery(""); setAbierto(false); }}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-brand-cream-soft"
+              >
+                <span className="font-medium text-brand-black">{c.nombre}</span>{" "}
+                <span className="text-xs text-brand-black/40">{c.codigo}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Modal de pedido: si `editando` viene con datos, edita ese pedido solo. Si no,
+ * permite ir "Añadiendo y siguiendo" varios mandados a una cola y guardarlos
+ * (y enviarlos a Drivin) todos juntos al final.
+ */
+function ModalPedido({
+  clientes,
+  pdvs,
+  domiciliarios,
+  esquemas,
+  editando,
+  onCerrar,
+  onGuardado,
+}: {
+  clientes: Cliente[];
+  pdvs: PuntoVenta[];
+  domiciliarios: Domiciliario[];
+  esquemas: EsquemaDrivin[];
+  editando: Pedido | null;
+  onCerrar: () => void;
+  onGuardado: () => void;
+}) {
+  const [form, setForm] = useState<FilaForm>(() =>
+    editando
+      ? {
+          clienteId: editando.clienteId,
+          puntoVentaId: editando.puntoVentaId ?? "",
+          domiciliarioId: editando.domiciliarioId ?? "",
+          kilos: String(editando.kilos ?? 1),
+          observaciones: editando.observaciones ?? "",
+          schemaName: editando.drivinSchemaName ?? "",
+        }
+      : FILA_VACIA,
+  );
+  const [cola, setCola] = useState<FilaForm[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const domiciliariosFiltrados = useMemo(
+    () => (form.puntoVentaId ? domiciliarios.filter((d) => d.puntoVentaId === form.puntoVentaId) : domiciliarios),
+    [domiciliarios, form.puntoVentaId],
+  );
+
+  function agregarYSeguir() {
+    if (!form.clienteId) {
+      setError("Elige un cliente para agregar el mandado.");
+      return;
+    }
+    setError(null);
+    setCola((prev) => [...prev, form]);
+    // Conserva PDV/domiciliario/esquema (suele ser el mismo lote) y limpia el resto.
+    setForm((f) => ({ ...FILA_VACIA, puntoVentaId: f.puntoVentaId, domiciliarioId: f.domiciliarioId, schemaName: f.schemaName }));
+  }
+
+  function quitarDeCola(idx: number) {
+    setCola((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function nombreCliente(id: string) {
+    return clientes.find((c) => c.id === id)?.nombre ?? "—";
+  }
+
+  function filaAPayload(f: FilaForm) {
+    return {
+      clienteId: f.clienteId,
+      puntoVentaId: f.puntoVentaId || null,
+      domiciliarioId: f.domiciliarioId || null,
+      kilos: Number(f.kilos) || 1,
+      observaciones: f.observaciones.trim() || undefined,
+      schemaName: f.schemaName || undefined,
+    };
+  }
+
+  async function guardar() {
+    setError(null);
+    if (editando) {
+      if (!form.clienteId) { setError("Elige un cliente."); return; }
+      setGuardando(true);
+      try {
+        await actualizarPedido(editando.id, {
+          clienteId: form.clienteId,
+          puntoVentaId: form.puntoVentaId || null,
+          domiciliarioId: form.domiciliarioId || null,
+          kilos: Number(form.kilos) || 1,
+          observaciones: form.observaciones.trim(),
+          drivinSchemaName: form.schemaName || undefined,
+        });
+        onGuardado();
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "No se pudo guardar el pedido");
+      } finally {
+        setGuardando(false);
+      }
+      return;
+    }
+    // Modo creación: la cola + la fila actual (si tiene cliente elegido).
+    const filas = [...cola];
+    if (form.clienteId) filas.push(form);
+    if (filas.length === 0) {
+      setError("Agrega al menos un mandado.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await crearPedidosLote(filas.map(filaAPayload));
+      onGuardado();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudieron guardar los pedidos");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  const totalAGuardar = cola.length + (!editando && form.clienteId ? 1 : 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
+      <div
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-serif text-xl font-bold text-brand-wine">
+            {editando ? `Editar pedido ${editando.numeroPedido}` : "Nuevo mandado"}
+          </h2>
+          <button onClick={onCerrar} className="text-sm text-brand-black/40 hover:text-brand-black">✕</button>
+        </div>
+
+        {error && <div className="mt-3 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <ClienteCombo clientes={clientes} value={form.clienteId} onChange={(id) => setForm({ ...form, clienteId: id })} />
+          </div>
+          <select value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value, domiciliarioId: "" })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+            <option value="">Punto de venta…</option>
+            {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          <select value={form.domiciliarioId} onChange={(e) => setForm({ ...form, domiciliarioId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+            <option value="">Domiciliario…</option>
+            {domiciliariosFiltrados.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+          </select>
+          <input type="number" step="0.1" min="0.1" placeholder="Kilos" value={form.kilos} onChange={(e) => setForm({ ...form, kilos: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
+          <select value={form.schemaName} onChange={(e) => setForm({ ...form, schemaName: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+            <option value="">Esquema Drivin (auto por PDV)…</option>
+            {esquemas.map((e) => <option key={e.code} value={e.name}>{e.name}</option>)}
+          </select>
+          <input placeholder="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber sm:col-span-2" />
+        </div>
+
+        {!editando && (
+          <>
+            <div className="mt-3 flex justify-end">
+              <button onClick={agregarYSeguir} className="rounded-xl border border-brand-amber px-4 py-2 text-sm font-semibold text-brand-amber hover:bg-brand-amber/5">
+                Añadir y seguir
+              </button>
+            </div>
+            {cola.length > 0 && (
+              <div className="mt-3 rounded-xl border border-brand-brown/10 bg-brand-cream-soft/40 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-black/50">
+                  En la cola ({cola.length})
+                </p>
+                <ul className="space-y-1.5">
+                  {cola.map((f, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-sm">
+                      <span className="truncate">{nombreCliente(f.clienteId)} · {f.kilos} kg</span>
+                      <button onClick={() => quitarDeCola(i)} className="shrink-0 text-xs font-medium text-rose-600 hover:underline">Quitar</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2 border-t border-brand-brown/10 pt-4">
+          <button onClick={onCerrar} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-medium">Cancelar</button>
+          <button onClick={guardar} disabled={guardando} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {guardando
+              ? "Guardando…"
+              : editando
+                ? "Guardar cambios"
+                : totalAGuardar > 1
+                  ? `Guardar ${totalAGuardar} y enviar a Drivin`
+                  : "Crear y enviar a Drivin"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
