@@ -403,22 +403,38 @@ function ModalPedido({
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Cliente</label>
             <ClienteCombo clientes={clientes} value={form.clienteId} onChange={(id) => setForm({ ...form, clienteId: id })} />
           </div>
-          <select value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value, domiciliarioId: "" })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Punto de venta…</option>
-            {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <select value={form.domiciliarioId} onChange={(e) => setForm({ ...form, domiciliarioId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Domiciliario…</option>
-            {domiciliariosFiltrados.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-          </select>
-          <input type="number" step="0.1" min="0.1" placeholder="Kilos" value={form.kilos} onChange={(e) => setForm({ ...form, kilos: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <select value={form.schemaName} onChange={(e) => setForm({ ...form, schemaName: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
-            <option value="">Esquema Drivin (auto por PDV)…</option>
-            {esquemas.map((e) => <option key={e.code} value={e.name}>{e.name}</option>)}
-          </select>
-          <input placeholder="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber sm:col-span-2" />
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Punto de venta</label>
+            <select value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value, domiciliarioId: "" })} className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+              <option value="">Punto de venta…</option>
+              {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Domiciliario</label>
+            <select value={form.domiciliarioId} onChange={(e) => setForm({ ...form, domiciliarioId: e.target.value })} className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+              <option value="">Domiciliario…</option>
+              {domiciliariosFiltrados.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Kilos</label>
+            <input type="number" step="0.1" min="0.1" placeholder="Kilos" value={form.kilos} onChange={(e) => setForm({ ...form, kilos: e.target.value })} className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Esquema Drivin</label>
+            <select value={form.schemaName} onChange={(e) => setForm({ ...form, schemaName: e.target.value })} className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+              <option value="">Auto por PDV…</option>
+              {esquemas.map((e) => <option key={e.code} value={e.name}>{e.name}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-semibold text-brand-black/60">Observaciones</label>
+            <input placeholder="Observaciones (opcional)" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
+          </div>
         </div>
 
         {!editando && (
