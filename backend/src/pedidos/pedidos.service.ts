@@ -1082,6 +1082,27 @@ export class PedidosService implements OnModuleInit {
         );
       }
 
+      // SINCRONIZACIÓN AUTOMÁTICA CON DRIVIN: si el pedido YA fue enviado a
+      // Drivin (facturado) y esta edición cambia si es "Entrega programada"
+      // (Posterior) o su fecha elegida, Drivin se queda con la fecha del
+      // envío original porque no se vuelve a mandar (la bandera drivinEnviado
+      // bloquea el reenvío). Se corrige SOLO la fecha de despacho allá.
+      if (
+        !estaAnulandoAhora &&
+        metaActual.drivinEnviado === true &&
+        finalPedido.comanda &&
+        puntoId &&
+        (prevData?.entregaProgramada !== finalPedido.entregaProgramada ||
+          String(prevData?.fechaProgramada ?? '') !==
+            String(finalPedido.fechaProgramada ?? ''))
+      ) {
+        this.actualizarFechaEnDrivin(id).catch((e) => {
+          this.logger.error(
+            `Error no controlado al corregir fecha en Drivin: ${String(e)}`,
+          );
+        });
+      }
+
       await client.query('COMMIT');
       return finalPedido;
     } catch (e) {
@@ -2421,6 +2442,82 @@ export class PedidosService implements OnModuleInit {
         `Error no capturado en cancelación async de Drivin: ${String(e)}`,
       );
     });
+  }
+
+  /**
+   * Corrige la fecha de despacho (delivery_date/deploy_date) de un pedido que
+   * YA fue enviado a Drivin, cuando DESPUÉS de facturar se edita la "Entrega
+   * programada" (Posterior) o la fecha elegida. Sin esto, Drivin se queda con
+   * la fecha del envío original (la bandera drivinEnviado bloquea el reenvío
+   * completo) y el pedido aparece en Drivin con la fecha vieja en vez de la
+   * programada. Se actualiza SOLO la fecha, vía PUT sobre la orden existente.
+   */
+  private async actualizarFechaEnDrivin(pedidoId: string): Promise<void> {
+    try {
+      const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+      if (!apiKey) {
+        this.logger.warn(
+          'No se pudo corregir fecha en Drivin: falta DRIVIN_API_KEY',
+        );
+        return;
+      }
+
+      const d = await this.construirDespacho(pedidoId);
+      const comandaLimpia = String(d.comanda ?? '').trim();
+      if (!comandaLimpia) return;
+
+      const cfg = await this.puntoDrivinCfg(
+        d.puntoId,
+        d.puntoCodigo,
+        d.puntoNombre,
+      );
+      if (!cfg.drivin) return;
+
+      // La orden vive en el escenario del día en que se subió originalmente
+      // (normalmente HOY, porque la edición suele ocurrir el mismo día que la
+      // facturación). Si no aparece ahí, se intenta con el escenario de la
+      // fecha de entrega recién calculada, por si ya cambió de día.
+      const hoy = this.diaBogota();
+      let token = await this.tokenScenarioPunto(cfg.schema, hoy);
+      if (!token && d.fechaEntrega && d.fechaEntrega !== hoy) {
+        token = await this.tokenScenarioPunto(cfg.schema, d.fechaEntrega);
+      }
+      if (!token) {
+        this.logger.warn(
+          `Pedido ${pedidoId} (${comandaLimpia}): sin escenario en Drivin para corregir fecha`,
+        );
+        return;
+      }
+
+      const body = JSON.stringify({
+        delivery_date: d.fechaEntrega,
+        deploy_date: d.fechaEntrega,
+      });
+      const path = `/orders/${encodeURIComponent(comandaLimpia)}?token=${encodeURIComponent(
+        token,
+      )}`;
+      const { status } = await this.drivinRequest(
+        'PUT',
+        path,
+        apiKey,
+        body,
+        'v2',
+      );
+      if (status === 200 || status === 204) {
+        this.logger.log(
+          `✓ Drivin orden ${comandaLimpia}: fecha corregida a ${d.fechaEntrega}`,
+        );
+      } else {
+        this.logger.warn(
+          `Drivin orden ${comandaLimpia}: respuesta inesperada al corregir fecha (status: ${status})`,
+        );
+      }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      this.logger.warn(
+        `No se pudo corregir fecha en Drivin (pedido ${pedidoId}): ${error}`,
+      );
+    }
   }
 }
 
