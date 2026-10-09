@@ -945,11 +945,19 @@ export class RunErrandsService implements OnModuleInit {
     await this.sincronizarClienteDrivin(pedido.cliente);
     const descripcion = (pedido.observaciones ?? '').trim() || `Mandado ${pedido.numeroPedido}`;
     const fecha = new Date(pedido.fecha).toISOString().slice(0, 10);
+    // El domiciliario ve "nombre / referencia" donde normalmente iría el
+    // cliente; sin `reference`/`name` en el pedido (solo se mandaban en el
+    // sync de /addresses) esa línea queda en blanco en la app de Drivin.
+    const referencia = `${pedido.numeroPedido} / Mandado`;
     const drivin = await this.llamarDrivin(`/orders?schema_code=${encodeURIComponent(schemaCode)}`, {
       clients: [{
         code: pedido.cliente.codigo,
+        reference: referencia,
+        name: `Run Errands - ${pedido.cliente.nombre}`,
+        client_name: `Run Errands - ${pedido.cliente.nombre}`,
         orders: [{
           code: pedido.numeroPedido,
+          alt_code: referencia,
           description: descripcion,
           category: 'Delivery',
           units_1: pedido.kilos,
