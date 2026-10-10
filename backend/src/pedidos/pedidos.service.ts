@@ -14,6 +14,7 @@ import { Pool, PoolClient } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
+import { ExtensionesService } from '../extensiones/extensiones.service';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
@@ -65,9 +66,32 @@ type PedidoData = Record<string, unknown> & {
   } | null;
   carrito?: Array<{
     cantidad?: number;
-    producto?: { um?: string };
+    pesoVariable?: number;
+    producto?: { um?: string; producto?: string };
   }>;
 };
+
+const GRAMOS_POR_UNIDAD_MEDIDA: Record<string, number> = {
+  ML: 1, CC: 1,
+  L: 1000, LT: 1000, LTS: 1000, LTR: 1000, LITRO: 1000, LITROS: 1000,
+  G: 1, GR: 1, GRS: 1, GRAMO: 1, GRAMOS: 1,
+  KG: 1000, KGS: 1000, KILO: 1000, KILOS: 1000,
+  LB: 500, LBS: 500, LIBRA: 500, LIBRAS: 500,
+};
+const RE_MEDIDA =
+  /(?:(\d+)\s*[X×]\s*)?(\d+(?:[.,]\d+)?)\s*(ML|CC|LITROS?|LTS?|LTR|L|GRAMOS?|GRS?|G|KILOS?|KGS?|LIBRAS?|LBS?)(?![A-Z])/g;
+
+/** Gramos de UNA unidad según la descripción ("AGUA X 600 ML" -> 600). Igual que frontend/src/lib/peso.ts. */
+function gramosPorUnidad(descripcion?: string | null): number | null {
+  const matches = [...(descripcion ?? '').toUpperCase().matchAll(RE_MEDIDA)];
+  const ultimo = matches[matches.length - 1];
+  if (!ultimo) return null;
+  const pack = ultimo[1] ? Number(ultimo[1]) : 1;
+  const valor = Number(ultimo[2].replace(',', '.'));
+  const factor = GRAMOS_POR_UNIDAD_MEDIDA[ultimo[3]];
+  if (!factor || !(valor > 0) || !(pack > 0)) return null;
+  return pack * valor * factor;
+}
 
 /** Metadata de despacho asociada a un pedido. */
 type DespachoMeta = Record<string, unknown>;
@@ -139,6 +163,7 @@ export class PedidosService implements OnModuleInit {
     @Inject(PG_POOL) private readonly pool: Pool,
     private readonly ubicaciones: UbicacionesService,
     private readonly config: ConfigService,
+    private readonly extensiones: ExtensionesService,
   ) {}
 
   async onModuleInit() {
@@ -348,7 +373,14 @@ export class PedidosService implements OnModuleInit {
     const ahora = new Date().toISOString();
     const { scope, params } = this.construirScope(rango, fecha, hasta);
 
-    const res = await this.pool.query<{
+    // El tiempo de esta consulta lo domina la TRANSFERENCIA del resultado (no
+    // el SQL): con rangos grandes o red lenta supera los 30s globales del pool.
+    const client = await this.pool.connect();
+    let res: { rows: { id: string; data: PedidoData; meta: DespachoMeta }[] };
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL statement_timeout = '120s'`);
+      res = await client.query<{
       id: string;
       data: PedidoData;
       meta: DespachoMeta;
@@ -387,6 +419,7 @@ export class PedidosService implements OnModuleInit {
                     'porcionado', COALESCE((item->>'porcionado')::boolean, false),
                     'unidades', (item->>'unidades')::numeric,
                     'gramos', (item->>'gramos')::numeric,
+                    'pesoVariable', (item->>'pesoVariable')::numeric,
                     'producto', jsonb_build_object(
                       'um', item->'producto'->>'um',
                       'producto', item->'producto'->>'producto',
@@ -403,6 +436,13 @@ export class PedidosService implements OnModuleInit {
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
       params,
     );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally {
+      client.release();
+    }
 
     const pedidos: PedidoData[] = [];
     const meta: Record<string, DespachoMeta> = {};
@@ -1118,6 +1158,16 @@ export class PedidosService implements OnModuleInit {
     id: string,
     cambios: DespachoMeta,
   ): Promise<{ id: string }> {
+    const tocaAsignacion =
+      typeof cambios?.domiciliario === 'string' || Array.isArray(cambios?.replicas);
+    const previo = tocaAsignacion
+      ? (
+          await this.pool.query<{ punto_id: string | null; meta: DespachoMeta }>(
+            `SELECT punto_id, meta FROM pedidos WHERE id = $1`,
+            [id],
+          )
+        ).rows[0]
+      : undefined;
     await this.pool.query(
       `UPDATE pedidos
          SET meta = COALESCE(meta, '{}'::jsonb) || $2::jsonb,
@@ -1125,6 +1175,14 @@ export class PedidosService implements OnModuleInit {
        WHERE id = $1`,
       [id, JSON.stringify(cambios ?? {})],
     );
+    if (previo) {
+      // No bloquea ni rompe el guardado de la metadata si falla.
+      this.extensiones
+        .registrarAsignaciones(id, previo.punto_id, previo.meta ?? {}, cambios)
+        .catch((e) =>
+          this.logger.warn(`No se pudo registrar el pedido ${id} en extensiones: ${String(e)}`),
+        );
+    }
     return { id };
   }
 
@@ -1316,10 +1374,14 @@ export class PedidosService implements OnModuleInit {
     const tipo = `PDV ${localidad}`.trim();
     const proveedor = `PDV ${localidad}`.trim();
 
-    // Kilos consolidados: suma de ítems vendidos por KG.
+    // Kilos consolidados: ítems por KG + ítems de unidad con medida en la descripción.
     const kilos = (pedido.carrito ?? []).reduce((s, i) => {
+      const cant = Number(i.cantidad) || 0;
       const esKilo = (i.producto?.um ?? '').trim().toUpperCase() === 'KG';
-      return s + (esKilo ? Number(i.cantidad) || 0 : 0);
+      if (esKilo) return s + cant;
+      const g =
+        gramosPorUnidad(i.producto?.producto) ?? (Number(i.pesoVariable) || 0);
+      return s + (g ? (cant * g) / 1000 : 0);
     }, 0);
 
     // Fechas y ventanas (zona horaria America/Bogota).
@@ -1769,9 +1831,9 @@ export class PedidosService implements OnModuleInit {
   }
 
   /** Scenarios de Drivin para una fecha (YYYY-MM-DD), con caché por fecha. */
-  private async drivinScenarios(date: string): Promise<DrivinScenario[]> {
+  private async drivinScenarios(date: string, fresco = false): Promise<DrivinScenario[]> {
     const cached = this.cacheScenarios.get(date);
-    if (cached && Date.now() - cached.ts < this.DRIVIN_TTL) {
+    if (!fresco && cached && Date.now() - cached.ts < this.DRIVIN_TTL) {
       return cached.datos;
     }
     const r = await this.drivinGet<{ response?: DrivinScenario[] }>(
@@ -1872,10 +1934,23 @@ export class PedidosService implements OnModuleInit {
     if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 5000) {
       return this.cacheAsignaciones.datos;
     }
+    const { mapa, completo } = await this.leerAsignacionesDrivin(false);
+    // Un mapa incompleto haría ver como "desasignadas" las órdenes del escenario
+    // que falló; se devuelve vacío para que nadie desasigne con datos parciales.
+    if (!completo) return {};
+    this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
+    return mapa;
+  }
+
+  private async leerAsignacionesDrivin(fresco: boolean): Promise<{
+    mapa: Record<string, { code: string; nombre: string } | null>;
+    completo: boolean;
+  }> {
     const out: Record<string, { code: string; nombre: string } | null> = {};
+    let completo = true;
     try {
       const hoy = this.diaBogota();
-      const scenarios = await this.drivinScenarios(hoy);
+      const scenarios = await this.drivinScenarios(hoy, fresco);
       const vehiculos = await this.drivinVehicles();
       const nombrePorCode = new Map<string, string>();
       for (const v of vehiculos) {
@@ -1897,7 +1972,8 @@ export class PedidosService implements OnModuleInit {
             }>(`/orders?token=${encodeURIComponent(t)}`);
             return Array.isArray(r?.response) ? r.response : [];
           } catch {
-            return []; // si un escenario falla, seguimos con los demás
+            completo = false;
+            return [];
           }
         }),
       );
@@ -1905,69 +1981,140 @@ export class PedidosService implements OnModuleInit {
         for (const g of arr) {
           for (const o of g.orders ?? []) {
             if (!o.code) continue;
-            out[o.code] = o.vehicle_code
-              ? {
-                  code: o.vehicle_code,
-                  nombre: nombrePorCode.get(o.vehicle_code) ?? o.vehicle_code,
-                }
-              : null;
+            // Si la orden sale en varios escenarios, manda el que tiene vehículo.
+            if (o.vehicle_code) {
+              out[o.code] = {
+                code: o.vehicle_code,
+                nombre: nombrePorCode.get(o.vehicle_code) ?? o.vehicle_code,
+              };
+            } else if (!(o.code in out)) {
+              out[o.code] = null;
+            }
           }
         }
       }
-      this.cacheAsignaciones = { ts: Date.now(), datos: out };
     } catch (e) {
+      completo = false;
       this.logger.warn(
         `No se pudieron leer las asignaciones de Drivin: ${
           e instanceof Error ? e.message : String(e)
         }`,
       );
     }
-    return out;
+    return { mapa: out, completo };
   }
 
   /**
-   * Sincroniza desasignaciones de Drivin: si un pedido que tiene domiciliario
-   * asignado fue desasignado en Drivin (vehicle_code = null), lo devuelve al
-   * estado previo (Facturado si ya estaba Despachado; si no, En proceso) y
-   * limpia el domiciliario de la metadata. Así SIGCOMPRO queda sincronizado
-   * con Drivin incluso si nadie tiene Despacho abierto en el navegador (esa
-   * vista hace lo mismo pero solo mientras está activa).
+   * Sincroniza desasignaciones de Drivin en el servidor (no depende de que
+   * alguien tenga Despacho abierto), con las MISMAS reglas que esa vista:
+   * si Drivin quitó el domiciliario (orden sin vehículo o fuera de la ruta),
+   * se libera el domiciliario y un Despachado vuelve a Facturado. Igual para
+   * las réplicas ("comanda-N"). Solo pedidos de HOY de puntos integrados con
+   * Drivin, y solo si el mapa de Drivin se leyó COMPLETO.
    */
   async sincronizarDesasignacionesDrivin(): Promise<number> {
     let desasignados = 0;
     try {
-      const asignaciones = await this.asignacionesDrivin();
-      
-      // Busca pedidos con domiciliario asignado en cualquier paso donde eso
-      // ya aplica (incluido Despachado, que Drivin puede desasignar luego).
+      const { mapa, completo } = await this.leerAsignacionesDrivin(true);
+      if (!completo || Object.keys(mapa).length === 0) return 0;
+
+      const hoy = this.diaBogota();
       const res = await this.pool.query<{
         id: string;
-        comanda: string;
+        punto_id: string | null;
         estado: string | null;
-        meta: Record<string, unknown>;
+        data: PedidoData;
+        meta: DespachoMeta;
       }>(
-        `SELECT id, comanda, estado, meta FROM pedidos
+        `SELECT id, punto_id, estado, data, meta FROM pedidos
          WHERE anulado = false
-         AND LOWER(COALESCE(estado, '')) IN ('en proceso', 'en producción', 'alistado', 'facturado', 'despachado')
-         AND meta->>'domiciliario' IS NOT NULL`,
+           AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado')
+           AND (
+             (CASE
+                WHEN (data->>'entregaProgramada') = 'true'
+                     AND COALESCE(data->>'fechaProgramada', '') <> ''
+                THEN (data->>'fechaProgramada')::date
+                ELSE (fecha AT TIME ZONE 'America/Bogota')::date
+              END) = $1::date
+             OR (NULLIF(meta->>'despachoFin', '')::timestamptz AT TIME ZONE 'America/Bogota')::date = $1::date
+           )
+           AND (
+             COALESCE(meta->>'domiciliario', '') <> ''
+             OR COALESCE(meta->>'domiciliarioCodigo', '') <> ''
+             OR LOWER(COALESCE(estado, '')) = 'despachado'
+             OR jsonb_typeof(meta->'replicas') = 'array'
+           )`,
+        [hoy],
       );
 
+      const drivinPorPunto = new Map<string, boolean>();
       for (const ped of res.rows) {
-        const comanda = String(ped.comanda || '').trim();
-        const asign = asignaciones[comanda];
-        
-        // Si la comanda no está en Drivin o está desasignada (null)
-        if (asign === null || (asign === undefined && Object.keys(asignaciones).length > 0)) {
-          const estabaDespachado = String(ped.estado ?? '').trim().toLowerCase() === 'despachado';
-          const nuevoEstado = estabaDespachado ? 'Facturado' : 'En proceso';
-          await this.actualizarMeta(ped.id, { domiciliario: null, domiciliarioCodigo: null });
-          await this.pool.query(
-            `UPDATE pedidos SET estado = $1, actualizado_en = now() WHERE id = $2`,
-            [nuevoEstado, ped.id],
-          );
-          desasignados++;
-          this.logger.log(
-            `Pedido desasignado en Drivin: ${comanda} (${ped.id}) → "${nuevoEstado}"`,
+        try {
+          const data = ped.data ?? {};
+          const meta = (ped.meta ?? {}) as {
+            domiciliario?: string | null;
+            domiciliarioCodigo?: string | null;
+            replicas?: Array<{
+              numero?: number;
+              domiciliario?: string | null;
+              domiciliarioCodigo?: string | null;
+            }>;
+          };
+          const comanda = String(data.comanda ?? '').trim();
+          if (!comanda) continue;
+
+          const puntoId = String(ped.punto_id ?? data.punto?.id ?? '');
+          if (!drivinPorPunto.has(puntoId)) {
+            const cfg = await this.puntoDrivinCfg(
+              puntoId || undefined,
+              String(data.punto?.codigo ?? ''),
+              String(data.punto?.nombre ?? ''),
+            );
+            drivinPorPunto.set(puntoId, cfg.drivin);
+          }
+          if (!drivinPorPunto.get(puntoId)) continue; // punto manual
+
+          const est = String(ped.estado ?? '').trim().toLowerCase();
+          const enMapa = comanda in mapa;
+          const asg = enMapa ? mapa[comanda] : undefined;
+          const teniaDomi = !!(meta.domiciliario || meta.domiciliarioCodigo);
+          const desasignar =
+            !asg && (enMapa ? teniaDomi || est === 'despachado' : teniaDomi);
+
+          const cambios: DespachoMeta = {};
+          if (desasignar && teniaDomi) {
+            cambios.domiciliario = '';
+            cambios.domiciliarioCodigo = '';
+          }
+          if (Array.isArray(meta.replicas) && meta.replicas.length > 0) {
+            let cambioRep = false;
+            const nuevas = meta.replicas.map((r) => {
+              if (!mapa[`${comanda}-${r.numero}`] && (r.domiciliario || r.domiciliarioCodigo)) {
+                cambioRep = true;
+                return { ...r, domiciliario: '', domiciliarioCodigo: '' };
+              }
+              return r;
+            });
+            if (cambioRep) cambios.replicas = nuevas;
+          }
+          if (Object.keys(cambios).length > 0) {
+            await this.actualizarMeta(ped.id, cambios);
+          }
+          if (desasignar && est === 'despachado') {
+            await this.guardar({ ...data, id: ped.id, estado: 'Facturado' }, undefined);
+          }
+          if (desasignar || cambios.replicas) {
+            desasignados++;
+            this.logger.log(
+              `Drivin desasignó ${comanda} (${ped.id}): domiciliario liberado` +
+                (desasignar && est === 'despachado' ? ' y vuelve a Facturado' : ''),
+            );
+          }
+        } catch (e) {
+          this.logger.warn(
+            `No se pudo sincronizar la desasignación del pedido ${ped.id}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
           );
         }
       }
@@ -2258,8 +2405,9 @@ export class PedidosService implements OnModuleInit {
           id: string;
           comanda: string;
           estado: string | null;
+          data: PedidoData;
         }>(
-          `SELECT id, data->>'comanda' as comanda, estado
+          `SELECT id, data->>'comanda' as comanda, estado, data
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
              AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
@@ -2270,6 +2418,7 @@ export class PedidosService implements OnModuleInit {
           try {
             const actualizado = await this.guardar(
               {
+                ...(ped.data ?? {}),
                 id: ped.id,
                 anulado: false,
                 estado: 'Rechazado',
@@ -2298,8 +2447,9 @@ export class PedidosService implements OnModuleInit {
           id: string;
           comanda: string;
           estado: string | null;
+          data: PedidoData;
         }>(
-          `SELECT id, data->>'comanda' as comanda, estado
+          `SELECT id, data->>'comanda' as comanda, estado, data
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
              AND anulado = false
@@ -2311,6 +2461,7 @@ export class PedidosService implements OnModuleInit {
           try {
             const actualizado = await this.guardar(
               {
+                ...(ped.data ?? {}),
                 id: ped.id,
                 anulado: true,
                 estado: 'Anulado',

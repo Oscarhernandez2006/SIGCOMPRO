@@ -20,6 +20,8 @@ interface NavItem {
   soloAdmin?: boolean;
   /** Si es true, lo ve cualquier usuario operativo (sin permiso específico). */
   personal?: boolean;
+  /** Si existe, lo ven solo estos roles (y los de acceso total), sin depender de permisos. */
+  roles?: string[];
   icon: ReactNode;
 }
 
@@ -62,6 +64,17 @@ const navItems: NavItem[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.834 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+      </svg>
+    ),
+  },
+  {
+    label: "Solicitud de extensión",
+    href: "/extensiones",
+    modulo: "extensiones",
+    roles: ["despacho"],
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
       </svg>
     ),
   },
@@ -230,8 +243,13 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   // Módulos visibles para este usuario según sus permisos. "Mi resumen" también
   // se gobierna por permiso (módulo mi_resumen): solo lo ve quien lo tenga.
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
+  const rolUsuario = (usuario?.rol ?? "").trim().toLowerCase();
   const itemsVisibles = navItems.filter((item) =>
-    item.soloAdmin ? esAdmin : puedeVerModulo(usuario, item.modulo),
+    item.roles
+      ? esAdmin || item.roles.includes(rolUsuario)
+      : item.soloAdmin
+        ? esAdmin
+        : puedeVerModulo(usuario, item.modulo),
   );
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {

@@ -92,18 +92,20 @@ export function rutaOperativaInicial(usuario: Usuario | null): string | null {
 export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
   const paneles: PanelAccesible[] = [];
 
-  // Panel administrativo: exclusivo de los roles con acceso total -- al
-  // inicio de la lista, junto con Run Errands.
-  if (tieneAccesoAdministrativo(usuario?.rol)) {
+  // Panel único SIGCOMPRO: los roles con acceso total entran a la vista
+  // administrativa; el resto, al primer módulo operativo que tenga.
+  const inicioSigcompro = tieneAccesoAdministrativo(usuario?.rol)
+    ? "/admin"
+    : rutaOperativaInicial(usuario);
+  if (inicioSigcompro) {
     paneles.push({
-      key: "administrativo",
-      label: "Panel Administrativo",
-      href: "/admin",
+      key: "operativo",
+      label: "SIGCOMPRO",
+      href: inicioSigcompro,
     });
   }
 
-  // Panel Run Errands (proceso de Carnes, migrado desde SIGROUTE) -- al
-  // inicio, al lado de Administrativo.
+  // Panel Run Errands (proceso de Carnes, migrado desde SIGROUTE).
   const inicioRunErrands = puedeAccederApartado(usuario, APARTADO_RUN_ERRANDS)
     ? RUTA_MODULO.run_errands
     : null;
@@ -112,16 +114,6 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
       key: "run_errands",
       label: "Run Errands",
       href: inicioRunErrands,
-    });
-  }
-
-  // Panel operativo: visible si tiene algún módulo de negocio.
-  const inicioOperativo = rutaOperativaInicial(usuario);
-  if (inicioOperativo) {
-    paneles.push({
-      key: "operativo",
-      label: "Panel Operativo",
-      href: inicioOperativo,
     });
   }
 

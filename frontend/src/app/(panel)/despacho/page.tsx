@@ -24,6 +24,7 @@ import {
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
+import { pesoPedidoKg } from "@/lib/peso";
 import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
@@ -85,14 +86,6 @@ function comprimirImagen(
     };
     reader.readAsDataURL(file);
   });
-}
-
-/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
-function pesoPedidoKg(p: Pedido): number {
-  return (p.carrito ?? []).reduce((s, i) => {
-    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
-    return s + (esKilo ? i.cantidad || 0 : 0);
-  }, 0);
 }
 
 /** Un segmento por cada línea del carrito, sin porcionador ni tiempos (punto de partida). */

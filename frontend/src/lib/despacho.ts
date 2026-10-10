@@ -1,5 +1,6 @@
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 import type { DespachoMeta } from "./pedidos";
+import { pesoPedidoKg } from "./peso";
 
 /**
  * Lógica de tiempos/deadlines de despacho, compartida entre la vista de
@@ -115,17 +116,9 @@ function baseDiaPedido(p: Pedido): Date {
     : new Date(p.fecha);
 }
 
-/** Peso del pedido en kilos (ítems vendidos por KG). */
-function pesoKgPedido(p: Pedido): number {
-  return (p.carrito ?? []).reduce((s, i) => {
-    const esKg = (i.producto?.um ?? "").trim().toUpperCase() === "KG";
-    return s + (esKg ? i.cantidad || 0 : 0);
-  }, 0);
-}
-
 /** ¿El pedido es "pequeño" (≤10 kg)? Su alistado dura solo 40 minutos. */
 export function esPedidoPequeno(p: Pedido): boolean {
-  return pesoKgPedido(p) <= KILOS_PEDIDO_PEQUENO;
+  return pesoPedidoKg(p) <= KILOS_PEDIDO_PEQUENO;
 }
 
 /**

@@ -15,8 +15,8 @@ export class DrivinSyncJob {
 
   constructor(private readonly pedidos: PedidosService) {}
 
-  /** Cada 5 minutos en horario de operación (6am-10pm, lunes a sábado). */
-  @Cron('0 */5 6-22 * * 1-6', {
+  /** Cada minuto en horario de operación (6am-10pm, todos los días). */
+  @Cron('0 * 6-22 * * *', {
     name: 'sincronizar-desasignaciones-drivin',
     timeZone: 'America/Bogota',
   })

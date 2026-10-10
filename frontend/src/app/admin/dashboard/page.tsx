@@ -11,6 +11,7 @@ import {
 } from "@/lib/puntos-venta";
 import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { objetivoDespacho, deadlinePreparacion, msRestantesDespacho, yaDespachado } from "@/lib/despacho";
+import { pesoPedidoKg, pesoItemKg } from "@/lib/peso";
 import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 const cop = (n: number) => "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -19,14 +20,6 @@ const num = (n: number) => (Number(n) || 0).toLocaleString("es-CO");
 function pctOf(value: number, total: number): string {
   if (!total || total <= 0) return "0.0";
   return ((value / total) * 100).toFixed(1);
-}
-
-/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
-function pesoPedidoKg(p: Pedido): number {
-  return (p.carrito ?? []).reduce((s, i) => {
-    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
-    return s + (esKilo ? Number(i.cantidad) || 0 : 0);
-  }, 0);
 }
 
 /** Peso realmente porcionado en kilos (solo ítems con el check "Porcionado": unidades x gramos). */
@@ -1055,10 +1048,9 @@ function métricas(
       const prod = it.producto;
       const nombre = prod?.producto || prod?.referencia || "Producto";
       const precio = Number(prod?.precio) || 0;
-      const esKilo = (prod?.um || "").trim().toUpperCase() === "KG";
       const pe = prodMap.get(nombre) ?? { nombre, unidades: 0, total: 0, kilos: 0 };
       pe.unidades += cant;
-      pe.kilos = (pe.kilos ?? 0) + (esKilo ? cant : 0);
+      pe.kilos = (pe.kilos ?? 0) + pesoItemKg(it);
       pe.total += precio * cant;
       prodMap.set(nombre, pe);
     }

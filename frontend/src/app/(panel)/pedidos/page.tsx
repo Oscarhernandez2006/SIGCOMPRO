@@ -21,6 +21,7 @@ import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
+import { gramosPorUnidad } from "@/lib/peso";
 import CrearClienteModal from "@/components/CrearClienteModal";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
@@ -2625,6 +2626,8 @@ export interface ItemCarrito {
   notas: string;
   /** Preparación excluyente (solo productos por kg, alternativa a Porcionado). */
   preparacion?: "" | "ENTERO" | "RELAJADO" | "PICADO" | "MOLIDA";
+  /** Gramos aproximados por unidad (productos de unidad sin medida en la descripción). */
+  pesoVariable?: number;
 }
 
 function UltimosPedidosModal({
@@ -3239,6 +3242,7 @@ function ConfigProducto({
   const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
+  const [pesoVariable, setPesoVariable] = useState(inicial?.pesoVariable ? String(inicial.pesoVariable) : "");
   // Ítems nuevos ya guardan la preparación en su propio campo (sin tocar las
   // notas); los antiguos aún pueden traerla embebida en el texto ("ENTERO / ...").
   const notasIniciales = inicial?.preparacion
@@ -3277,6 +3281,10 @@ function ConfigProducto({
   const paso = esKilo ? 0.5 : 1;
   const minimo = esKilo ? 0.5 : 1;
   const cant = parseFloat(cantidad.replace(",", ".")) || 0;
+  const gUnidad = esKilo ? null : gramosPorUnidad(producto.producto);
+  // Producto de unidad sin medida en la descripción: se digita el peso aproximado por unidad.
+  const sinMedida = !esKilo && gUnidad === null;
+  const pv = parseFloat(pesoVariable.replace(",", ".")) || 0;
   const g = parseFloat(gramos) || 0;
   const u = parseFloat(unidades) || 0;
   const pesoG = cant * 1000;
@@ -3327,6 +3335,7 @@ function ConfigProducto({
       unidades: puedePorcionar ? u : 0,
       notas: notas.trim(),
       preparacion: preparacionEfectiva,
+      pesoVariable: sinMedida && pv > 0 ? pv : undefined,
     });
   }
 
@@ -3377,8 +3386,42 @@ function ConfigProducto({
                 title="Aumentar la cantidad"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-brown/15 text-lg text-brand-brown hover:bg-brand-cream-soft"
               >+</button>
+              {gUnidad !== null && (
+                <div
+                  className="relative"
+                  title={`Cada unidad equivale a ${gUnidad.toLocaleString("es-CO")} g`}
+                >
+                  <span className="absolute -top-4 left-0 right-0 text-center text-[10px] font-semibold uppercase text-brand-brown/60">Kilos</span>
+                  <span className="flex h-10 w-24 items-center justify-center rounded-xl border border-brand-brown/15 bg-brand-cream-soft/50 text-sm font-bold text-brand-wine">
+                    {Number(((cant * gUnidad) / 1000).toFixed(3)).toLocaleString("es-CO")}
+                  </span>
+                </div>
+              )}
+              {sinMedida && (
+                <div className="relative">
+                  <label className="absolute -top-4 left-0 right-0 whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Peso variable (g)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={pesoVariable}
+                    placeholder="0"
+                    title="Peso aproximado de UNA unidad, en gramos"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(",", ".");
+                      if (/^\d*\.?\d*$/.test(v)) setPesoVariable(v);
+                    }}
+                    className="h-10 w-24 rounded-xl border border-brand-brown/15 text-center text-sm font-semibold outline-none focus:border-brand-amber"
+                  />
+                </div>
+              )}
               <span className="ml-auto text-lg font-bold text-brand-wine">{formatoCOP(subtotal)}</span>
             </div>
+            {sinMedida && (
+              <div className="mt-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 px-2 py-1.5 text-center">
+                <p className="text-[10px] font-semibold uppercase text-brand-brown/60">Kilos</p>
+                <p className="text-sm font-bold text-brand-wine">{Number(((cant * pv) / 1000).toFixed(3)).toLocaleString("es-CO")}</p>
+              </div>
+            )}
           </div>
 
           {/* Empaque al vacío (solo productos por kg) */}
