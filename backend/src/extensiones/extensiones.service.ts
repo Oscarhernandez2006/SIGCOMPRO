@@ -75,6 +75,16 @@ const ESTADO_REPLICA: Record<string, string> = {
 
 const norm = (s: unknown) => String(s ?? '').trim().toLowerCase();
 
+/** Nombre comparable: sin tildes, minúsculas y espacios simples. */
+export function normalizarNombre(s: unknown): string {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Fecha (YYYY-MM-DD) de hoy en Bogotá. */
 function hoyBogota(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -164,6 +174,17 @@ export class ExtensionesService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    // Cédula de cada domiciliario, casada por nombre normalizado (sin tildes ni mayúsculas).
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS domiciliarios_cedula (
+        cedula text PRIMARY KEY,
+        nombre text NOT NULL,
+        nombre_norm text NOT NULL
+      )
+    `);
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_domiciliarios_cedula_nombre ON domiciliarios_cedula (nombre_norm)`,
+    );
     // Si el servidor estaba apagado al cambiar de día, cierra lo pendiente.
     this.cerrarDiasAnteriores().catch((e) =>
       this.logger.warn(`No se pudieron cerrar extensiones: ${String(e)}`),
@@ -454,6 +475,10 @@ export class ExtensionesService implements OnModuleInit {
       throw new BadRequestException('Rango inválido: "desde" debe ser <= "hasta" y máximo 93 días.');
     }
     const lista = await this.listarAdmin({ desde, hasta, puntoId: f.puntoId, estado: 'aprobada,cerrada' });
+    const cedulas = await this.pool.query<{ cedula: string; nombre_norm: string }>(
+      `SELECT cedula, nombre_norm FROM domiciliarios_cedula`,
+    );
+    const cedulaPorNombre = new Map(cedulas.rows.map((c) => [c.nombre_norm, c.cedula]));
     const extensiones = await Promise.all(
       lista.map(async (s) => {
         const pedidos = await this.pedidosDe(s);
@@ -461,8 +486,9 @@ export class ExtensionesService implements OnModuleInit {
           id: s.id,
           dia: s.dia,
           punto_id: s.punto_id,
-          punto: s.punto_nombre,
+          punto_venta: s.punto_nombre,
           domiciliario: s.domiciliario,
+          domiciliario_cedula: cedulaPorNombre.get(normalizarNombre(s.domiciliario)) ?? null,
           domiciliario_codigo: s.domiciliario_codigo || null,
           motivo: s.motivo,
           estado: s.estado,
@@ -471,7 +497,7 @@ export class ExtensionesService implements OnModuleInit {
           aprobado_por: s.resuelto_por_nombre,
           aprobado_en: s.resuelto_en,
           cerrado_en: s.cerrado_en,
-          valor: Number(s.valor) || 0,
+          valor_dia_extendido: Number(s.valor) || 0,
           total_pedidos: pedidos.length,
           pedidos: pedidos.map((p) => ({
             consecutivo: p.consecutivo,
@@ -489,7 +515,7 @@ export class ExtensionesService implements OnModuleInit {
       desde,
       hasta,
       total_extensiones: extensiones.length,
-      total_a_pagar: extensiones.reduce((acc, e) => acc + e.valor, 0),
+      total_a_pagar: extensiones.reduce((acc, e) => acc + e.valor_dia_extendido, 0),
       extensiones,
     };
   }
