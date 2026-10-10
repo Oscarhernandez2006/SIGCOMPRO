@@ -47,7 +47,18 @@ const GRID: Def[] = [
   { key: "transito", label: "En tránsito", sub: "En reparto (Drivin)", icon: I.camion, chip: "bg-sky-100 text-sky-600" },
 ];
 
-function Card({ def, cantidad, kg, texto }: { def: Def; cantidad: number; kg?: number; texto?: string }) {
+function Card({
+  def,
+  cantidad,
+  kg,
+  totalDia,
+}: {
+  def: Def;
+  cantidad: number;
+  kg?: number;
+  /** Total de pedidos del día (para Entregados: casilla "entregados" + casilla "total"). */
+  totalDia?: number;
+}) {
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm ${
@@ -64,20 +75,31 @@ function Card({ def, cantidad, kg, texto }: { def: Def; cantidad: number; kg?: n
         <p className="text-[10px] text-brand-black">{def.sub}</p>
       </div>
       {kg !== undefined ? (
-        <div className="ml-auto flex items-end gap-4">
-          <div className="text-center">
+        <div className="ml-auto flex items-stretch gap-2">
+          <div className="min-w-16 rounded-lg border border-brand-wine/15 bg-brand-wine/5 px-3 py-1.5 text-center">
             <span className="block text-2xl font-extrabold leading-none text-brand-black">{cantidad}</span>
             <span className="text-[10px] font-semibold text-brand-wine">pedidos</span>
           </div>
-          <div className="text-center">
+          <div className="min-w-16 rounded-lg border border-brand-wine/15 bg-brand-wine/5 px-3 py-1.5 text-center">
             <span className="block text-2xl font-extrabold leading-none text-brand-black">
               {Number(kg.toFixed(2)).toLocaleString("es-CO")}
             </span>
             <span className="text-[10px] font-semibold text-brand-wine">kilos</span>
           </div>
         </div>
+      ) : totalDia !== undefined ? (
+        <div className="ml-auto flex items-stretch gap-2">
+          <div className="min-w-16 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-center">
+            <span className="block text-2xl font-extrabold leading-none text-brand-black">{cantidad}</span>
+            <span className="text-[10px] font-semibold text-green-700">entregados</span>
+          </div>
+          <div className="min-w-16 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-center">
+            <span className="block text-2xl font-extrabold leading-none text-brand-black">{totalDia}</span>
+            <span className="text-[10px] font-semibold text-green-700">total</span>
+          </div>
+        </div>
       ) : (
-        <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">{texto ?? cantidad}</span>
+        <span className="ml-auto text-2xl font-extrabold leading-none text-brand-black">{cantidad}</span>
       )}
     </div>
   );
@@ -87,7 +109,14 @@ function Card({ def, cantidad, kg, texto }: { def: Def; cantidad: number; kg?: n
 const SUMAN_TOTAL: ClaveCard[] = ["pendientes", "atrasados", "retenido", "produccion", "alistados", "facturados"];
 
 /** Cards de Despacho (solo lectura) a partir de la foto guardada en la solicitud. */
-export default function CardsDespachoFoto({ resumen }: { resumen: ResumenDespacho }) {
+export default function CardsDespachoFoto({
+  resumen,
+  parte,
+}: {
+  resumen: ResumenDespacho;
+  /** "arriba" = Total y Entregados; "abajo" = el resto de cards. */
+  parte: "arriba" | "abajo";
+}) {
   const base = (k: ClaveCard) => resumen[k] ?? { cantidad: 0, kg: 0 };
   const total = SUMAN_TOTAL.reduce(
     (acc, k) => ({ cantidad: acc.cantidad + base(k).cantidad, kg: acc.kg + base(k).kg }),
@@ -96,24 +125,26 @@ export default function CardsDespachoFoto({ resumen }: { resumen: ResumenDespach
   const v = (k: ClaveCard) => (k === "total" ? total : base(k));
   // Fotos antiguas no tienen "todos": su "total" era el de todos los pedidos del día.
   const todos = resumen.todos ?? resumen.total ?? { cantidad: 0, kg: 0 };
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+  if (parte === "arriba") {
+    return (
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {TOP.map((d) => (
           <Card
             key={d.key}
             def={d}
             cantidad={v(d.key).cantidad}
             kg={d.key === "total" ? v(d.key).kg : undefined}
-            texto={d.key === "entregados" ? `${v(d.key).cantidad}/${todos.cantidad}` : undefined}
+            totalDia={d.key === "entregados" ? todos.cantidad : undefined}
           />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {GRID.map((d) => (
-          <Card key={d.key} def={d} cantidad={v(d.key).cantidad} />
-        ))}
-      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      {GRID.map((d) => (
+        <Card key={d.key} def={d} cantidad={v(d.key).cantidad} />
+      ))}
     </div>
   );
 }

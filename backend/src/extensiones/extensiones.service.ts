@@ -12,6 +12,7 @@ import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 import { tieneAccesoTotal } from '../users/permisos.catalog';
+import { ItemConPeso, pesoCarritoKg } from '../common/peso';
 
 export type EstadoSolicitud =
   | 'pendiente'
@@ -49,6 +50,8 @@ export interface PedidoExtension {
   cliente_nombre: string | null;
   cliente_nit: string | null;
   estado_final: string | null;
+  /** Kilos del pedido (null en réplicas: el peso es del pedido completo). */
+  kg: number | null;
   asignado_en: string;
 }
 
@@ -85,7 +88,11 @@ function hoyBogota(): string {
 const COLUMNAS = `s.id, s.punto_id, s.punto_nombre, to_char(s.dia, 'YYYY-MM-DD') AS dia,
   s.domiciliario, s.domiciliario_codigo, s.motivo, s.estado,
   s.solicitado_por_nombre, s.solicitado_en, s.resuelto_por_nombre, s.resuelto_en,
-  s.motivo_rechazo, s.valor, s.cerrado_en, s.snapshot,
+  s.motivo_rechazo,
+  CASE WHEN s.estado = 'aprobada'
+       THEN COALESCE((SELECT c.valor FROM extensiones_config c WHERE c.punto_id = s.punto_id), s.valor, 0)
+       ELSE s.valor END AS valor,
+  s.cerrado_en, s.snapshot,
   (SELECT count(*)::int FROM extensiones_pedidos ep WHERE ep.solicitud_id = s.id) AS pedidos`;
 
 /**
@@ -146,6 +153,9 @@ export class ExtensionesService implements OnModuleInit {
         UNIQUE (solicitud_id, pedido_id, replica)
       )
     `);
+    await this.pool.query(
+      `ALTER TABLE extensiones_pedidos ADD COLUMN IF NOT EXISTS kg numeric(12,2)`,
+    );
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS extensiones_config (
         punto_id text PRIMARY KEY,
@@ -315,6 +325,27 @@ export class ExtensionesService implements OnModuleInit {
     await this.pool.query(`DELETE FROM extensiones_pedidos WHERE solicitud_id = $1`, [id]);
   }
 
+  /** Pendientes de hoy + la más reciente (para la burbuja y el aviso del menú). */
+  async pendientes(): Promise<{
+    pendientes: number;
+    ultimo: { id: string; domiciliario: string; punto_nombre: string | null } | null;
+  }> {
+    const hoy = hoyBogota();
+    const r = await this.pool.query<{ id: string; domiciliario: string; punto_nombre: string | null; total: number }>(
+      `SELECT id::text, domiciliario, punto_nombre, count(*) OVER ()::int AS total
+       FROM extensiones_solicitudes
+       WHERE estado = 'pendiente' AND dia = $1::date
+       ORDER BY id DESC
+       LIMIT 1`,
+      [hoy],
+    );
+    const fila = r.rows[0];
+    return {
+      pendientes: fila?.total ?? 0,
+      ultimo: fila ? { id: fila.id, domiciliario: fila.domiciliario, punto_nombre: fila.punto_nombre } : null,
+    };
+  }
+
   /** Listado administrativo con filtros (fechas YYYY-MM-DD inclusivas). */
   async listarAdmin(f: { desde?: string; hasta?: string; puntoId?: string; estado?: string }) {
     const cond: string[] = [];
@@ -392,18 +423,75 @@ export class ExtensionesService implements OnModuleInit {
   async pedidos(user: JwtPayload, id: string): Promise<PedidoExtension[]> {
     const s = await this.obtener(id);
     await this.verificarPunto(user, s.punto_id);
+    return this.pedidosDe(s);
+  }
+
+  private async pedidosDe(s: SolicitudExtension): Promise<PedidoExtension[]> {
     if (s.estado === 'cerrada') {
       const r = await this.pool.query<PedidoExtension>(
         `SELECT pedido_id, replica, consecutivo, comanda, cliente_nombre, cliente_nit,
-                estado_final, asignado_en
+                estado_final, kg::float AS kg, asignado_en
          FROM extensiones_pedidos WHERE solicitud_id = $1
          ORDER BY asignado_en`,
-        [id],
+        [s.id],
       );
       return r.rows;
     }
     const filas = await this.filasVivas(s);
     return filas.filter((f) => !f.reasignado).map((f) => f.fila);
+  }
+
+  /**
+   * Reporte para la API externa: extensiones aprobadas/cerradas del rango con
+   * su valor y el detalle de sus pedidos. Rango máximo 93 días.
+   */
+  async reporteExterno(f: { desde?: string; hasta?: string; puntoId?: string }) {
+    const fecha = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const hasta = fecha(f.hasta) ? f.hasta! : hoyBogota();
+    const desde = fecha(f.desde) ? f.desde! : hasta;
+    const dias = (Date.parse(hasta) - Date.parse(desde)) / 86_400_000;
+    if (dias < 0 || dias > 93) {
+      throw new BadRequestException('Rango inválido: "desde" debe ser <= "hasta" y máximo 93 días.');
+    }
+    const lista = await this.listarAdmin({ desde, hasta, puntoId: f.puntoId, estado: 'aprobada,cerrada' });
+    const extensiones = await Promise.all(
+      lista.map(async (s) => {
+        const pedidos = await this.pedidosDe(s);
+        return {
+          id: s.id,
+          dia: s.dia,
+          punto_id: s.punto_id,
+          punto: s.punto_nombre,
+          domiciliario: s.domiciliario,
+          domiciliario_codigo: s.domiciliario_codigo || null,
+          motivo: s.motivo,
+          estado: s.estado,
+          solicitado_por: s.solicitado_por_nombre,
+          solicitado_en: s.solicitado_en,
+          aprobado_por: s.resuelto_por_nombre,
+          aprobado_en: s.resuelto_en,
+          cerrado_en: s.cerrado_en,
+          valor: Number(s.valor) || 0,
+          total_pedidos: pedidos.length,
+          pedidos: pedidos.map((p) => ({
+            consecutivo: p.consecutivo,
+            comanda: p.comanda,
+            cliente: p.cliente_nombre,
+            cliente_nit: p.cliente_nit,
+            kilos: p.kg,
+            estado: p.estado_final,
+            asignado_en: p.asignado_en,
+          })),
+        };
+      }),
+    );
+    return {
+      desde,
+      hasta,
+      total_extensiones: extensiones.length,
+      total_a_pagar: extensiones.reduce((acc, e) => acc + e.valor, 0),
+      extensiones,
+    };
   }
 
   /** Filas de la extensión con estado/cliente actuales y si ya pasó a otro domiciliario. */
@@ -420,13 +508,15 @@ export class ExtensionesService implements OnModuleInit {
       anulado: boolean | null;
       estado_pedido: string | null;
       meta: MetaAsignacion | null;
+      carrito: ItemConPeso[] | null;
     }>(
       `SELECT ep.pedido_id, ep.replica, ep.asignado_en,
               COALESCE((p.data->>'consecutivo')::int, ep.consecutivo) AS consecutivo,
               COALESCE(p.data->>'comanda', ep.comanda) AS comanda,
               COALESCE(p.data->'cliente'->>'nombre', ep.cliente_nombre) AS cliente_nombre,
               COALESCE(p.data->'cliente'->>'nit_cedula', ep.cliente_nit) AS cliente_nit,
-              ep.estado_final, p.anulado, p.data->>'estado' AS estado_pedido, p.meta
+              ep.estado_final, p.anulado, p.data->>'estado' AS estado_pedido, p.meta,
+              p.data->'carrito' AS carrito
        FROM extensiones_pedidos ep
        LEFT JOIN pedidos p ON p.id = ep.pedido_id
        WHERE ep.solicitud_id = $1
@@ -453,6 +543,7 @@ export class ExtensionesService implements OnModuleInit {
           cliente_nombre: row.cliente_nombre,
           cliente_nit: row.cliente_nit,
           estado_final: estado,
+          kg: row.replica > 0 || !row.carrito ? null : Number(pesoCarritoKg(row.carrito).toFixed(2)),
           asignado_en: row.asignado_en,
         } as PedidoExtension,
       };
@@ -586,14 +677,17 @@ export class ExtensionesService implements OnModuleInit {
           }
           await client.query(
             `UPDATE extensiones_pedidos
-               SET consecutivo = $4, comanda = $5, cliente_nombre = $6, cliente_nit = $7, estado_final = $8
+               SET consecutivo = $4, comanda = $5, cliente_nombre = $6, cliente_nit = $7, estado_final = $8, kg = $9
              WHERE solicitud_id = $1 AND pedido_id = $2 AND replica = $3`,
             [s.id, fila.pedido_id, fila.replica, fila.consecutivo, fila.comanda,
-             fila.cliente_nombre, fila.cliente_nit, fila.estado_final],
+             fila.cliente_nombre, fila.cliente_nit, fila.estado_final, fila.kg],
           );
         }
         await client.query(
-          `UPDATE extensiones_solicitudes SET estado = 'cerrada', cerrado_en = now() WHERE id = $1`,
+          `UPDATE extensiones_solicitudes s
+             SET estado = 'cerrada', cerrado_en = now(),
+                 valor = COALESCE((SELECT c.valor FROM extensiones_config c WHERE c.punto_id = s.punto_id), s.valor, 0)
+           WHERE s.id = $1`,
           [s.id],
         );
         await client.query('COMMIT');

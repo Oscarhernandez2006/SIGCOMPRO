@@ -15,7 +15,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -415,9 +415,25 @@ export default function PedidosPage() {
     setMotivoModal(null);
   };
 
-  // Reimprime/descarga el Excel de despacho del pedido.
-  const reimprimirExcel = (p: Pedido) => {
-    descargarExcelDespacho(p.id).catch(() => alert("No se pudo generar el Excel de despacho."));
+  // Reenvía a Drivin un pedido facturado que no subió (p. ej. el cliente no tenía barrio).
+  const [reenvio, setReenvio] = useState<{ estado: "enviando" | "ok" | "error"; comanda: string; msg?: string } | null>(null);
+  const reenviarDrivin = async (p: Pedido) => {
+    if (reenvio?.estado === "enviando") return;
+    if (
+      meta[p.id]?.drivinEnviado &&
+      !confirm(`El pedido #${p.comanda} ya se subió a Drivin. ¿Reenviarlo de todas formas?`)
+    ) {
+      return;
+    }
+    setReenvio({ estado: "enviando", comanda: p.comanda });
+    try {
+      await enviarADrivinApi(p.id);
+      await actualizarMetaApi(p.id, { drivinEnviado: true }).catch(() => { /* ignore */ });
+      setMeta((prev) => ({ ...prev, [p.id]: { ...prev[p.id], drivinEnviado: true } }));
+      setReenvio({ estado: "ok", comanda: p.comanda });
+    } catch (e) {
+      setReenvio({ estado: "error", comanda: p.comanda, msg: e instanceof Error ? e.message : "" });
+    }
   };
 
   // Sincroniza la lista de precios desde la API externa (permiso pedidos.sincronizar).
@@ -701,14 +717,22 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
                             </svg>
                           </button>
-                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver y Reimprimir. */}
+                          {p.punto?.drivin !== false && !yaDespachado(p.estado) && (
+                            <button
+                              onClick={() => reenviarDrivin(p)}
+                              disabled={reenvio?.estado === "enviando"}
+                              aria-label="Reenvío a Drivin"
+                              title="Reenvío: volver a subir el pedido a Drivin (después de corregir los datos del cliente, p. ej. el barrio)"
+                              className="rounded-lg border border-sky-200 p-1.5 text-sky-600 transition hover:bg-sky-50 disabled:opacity-50"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                              </svg>
+                            </button>
+                          )}
+                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver, Reimprimir y Reenvío. */}
                           {!yaDespachado(p.estado) && (
                           <>
-                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} aria-label="Descargar Excel" title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
-                            </svg>
-                          </button>
                           <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} aria-label="Editar pedido" title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 p-1.5 text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
@@ -777,6 +801,38 @@ export default function PedidosPage() {
               ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {reenvio && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            {reenvio.estado === "enviando" ? (
+              <>
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
+                <p className="mt-3 text-sm font-semibold text-brand-black">Reenviando el pedido #{reenvio.comanda} a Drivin…</p>
+              </>
+            ) : reenvio.estado === "ok" ? (
+              <>
+                <p className="font-serif text-lg font-bold text-emerald-700">Reenviado con éxito</p>
+                <p className="mt-1 text-sm text-brand-black">El pedido #{reenvio.comanda} se subió a Drivin.</p>
+              </>
+            ) : (
+              <>
+                <p className="font-serif text-lg font-bold text-red-600">Hubo un error al reenviar el pedido</p>
+                <p className="mt-1 text-sm text-brand-black">Pedido #{reenvio.comanda}</p>
+                {reenvio.msg && <p className="mt-2 break-words text-xs text-brand-brown/70">{reenvio.msg}</p>}
+              </>
+            )}
+            {reenvio.estado !== "enviando" && (
+              <button
+                onClick={() => setReenvio(null)}
+                className="mt-5 w-full rounded-xl bg-brand-wine py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Aceptar
+              </button>
+            )}
           </div>
         </div>
       )}

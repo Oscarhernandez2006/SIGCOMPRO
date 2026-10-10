@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   getToken,
   getUsuario,
@@ -15,6 +15,8 @@ import {
   type Usuario,
 } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
+import { resumenPendientesExtension } from "@/lib/extensiones";
+import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
 
@@ -28,6 +30,8 @@ interface NavItem {
   soloDashboard?: boolean;
   /** Sub-opciones desplegables (menú anidado). Si existen, el ítem es un grupo. */
   children?: NavItem[];
+  /** Muestra la burbuja con las solicitudes de extensión pendientes. */
+  burbujaExtensiones?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -98,22 +102,23 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Aprobación de extensiones",
-    href: "/admin/solicitudes-extension",
-    soloDashboard: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-      </svg>
-    ),
-  },
-  {
     label: "Solicitud de extensión",
     href: "/admin/extensiones",
     soloDashboard: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Aprobación de extensiones",
+    href: "/admin/solicitudes-extension",
+    soloDashboard: true,
+    burbujaExtensiones: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
       </svg>
     ),
   },
@@ -282,6 +287,46 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     void refrescarUsuario();
   }, [router]);
 
+  // Solicitudes de extensión pendientes: burbuja en el menú y aviso (sonido +
+  // notificación del sistema) cuando llega una nueva.
+  const [pendientesExt, setPendientesExt] = useState(0);
+  const maxIdVistoRef = useRef<number | null>(null);
+  const veExtensiones = ready && puedeVerDashboard(usuario?.rol);
+  useEffect(() => {
+    if (!veExtensiones) return;
+    let activo = true;
+    const revisar = () => {
+      resumenPendientesExtension()
+        .then((r) => {
+          if (!activo) return;
+          setPendientesExt(r.pendientes);
+          const id = r.ultimo ? Number(r.ultimo.id) : 0;
+          const previo = maxIdVistoRef.current;
+          if (previo !== null && id > previo && r.ultimo) {
+            sonidoNuevaExtension();
+            notificarSistema(
+              "Nueva solicitud de extensión",
+              `${r.ultimo.domiciliario} · ${r.ultimo.punto_nombre ?? ""}`.trim(),
+              "/admin/solicitudes-extension",
+              `extension-${r.ultimo.id}`,
+            );
+          }
+          maxIdVistoRef.current = Math.max(previo ?? 0, id);
+        })
+        .catch(() => {});
+    };
+    revisar();
+    const intervalo = setInterval(revisar, 20000);
+    // El permiso de notificaciones se pide tras una interacción (exigido por los navegadores).
+    const pedir = () => pedirPermisoNotificaciones();
+    document.addEventListener("click", pedir, { once: true });
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      document.removeEventListener("click", pedir);
+    };
+  }, [veExtensiones]);
+
   function cerrarSesion() {
     limpiarSesion();
     router.replace("/");
@@ -387,7 +432,19 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   : "text-brand-cream/80 hover:bg-brand-cream/10 hover:text-brand-cream"
               }`}
             >
-              {item.icon}
+              {item.burbujaExtensiones && pendientesExt > 0 ? (
+                <span className="relative shrink-0">
+                  {item.icon}
+                  <span
+                    title={`${pendientesExt} solicitud(es) pendiente(s)`}
+                    className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-brand-wine-dark"
+                  >
+                    {pendientesExt}
+                  </span>
+                </span>
+              ) : (
+                item.icon
+              )}
               <span className="whitespace-nowrap">{item.label}</span>
             </Link>
           );

@@ -38,6 +38,8 @@ export interface PedidoExtension {
   cliente_nombre: string | null;
   cliente_nit: string | null;
   estado_final: string | null;
+  /** Kilos del pedido (null en réplicas). */
+  kg: number | null;
   asignado_en: string;
 }
 
@@ -125,4 +127,13 @@ export function guardarValorExtension(puntoId: string, valor: number): Promise<{
 /** ¿El rol puede solicitar extensiones? (rol Despacho). */
 export function esRolDespacho(rol?: string | null): boolean {
   return (rol ?? "").trim().toLowerCase() === "despacho";
+}
+
+export interface ResumenPendientesExtension {
+  pendientes: number;
+  ultimo: { id: string; domiciliario: string; punto_nombre: string | null } | null;
+}
+
+export function resumenPendientesExtension(): Promise<ResumenPendientesExtension> {
+  return apiFetch("/extensiones/pendientes/resumen");
 }

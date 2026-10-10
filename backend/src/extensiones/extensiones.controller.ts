@@ -52,6 +52,13 @@ export class ExtensionesController {
     return this.ext.cancelar(req.user!, id);
   }
 
+  /** Conteo de pendientes de hoy (burbuja y notificación del menú administrativo). */
+  @Get('pendientes/resumen')
+  @Roles('administrador app', 'desarrollador')
+  pendientes() {
+    return this.ext.pendientes();
+  }
+
   @Get(':id/pedidos')
   @Roles('despacho', 'administrador app', 'desarrollador')
   pedidos(@Req() req: ReqUsuario, @Param('id') id: string) {

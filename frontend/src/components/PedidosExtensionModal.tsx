@@ -51,23 +51,25 @@ export default function PedidosExtensionModal({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-brand-brown/60">
-                  <th className="pb-2">Consecutivo</th>
                   <th className="pb-2">Comanda</th>
                   <th className="pb-2">Cliente</th>
-                  <th className="pb-2">Estado</th>
+                  <th className="pb-2 text-right">Kilos</th>
+                  <th className="pb-2 pl-4">Estado</th>
                   <th className="pb-2">Asignado</th>
                 </tr>
               </thead>
               <tbody>
                 {pedidos.map((p) => (
                   <tr key={`${p.pedido_id}-${p.replica}`} className="border-t border-brand-brown/10">
-                    <td className="py-2 font-semibold">{p.consecutivo ?? "—"}</td>
-                    <td className="py-2">{p.comanda ?? "—"}</td>
+                    <td className="py-2 font-semibold">{p.comanda ?? "—"}</td>
                     <td className="py-2">
                       {p.cliente_nombre ?? "—"}
                       {p.cliente_nit && <span className="block text-[11px] text-brand-brown/60">{p.cliente_nit}</span>}
                     </td>
-                    <td className="py-2">{p.estado_final ?? "—"}</td>
+                    <td className="py-2 text-right font-semibold whitespace-nowrap">
+                      {p.kg != null ? `${p.kg.toLocaleString("es-CO")} kg` : "—"}
+                    </td>
+                    <td className="py-2 pl-4">{p.estado_final ?? "—"}</td>
                     <td className="py-2 whitespace-nowrap">{fmtHora(p.asignado_en)}</td>
                   </tr>
                 ))}

@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { PG_POOL } from '../database/database.module';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { ExtensionesService } from '../extensiones/extensiones.service';
+import { pesoCarritoKg } from '../common/peso';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
@@ -70,28 +71,6 @@ type PedidoData = Record<string, unknown> & {
     producto?: { um?: string; producto?: string };
   }>;
 };
-
-const GRAMOS_POR_UNIDAD_MEDIDA: Record<string, number> = {
-  ML: 1, CC: 1,
-  L: 1000, LT: 1000, LTS: 1000, LTR: 1000, LITRO: 1000, LITROS: 1000,
-  G: 1, GR: 1, GRS: 1, GRAMO: 1, GRAMOS: 1,
-  KG: 1000, KGS: 1000, KILO: 1000, KILOS: 1000,
-  LB: 500, LBS: 500, LIBRA: 500, LIBRAS: 500,
-};
-const RE_MEDIDA =
-  /(?:(\d+)\s*[X×]\s*)?(\d+(?:[.,]\d+)?)\s*(ML|CC|LITROS?|LTS?|LTR|L|GRAMOS?|GRS?|G|KILOS?|KGS?|LIBRAS?|LBS?)(?![A-Z])/g;
-
-/** Gramos de UNA unidad según la descripción ("AGUA X 600 ML" -> 600). Igual que frontend/src/lib/peso.ts. */
-function gramosPorUnidad(descripcion?: string | null): number | null {
-  const matches = [...(descripcion ?? '').toUpperCase().matchAll(RE_MEDIDA)];
-  const ultimo = matches[matches.length - 1];
-  if (!ultimo) return null;
-  const pack = ultimo[1] ? Number(ultimo[1]) : 1;
-  const valor = Number(ultimo[2].replace(',', '.'));
-  const factor = GRAMOS_POR_UNIDAD_MEDIDA[ultimo[3]];
-  if (!factor || !(valor > 0) || !(pack > 0)) return null;
-  return pack * valor * factor;
-}
 
 /** Metadata de despacho asociada a un pedido. */
 type DespachoMeta = Record<string, unknown>;
@@ -1355,6 +1334,9 @@ export class PedidosService implements OnModuleInit {
     if (!pedido) {
       throw new NotFoundException('Pedido no encontrado');
     }
+    // Usa los datos ACTUALES del cliente (barrio, dirección...), para que un
+    // reenvío tras corregir el cliente suba la información corregida.
+    await this.refrescarClientes([pedido]);
 
     const cliente = pedido.cliente ?? {};
     const punto = pedido.punto ?? {};
@@ -1375,14 +1357,7 @@ export class PedidosService implements OnModuleInit {
     const proveedor = `PDV ${localidad}`.trim();
 
     // Kilos consolidados: ítems por KG + ítems de unidad con medida en la descripción.
-    const kilos = (pedido.carrito ?? []).reduce((s, i) => {
-      const cant = Number(i.cantidad) || 0;
-      const esKilo = (i.producto?.um ?? '').trim().toUpperCase() === 'KG';
-      if (esKilo) return s + cant;
-      const g =
-        gramosPorUnidad(i.producto?.producto) ?? (Number(i.pesoVariable) || 0);
-      return s + (g ? (cant * g) / 1000 : 0);
-    }, 0);
+    const kilos = pesoCarritoKg(pedido.carrito);
 
     // Fechas y ventanas (zona horaria America/Bogota).
     // Para una RÉPLICA la fecha de entrega es HOY (la réplica se despacha el

@@ -184,6 +184,7 @@ function Solicitudes({ puntos }: { puntos: PuntoVenta[] }) {
                 <th className="px-3 py-2">Motivo</th>
                 <th className="px-3 py-2">Solicitó</th>
                 <th className="px-3 py-2">Estado</th>
+                <th className="px-3 py-2">Aprobó / Rechazó</th>
                 <th className="px-3 py-2 text-center">Trazabilidad</th>
                 <th className="px-3 py-2 text-right">Acciones</th>
               </tr>
@@ -204,6 +205,18 @@ function Solicitudes({ puntos }: { puntos: PuntoVenta[] }) {
                       {ETIQUETA_ESTADO[s.estado]}
                     </span>
                     {s.motivo_rechazo && <span className="mt-1 block text-[11px] text-red-600">{s.motivo_rechazo}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {s.resuelto_por_nombre ? (
+                      <>
+                        {s.resuelto_por_nombre}
+                        {s.resuelto_en && (
+                          <span className="block text-[11px] text-brand-brown/60">{fmtHora(s.resuelto_en)}</span>
+                        )}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <button
@@ -279,7 +292,7 @@ function TrazabilidadModal({
     s.estado === "rechazada" ? "Rechazó" : s.estado === "cancelada" ? "Cancelada" : "Aprobó";
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/40 p-4">
-      <div className="flex max-h-[88vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-brand-brown/10 px-5 py-4">
           <div>
             <h3 className="font-serif text-lg font-bold text-brand-wine">Trazabilidad de la solicitud</h3>
@@ -294,6 +307,9 @@ function TrazabilidadModal({
           </button>
         </div>
         <div className="space-y-4 overflow-y-auto px-5 py-4 text-sm">
+        <div className="flex flex-col gap-5 md:flex-row">
+          <div className="md:w-72 md:shrink-0 md:border-r md:border-brand-brown/10 md:pr-5">
+            <h4 className="mb-2 font-semibold text-brand-black">Trazabilidad</h4>
           <ol className="space-y-2 border-l-2 border-brand-brown/15 pl-4">
             <li>
               <span className="font-semibold">Solicitada</span> por {s.solicitado_por_nombre ?? "—"} a las{" "}
@@ -313,17 +329,25 @@ function TrazabilidadModal({
               </li>
             )}
           </ol>
+          </div>
 
-          <div>
+          <div className="min-w-0 flex-1">
             <h4 className="mb-2 font-semibold text-brand-black">
               Estado del punto al momento de solicitar
             </h4>
             {!s.snapshot ? (
               <p className="text-brand-brown/60">Esta solicitud no tiene el registro del estado del punto.</p>
             ) : (
-              <CardsDespachoFoto resumen={s.snapshot} />
+              <CardsDespachoFoto resumen={s.snapshot} parte="arriba" />
             )}
           </div>
+        </div>
+        {s.snapshot && (
+          <>
+            <hr className="border-brand-brown/15" />
+            <CardsDespachoFoto resumen={s.snapshot} parte="abajo" />
+          </>
+        )}
         </div>
       </div>
     </div>
@@ -452,6 +476,7 @@ function Reporte({ puntos }: { puntos: PuntoVenta[] }) {
             Comanda: p.comanda ?? "",
             Cliente: p.cliente_nombre ?? "",
             "NIT/Cédula": p.cliente_nit ?? "",
+            Kilos: p.kg ?? "",
             "Estado final": p.estado_final ?? "",
           })),
         ),
@@ -582,7 +607,7 @@ function Valores() {
     setGuardando(puntoId);
     try {
       await guardarValorExtension(puntoId, v);
-      setMensaje("Valor guardado. Aplica a las extensiones que se aprueben desde ahora.");
+      setMensaje("Valor guardado. Aplica a las extensiones aprobadas que aún no se han cerrado; al terminar el día queda fijo.");
     } catch (e) {
       setMensaje(e instanceof Error ? e.message : "No se pudo guardar");
     } finally {

@@ -100,7 +100,7 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
   if (inicioSigcompro) {
     paneles.push({
       key: "operativo",
-      label: "SIGCOMPRO",
+      label: "Sigcompro",
       href: inicioSigcompro,
     });
   }
