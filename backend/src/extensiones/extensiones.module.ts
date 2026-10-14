@@ -5,9 +5,11 @@ import { ExtensionesService } from './extensiones.service';
 import { ExtensionesController } from './extensiones.controller';
 import { ExtensionesExternoController } from './extensiones-externo.controller';
 import { ExtensionesApiKeyGuard } from './extensiones-api-key.guard';
+import { ConfiguracionModule } from '../configuracion/configuracion.module';
 
 @Module({
   imports: [
+    ConfiguracionModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -3298,7 +3298,10 @@ function ConfigProducto({
   const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
-  const [pesoVariable, setPesoVariable] = useState(inicial?.pesoVariable ? String(inicial.pesoVariable) : "");
+  // Se digita en KILOS, pero se guarda en gramos (`pesoVariable`), que es como lo lee el resto del sistema.
+  const [pesoVariable, setPesoVariable] = useState(
+    inicial?.pesoVariable ? String(Number((inicial.pesoVariable / 1000).toFixed(3))) : "",
+  );
   // Ítems nuevos ya guardan la preparación en su propio campo (sin tocar las
   // notas); los antiguos aún pueden traerla embebida en el texto ("ENTERO / ...").
   const notasIniciales = inicial?.preparacion
@@ -3340,7 +3343,7 @@ function ConfigProducto({
   const gUnidad = esKilo ? null : gramosPorUnidad(producto.producto);
   // Producto de unidad sin medida en la descripción: se digita el peso aproximado por unidad.
   const sinMedida = !esKilo && gUnidad === null;
-  const pv = parseFloat(pesoVariable.replace(",", ".")) || 0;
+  const pv = Math.round((parseFloat(pesoVariable.replace(",", ".")) || 0) * 1000);
   const g = parseFloat(gramos) || 0;
   const u = parseFloat(unidades) || 0;
   const pesoG = cant * 1000;
@@ -3455,16 +3458,16 @@ function ConfigProducto({
               )}
               {sinMedida && (
                 <div className="relative">
-                  <label className="absolute -top-4 left-0 right-0 whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Peso variable (g)</label>
+                  <label className="absolute -top-4 left-0 right-0                   whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Peso variable (kg)</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={pesoVariable}
-                    placeholder="0"
-                    title="Peso aproximado de UNA unidad, en gramos"
+                                      placeholder="0,5"
+                                      title="Peso aproximado de UNA unidad, en kilos (ej. 1,5)"
                     onChange={(e) => {
                       const v = e.target.value.replace(",", ".");
-                      if (/^\d*\.?\d*$/.test(v)) setPesoVariable(v);
+                                        if (/^\d*\.?\d{0,3}$/.test(v)) setPesoVariable(v);
                     }}
                     className="h-10 w-24 rounded-xl border border-brand-brown/15 text-center text-sm font-semibold outline-none focus:border-brand-amber"
                   />

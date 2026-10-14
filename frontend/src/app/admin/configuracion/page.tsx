@@ -89,7 +89,9 @@ export default function AdminConfiguracionPage() {
     const q = busqueda.trim().toLowerCase();
     return personas.filter((p) => {
       if (filtroRol !== "todos" && p.rol !== filtroRol) return false;
-      if (q && !p.nombre.toLowerCase().includes(q)) return false;
+      if (q && !p.nombre.toLowerCase().includes(q) && !(p.cedula ?? "").includes(q)) {
+        return false;
+      }
       return true;
     });
   }, [personas, busqueda, filtroRol]);
@@ -117,16 +119,32 @@ export default function AdminConfiguracionPage() {
     }
   }
 
-  function agregarPersona(nombre: string, rol: Rol): boolean {
+  // Cédula ya usada por OTRA persona (mismo nombre en otro rol sí se permite).
+  function cedulaDuplicada(cedula: string, nombre: string): string | null {
+    if (!cedula) return null;
+    const otra = personas.find(
+      (p) =>
+        p.cedula === cedula &&
+        p.nombre.toLowerCase() !== nombre.trim().toLowerCase(),
+    );
+    return otra ? otra.nombre : null;
+  }
+
+  function agregarPersona(nombre: string, rol: Rol, cedula: string): string | null {
     const limpio = nombre.trim();
-    if (!limpio) return false;
+    if (!limpio) return "Escribe el nombre de la persona.";
     const cat = CAT[rol];
     const existe = registro[cat].some(
       (p) => p.nombre.toLowerCase() === limpio.toLowerCase(),
     );
-    if (existe) return false;
-    persistir({ ...registro, [cat]: [...registro[cat], { nombre: limpio, puntos: [] }] });
-    return true;
+    if (existe) return "Ya existe una persona con ese nombre en ese rol.";
+    const dup = cedulaDuplicada(cedula, limpio);
+    if (dup) return `La cédula ${cedula} ya está registrada para ${dup}.`;
+    persistir({
+      ...registro,
+      [cat]: [...registro[cat], { nombre: limpio, puntos: [], cedula: cedula || undefined }],
+    });
+    return null;
   }
 
   function eliminarPersona(p: PersonaConRol) {
@@ -140,15 +158,16 @@ export default function AdminConfiguracionPage() {
     });
   }
 
-  // Edita nombre y/o rol. Si cambia el rol, mueve la persona de categoría
-  // conservando sus puntos asignados.
+  // Edita nombre, cédula y/o rol. Si cambia el rol, mueve la persona de
+  // categoría conservando sus puntos asignados.
   function editarPersona(
     original: PersonaConRol,
     nuevoNombre: string,
     nuevoRol: Rol,
-  ): boolean {
+    cedula: string,
+  ): string | null {
     const limpio = nuevoNombre.trim();
-    if (!limpio) return false;
+    if (!limpio) return "Escribe el nombre de la persona.";
     const catOrig = CAT[original.rol];
     const catNuevo = CAT[nuevoRol];
     const duplicado = registro[catNuevo].some(
@@ -159,7 +178,15 @@ export default function AdminConfiguracionPage() {
           p.nombre.toLowerCase() === original.nombre.toLowerCase()
         ),
     );
-    if (duplicado) return false;
+    if (duplicado) return "Ya existe una persona con ese nombre en ese rol.";
+    const dup = personas.find(
+      (p) =>
+        cedula &&
+        p.cedula === cedula &&
+        !(p.rol === original.rol && p.nombre.toLowerCase() === original.nombre.toLowerCase()) &&
+        p.nombre.toLowerCase() !== limpio.toLowerCase(),
+    );
+    if (dup) return `La cédula ${cedula} ya está registrada para ${dup.nombre}.`;
 
     let nuevo: RegistroPersonal = {
       ...registro,
@@ -169,10 +196,13 @@ export default function AdminConfiguracionPage() {
     };
     nuevo = {
       ...nuevo,
-      [catNuevo]: [...nuevo[catNuevo], { nombre: limpio, puntos: original.puntos, activo: original.activo }],
+      [catNuevo]: [
+        ...nuevo[catNuevo],
+        { nombre: limpio, puntos: original.puntos, activo: original.activo, cedula },
+      ],
     };
     persistir(nuevo);
-    return true;
+    return null;
   }
 
   function asignarPuntos(p: PersonaConRol, puntosIds: string[]) {
@@ -234,7 +264,7 @@ export default function AdminConfiguracionPage() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre"
+            placeholder="Buscar por nombre o cédula"
             className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           />
           {busqueda && (
@@ -291,10 +321,11 @@ export default function AdminConfiguracionPage() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-brand-cream-soft text-xs uppercase tracking-wide text-brand-black shadow-sm">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Nombre</th>
+                  <th className="px-4 py-3 font-semibold">Cédula</th>
                   <th className="px-4 py-3 font-semibold">Rol</th>
                   <th className="px-4 py-3 font-semibold">Puntos de venta</th>
                   <th className="px-4 py-3 text-center font-semibold">Estado</th>
@@ -304,7 +335,7 @@ export default function AdminConfiguracionPage() {
               <tbody className="divide-y divide-brand-brown/5">
                 {filtradas.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-brand-black">
+                    <td colSpan={6} className="px-4 py-10 text-center text-brand-black">
                       {personas.length === 0
                         ? "Aún no hay personas. Agrega la primera con “Nueva persona”."
                         : "No se encontraron resultados."}
@@ -316,6 +347,20 @@ export default function AdminConfiguracionPage() {
                     return (
                     <tr key={`${p.rol}-${p.nombre}`} className={`hover:bg-brand-cream-soft/40 ${activo ? "" : "opacity-60"}`}>
                       <td className="px-4 py-3 font-medium text-brand-black">{p.nombre}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {p.cedula ? (
+                          <span className="font-mono text-xs text-brand-black">{p.cedula}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditando(p)}
+                            title={`Agregar la cédula de ${p.nombre}`}
+                            className="text-xs text-brand-black/40 hover:text-brand-amber hover:underline"
+                          >
+                            + Agregar
+                          </button>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP_ROL[p.rol]}`}>
                           {ETIQUETA_ROL[p.rol]}
@@ -365,7 +410,7 @@ export default function AdminConfiguracionPage() {
                           </button>
                           <button
                             onClick={() => setEditando(p)}
-                            title={`Editar nombre y rol de ${p.nombre}`}
+                            title={`Editar nombre, cédula y rol de ${p.nombre}`}
                             className="rounded-lg border border-brand-brown/20 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-brand-cream-soft"
                           >
                             Editar
@@ -392,10 +437,10 @@ export default function AdminConfiguracionPage() {
       {modalNuevo && (
         <ModalNuevaPersona
           onCerrar={() => setModalNuevo(false)}
-          onAgregar={(nombre, rol) => {
-            const ok = agregarPersona(nombre, rol);
-            if (ok) setModalNuevo(false);
-            return ok;
+          onAgregar={(nombre, rol, cedula) => {
+            const error = agregarPersona(nombre, rol, cedula);
+            if (!error) setModalNuevo(false);
+            return error;
           }}
         />
       )}
@@ -416,10 +461,10 @@ export default function AdminConfiguracionPage() {
         <ModalEditarPersona
           persona={editando}
           onCerrar={() => setEditando(null)}
-          onGuardar={(nombre, rol) => {
-            const ok = editarPersona(editando, nombre, rol);
-            if (ok) setEditando(null);
-            return ok;
+          onGuardar={(nombre, rol, cedula) => {
+            const error = editarPersona(editando, nombre, rol, cedula);
+            if (!error) setEditando(null);
+            return error;
           }}
         />
       )}
@@ -428,16 +473,48 @@ export default function AdminConfiguracionPage() {
 }
 
 /* ---------------------------------------------------------------- */
-/* Modal: nueva persona (nombre + rol)                              */
+/* Campo de cédula (solo dígitos)                                   */
+/* ---------------------------------------------------------------- */
+function CampoCedula({
+  valor,
+  onCambiar,
+  onEnter,
+}: {
+  valor: string;
+  onCambiar: (v: string) => void;
+  onEnter: () => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-brand-brown">
+        Cédula <span className="font-normal text-brand-black/40">(opcional)</span>
+      </label>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={valor}
+        maxLength={15}
+        onChange={(e) => onCambiar(e.target.value.replace(/\D+/g, "").slice(0, 15))}
+        onKeyDown={(e) => { if (e.key === "Enter") onEnter(); }}
+        placeholder="Número de documento"
+        className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 font-mono text-sm text-brand-black outline-none focus:border-brand-wine"
+      />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Modal: nueva persona (nombre + cédula + rol)                     */
 /* ---------------------------------------------------------------- */
 function ModalNuevaPersona({
   onCerrar,
   onAgregar,
 }: {
   onCerrar: () => void;
-  onAgregar: (nombre: string, rol: Rol) => boolean;
+  onAgregar: (nombre: string, rol: Rol, cedula: string) => string | null;
 }) {
   const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
   const [rol, setRol] = useState<Rol>("porcionador");
   const [error, setError] = useState<string | null>(null);
 
@@ -446,8 +523,7 @@ function ModalNuevaPersona({
       setError("Escribe el nombre de la persona.");
       return;
     }
-    const ok = onAgregar(nombre, rol);
-    if (!ok) setError("Ya existe una persona con ese nombre en ese rol.");
+    setError(onAgregar(nombre, rol, cedula));
   }
 
   return (
@@ -474,6 +550,11 @@ function ModalNuevaPersona({
               className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
             />
           </div>
+          <CampoCedula
+            valor={cedula}
+            onCambiar={(v) => { setCedula(v); setError(null); }}
+            onEnter={agregar}
+          />
           <div>
             <label className="mb-1 block text-sm font-semibold text-brand-brown">Rol</label>
             <div className="grid grid-cols-2 gap-2">
@@ -633,7 +714,7 @@ function ModalAsignarPuntos({
 }
 
 /* ---------------------------------------------------------------- */
-/* Modal: editar persona (nombre + rol)                             */
+/* Modal: editar persona (nombre + cédula + rol)                    */
 /* ---------------------------------------------------------------- */
 function ModalEditarPersona({
   persona,
@@ -642,9 +723,10 @@ function ModalEditarPersona({
 }: {
   persona: PersonaConRol;
   onCerrar: () => void;
-  onGuardar: (nombre: string, rol: Rol) => boolean;
+  onGuardar: (nombre: string, rol: Rol, cedula: string) => string | null;
 }) {
   const [nombre, setNombre] = useState(persona.nombre);
+  const [cedula, setCedula] = useState(persona.cedula ?? "");
   const [rol, setRol] = useState<Rol>(persona.rol);
   const [error, setError] = useState<string | null>(null);
 
@@ -653,8 +735,7 @@ function ModalEditarPersona({
       setError("Escribe el nombre de la persona.");
       return;
     }
-    const ok = onGuardar(nombre, rol);
-    if (!ok) setError("Ya existe una persona con ese nombre en ese rol.");
+    setError(onGuardar(nombre, rol, cedula));
   }
 
   return (
@@ -681,6 +762,11 @@ function ModalEditarPersona({
               className="w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm text-brand-black outline-none focus:border-brand-wine"
             />
           </div>
+          <CampoCedula
+            valor={cedula}
+            onCambiar={(v) => { setCedula(v); setError(null); }}
+            onEnter={guardar}
+          />
           <div>
             <label className="mb-1 block text-sm font-semibold text-brand-brown">Rol</label>
             <div className="grid grid-cols-2 gap-2">

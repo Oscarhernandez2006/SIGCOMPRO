@@ -13,6 +13,7 @@ import { PG_POOL } from '../database/database.module';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 import { tieneAccesoTotal } from '../users/permisos.catalog';
 import { ItemConPeso, pesoCarritoKg } from '../common/peso';
+import { ConfiguracionService } from '../configuracion/configuracion.service';
 
 export type EstadoSolicitud =
   | 'pendiente'
@@ -117,7 +118,10 @@ const COLUMNAS = `s.id, s.punto_id, s.punto_nombre, to_char(s.dia, 'YYYY-MM-DD')
 export class ExtensionesService implements OnModuleInit {
   private readonly logger = new Logger(ExtensionesService.name);
 
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    private readonly configuracion: ConfiguracionService,
+  ) {}
 
   async onModuleInit() {
     await this.pool.query(`
@@ -479,6 +483,11 @@ export class ExtensionesService implements OnModuleInit {
       `SELECT cedula, nombre_norm FROM domiciliarios_cedula`,
     );
     const cedulaPorNombre = new Map(cedulas.rows.map((c) => [c.nombre_norm, c.cedula]));
+    // La cédula definida en Gestión de recursos tiene prioridad.
+    const registro = await this.configuracion.obtenerRegistroConCedulas();
+    for (const d of registro.domiciliarios) {
+      if (d.cedula) cedulaPorNombre.set(normalizarNombre(d.nombre), d.cedula);
+    }
     const extensiones = await Promise.all(
       lista.map(async (s) => {
         const pedidos = await this.pedidosDe(s);

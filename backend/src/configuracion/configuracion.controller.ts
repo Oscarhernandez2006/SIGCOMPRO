@@ -14,11 +14,12 @@ export class ConfiguracionController {
 
   /**
    * Registro global de porcionadores y domiciliarios con los puntos donde
-   * está asignada cada persona. Lo usa el editor del panel de configuración.
+   * está asignada cada persona (incluye su cédula). Lo usa el editor del
+   * panel de configuración.
    */
   @Get('personal')
   registro() {
-    return this.configuracion.obtenerRegistro();
+    return this.configuracion.obtenerRegistroConCedulas();
   }
 
   /** Guarda el registro global de personas. Solo administrador/desarrollador. */

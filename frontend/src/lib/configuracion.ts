@@ -12,6 +12,8 @@ export interface PersonaAsignada {
   puntos: string[];
   /** ¿Activa? Si es false, no aparece en los selectores de despacho. */
   activo?: boolean;
+  /** Cédula (solo dígitos). Vacía/ausente = sin cédula. */
+  cedula?: string;
 }
 
 /** Registro global de personas (centrado en la persona, no en el punto). */
