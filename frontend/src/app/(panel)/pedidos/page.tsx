@@ -20,9 +20,10 @@ import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
-import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
+import { yaDespachado, colorEstado, estadoReplicaVista, permiteReenvioDrivin } from "@/lib/despacho";
 import { gramosPorUnidad } from "@/lib/peso";
 import CrearClienteModal from "@/components/CrearClienteModal";
+import ZoomImagen from "@/components/ZoomImagen";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
 
@@ -415,10 +416,15 @@ export default function PedidosPage() {
     setMotivoModal(null);
   };
 
-  // Reenvía a Drivin un pedido facturado que no subió (p. ej. el cliente no tenía barrio).
+  // Reenvía a Drivin un pedido facturado/despachado/entregado (p. ej. tras
+  // corregir el barrio del cliente). Antes de Facturado no se permite.
   const [reenvio, setReenvio] = useState<{ estado: "enviando" | "ok" | "error"; comanda: string; msg?: string } | null>(null);
   const reenviarDrivin = async (p: Pedido) => {
     if (reenvio?.estado === "enviando") return;
+    if (p.anulado || !permiteReenvioDrivin(p.estado)) {
+      alert("Solo se puede reenviar un pedido Facturado, Despachado o Entregado.");
+      return;
+    }
     if (
       meta[p.id]?.drivinEnviado &&
       !confirm(`El pedido #${p.comanda} ya se subió a Drivin. ¿Reenviarlo de todas formas?`)
@@ -717,7 +723,7 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
                             </svg>
                           </button>
-                          {p.punto?.drivin !== false && !yaDespachado(p.estado) && (
+                          {p.punto?.drivin !== false && permiteReenvioDrivin(p.estado) && (
                             <button
                               onClick={() => reenviarDrivin(p)}
                               disabled={reenvio?.estado === "enviando"}
@@ -3458,16 +3464,16 @@ function ConfigProducto({
               )}
               {sinMedida && (
                 <div className="relative">
-                  <label className="absolute -top-4 left-0 right-0                   whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Peso variable (kg)</label>
+                  <label className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Kg de 1 unidad</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={pesoVariable}
-                                      placeholder="0,5"
-                                      title="Peso aproximado de UNA unidad, en kilos (ej. 1,5)"
+                    placeholder="0,5"
+                    title="Kilos de UNA sola unidad (ej. 1,5). El total se calcula solo."
                     onChange={(e) => {
                       const v = e.target.value.replace(",", ".");
-                                        if (/^\d*\.?\d{0,3}$/.test(v)) setPesoVariable(v);
+                      if (/^\d*\.?\d{0,3}$/.test(v)) setPesoVariable(v);
                     }}
                     className="h-10 w-24 rounded-xl border border-brand-brown/15 text-center text-sm font-semibold outline-none focus:border-brand-amber"
                   />
@@ -3477,8 +3483,13 @@ function ConfigProducto({
             </div>
             {sinMedida && (
               <div className="mt-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 px-2 py-1.5 text-center">
-                <p className="text-[10px] font-semibold uppercase text-brand-brown/60">Kilos</p>
+                <p className="text-[10px] font-semibold uppercase text-brand-brown/60">Kilos totales</p>
                 <p className="text-sm font-bold text-brand-wine">{Number(((cant * pv) / 1000).toFixed(3)).toLocaleString("es-CO")}</p>
+                <p className="text-[10px] text-brand-black/50">
+                  {pv > 0
+                    ? `${cant.toLocaleString("es-CO")} unidad${cant === 1 ? "" : "es"} × ${(pv / 1000).toLocaleString("es-CO")} kg (se calcula solo)`
+                    : "Digita arriba los kilos de UNA unidad; el total se calcula solo"}
+                </p>
               </div>
             )}
           </div>
@@ -4303,7 +4314,7 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   return mapa;
 }
 
-/** Lee una imagen (archivo) y la comprime a JPEG (máx 1280px) como data URL base64. */
+/** Lee una imagen (archivo) y la comprime a JPEG (máx 2000px) como data URL base64. */
 async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime: string }> {
   const dataUrl0 = await new Promise<string>((res, rej) => {
     const r = new FileReader();
@@ -4317,7 +4328,7 @@ async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime
     i.onload = () => res(i);
     i.src = dataUrl0;
   });
-  const maxLado = 1280;
+  const maxLado = 2000;
   let { width, height } = img;
   if (width > maxLado || height > maxLado) {
     if (width >= height) { height = Math.round((height * maxLado) / width); width = maxLado; }
@@ -4329,7 +4340,7 @@ async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime
   const ctx = canvas.getContext("2d");
   if (!ctx) return { dataUrl: dataUrl0, mime: file.type || "image/jpeg" };
   ctx.drawImage(img, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.7), mime: "image/jpeg" };
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), mime: "image/jpeg" };
 }
 
 export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta; clones?: string[] }) {
@@ -4535,7 +4546,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
 
       {compAbierto && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/60 p-4" onClick={() => setCompAbierto(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
               <div>
                 <h3 className="font-serif text-lg font-bold text-brand-wine">Comprobante de pago</h3>
@@ -4550,8 +4561,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
               ) : compImg.length ? (
                 compImg.map((src, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={src} alt={`Comprobante ${i + 1}`} className="mx-auto max-h-[70vh] w-auto rounded-lg" />
+                  <ZoomImagen key={i} src={src} alt={`Comprobante ${i + 1}`} alto="62vh" className="w-full" />
                 ))
               ) : (
                 <p className="px-4 py-8 text-center text-sm font-medium text-brand-black">

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -75,6 +76,25 @@ type PedidoData = Record<string, unknown> & {
 /** Metadata de despacho asociada a un pedido. */
 type DespachoMeta = Record<string, unknown>;
 
+/** Réplica (parte del mismo pedido enviada como orden aparte "comanda-N" a Drivin). */
+export interface ReplicaMeta {
+  numero: number;
+  domiciliario?: string;
+  domiciliarioCodigo?: string;
+  drivinEnviado?: boolean;
+  /** Momento (ISO) en que la réplica se subió a Drivin. */
+  drivinEnviadoEn?: string;
+  /** Estado de entrega (POD) que reporta Drivin. */
+  estado?: string;
+}
+
+/** Campos de una réplica que se pueden cambiar sin reescribir la lista entera. */
+export type CambiosReplica = Partial<
+  Pick<ReplicaMeta, 'domiciliario' | 'domiciliarioCodigo' | 'drivinEnviado' | 'drivinEnviadoEn' | 'estado'>
+>;
+
+const MAX_REPLICAS = 5;
+
 /** Escenario de ruteo de Drivin (GET external/v2/scenarios). */
 interface DrivinScenario {
   token: string;
@@ -138,6 +158,13 @@ export class PedidosService implements OnModuleInit {
     ts: number;
     datos: Record<string, { code: string; nombre: string } | null>;
   } | null = null;
+  /** Lectura de asignaciones de Drivin en curso (compartida entre peticiones simultáneas). */
+  private lecturaAsignaciones: Promise<{
+    mapa: Record<string, { code: string; nombre: string } | null>;
+    completo: boolean;
+  }> | null = null;
+  /** Evita que dos corridas de la sincronización de desasignaciones se solapen. */
+  private sincronizandoDesasignaciones = false;
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     private readonly ubicaciones: UbicacionesService,
@@ -1132,6 +1159,148 @@ export class PedidosService implements OnModuleInit {
     }
   }
 
+  /**
+   * Cambia la lista de réplicas de un pedido de forma ATÓMICA: bloquea la fila
+   * (FOR UPDATE), aplica `fn` sobre las réplicas ACTUALES de la base de datos y
+   * guarda. Así varias pantallas de Despacho y el job de Drivin no se pisan
+   * (antes cada uno reescribía la lista completa con datos viejos y un cambio
+   * —p. ej. una desasignación— podía perderse). `fn` devuelve null si no hay
+   * nada que cambiar.
+   */
+  private async modificarReplicas(
+    id: string,
+    fn: (actuales: ReplicaMeta[]) => ReplicaMeta[] | null,
+  ): Promise<{ replicas: ReplicaMeta[]; cambio: boolean }> {
+    const cliente = await this.pool.connect();
+    let previo: { punto_id: string | null; meta: DespachoMeta } | undefined;
+    let nuevas: ReplicaMeta[] | null = null;
+    let actuales: ReplicaMeta[] = [];
+    try {
+      await cliente.query('BEGIN');
+      const r = await cliente.query<{ punto_id: string | null; meta: DespachoMeta }>(
+        `SELECT punto_id, meta FROM pedidos WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      previo = r.rows[0];
+      if (!previo) throw new NotFoundException('Pedido no encontrado');
+      const lista = (previo.meta ?? {}).replicas;
+      actuales = Array.isArray(lista)
+        ? (lista as ReplicaMeta[]).filter((x) => x && Number(x.numero) > 0)
+        : [];
+      nuevas = fn(actuales.map((x) => ({ ...x })));
+      if (nuevas) {
+        await cliente.query(
+          `UPDATE pedidos
+             SET meta = COALESCE(meta, '{}'::jsonb) || jsonb_build_object('replicas', $2::jsonb),
+                 actualizado_en = now()
+           WHERE id = $1`,
+          [id, JSON.stringify(nuevas)],
+        );
+      }
+      await cliente.query('COMMIT');
+    } catch (e) {
+      await cliente.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally {
+      cliente.release();
+    }
+    if (nuevas && previo) {
+      this.extensiones
+        .registrarAsignaciones(id, previo.punto_id, previo.meta ?? {}, { replicas: nuevas })
+        .catch((e) =>
+          this.logger.warn(`No se pudo registrar el pedido ${id} en extensiones: ${String(e)}`),
+        );
+    }
+    return { replicas: nuevas ?? actuales, cambio: !!nuevas };
+  }
+
+  /**
+   * Cambia campos de UNA réplica. Con `siCodigo` solo aplica si su
+   * domiciliarioCodigo actual es ese (evita deshacer una asignación más nueva).
+   */
+  async parcharReplica(
+    id: string,
+    numero: number,
+    cambios: Record<string, unknown>,
+    siCodigo?: string | null,
+  ) {
+    const limpio: CambiosReplica = {};
+    for (const k of ['domiciliario', 'domiciliarioCodigo', 'estado', 'drivinEnviadoEn'] as const) {
+      if (typeof cambios?.[k] === 'string') limpio[k] = String(cambios[k]).trim();
+    }
+    if (typeof cambios?.drivinEnviado === 'boolean') limpio.drivinEnviado = cambios.drivinEnviado;
+    if (Object.keys(limpio).length === 0) {
+      throw new BadRequestException('Sin cambios válidos para la réplica');
+    }
+    return this.modificarReplicas(id, (reps) => {
+      const i = reps.findIndex((r) => Number(r.numero) === numero);
+      if (i < 0) return null;
+      const r = reps[i];
+      if (typeof siCodigo === 'string' && String(r.domiciliarioCodigo ?? '') !== siCodigo) {
+        return null;
+      }
+      const hayCambio = (Object.keys(limpio) as (keyof CambiosReplica)[]).some(
+        (k) => (r[k] ?? (typeof limpio[k] === 'string' ? '' : undefined)) !== limpio[k],
+      );
+      if (!hayCambio) return null;
+      reps[i] = { ...r, ...limpio };
+      return reps;
+    });
+  }
+
+  /** Agrega la réplica `numero` (debe ser la siguiente en secuencia, máx. 5). */
+  async agregarReplica(
+    id: string,
+    numero: number,
+    domiciliario: string,
+    domiciliarioCodigo?: string,
+  ) {
+    if (!(numero >= 1 && numero <= MAX_REPLICAS)) {
+      throw new BadRequestException(`Máximo ${MAX_REPLICAS} réplicas por pedido`);
+    }
+    let conflicto = false;
+    const res = await this.modificarReplicas(id, (reps) => {
+      if (reps.some((r) => Number(r.numero) === numero)) return null; // ya existe (doble clic)
+      const max = reps.reduce((mx, r) => Math.max(mx, Number(r.numero) || 0), 0);
+      if (numero !== max + 1) {
+        conflicto = true;
+        return null;
+      }
+      return [
+        ...reps,
+        {
+          numero,
+          domiciliario: String(domiciliario ?? '').trim(),
+          domiciliarioCodigo: String(domiciliarioCodigo ?? '').trim(),
+        },
+      ];
+    });
+    if (conflicto) {
+      throw new ConflictException(
+        'Otra persona cambió las réplicas de este pedido. Cierra y vuelve a abrir la réplica.',
+      );
+    }
+    return res;
+  }
+
+  /** Quita la réplica `numero`, solo si es la última (mantiene la secuencia). */
+  async quitarReplica(id: string, numero: number) {
+    let conflicto = false;
+    const res = await this.modificarReplicas(id, (reps) => {
+      if (!reps.some((r) => Number(r.numero) === numero)) return null;
+      const max = reps.reduce((mx, r) => Math.max(mx, Number(r.numero) || 0), 0);
+      if (numero !== max) {
+        conflicto = true;
+        return null;
+      }
+      return reps.filter((r) => Number(r.numero) !== numero);
+    });
+    if (conflicto) {
+      throw new ConflictException('Solo se puede quitar la última réplica.');
+    }
+    return res;
+  }
+
   /** Mezcla cambios en la metadata de despacho de un pedido. */
   async actualizarMeta(
     id: string,
@@ -1462,6 +1631,36 @@ export class PedidosService implements OnModuleInit {
         finVentana = horaHM(new Date(creado.getTime() + 2 * 60 * 60 * 1000));
       }
       prioridad = kilos > 20 ? '3.00' : '2.00';
+    }
+
+    // Pedido ARRASTRADO: su fecha de entrega ya pasó (se tomó un día anterior,
+    // o era Posterior con fecha vencida) y se sube a Drivin hoy, al facturar.
+    // SOLO para Drivin se usan la fecha y hora de este momento (Despacho y
+    // compromisos mín/máx); en SIGCOMPRO el pedido conserva su fecha de
+    // creación y de despacho. Si tenía hora de despacho y aún no ha pasado, se
+    // respeta esa ventana.
+    const ahora = new Date();
+    const hoy = fechaISO(ahora);
+    if (!esReplica && fechaEntrega < hoy) {
+      const horaActual = horaHM(ahora);
+      fechaEntrega = hoy;
+      if (esRecogePdv) {
+        inicioVentana = horaActual;
+        finVentana = '19:00';
+      } else if (
+        !programado &&
+        tieneHora &&
+        normalizarHora(horaDespacho) > horaActual
+      ) {
+        inicioVentana = restarDosHoras(horaDespacho);
+        finVentana = normalizarHora(horaDespacho);
+      } else {
+        inicioVentana = horaActual;
+        finVentana = sumarHoras(horaActual, 2);
+      }
+      if (inicioVentana >= finVentana) finVentana = sumarHoras(inicioVentana, 1);
+      // Al final del día no hay margen para sumar: se abre la ventana hacia atrás.
+      if (inicioVentana >= finVentana) inicioVentana = restarDosHoras(finVentana);
     }
 
     // Departamento (Región) a partir de la ciudad del cliente.
@@ -1909,7 +2108,15 @@ export class PedidosService implements OnModuleInit {
     if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 5000) {
       return this.cacheAsignaciones.datos;
     }
-    const { mapa, completo } = await this.leerAsignacionesDrivin(false);
+    // Muchas pantallas de Despacho piden esto a la vez: comparten UNA sola
+    // lectura en curso en vez de lanzar varias contra Drivin (que bajo carga
+    // fallan y dejan el mapa incompleto, sin sincronizar).
+    if (!this.lecturaAsignaciones) {
+      this.lecturaAsignaciones = this.leerAsignacionesDrivin(false).finally(() => {
+        this.lecturaAsignaciones = null;
+      });
+    }
+    const { mapa, completo } = await this.lecturaAsignaciones;
     // Un mapa incompleto haría ver como "desasignadas" las órdenes del escenario
     // que falló; se devuelve vacío para que nadie desasigne con datos parciales.
     if (!completo) return {};
@@ -1980,18 +2187,26 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
-   * Sincroniza desasignaciones de Drivin en el servidor (no depende de que
-   * alguien tenga Despacho abierto), con las MISMAS reglas que esa vista:
-   * si Drivin quitó el domiciliario (orden sin vehículo o fuera de la ruta),
-   * se libera el domiciliario y un Despachado vuelve a Facturado. Igual para
-   * las réplicas ("comanda-N"). Solo pedidos de HOY de puntos integrados con
-   * Drivin, y solo si el mapa de Drivin se leyó COMPLETO.
+   * Sincroniza asignaciones/desasignaciones de Drivin en el servidor (no
+   * depende de que alguien tenga Despacho abierto), con las MISMAS reglas que
+   * esa vista:
+   *  - Pedido base: si Drivin quitó el domiciliario (orden sin vehículo o fuera
+   *    de la ruta), se libera y un Despachado vuelve a Facturado. Solo pedidos
+   *    de HOY en Facturado/Despachado.
+   *  - Réplicas ("comanda-N"): se baja el domiciliario que Drivin asignó o se
+   *    libera si lo quitó, AUNQUE el pedido ya esté En tránsito/Entregado.
+   * Solo si el mapa de Drivin se leyó COMPLETO. Cada cambio de réplica es
+   * atómico y condicionado (no pisa cambios hechos mientras tanto).
    */
   async sincronizarDesasignacionesDrivin(): Promise<number> {
+    if (this.sincronizandoDesasignaciones) return 0;
+    this.sincronizandoDesasignaciones = true;
     let desasignados = 0;
     try {
       const { mapa, completo } = await this.leerAsignacionesDrivin(true);
       if (!completo || Object.keys(mapa).length === 0) return 0;
+      // Comparte el mapa recién leído con las pantallas de Despacho.
+      this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
 
       const hoy = this.diaBogota();
       const res = await this.pool.query<{
@@ -2000,24 +2215,38 @@ export class PedidosService implements OnModuleInit {
         estado: string | null;
         data: PedidoData;
         meta: DespachoMeta;
+        de_hoy: boolean;
       }>(
-        `SELECT id, punto_id, estado, data, meta FROM pedidos
-         WHERE anulado = false
-           AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado')
-           AND (
-             (CASE
-                WHEN (data->>'entregaProgramada') = 'true'
-                     AND COALESCE(data->>'fechaProgramada', '') <> ''
-                THEN (data->>'fechaProgramada')::date
-                ELSE (fecha AT TIME ZONE 'America/Bogota')::date
-              END) = $1::date
-             OR (NULLIF(meta->>'despachoFin', '')::timestamptz AT TIME ZONE 'America/Bogota')::date = $1::date
+        `SELECT id, punto_id, estado, data, meta, de_hoy FROM (
+           SELECT id, punto_id, estado, data, meta, actualizado_en,
+             (
+               (CASE
+                  WHEN (data->>'entregaProgramada') = 'true'
+                       AND COALESCE(data->>'fechaProgramada', '') <> ''
+                  THEN (data->>'fechaProgramada')::date
+                  ELSE (fecha AT TIME ZONE 'America/Bogota')::date
+                END) = $1::date
+               OR (NULLIF(meta->>'despachoFin', '')::timestamptz AT TIME ZONE 'America/Bogota')::date = $1::date
+             ) AS de_hoy
+           FROM pedidos
+           WHERE anulado = false
+         ) p
+         WHERE (
+             de_hoy
+             AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado')
+             AND (
+               COALESCE(meta->>'domiciliario', '') <> ''
+               OR COALESCE(meta->>'domiciliarioCodigo', '') <> ''
+               OR LOWER(COALESCE(estado, '')) = 'despachado'
+               OR jsonb_typeof(meta->'replicas') = 'array'
+             )
            )
-           AND (
-             COALESCE(meta->>'domiciliario', '') <> ''
-             OR COALESCE(meta->>'domiciliarioCodigo', '') <> ''
-             OR LOWER(COALESCE(estado, '')) = 'despachado'
-             OR jsonb_typeof(meta->'replicas') = 'array'
+           OR (
+             jsonb_typeof(meta->'replicas') = 'array'
+             AND jsonb_array_length(meta->'replicas') > 0
+             AND LOWER(COALESCE(estado, '')) IN
+               ('facturado', 'despachado', 'en tránsito', 'en transito', 'entregado')
+             AND (de_hoy OR actualizado_en >= now() - interval '2 days')
            )`,
         [hoy],
       );
@@ -2029,11 +2258,7 @@ export class PedidosService implements OnModuleInit {
           const meta = (ped.meta ?? {}) as {
             domiciliario?: string | null;
             domiciliarioCodigo?: string | null;
-            replicas?: Array<{
-              numero?: number;
-              domiciliario?: string | null;
-              domiciliarioCodigo?: string | null;
-            }>;
+            replicas?: ReplicaMeta[];
           };
           const comanda = String(data.comanda ?? '').trim();
           if (!comanda) continue;
@@ -2050,39 +2275,80 @@ export class PedidosService implements OnModuleInit {
           if (!drivinPorPunto.get(puntoId)) continue; // punto manual
 
           const est = String(ped.estado ?? '').trim().toLowerCase();
-          const enMapa = comanda in mapa;
-          const asg = enMapa ? mapa[comanda] : undefined;
-          const teniaDomi = !!(meta.domiciliario || meta.domiciliarioCodigo);
-          const desasignar =
-            !asg && (enMapa ? teniaDomi || est === 'despachado' : teniaDomi);
 
-          const cambios: DespachoMeta = {};
-          if (desasignar && teniaDomi) {
-            cambios.domiciliario = '';
-            cambios.domiciliarioCodigo = '';
+          // --- Pedido base (solo de hoy, Facturado/Despachado) ---
+          let desasignar = false;
+          if (ped.de_hoy && (est === 'facturado' || est === 'despachado')) {
+            const enMapa = comanda in mapa;
+            const asg = enMapa ? mapa[comanda] : undefined;
+            const teniaDomi = !!(meta.domiciliario || meta.domiciliarioCodigo);
+            desasignar = !asg && (enMapa ? teniaDomi || est === 'despachado' : teniaDomi);
+            if (desasignar && teniaDomi) {
+              // Condicionado a que siga el MISMO domiciliario que se vio.
+              const r = await this.pool.query(
+                `UPDATE pedidos
+                   SET meta = COALESCE(meta, '{}'::jsonb)
+                              || '{"domiciliario": "", "domiciliarioCodigo": ""}'::jsonb,
+                       actualizado_en = now()
+                 WHERE id = $1
+                   AND COALESCE(meta->>'domiciliario', '') = $2
+                   AND COALESCE(meta->>'domiciliarioCodigo', '') = $3`,
+                [ped.id, String(meta.domiciliario ?? ''), String(meta.domiciliarioCodigo ?? '')],
+              );
+              if (!r.rowCount) desasignar = false;
+            }
+            if (desasignar && est === 'despachado') {
+              await this.guardar({ ...data, id: ped.id, estado: 'Facturado' }, undefined);
+            }
           }
-          if (Array.isArray(meta.replicas) && meta.replicas.length > 0) {
-            let cambioRep = false;
-            const nuevas = meta.replicas.map((r) => {
-              if (!mapa[`${comanda}-${r.numero}`] && (r.domiciliario || r.domiciliarioCodigo)) {
-                cambioRep = true;
-                return { ...r, domiciliario: '', domiciliarioCodigo: '' };
+
+          // --- Réplicas ---
+          let cambiosReplicas = 0;
+          for (const r of Array.isArray(meta.replicas) ? meta.replicas : []) {
+            const numero = Number(r.numero);
+            if (!(numero > 0)) continue;
+            const clave = `${comanda}-${numero}`;
+            const a = clave in mapa ? mapa[clave] : undefined;
+            const codigo = String(r.domiciliarioCodigo ?? '');
+            const tenia = !!(r.domiciliario || r.domiciliarioCodigo);
+            if (a) {
+              if (codigo !== a.code) {
+                const x = await this.parcharReplica(
+                  ped.id,
+                  numero,
+                  { domiciliario: a.nombre, domiciliarioCodigo: a.code },
+                  codigo,
+                );
+                if (x.cambio) cambiosReplicas++;
               }
-              return r;
-            });
-            if (cambioRep) cambios.replicas = nuevas;
+              continue;
+            }
+            if (!tenia) continue;
+            // null = la orden sigue en Drivin pero SIN domiciliario (desasignada).
+            // Fuera del mapa (que solo trae los escenarios de HOY): se libera solo
+            // si la réplica se subió hoy y no está ya entregada/rechazada.
+            const subidaHoy = r.drivinEnviadoEn
+              ? this.diaBogota(r.drivinEnviadoEn) === hoy
+              : ped.de_hoy;
+            const final = r.estado === 'approved' || r.estado === 'rejected';
+            if (a === null || (subidaHoy && !final)) {
+              const x = await this.parcharReplica(
+                ped.id,
+                numero,
+                { domiciliario: '', domiciliarioCodigo: '' },
+                codigo,
+              );
+              if (x.cambio) cambiosReplicas++;
+            }
           }
-          if (Object.keys(cambios).length > 0) {
-            await this.actualizarMeta(ped.id, cambios);
-          }
-          if (desasignar && est === 'despachado') {
-            await this.guardar({ ...data, id: ped.id, estado: 'Facturado' }, undefined);
-          }
-          if (desasignar || cambios.replicas) {
+
+          if (desasignar || cambiosReplicas > 0) {
             desasignados++;
             this.logger.log(
-              `Drivin desasignó ${comanda} (${ped.id}): domiciliario liberado` +
-                (desasignar && est === 'despachado' ? ' y vuelve a Facturado' : ''),
+              `Drivin sincronizado ${comanda} (${ped.id}):` +
+                (desasignar ? ' domiciliario liberado' : '') +
+                (desasignar && est === 'despachado' ? ' y vuelve a Facturado' : '') +
+                (cambiosReplicas ? ` · ${cambiosReplicas} réplica(s) actualizada(s)` : ''),
             );
           }
         } catch (e) {
@@ -2099,6 +2365,8 @@ export class PedidosService implements OnModuleInit {
           e instanceof Error ? e.message : String(e)
         }`,
       );
+    } finally {
+      this.sincronizandoDesasignaciones = false;
     }
     return desasignados;
   }
@@ -2313,6 +2581,16 @@ export class PedidosService implements OnModuleInit {
       const detalle =
         typeof data === 'string' ? data : JSON.stringify(data ?? {});
       throw new Error(`Drivin respondió ${status}: ${detalle}`);
+    }
+    // Réplica subida: queda marcada en el servidor (con la hora) aunque se
+    // cierre la pantalla; la sincronización usa esa hora para saber de qué día es.
+    if (typeof replica === 'number' && replica >= 1) {
+      await this.parcharReplica(id, replica, {
+        drivinEnviado: true,
+        drivinEnviadoEn: new Date().toISOString(),
+      }).catch((e) =>
+        this.logger.warn(`No se pudo marcar la réplica ${d.comanda} como enviada: ${String(e)}`),
+      );
     }
     return { status, comanda: d.comanda, respuesta: data };
   }

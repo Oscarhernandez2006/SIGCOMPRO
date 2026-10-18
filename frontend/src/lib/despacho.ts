@@ -45,6 +45,20 @@ export function yaDespachado(estado?: string | null): boolean {
 }
 
 /**
+ * ¿Se permite el Reenvío a Drivin? Solo desde Facturado en adelante
+ * (Facturado, Despachado, En tránsito, Entregado); antes de facturar no.
+ */
+export function permiteReenvioDrivin(estado?: string | null): boolean {
+  const e = (estado ?? "").trim().toLowerCase();
+  return (
+    e === "facturado" ||
+    e === "despachado" ||
+    e === "en tránsito" ||
+    e === "entregado"
+  );
+}
+
+/**
  * Clases de color (borde + fondo + texto) por estado, IGUALES a las cards de
  * Despacho, para mantener el mismo estándar de color en toda la app. En los
  * badges tipo "pill" (sin la clase `border`) el color de borde es inerte.

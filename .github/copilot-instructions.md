@@ -19,9 +19,10 @@ backend/src/
   app.module.ts, database/database.module.ts (PG_POOL)
   auth/ (JWT + clave-dinámica), users/ (permisos.catalog.ts), clientes/, puntos-venta/,
   productos/ (listas precio, @Cron 7:50am sync), pedidos/, despacho vía pedidos,
-  cotizaciones/, congelados/, configuracion/ (personal, cortes, cuadre), motivos/, ubicaciones/
+  cotizaciones/, congelados/, configuracion/ (personal, cortes, cuadre), motivos/, ubicaciones/,
+  direcciones/ (hoja de direcciones de Drivin: tabla `direcciones`, 66 columnas en jsonb por letra, `corregida` = amarillo)
 frontend/src/
-  app/(panel)/  -> pedidos, despacho, cuadre-caja, cotizaciones, congelados, historicos, ubicaciones
+  app/(panel)/  -> pedidos, despacho, cuadre-caja, cotizaciones, congelados, historicos, ubicaciones, direcciones (grilla tipo Excel)
   app/admin/    -> usuarios, configuracion (Gestión de recursos), dashboard
   app/seleccionar-panel, layout.tsx, page.tsx (login)
   components/ (AdminShell, PanelShell, DireccionInput, MapaDireccion, ReferenciaInput, ...)

@@ -22,6 +22,7 @@ import { MachineLearningModule } from './machine-learning/machine-learning.modul
 import { ChatModule } from './chat/chat.module';
 import { RunErrandsModule } from './run-errands/run-errands.module';
 import { ExtensionesModule } from './extensiones/extensiones.module';
+import { DireccionesModule } from './direcciones/direcciones.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ExtensionesModule } from './extensiones/extensiones.module';
     ChatModule,
     RunErrandsModule,
     ExtensionesModule,
+    DireccionesModule,
   ],
   controllers: [AppController],
 })

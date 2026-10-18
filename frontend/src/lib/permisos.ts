@@ -30,6 +30,7 @@ export const RUTA_MODULO: Record<string, string> = {
   reporte_productos: "/reporte-productos",
   mi_resumen: "/mi-resumen",
   liquidacion_variable: "/liquidacion-variable",
+  direcciones: "/direcciones",
   credito_empleados: "/credito-empleados",
   monitoreo: "/monitoreo",
   run_errands: "/run-errands",
