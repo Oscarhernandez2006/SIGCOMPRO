@@ -23,6 +23,7 @@ import { ChatModule } from './chat/chat.module';
 import { RunErrandsModule } from './run-errands/run-errands.module';
 import { ExtensionesModule } from './extensiones/extensiones.module';
 import { DireccionesModule } from './direcciones/direcciones.module';
+import { PlanesModule } from './planes/planes.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { DireccionesModule } from './direcciones/direcciones.module';
     RunErrandsModule,
     ExtensionesModule,
     DireccionesModule,
+    PlanesModule,
   ],
   controllers: [AppController],
 })

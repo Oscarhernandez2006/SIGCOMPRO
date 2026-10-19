@@ -10,6 +10,7 @@ import { cargarResumenPedidos } from "@/lib/pedidos";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
+import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 
 interface NavItem {
   label: string;
@@ -483,6 +484,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
         </div>
       )}
       <ChatBubble />
+      <AvisoProcesoPlanes />
     </div>
   );
 }

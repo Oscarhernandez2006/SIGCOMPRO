@@ -10,6 +10,7 @@ import {
 } from "@/lib/clientes";
 import { buscarCiudades } from "@/lib/ubicaciones";
 import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
+import ValidarCedula from "./ValidarCedula";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -197,12 +198,21 @@ export default function CrearClienteModal({
             <Bloque titulo="Identificación">
               <div className="grid gap-2 sm:grid-cols-2">
                 <Campo label="NIT / Cédula *">
-                  <input
-                    value={form.nit_cedula}
-                    onChange={(e) => cambiar("nit_cedula", e.target.value)}
-                    autoFocus={!form.nit_cedula}
-                    className="campo"
-                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      value={form.nit_cedula}
+                      onChange={(e) => cambiar("nit_cedula", e.target.value)}
+                      autoFocus={!form.nit_cedula}
+                      className="campo"
+                    />
+                    <ValidarCedula
+                      cedula={form.nit_cedula ?? ""}
+                      onConfirmar={(n, a) => {
+                        setNombres(n);
+                        setApellidos(a);
+                      }}
+                    />
+                  </div>
                 </Campo>
                 <label className="flex items-end gap-2 pb-2 text-sm text-brand-black">
                   <input

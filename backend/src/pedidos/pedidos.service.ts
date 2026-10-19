@@ -95,6 +95,102 @@ export type CambiosReplica = Partial<
 
 const MAX_REPLICAS = 5;
 
+/** Orden de un plan de Drivin, cruzada con su pedido de SIGCOMPRO. */
+export interface OrdenPlan {
+  codigo: string;
+  cliente: string;
+  codigoCliente: string;
+  direccion: string;
+  barrio: string;
+  ciudad: string;
+  prioridad: number | null;
+  kilos: number;
+  vehiculo: string | null;
+  domiciliario: string | null;
+  viaje: number | null;
+  proveedor: string;
+  fechaEntrega: string;
+  pedidoId: string | null;
+  /** Número de réplica si la orden es "comanda-N". */
+  replica: number | null;
+  estadoSigcompro: string | null;
+}
+
+/** Plan (escenario) de Drivin de un día para un esquema. */
+export interface PlanDrivin {
+  esquemaCodigo: string;
+  esquemaNombre: string;
+  descripcion: string;
+  estado: string;
+  fecha: string;
+  creadoEn: string | null;
+  /** Puntos de venta de SIGCOMPRO que suben a este esquema. */
+  puntos: string[];
+  ordenes: OrdenPlan[];
+  /** Error al leer las órdenes de este plan (si falló). */
+  error: string | null;
+}
+
+/** Esquema de Drivin (GET external/v2/schemas). */
+interface DrivinSchema {
+  code?: string;
+  name?: string;
+  fleet?: string | null;
+}
+
+/** Resultado de crear (o no) el plan de un esquema. */
+export interface ResultadoPlan {
+  esquemaCodigo: string;
+  esquemaNombre: string;
+  puntos: string[];
+  estado: 'pendiente' | 'creado' | 'existente' | 'error';
+  /** Paso en curso (para ver el avance en vivo). */
+  paso?: 'pendiente' | 'creando' | 'optimizando' | 'aprobando' | 'listo';
+  /** Último estado que reportó Drivin (ej. "Optimizing", "Optimized"). */
+  estadoDrivin?: string | null;
+  mensaje: string;
+  /** Token del plan en Drivin (si SIGCOMPRO lo creó). */
+  token?: string | null;
+  /** ¿Se aprobó en Drivin? null = no aplica (no se creó ni se reintentó). */
+  aprobado?: boolean | null;
+  /** Detalle del error de aprobación, si falló. */
+  errorAprobacion?: string | null;
+  /** ¿Se optimizó en Drivin (después de aprobar)? null = no aplica. */
+  optimizado?: boolean | null;
+  /** Detalle del error de optimización, si falló. */
+  errorOptimizacion?: string | null;
+}
+
+/** Una corrida de generación de planes (automática o manual). */
+export interface GeneracionPlanes {
+  id: string;
+  fecha: string;
+  origen: 'automatico' | 'manual';
+  usuario: string | null;
+  resultado: ResultadoPlan[];
+  creadoEn: string;
+  estado?: 'en_curso' | 'terminado' | 'error' | 'interrumpida';
+  error?: string | null;
+  terminadoEn?: string | null;
+}
+
+/** Configuración de Drivin de un punto de venta (pestaña Esquemas). */
+export interface EsquemaPunto {
+  puntoId: string;
+  puntoNombre: string;
+  puntoCodigo: string;
+  activo: boolean;
+  drivin: boolean;
+  esquemaConfigurado: string | null;
+  localidadConfigurada: string | null;
+  esquemaEfectivo: string;
+  localidadEfectiva: string;
+  esquemaNombreDrivin: string | null;
+  /** null = no se pudo consultar Drivin. */
+  planHoy: boolean | null;
+  estadoPlanHoy: string | null;
+}
+
 /** Escenario de ruteo de Drivin (GET external/v2/scenarios). */
 interface DrivinScenario {
   token: string;
@@ -173,6 +269,23 @@ export class PedidosService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Historial de generación de planes de Drivin (automática y manual).
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS drivin_planes_generacion (
+        id bigserial PRIMARY KEY,
+        fecha date NOT NULL,
+        origen text NOT NULL,
+        usuario text,
+        resultado jsonb NOT NULL DEFAULT '[]'::jsonb,
+        creado_en timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await this.pool.query(`
+      ALTER TABLE drivin_planes_generacion
+        ADD COLUMN IF NOT EXISTS estado text NOT NULL DEFAULT 'terminado',
+        ADD COLUMN IF NOT EXISTS error text,
+        ADD COLUMN IF NOT EXISTS terminado_en timestamptz
+    `);
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS pedidos (
         id text PRIMARY KEY,
@@ -1984,7 +2097,10 @@ export class PedidosService implements OnModuleInit {
                   'Content-Type': 'application/json',
                   'Content-Length': Buffer.byteLength(body),
                 }
-              : {}),
+              : method !== 'GET'
+                ? // Acciones sin body (approve/optimize): igual que el curl de Drivin.
+                  { 'Content-Type': 'application/json', 'Content-Length': 0 }
+                : {}),
           },
           timeout: 10000, // Reducido de 15s a 10s para consultas más rápidas
         },
@@ -2369,6 +2485,745 @@ export class PedidosService implements OnModuleInit {
       this.sincronizandoDesasignaciones = false;
     }
     return desasignados;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Planes y esquemas (consulta para el panel administrativo)          */
+  /* ------------------------------------------------------------------ */
+
+  /** Caché de planes por fecha (Drivin es lento con muchos escenarios). */
+  private cachePlanes = new Map<string, { ts: number; datos: PlanDrivin[] }>();
+
+  /**
+   * Planes (escenarios) de Drivin de un día, con sus órdenes. Solo LECTURA.
+   * Cada orden se cruza con SIGCOMPRO (pedido base o réplica "comanda-N") para
+   * mostrar su estado aquí. Caché de 30 s por fecha (salvo `fresco`).
+   */
+  async planesDrivin(fecha: string, fresco = false): Promise<PlanDrivin[]> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      throw new BadRequestException('Fecha inválida (YYYY-MM-DD)');
+    }
+    const cache = this.cachePlanes.get(fecha);
+    if (!fresco && cache && Date.now() - cache.ts < 30_000) return cache.datos;
+
+    const [scenarios, vehiculos] = await Promise.all([
+      this.drivinScenarios(fecha, true),
+      this.drivinVehicles().catch(() => [] as DrivinVehicle[]),
+    ]);
+    const nombrePorCode = new Map<string, string>();
+    for (const v of vehiculos) {
+      if (!v.code) continue;
+      const n = `${v.driver?.first_name ?? ''} ${v.driver?.last_name ?? ''}`.trim();
+      nombrePorCode.set(v.code, n || v.code);
+    }
+    const puntos = await this.puntosPorEsquema();
+
+    type GrupoDrivin = {
+      code?: string;
+      address_1?: string;
+      area_level_2?: string;
+      area_level_3?: string;
+      orders?: Array<{
+        code?: string;
+        name?: string;
+        delivery_date?: string;
+        priority?: number | null;
+        units_1?: number | null;
+        vehicle_code?: string | null;
+        trip_number?: number | null;
+        supplier_name?: string | null;
+      }>;
+    };
+    const planes: PlanDrivin[] = await Promise.all(
+      scenarios
+        .filter((s) => s.token)
+        .map(async (s) => {
+          let grupos: GrupoDrivin[] = [];
+          let error: string | null = null;
+          try {
+            const r = await this.drivinGet<{ response?: GrupoDrivin[] }>(
+              `/orders?token=${encodeURIComponent(s.token)}`,
+            );
+            grupos = Array.isArray(r?.response) ? r.response : [];
+          } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+          }
+          const ordenes: OrdenPlan[] = [];
+          for (const g of grupos) {
+            for (const o of g.orders ?? []) {
+              if (!o.code) continue;
+              const vc = o.vehicle_code ?? null;
+              ordenes.push({
+                codigo: o.code,
+                cliente: o.name ?? '',
+                codigoCliente: g.code ?? '',
+                direccion: g.address_1 ?? '',
+                barrio: g.area_level_3 ?? '',
+                ciudad: g.area_level_2 ?? '',
+                prioridad: o.priority ?? null,
+                kilos: Number(o.units_1) || 0,
+                vehiculo: vc,
+                domiciliario: vc ? nombrePorCode.get(vc) ?? vc : null,
+                viaje: o.trip_number ?? null,
+                proveedor: o.supplier_name ?? '',
+                fechaEntrega: o.delivery_date ?? '',
+                pedidoId: null,
+                replica: null,
+                estadoSigcompro: null,
+              });
+            }
+          }
+          const code = String(s.schema_code ?? '');
+          return {
+            esquemaCodigo: code,
+            esquemaNombre: s.schema_name ?? '',
+            descripcion: s.description ?? '',
+            estado: s.status ?? '',
+            fecha: s.deploy_date ?? fecha,
+            creadoEn: s.created_at ?? null,
+            puntos: puntos.get(code) ?? [],
+            ordenes,
+            error,
+          };
+        }),
+    );
+
+    // Cruce con SIGCOMPRO: "1CS00005686" (base) o "1CS00005686-2" (réplica 2).
+    const bases = new Set<string>();
+    for (const p of planes) {
+      for (const o of p.ordenes) bases.add(o.codigo.replace(/-\d+$/, ''));
+    }
+    if (bases.size) {
+      const r = await this.pool.query<{ id: string; comanda: string; estado: string | null; anulado: boolean }>(
+        `SELECT id, data->>'comanda' AS comanda, estado, anulado
+           FROM pedidos WHERE data->>'comanda' = ANY($1::text[])`,
+        [[...bases]],
+      );
+      const porComanda = new Map(r.rows.map((x) => [x.comanda, x]));
+      for (const p of planes) {
+        for (const o of p.ordenes) {
+          const m = o.codigo.match(/^(.*)-(\d+)$/);
+          const ped = porComanda.get(o.codigo) ?? (m ? porComanda.get(m[1]) : undefined);
+          if (!ped) continue;
+          o.pedidoId = ped.id;
+          o.replica = !porComanda.has(o.codigo) && m ? Number(m[2]) : null;
+          o.estadoSigcompro = ped.anulado ? 'Anulado' : ped.estado ?? null;
+        }
+      }
+    }
+
+    planes.sort((a, b) => a.esquemaCodigo.localeCompare(b.esquemaCodigo, 'es', { numeric: true }));
+    this.cachePlanes.set(fecha, { ts: Date.now(), datos: planes });
+    return planes;
+  }
+
+  /** Puntos de venta (nombres) que suben a cada esquema de Drivin. */
+  private async puntosPorEsquema(): Promise<Map<string, string[]>> {
+    const r = await this.pool.query<{ id: string; nombre: string; codigo: string | null; drivin: boolean }>(
+      `SELECT id, nombre, codigo, drivin FROM puntos_venta WHERE activo IS NOT FALSE`,
+    );
+    const mapa = new Map<string, string[]>();
+    for (const p of r.rows) {
+      if (!p.drivin) continue;
+      const cfg = await this.puntoDrivinCfg(String(p.id), p.codigo ?? '', p.nombre);
+      const lista = mapa.get(cfg.schema) ?? [];
+      lista.push(p.nombre);
+      mapa.set(cfg.schema, lista);
+    }
+    return mapa;
+  }
+
+  /** Esquemas de Drivin (código, nombre, flota). Caché corta. */
+  private cacheSchemas: { ts: number; datos: DrivinSchema[] } | null = null;
+  private async drivinSchemas(fresco = false): Promise<DrivinSchema[]> {
+    if (!fresco && this.cacheSchemas && Date.now() - this.cacheSchemas.ts < this.DRIVIN_TTL) {
+      return this.cacheSchemas.datos;
+    }
+    const r = await this.drivinGet<{ response?: DrivinSchema[] }>(`/schemas`);
+    const datos = Array.isArray(r?.response) ? r.response : [];
+    this.cacheSchemas = { ts: Date.now(), datos };
+    return datos;
+  }
+
+  /**
+   * Crea en Drivin los planes (escenarios) de un día para TODOS los esquemas
+   * activos (puntos con Drivin activo), con el mismo formato que los existentes:
+   * "PDV La 93 Domicilios 19-10-26", su esquema y su flota de domiciliarios.
+   * Cada plan creado se APRUEBA y luego se OPTIMIZA. Solo crea los que FALTAN,
+   * así que se puede ejecutar varias veces sin duplicar. Un bloqueo en la BD
+   * evita que dos procesos (cron + botón, o varias instancias) lo hagan a la vez.
+   *
+   * Devuelve en cuanto la corrida queda registrada (`id`) y sigue en segundo
+   * plano (`terminado`), guardando el avance de cada paso en
+   * `drivin_planes_generacion` para mostrarlo en vivo.
+   */
+  async iniciarGeneracionPlanes(
+    fecha: string,
+    origen: 'automatico' | 'manual',
+    usuario?: JwtPayload,
+  ): Promise<{ id: string; terminado: Promise<GeneracionPlanes> }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(fecha))) {
+      throw new BadRequestException('Fecha inválida (YYYY-MM-DD)');
+    }
+    const hoy = this.diaBogota();
+    if (fecha < hoy) {
+      throw new BadRequestException('No se pueden crear planes de días anteriores.');
+    }
+    const limite = this.diaBogota(new Date(Date.now() + 31 * 86_400_000));
+    if (fecha > limite) {
+      throw new BadRequestException('Solo se pueden crear planes hasta 30 días adelante.');
+    }
+    const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+    if (!apiKey) throw new BadRequestException('Falta DRIVIN_API_KEY en el backend.');
+
+    let nombreUsuario: string | null = null;
+    if (usuario?.sub) {
+      const u = await this.pool.query<{ nombre: string }>(
+        `SELECT nombre FROM usuarios WHERE id = $1::bigint LIMIT 1`,
+        [usuario.sub],
+      );
+      nombreUsuario = u.rows[0]?.nombre ?? usuario.cedula ?? null;
+    }
+
+    const cliente = await this.pool.connect();
+    let id = '';
+    try {
+      const lock = await cliente.query<{ ok: boolean }>(
+        `SELECT pg_try_advisory_lock(hashtext('drivin_generar_planes')) AS ok`,
+      );
+      if (!lock.rows[0]?.ok) {
+        throw new ConflictException(
+          'Ya se están generando planes en este momento. Espera un momento y revisa de nuevo.',
+        );
+      }
+      // Esquemas activos: los de los puntos con Drivin activo (sin repetir).
+      const pts = await cliente.query<{ id: string; nombre: string; codigo: string | null }>(
+        `SELECT id, nombre, codigo FROM puntos_venta
+          WHERE drivin = true AND activo IS NOT FALSE ORDER BY nombre`,
+      );
+      const porEsquema = new Map<string, string[]>();
+      for (const p of pts.rows) {
+        const cfg = await this.puntoDrivinCfg(String(p.id), p.codigo ?? '', p.nombre);
+        if (!cfg.schema) continue;
+        porEsquema.set(cfg.schema, [...(porEsquema.get(cfg.schema) ?? []), p.nombre]);
+      }
+      const inicial: ResultadoPlan[] = [...porEsquema.keys()]
+        .sort((x, y) => x.localeCompare(y, 'es', { numeric: true }))
+        .map((codigo) => ({
+          esquemaCodigo: codigo,
+          esquemaNombre: '',
+          puntos: porEsquema.get(codigo) ?? [],
+          estado: 'pendiente',
+          paso: 'pendiente',
+          mensaje: '',
+        }));
+      const ins = await cliente.query<{ id: string }>(
+        `INSERT INTO drivin_planes_generacion (fecha, origen, usuario, resultado, estado)
+         VALUES ($1::date, $2, $3, $4::jsonb, 'en_curso') RETURNING id`,
+        [fecha, origen, nombreUsuario, JSON.stringify(inicial)],
+      );
+      id = String(ins.rows[0].id);
+      const terminado = this.ejecutarGeneracionPlanes(id, cliente, fecha, origen, nombreUsuario, apiKey, inicial);
+      return { id, terminado };
+    } catch (e) {
+      // Si no arrancó la ejecución, se libera aquí el bloqueo y la conexión.
+      if (!id) {
+        await cliente.query(`SELECT pg_advisory_unlock(hashtext('drivin_generar_planes'))`).catch(() => undefined);
+        cliente.release();
+      }
+      throw e;
+    }
+  }
+
+  /** Crea, aprueba y optimiza (o completa) los planes de una corrida. */
+  private async ejecutarGeneracionPlanes(
+    id: string,
+    cliente: PoolClient,
+    fecha: string,
+    origen: 'automatico' | 'manual',
+    nombreUsuario: string | null,
+    apiKey: string,
+    resultado: ResultadoPlan[],
+  ): Promise<GeneracionPlanes> {
+    const hoy = this.diaBogota();
+    let errorGeneral: string | null = null;
+    // Guarda el avance (en serie, para que no se pisen las escrituras).
+    let cola: Promise<unknown> = Promise.resolve();
+    const guardar = () => {
+      const json = JSON.stringify(resultado);
+      cola = cola
+        .then(() =>
+          this.pool.query(`UPDATE drivin_planes_generacion SET resultado = $2::jsonb WHERE id = $1`, [id, json]),
+        )
+        .catch(() => undefined);
+      return cola;
+    };
+    const set = (r: ResultadoPlan, cambios: Partial<ResultadoPlan>) => {
+      Object.assign(r, cambios);
+      return guardar();
+    };
+    /**
+     * Optimiza (si falta), espera a que Drivin termine de optimizar y aprueba.
+     * Drivin NO deja aprobar un plan sin optimizar ("not_optimized").
+     */
+    const optimizarYAprobar = async (r: ResultadoPlan, token: string, yaOptimizado: boolean) => {
+      if (!yaOptimizado) {
+        await set(r, { paso: 'optimizando', estadoDrivin: null });
+        const op = await this.accionPlanDrivin(token, 'optimize', apiKey, r.esquemaCodigo, fecha);
+        if (!op.ok) {
+          await set(r, { optimizado: false, errorOptimizacion: op.error });
+          return;
+        }
+        // La optimización es asíncrona: se espera a que el plan quede optimizado.
+        const espera = await this.esperarOptimizacionPlan(token, (estado) =>
+          set(r, { estadoDrivin: estado }),
+        );
+        await set(r, { optimizado: espera.ok, errorOptimizacion: espera.ok ? null : espera.error });
+        if (!espera.ok) return;
+      } else {
+        await set(r, { optimizado: true });
+      }
+      await set(r, { paso: 'aprobando' });
+      const ap = await this.accionPlanDrivin(token, 'approve', apiKey, r.esquemaCodigo, fecha);
+      await set(r, { aprobado: ap.ok, errorAprobacion: ap.ok ? null : ap.error });
+    };
+
+    try {
+      const [schemas, existentes] = await Promise.all([
+        this.drivinSchemas(true),
+        this.drivinScenarios(fecha, true),
+      ]);
+      const schemaPorCodigo = new Map(schemas.filter((s) => s.code).map((s) => [String(s.code), s]));
+      const yaExisten = new Set(existentes.map((s) => String(s.schema_code ?? '')));
+      const tokensExistentes = new Set(existentes.map((s) => String(s.token ?? '')));
+      for (const r of resultado) r.esquemaNombre = schemaPorCodigo.get(r.esquemaCodigo)?.name ?? '';
+      await guardar();
+
+      // Planes que SIGCOMPRO ya creó para ese día (el más reciente por esquema).
+      const pendientes = await this.pool.query<{ codigo: string; token: string }>(
+        `SELECT DISTINCT ON (r->>'esquemaCodigo') r->>'esquemaCodigo' AS codigo, r->>'token' AS token
+           FROM drivin_planes_generacion g, jsonb_array_elements(g.resultado) r
+          WHERE g.fecha = $1::date AND g.id <> $2
+            AND r->>'estado' = 'creado' AND COALESCE(r->>'token', '') <> ''
+          ORDER BY r->>'esquemaCodigo', g.creado_en DESC`,
+        [fecha, id],
+      );
+      const hechos = await this.pool.query<{ token: string; aprobado: boolean; optimizado: boolean }>(
+        `SELECT r->>'token' AS token,
+                bool_or(COALESCE((r->>'aprobado')::boolean, false)) AS aprobado,
+                bool_or(COALESCE((r->>'optimizado')::boolean, false)) AS optimizado
+           FROM drivin_planes_generacion g, jsonb_array_elements(g.resultado) r
+          WHERE g.fecha = $1::date AND g.id <> $2 AND COALESCE(r->>'token', '') <> ''
+          GROUP BY r->>'token'`,
+        [fecha, id],
+      );
+      const estadoToken = new Map(hechos.rows.map((x) => [x.token, x]));
+      // Se confirma con Drivin que cada plan creado por SIGCOMPRO siga existiendo
+      // (aunque no salga en el listado del día). Si existe, NO se vuelve a crear.
+      const propiosPorEsquema = new Map<string, { token: string; aprobado: boolean; optimizado: boolean }>();
+      for (const x of pendientes.rows) {
+        const existe =
+          tokensExistentes.has(x.token) || (await this.estadoPlanDrivin(x.token, apiKey)) !== null;
+        if (!existe) continue;
+        const e = estadoToken.get(x.token);
+        propiosPorEsquema.set(x.codigo, { token: x.token, aprobado: !!e?.aprobado, optimizado: !!e?.optimizado });
+        yaExisten.add(x.codigo);
+      }
+
+      const [a, m, d] = fecha.split('-');
+      const fechaCorta = `${d}-${m}-${a.slice(2)}`;
+
+      for (const r of resultado) {
+        const codigo = r.esquemaCodigo;
+        const sch = schemaPorCodigo.get(codigo);
+        if (yaExisten.has(codigo)) {
+          const propio = propiosPorEsquema.get(codigo);
+          if (!propio || (propio.aprobado && propio.optimizado)) {
+            await set(r, {
+              estado: 'existente',
+              paso: 'listo',
+              mensaje: 'Ya existía',
+              ...(propio ? { token: propio.token, optimizado: true, aprobado: true } : {}),
+            });
+            continue;
+          }
+          await set(r, { estado: 'existente', token: propio.token, mensaje: 'Ya existía · completando pasos pendientes' });
+          await optimizarYAprobar(r, propio.token, propio.optimizado);
+          await set(r, {
+            paso: 'listo',
+            mensaje: r.aprobado
+              ? 'Ya existía · se completó (optimizado y aprobado)'
+              : r.optimizado
+                ? 'Ya existía · optimizado, sigue sin aprobar'
+                : 'Ya existía · sigue sin optimizar',
+          });
+          continue;
+        }
+        if (!sch?.name) {
+          await set(r, {
+            estado: 'error',
+            paso: 'listo',
+            mensaje: `El esquema "${codigo}" no existe en Drivin. Revisa el código en la pestaña Esquemas.`,
+          });
+          continue;
+        }
+        const descripcion = `${sch.name.replace(/\s*carnes\s+santacruz\s*/gi, ' ').replace(/\s+/g, ' ').trim()} Domicilios ${fechaCorta}`;
+        await set(r, { paso: 'creando', mensaje: descripcion });
+        try {
+          const { status, text } = await this.drivinRequest(
+            'POST',
+            '/scenarios',
+            apiKey,
+            JSON.stringify({
+              description: descripcion,
+              date: fecha,
+              fleet_name: sch.fleet ?? null,
+              schema_name: sch.name,
+              clients: [],
+            }),
+          );
+          this.logger.log(
+            `Drivin crear plan ${codigo} ${fecha} (${origen}): status=${status} resp=${(text ?? '').slice(0, 300)}`,
+          );
+          if (status < 200 || status >= 300) {
+            let detalle = text ?? '';
+            try {
+              const j = JSON.parse(text) as { message?: string; error?: string; response?: { description?: string } };
+              detalle = j.response?.description || j.message || j.error || text;
+            } catch {
+              /* respuesta no JSON */
+            }
+            await set(r, { estado: 'error', paso: 'listo', mensaje: `Drivin respondió ${status}: ${String(detalle).slice(0, 300)}` });
+            continue;
+          }
+          let token: string | null = null;
+          try {
+            token = (JSON.parse(text) as { response?: { scenario_token?: string } }).response?.scenario_token ?? null;
+          } catch {
+            /* respuesta no JSON */
+          }
+          await set(r, { estado: 'creado', token });
+          if (!token) {
+            await set(r, { optimizado: false, errorOptimizacion: 'Drivin no devolvió el token del plan.' });
+          } else {
+            await optimizarYAprobar(r, token, false);
+          }
+          await set(r, { paso: 'listo' });
+        } catch (e) {
+          await set(r, { estado: 'error', paso: 'listo', mensaje: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    } catch (e) {
+      errorGeneral = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Error al generar planes ${fecha}: ${errorGeneral}`);
+      for (const r of resultado) {
+        if (r.paso !== 'listo') Object.assign(r, { estado: 'error', paso: 'listo', mensaje: r.mensaje || errorGeneral });
+      }
+    } finally {
+      await cliente.query(`SELECT pg_advisory_unlock(hashtext('drivin_generar_planes'))`).catch(() => undefined);
+      cliente.release();
+    }
+
+    // Los planes nuevos deben verse ya (asignaciones, envíos y pestaña Planes).
+    this.cacheScenarios.delete(fecha);
+    this.cachePlanes.delete(fecha);
+    if (fecha === hoy) this.cacheAsignaciones = null;
+
+    await cola;
+    const fin = await this.pool.query<{ creado_en: string }>(
+      `UPDATE drivin_planes_generacion
+          SET resultado = $2::jsonb, estado = $3, error = $4, terminado_en = now()
+        WHERE id = $1 RETURNING creado_en`,
+      [id, JSON.stringify(resultado), errorGeneral ? 'error' : 'terminado', errorGeneral],
+    );
+    const creados = resultado.filter((r) => r.estado === 'creado').length;
+    const errores = resultado.filter((r) => r.estado === 'error').length;
+    const sinAprobar = resultado.filter((r) => r.aprobado === false).length;
+    const sinOptimizar = resultado.filter((r) => r.optimizado === false).length;
+    const msg =
+      `Planes Drivin ${fecha} (${origen}): ${creados} creados, ${resultado.length - creados - errores} ya existían, ` +
+      `${errores} con error, ${sinAprobar} sin aprobar, ${sinOptimizar} sin optimizar`;
+    if (errores || sinAprobar || sinOptimizar || errorGeneral) this.logger.warn(msg);
+    else this.logger.log(msg);
+    return {
+      id,
+      fecha,
+      origen,
+      usuario: nombreUsuario,
+      resultado,
+      creadoEn: fin.rows[0]?.creado_en ?? new Date().toISOString(),
+      estado: errorGeneral ? 'error' : 'terminado',
+      error: errorGeneral,
+    };
+  }
+
+  /** Genera los planes de un día y espera a que termine (lo usa el cron). */
+  async generarPlanesDrivin(
+    fecha: string,
+    origen: 'automatico' | 'manual',
+    usuario?: JwtPayload,
+  ): Promise<GeneracionPlanes> {
+    const { terminado } = await this.iniciarGeneracionPlanes(fecha, origen, usuario);
+    return terminado;
+  }
+
+  /** Estado de un plan en Drivin (GET /scenarios/{token}/status); null si no existe. */
+  private async estadoPlanDrivin(token: string, apiKey: string): Promise<string | null> {
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        const { status, text } = await this.drivinRequest(
+          'GET',
+          `/scenarios/${encodeURIComponent(token)}/status`,
+          apiKey,
+        );
+        if (status === 404) return null;
+        if (status >= 200 && status < 300) {
+          const j = JSON.parse(text) as { response?: { status?: string } };
+          return j.response?.status ?? '';
+        }
+      } catch {
+        /* reintenta */
+      }
+      await new Promise((r) => setTimeout(r, 700 * intento));
+    }
+    // Si Drivin no responde, se asume que existe (es preferible no duplicar).
+    return '';
+  }
+
+  /**
+   * Espera (máx. 4 min) a que Drivin termine de optimizar un plan. Reporta el
+   * estado de Drivin en cada consulta para mostrarlo en vivo.
+   */
+  private async esperarOptimizacionPlan(
+    token: string,
+    onEstado: (estado: string) => unknown,
+  ): Promise<{ ok: boolean; error: string | null }> {
+    const apiKey = this.config.get<string>('DRIVIN_API_KEY') ?? '';
+    const inicio = Date.now();
+    const limite = inicio + 4 * 60_000;
+    let ultimo = '';
+    let empezo = false;
+    while (Date.now() < limite) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const estado = await this.estadoPlanDrivin(token, apiKey);
+      if (estado === null) return { ok: false, error: 'El plan ya no existe en Drivin.' };
+      if (estado && estado !== ultimo) {
+        ultimo = estado;
+        await onEstado(estado);
+      }
+      const e = estado.toLowerCase();
+      if (/optimiz/.test(e)) empezo = true;
+      if (/optimized|approved|started|finished|completed/.test(e) && !/optimizing/.test(e)) {
+        return { ok: true, error: null };
+      }
+      if (/error|fail/.test(e)) return { ok: false, error: `Drivin reportó el estado "${estado}" al optimizar.` };
+      // Si en 30 s Drivin ni siquiera empezó a optimizar, no se sigue esperando.
+      if (!empezo && Date.now() - inicio > 30_000) {
+        return {
+          ok: false,
+          error: `Drivin no empezó a optimizar el plan (sigue en "${ultimo || 'desconocido'}").`,
+        };
+      }
+    }
+    return {
+      ok: false,
+      error: `La optimización no terminó en 4 minutos (último estado en Drivin: "${ultimo || 'desconocido'}").`,
+    };
+  }
+
+  /**
+   * Ejecuta una acción sobre un plan en Drivin: PUT /scenarios/{token}/approve
+   * u /optimize. Reintenta hasta 3 veces porque la API de Drivin es
+   * intermitente. Nunca lanza error.
+   */
+  private async accionPlanDrivin(
+    token: string,
+    accion: 'approve' | 'optimize',
+    apiKey: string,
+    codigo: string,
+    fecha: string,
+  ): Promise<{ ok: boolean; error: string | null }> {
+    const verbo = accion === 'approve' ? 'aprobar' : 'optimizar';
+    let error: string | null = null;
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        const { status, text } = await this.drivinRequest(
+          'PUT',
+          `/scenarios/${encodeURIComponent(token)}/${accion}`,
+          apiKey,
+        );
+        this.logger.log(
+          `Drivin ${verbo} plan ${codigo} ${fecha} (intento ${intento}): status=${status} resp=${(text ?? '').slice(0, 200)}`,
+        );
+        if (status >= 200 && status < 300) return { ok: true, error: null };
+        let detalle = text ?? '';
+        try {
+          const j = JSON.parse(text) as { response?: { description?: string }; message?: string };
+          detalle = j.response?.description || j.message || text;
+        } catch {
+          /* respuesta no JSON */
+        }
+        error = `Drivin respondió ${status} al ${verbo}: ${String(detalle).slice(0, 300)}`;
+        // Un 4xx es definitivo (no se arregla reintentando).
+        if (status >= 400 && status < 500) break;
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      if (intento < 3) await new Promise((r) => setTimeout(r, 1000 * intento));
+    }
+    return { ok: false, error };
+  }
+
+  /**
+   * Estado de la generación AUTOMÁTICA de planes (la del cambio de día) para el
+   * aviso global de todas las pantallas. Activa si está en curso o si terminó
+   * hace menos de 15 s (para mostrar "listos" un momento). Consulta liviana.
+   */
+  async avisoGeneracionAutomatica(): Promise<{
+    activa: boolean;
+    id?: string;
+    fecha?: string;
+    estado?: 'en_curso' | 'terminado' | 'error' | 'interrumpida';
+    total?: number;
+    listos?: number;
+    actual?: { esquemaCodigo: string; puntos: string[]; paso: string } | null;
+    pendientes?: number;
+  }> {
+    const r = await this.pool.query<{
+      id: string;
+      fecha: string;
+      estado: string;
+      resultado: ResultadoPlan[];
+    }>(
+      `SELECT id, to_char(fecha, 'YYYY-MM-DD') AS fecha, estado, resultado
+         FROM drivin_planes_generacion
+        WHERE origen = 'automatico'
+          AND (
+            (estado = 'en_curso' AND creado_en > now() - interval '60 minutes')
+            OR terminado_en > now() - interval '15 seconds'
+          )
+        ORDER BY creado_en DESC LIMIT 1`,
+    );
+    const g = r.rows[0];
+    if (!g) return { activa: false };
+    const res = Array.isArray(g.resultado) ? g.resultado : [];
+    const actual = res.find((x) => x.paso === 'creando' || x.paso === 'optimizando' || x.paso === 'aprobando');
+    return {
+      activa: true,
+      id: String(g.id),
+      fecha: g.fecha,
+      estado: g.estado as 'en_curso' | 'terminado' | 'error' | 'interrumpida',
+      total: res.length,
+      listos: res.filter((x) => x.paso === 'listo').length,
+      actual: actual
+        ? { esquemaCodigo: actual.esquemaCodigo, puntos: actual.puntos, paso: actual.paso ?? '' }
+        : null,
+      pendientes: res.filter(
+        (x) => x.estado === 'error' || x.aprobado === false || x.optimizado === false,
+      ).length,
+    };
+  }
+
+  /** Una generación (para seguir su avance en vivo). */
+  async generacionPlanes(id: string): Promise<GeneracionPlanes> {
+    if (!/^\d+$/.test(String(id ?? ''))) throw new BadRequestException('Generación inválida');
+    const r = await this.listarGeneraciones(`WHERE id = $1::bigint`, [id]);
+    if (!r[0]) throw new NotFoundException('Generación no encontrada');
+    return r[0];
+  }
+
+  /** Últimas generaciones de planes (para el historial del módulo). */
+  async historialGeneracionPlanes(limite = 20): Promise<GeneracionPlanes[]> {
+    return this.listarGeneraciones(`ORDER BY creado_en DESC LIMIT $1`, [Math.min(100, Math.max(1, limite))]);
+  }
+
+  private async listarGeneraciones(sufijo: string, params: unknown[]): Promise<GeneracionPlanes[]> {
+    const r = await this.pool.query<{
+      id: string;
+      fecha: string;
+      origen: 'automatico' | 'manual';
+      usuario: string | null;
+      resultado: ResultadoPlan[];
+      creado_en: string;
+      estado: string | null;
+      error: string | null;
+      terminado_en: string | null;
+    }>(
+      `SELECT id, to_char(fecha, 'YYYY-MM-DD') AS fecha, origen, usuario, resultado, creado_en,
+              estado, error, terminado_en
+         FROM drivin_planes_generacion ${sufijo}`,
+      params,
+    );
+    return r.rows.map((x) => {
+      // Una corrida "en curso" por más de 60 min quedó interrumpida
+      // (p. ej. se reinició el servidor).
+      const estado =
+        x.estado === 'en_curso' && Date.now() - new Date(x.creado_en).getTime() > 60 * 60_000
+          ? 'interrumpida'
+          : ((x.estado ?? 'terminado') as GeneracionPlanes['estado']);
+      return {
+        id: String(x.id),
+        fecha: x.fecha,
+        origen: x.origen,
+        usuario: x.usuario,
+        resultado: x.resultado ?? [],
+        creadoEn: x.creado_en,
+        estado,
+        error: x.error,
+        terminadoEn: x.terminado_en,
+      };
+    });
+  }
+
+  /**
+   * Esquemas de Drivin por punto de venta: configuración guardada, valor
+   * EFECTIVO (con el respaldo por número de punto) y si Drivin tiene un plan
+   * de hoy para ese esquema.
+   */
+  async esquemasDrivin(): Promise<EsquemaPunto[]> {
+    const hoy = this.diaBogota();
+    let scenarios: DrivinScenario[] = [];
+    let drivinOk = true;
+    try {
+      scenarios = await this.drivinScenarios(hoy);
+    } catch {
+      drivinOk = false;
+    }
+    const porCodigo = new Map<string, DrivinScenario>();
+    for (const s of scenarios) if (s.schema_code) porCodigo.set(String(s.schema_code), s);
+
+    const r = await this.pool.query<{
+      id: string;
+      nombre: string;
+      codigo: string | null;
+      drivin: boolean;
+      drivin_schema_code: string | null;
+      drivin_localidad: string | null;
+      activo: boolean | null;
+    }>(
+      `SELECT id, nombre, codigo, drivin, drivin_schema_code, drivin_localidad, activo
+         FROM puntos_venta ORDER BY nombre`,
+    );
+    const salida: EsquemaPunto[] = [];
+    for (const p of r.rows) {
+      const cfg = await this.puntoDrivinCfg(String(p.id), p.codigo ?? '', p.nombre);
+      const plan = porCodigo.get(cfg.schema);
+      salida.push({
+        puntoId: String(p.id),
+        puntoNombre: p.nombre,
+        puntoCodigo: p.codigo ?? '',
+        activo: p.activo !== false,
+        drivin: p.drivin === true,
+        esquemaConfigurado: p.drivin_schema_code?.trim() || null,
+        localidadConfigurada: p.drivin_localidad?.trim() || null,
+        esquemaEfectivo: cfg.schema,
+        localidadEfectiva: cfg.localidad,
+        esquemaNombreDrivin: plan?.schema_name ?? null,
+        planHoy: drivinOk ? !!plan : null,
+        estadoPlanHoy: plan?.status ?? null,
+      });
+    }
+    return salida;
   }
 
   /** Caché por comanda del estado de entrega (POD v3). TTL corto. */

@@ -20,6 +20,7 @@ import { buscarCiudades } from "@/lib/ubicaciones";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
+import ValidarCedula from "@/components/ValidarCedula";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
@@ -761,11 +762,20 @@ export default function ClientesPage() {
                 <Bloque titulo="Identificación">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Campo label="NIT / Cédula *">
-                      <input
-                        value={form.nit_cedula}
-                        onChange={(e) => cambiar("nit_cedula", e.target.value)}
-                        className="campo"
-                      />
+                      <div className="flex gap-1.5">
+                        <input
+                          value={form.nit_cedula}
+                          onChange={(e) => cambiar("nit_cedula", e.target.value)}
+                          className="campo"
+                        />
+                        <ValidarCedula
+                          cedula={form.nit_cedula ?? ""}
+                          onConfirmar={(n, a) => {
+                            setNombres(n);
+                            setApellidos(a);
+                          }}
+                        />
+                      </div>
                     </Campo>
                     <label
                       className={`flex items-end gap-2 pb-2 text-sm text-brand-black ${permite.estado ? "" : "opacity-50"}`}

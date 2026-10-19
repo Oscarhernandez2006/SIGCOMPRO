@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "SIGCOMPRO · Validar cédula en ADRES",
+  "version": "1.6.0",
+  "description": "Llena la cédula en la consulta de ADRES y devuelve nombres y apellidos a SIGCOMPRO.",
+  "permissions": [
+    "storage",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://www.adres.gov.co/*",
+    "https://aplicaciones.adres.gov.co/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
+        "https://sigcompro.grupo-santacruz.com/*"
+      ],
+      "js": [
+        "sigcompro.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://aplicaciones.adres.gov.co/BDUA_Internet/*"
+      ],
+      "js": [
+        "mismo-marco.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://aplicaciones.adres.gov.co/BDUA_Internet/*"
+      ],
+      "js": [
+        "adres.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}
