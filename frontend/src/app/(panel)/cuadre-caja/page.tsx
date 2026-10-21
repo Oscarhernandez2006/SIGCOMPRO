@@ -15,6 +15,7 @@ import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinami
 import { yaDespachado } from "@/lib/despacho";
 import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
 import { METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
+import { DetalleDevolucionModal } from "@/components/DevolucionModal";
 
 const cop = (n: number) =>
   "$ " + Math.round(Number(n) || 0).toLocaleString("es-CO");
@@ -112,6 +113,7 @@ export default function CuadreCajaPage() {
   const [filtroLiquidacion, setFiltroLiquidacion] = useState<string>("todos");
   // Id del pedido cuya ventanita de detalle (creó/alistó/domiciliario) está abierta.
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [devolucionDe, setDevolucionDe] = useState<Pedido | null>(null);
   // Orden de "completados" (autoguardados con valor): van al final para facilitar
   // el llenado (el que se acaba de liquidar baja y sube el siguiente).
   const [completados, setCompletados] = useState<Record<string, number>>({});
@@ -946,16 +948,17 @@ export default function CuadreCajaPage() {
       ) : (
         <>
           <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-            <table className="w-full min-w-[880px] table-fixed text-xs">
+            <table className="w-full min-w-[960px] table-fixed text-xs">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-black shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                   <th className="w-[9%] px-2 py-2.5">No. Factura</th>
-                  <th className="w-[10%] px-2 py-2.5">Consecutivo</th>
-                  <th className="w-[15%] px-2 py-2.5">Cliente</th>
-                  <th className="w-[9%] px-2 py-2.5">NIT / Cédula</th>
-                  <th className="w-[10%] px-2 py-2.5">Método de pago</th>
-                  <th className="w-[11%] px-2 py-2.5">Despachado por</th>
+                  <th className="w-[9%] px-2 py-2.5">Consecutivo</th>
+                  <th className="w-[13%] px-2 py-2.5">Cliente</th>
+                  <th className="w-[8%] px-2 py-2.5">NIT / Cédula</th>
+                  <th className="w-[9%] px-2 py-2.5">Método de pago</th>
+                  <th className="w-[10%] px-2 py-2.5">Despachado por</th>
                   <th className="w-[9%] px-2 py-2.5 text-right">Facturado</th>
+                  <th className="w-[6%] px-2 py-2.5 text-center">Devolución</th>
                   <th className="w-[9%] px-2 py-2.5 text-right">Liq. efectivo</th>
                   <th className="w-[9%] px-2 py-2.5 text-right">Liq. O.M.P.</th>
                   <th className="w-[9%] px-2 py-2.5 text-right">Diferencia</th>
@@ -1074,6 +1077,20 @@ export default function CuadreCajaPage() {
                       <td className="px-2 py-2 text-right font-semibold tabular-nums text-brand-black">
                         {cop(valorFacturado(p))}
                       </td>
+                      <td className="px-2 py-2 text-center">
+                        {meta[p.id]?.devolucion ? (
+                          <button
+                            type="button"
+                            onClick={() => setDevolucionDe(p)}
+                            title="Ver el detalle de la devolución"
+                            className="rounded-full bg-fuchsia-100 px-2 py-0.5 text-[11px] font-bold text-fuchsia-700 underline-offset-2 transition hover:bg-fuchsia-200 hover:underline"
+                          >
+                            Sí
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-brand-black">No</span>
+                        )}
+                      </td>
                       <td className="px-2 py-2 text-right">
                         {ajena ? (
                           <div
@@ -1169,6 +1186,9 @@ export default function CuadreCajaPage() {
                     Total general · {filas.length} pedido{filas.length === 1 ? "" : "s"}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.facturado)}</td>
+                  <td className="px-2 py-2.5 text-center tabular-nums">
+                    {filas.filter((p) => meta[p.id]?.devolucion).length || ""}
+                  </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.efectivo)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.omp)}</td>
                   <td
@@ -1265,6 +1285,13 @@ export default function CuadreCajaPage() {
       )}
 
       {/* Modal de autorización con clave dinámica para editar un cuadre cerrado */}
+      {devolucionDe && meta[devolucionDe.id]?.devolucion && (
+        <DetalleDevolucionModal
+          pedido={devolucionDe}
+          devolucion={meta[devolucionDe.id]!.devolucion!}
+          onCerrar={() => setDevolucionDe(null)}
+        />
+      )}
       {authAbierta && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/60 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">

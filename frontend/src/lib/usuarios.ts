@@ -92,6 +92,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
           { key: "despacho.estado.facturado", label: "Facturar (colocar en 'Facturado')" },
           { key: "despacho.estado.despachado", label: "Despachar (colocar en 'Despachado')" },
           { key: "despacho.pago", label: "Cambiar método de pago / liberar cartera" },
+          { key: "despacho.devolucion", label: "Registrar devoluciones" },
         ],
       },
       {

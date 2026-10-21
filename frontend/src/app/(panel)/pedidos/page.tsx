@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { listarClientes, puntosCompradosClientes, type Cliente } from "@/lib/clientes";
 import {
   misPuntosVenta,
@@ -15,7 +16,7 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, buscarPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
@@ -204,6 +205,39 @@ export default function PedidosPage() {
   // Búsqueda (consecutivo, comanda, nombre o NIT) y filtro por día.
   const [busqueda, setBusqueda] = useState("");
   const [fechaFiltro, setFechaFiltro] = useState("");
+
+  // Filtro que llega por URL (?comanda=, p. ej. desde Cotizaciones). Se aplica
+  // como búsqueda y se quita de la URL en cuanto el usuario cambia los filtros.
+  const router = useRouter();
+  const pathname = usePathname();
+  const [comandaUrl, setComandaUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const comanda = new URLSearchParams(window.location.search).get("comanda")?.trim().slice(0, 40);
+    if (!comanda) return;
+    setComandaUrl(comanda);
+    setBusqueda(comanda);
+    // Puede ser de un día anterior: se busca en todo el historial y se fusiona.
+    buscarPedidos(comanda)
+      .then((e) => {
+        if (e.pedidos.length) {
+          setPedidos((prev) => {
+            const ids = new Set(prev.map((p) => p.id));
+            return [...e.pedidos.filter((p) => !ids.has(p.id)), ...prev];
+          });
+        }
+        if (e.meta && Object.keys(e.meta).length) setMeta((prev) => ({ ...e.meta, ...prev }));
+        const encontrado = e.pedidos.find((p) => p.comanda === comanda);
+        if (encontrado?.punto?.id) setPuntoActivoId(String(encontrado.punto.id));
+      })
+      .catch(() => { /* la búsqueda local sigue funcionando */ });
+  }, []);
+  const quitarFiltroUrl = useCallback(() => {
+    setComandaUrl(null);
+    router.replace(pathname, { scroll: false });
+  }, [router, pathname]);
+  useEffect(() => {
+    if (comandaUrl && (busqueda !== comandaUrl || fechaFiltro)) quitarFiltroUrl();
+  }, [busqueda, fechaFiltro, comandaUrl, quitarFiltroUrl]);
 
   // Ordena por fecha desc y aplica el alcance por punto + búsqueda + filtro de día.
   const pedidosFiltrados = useMemo(() => {
@@ -539,6 +573,20 @@ export default function PedidosPage() {
       </div>
 
       {/* Barra de búsqueda y filtro por día */}
+      {comandaUrl && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          <span>
+            Mostrando el pedido <b>{comandaUrl}</b> (enlace desde Cotizaciones).
+          </span>
+          <button
+            type="button"
+            onClick={() => setBusqueda("")}
+            className="ml-auto rounded-lg border border-blue-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+          >
+            Ver todos los pedidos
+          </button>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
@@ -1369,20 +1417,20 @@ function DetalleCongelado({
 /* ---------------------------------------------------------------- */
 /* Wizard de creación de pedido                                     */
 /* ---------------------------------------------------------------- */
-function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, clon, borrador }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; meta?: Record<string, DespachoMeta>; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null }) {
-  // Fuente para precargar el formulario: edición o clonación.
-  const base = inicial ?? clon ?? null;
+export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, clon, borrador, cotizacion, guardar }: { onCerrar: () => void; onCrear: (p: Pedido) => void; onCongelar?: (b: PedidoCongelado) => void; pedidos: Pedido[]; meta?: Record<string, DespachoMeta>; inicial?: Pedido | null; clon?: Pedido | null; borrador?: PedidoCongelado | null; cotizacion?: { numero: number; pedido: Pedido } | null; guardar?: (p: Pedido) => Promise<Pedido> }) {
+  // Fuente para precargar el formulario: edición, clonación o cotización.
+  const base = inicial ?? clon ?? cotizacion?.pedido ?? null;
   // En modo edición solo se permite cambiar entrega/pago/fecha (paso 2). Para
   // corregir cliente o productos hay que anular y clonar el pedido.
   const modoEdicion = !!inicial;
-  const [paso, setPaso] = useState(modoEdicion ? 2 : borrador?.paso ?? 0);
+  const [paso, setPaso] = useState(modoEdicion || cotizacion ? 2 : borrador?.paso ?? 0);
   const [modalNotasAbierto, setModalNotasAbierto] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(borrador ? borrador.cliente : base?.cliente ?? null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>(() => {
     if (borrador) return borrador.carrito;
     const src = base?.carrito ?? [];
     // Al clonar, copiamos los ítems para no mutar el pedido original.
-    return clon ? structuredClone(src) : src;
+    return clon || cotizacion ? structuredClone(src) : src;
   });
   const [entrega, setEntrega] = useState<"domicilio" | "recoge" | null>(borrador ? borrador.entrega : base?.entrega ?? null);
   const [pago, setPago] = useState<string | null>(borrador ? borrador.pago : base?.pago ?? null);
@@ -1697,10 +1745,14 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
     // imprimimos, garantizando que no haya consecutivos duplicados.
     let finalPedido: Pedido;
     try {
-      finalPedido = await guardarPedidoApi(pedido);
-    } catch {
+      finalPedido = await (guardar ?? guardarPedidoApi)(pedido);
+    } catch (e) {
       finalizandoRef.current = false;
-      alert("No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.");
+      alert(
+        e instanceof Error && e.message
+          ? e.message
+          : "No se pudo crear el pedido. Verifica tu conexión e inténtalo de nuevo.",
+      );
       return;
     }
 
@@ -1850,7 +1902,7 @@ function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, inicial, c
         {/* Cabecera */}
         <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-6 py-4">
           <h2 className="font-serif text-xl font-bold text-brand-wine">
-            {inicial ? `Editar pedido ${inicial.comanda}` : clon ? `Clonar pedido ${clon.comanda}` : borrador ? `Pedido congelado CONG-${borrador.tempConsecutivo}` : "Nuevo pedido"}
+            {inicial ? `Editar pedido ${inicial.comanda}` : clon ? `Clonar pedido ${clon.comanda}` : cotizacion ? `Pedido desde cotización COT-${String(cotizacion.numero).padStart(5, "0")}` : borrador ? `Pedido congelado CONG-${borrador.tempConsecutivo}` : "Nuevo pedido"}
           </h2>
           <div className="flex items-center gap-3">
             {punto && (
@@ -4232,7 +4284,7 @@ export interface Pedido extends DatosComanda {
   total: number;
   vendedorNombre?: string;
   vendedorCedula?: string;
-  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "En tránsito" | "Entregado" | "Rechazado" | "Anulado" | "Cancelado";
+  estado?: "En proceso" | "En producción" | "Alistado" | "Facturado" | "Despachado" | "En tránsito" | "Entregado" | "Rechazado" | "Anulado" | "Cancelado" | "Devolución";
   anulado?: boolean;
   /** Motivo de anulación o cancelación (se guarda al anular/cancelar). */
   motivo?: string;

@@ -92,6 +92,32 @@ export interface DespachoMeta {
    * consulta por separado). Solo aplica a pedidos de transferencia o mixto.
    */
   comprobante?: { tiene: boolean; confirmado: boolean } | null;
+  /** Devolución registrada en Despacho (ya descontada de facturaValor). */
+  devolucion?: DevolucionPedido;
+}
+
+export interface ProductoDevuelto {
+  itemId: string;
+  referencia: string;
+  producto: string;
+  um: string;
+  precio: number;
+  cantidadOriginal: number;
+  cantidadDevuelta: number;
+  cantidadFinal: number;
+  valor: number;
+}
+
+export interface DevolucionPedido {
+  facturaNumero: string;
+  valorAnterior: number;
+  valorDevuelto: number;
+  valorNuevo: number;
+  motivo: string | null;
+  productos: ProductoDevuelto[];
+  estadoAnterior: string;
+  fecha: string;
+  usuarioNombre: string | null;
 }
 
 export interface EstadoPedidos {
@@ -206,6 +232,22 @@ export function actualizarMetaApi(
   return apiFetch<{ id: string }>(`/pedidos/${id}/meta`, {
     method: "PATCH",
     body: JSON.stringify(cambios),
+  });
+}
+
+/** Registra la devolución (total o parcial) de un pedido facturado. */
+export function registrarDevolucionApi(
+  id: string,
+  datos: {
+    facturaNumero: string;
+    valorDevuelto: number;
+    motivo?: string;
+    productos: { itemId: string; cantidad: number }[];
+  },
+): Promise<{ pedido: Pedido; meta: DespachoMeta }> {
+  return apiFetch(`/pedidos/${id}/devolucion`, {
+    method: "POST",
+    body: JSON.stringify(datos),
   });
 }
 

@@ -31,7 +31,7 @@ export class AppController {
            AND p.meta->>'despachoFin' ~ '^\\d{4}-\\d{2}-\\d{2}'
            AND ((p.meta->>'despachoFin')::timestamptz AT TIME ZONE 'America/Bogota')::date = d.hoy) AS despachados_hoy,
         COUNT(p.id) FILTER (WHERE NOT p.anulado
-           AND lower(coalesce(p.estado,'')) NOT IN ('despachado','anulado','entregado','cancelado','en tránsito','en transito','facturado','rechazado')
+           AND lower(coalesce(p.estado,'')) NOT IN ('despachado','anulado','entregado','cancelado','en tránsito','en transito','facturado','rechazado','devolución','devolucion')
            AND (CASE WHEN p.data->>'entregaProgramada' = 'true' AND p.data->>'fechaProgramada' ~ '^\\d{4}-\\d{2}-\\d{2}'
                      THEN substring(p.data->>'fechaProgramada' from 1 for 10)::date
                      ELSE (p.fecha AT TIME ZONE 'America/Bogota')::date END) < d.hoy) AS atrasados

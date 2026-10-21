@@ -73,6 +73,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
             label: "Despachar (colocar en 'Despachado')",
           },
           { key: 'despacho.pago', label: 'Cambiar método de pago / liberar cartera' },
+          { key: 'despacho.devolucion', label: 'Registrar devoluciones' },
         ],
       },
       {

@@ -7,6 +7,7 @@ import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdm
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import ZoomImagen from "@/components/ZoomImagen";
+import { DetalleDevolucionModal, RegistrarDevolucionModal } from "@/components/DevolucionModal";
 import {
   cargarEstadoPedidos,
   actualizarMetaApi,
@@ -522,9 +523,14 @@ export default function DespachoPage() {
     () => ({
       estado: puedeAccion(usuarioDesp, "despacho.estado"),
       pago: puedeAccion(usuarioDesp, "despacho.pago"),
+      devolucion:
+        puedeAccion(usuarioDesp, "despacho.devolucion") ||
+        puedeAccion(usuarioDesp, "despacho.estado"),
     }),
     [usuarioDesp],
   );
+  const [devolucionDe, setDevolucionDe] = useState<Pedido | null>(null);
+  const [detalleDevolucionDe, setDetalleDevolucionDe] = useState<Pedido | null>(null);
 
   // ¿El usuario puede COLOCAR un pedido en un estado concreto? Cada estado tiene
   // su permiso (despacho.estado.<estado>); el maestro despacho.estado y los
@@ -1999,13 +2005,13 @@ export default function DespachoPage() {
             ref={scrollRef}
             className="max-h-[calc(100vh-340px)] overflow-auto"
           >
-          <table className="w-full min-w-[1000px] table-fixed text-sm">
+          <table className="w-full min-w-[1080px] table-fixed text-sm">
             <colgroup>
-              <col className="w-[28%]" />
-              <col className="w-[17%]" />
+              <col className="w-[30%]" />
+              <col className="w-[16%]" />
               <col className="w-[15%]" />
               <col className="w-[16%]" />
-              <col className="w-[14%]" />
+              <col className="w-[13%]" />
               <col className="w-[10%]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-cream-soft text-center text-[11px] uppercase tracking-wide text-brand-black shadow-sm">
@@ -2190,10 +2196,9 @@ export default function DespachoPage() {
                           </div>
                         </div>
                         <div className="w-px shrink-0 self-stretch bg-brand-brown/10" />
-                        <div className="min-w-0 text-right">
-                          <p className="text-xs font-semibold text-brand-wine">Comanda</p>
-                          <p className="text-xs font-semibold text-brand-wine">
-                            #{p.comanda}
+                        <div className="shrink-0 text-right">
+                          <p className="whitespace-nowrap text-xs font-semibold text-brand-wine">
+                            Comanda #{p.comanda}
                           </p>
                           {p.clonadoDe && (
                             <p className="mt-0.5 text-[11px] font-medium text-brand-amber">
@@ -2257,20 +2262,22 @@ export default function DespachoPage() {
                               marcarImpreso(p.id);
                               imprimirComanda(p, numeroDelDiaPorId.get(p.id));
                             }}
-                            title="Imprimir la comanda del pedido"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90"
+                            title={impreso ? "Volver a imprimir la comanda del pedido" : "Imprimir la comanda del pedido"}
+                            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition ${
+                              impreso ? "bg-blue-600 hover:bg-blue-700" : "bg-brand-wine hover:bg-brand-wine/90"
+                            }`}
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Z" />
                             </svg>
-                            Imprimir comanda
+                            {impreso ? "Reimprimir comanda" : "Imprimir comanda"}
                           </button>
-                          {impresos.has(p.id) && (
-                            <span className="mx-auto inline-flex items-center justify-center gap-1 self-center rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold uppercase leading-none tracking-wide text-emerald-700">
+                          {impreso && (
+                            <span className="inline-flex items-center justify-center gap-1 self-center whitespace-nowrap rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold uppercase leading-none tracking-wide text-emerald-700">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3 w-3">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                               </svg>
-                              Impresa
+                              Impreso
                             </span>
                           )}
                           {!impreso && (
@@ -2284,7 +2291,7 @@ export default function DespachoPage() {
 
                     {/* Estado */}
                     <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className={puedeCambiarEstadoManual && !anulado ? "pb-14" : ""}>
+                      <div className={puedeCambiarEstadoManual && !anulado && !m.devolucion ? "pb-14" : ""}>
                       <div
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold ${
                           esPosteriorPend
@@ -2334,7 +2341,7 @@ export default function DespachoPage() {
                         )
                       )}
                       </div>
-                      {puedeCambiarEstadoManual && !anulado && (
+                      {puedeCambiarEstadoManual && !anulado && !m.devolucion && (
                         <div className="absolute inset-x-3 bottom-3">
                           <label className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-brand-black">
                             Cambiar estado
@@ -2537,6 +2544,31 @@ export default function DespachoPage() {
                           <p className="text-[11px] font-medium text-brand-black">
                             Facturó: {m.facturadoPor}
                           </p>
+                        )}
+                        {m.devolucion ? (
+                          <button
+                            type="button"
+                            onClick={() => setDetalleDevolucionDe(p)}
+                            title="Ver el detalle de la devolución"
+                            className="flex w-full items-center justify-between gap-1.5 rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-semibold text-fuchsia-700 transition hover:bg-fuchsia-100"
+                          >
+                            <span>Devolución {m.devolucion.facturaNumero}</span>
+                            <span>− {fmtMoneda(m.devolucion.valorDevuelto)}</span>
+                          </button>
+                        ) : (
+                          facturado && !anulado && (
+                            <button
+                              type="button"
+                              onClick={() => (permite.devolucion ? setDevolucionDe(p) : sinPermiso.mostrar())}
+                              title="Registrar una devolución total o parcial de este pedido"
+                              className={`flex w-full items-center justify-center gap-1.5 rounded-lg border border-fuchsia-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-fuchsia-700 transition hover:bg-fuchsia-50 ${permite.devolucion ? "" : "opacity-50"}`}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                              </svg>
+                              Devolución
+                            </button>
+                          )
                         )}
                         {requiereComprobante && (
                           <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
@@ -3263,6 +3295,25 @@ export default function DespachoPage() {
         </div>
       )}
       <ModalSinPermiso abierto={sinPermiso.abierto} onCerrar={sinPermiso.cerrar} />
+      {devolucionDe && (
+        <RegistrarDevolucionModal
+          pedido={devolucionDe}
+          meta={meta[devolucionDe.id]}
+          onCerrar={() => setDevolucionDe(null)}
+          onRegistrada={({ pedido, meta: nuevaMeta }) => {
+            setPedidos((prev) => prev.map((x) => (x.id === pedido.id ? { ...x, ...pedido } : x)));
+            setMeta((prev) => ({ ...prev, [pedido.id]: nuevaMeta }));
+            setDevolucionDe(null);
+          }}
+        />
+      )}
+      {detalleDevolucionDe && meta[detalleDevolucionDe.id]?.devolucion && (
+        <DetalleDevolucionModal
+          pedido={detalleDevolucionDe}
+          devolucion={meta[detalleDevolucionDe.id]!.devolucion!}
+          onCerrar={() => setDetalleDevolucionDe(null)}
+        />
+      )}
       {despachoManual && (() => {
         const ped = pedidos.find((x) => x.id === despachoManual.id);
         const personal = personalPorPunto[String(ped?.punto?.id ?? "")] ?? {

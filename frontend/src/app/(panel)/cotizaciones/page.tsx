@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo, puedeAccion } from "@/lib/permisos";
 import {
@@ -11,7 +12,7 @@ import {
 } from "@/lib/puntos-venta";
 import { listarClientes, type Cliente } from "@/lib/clientes";
 import { listarProductos, type ProductoPrecio } from "@/lib/productos";
-import type { ItemCarrito } from "@/app/(panel)/pedidos/page";
+import { WizardPedido, type ItemCarrito, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
   listarCotizaciones,
   guardarCotizacion,
@@ -287,14 +288,17 @@ export default function CotizacionesPage() {
     null,
   );
   const [aBorrar, setABorrar] = useState<Cotizacion | null>(null);
-  const [convirtiendo, setConvirtiendo] = useState<string | null>(null);
+  const [convirtiendo, setConvirtiendo] = useState<Cotizacion | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const pathname = usePathname();
+  const rutaPedidos = pathname.startsWith("/admin") ? "/admin/pedidos" : "/pedidos";
 
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
   const puedeCrear = puedeAccion(usuario, "cotizaciones.crear");
   const puedeEditar = puedeAccion(usuario, "cotizaciones.editar");
   const puedeEliminar = puedeAccion(usuario, "cotizaciones.eliminar");
   const puedeConvertir = puedeAccion(usuario, "cotizaciones.convertir");
+  const puedeVerPedidos = puedeVerModulo(usuario, "pedidos");
 
   /** Sólo el creador (o admin) puede eliminar una cotización. */
   const puedeEliminarCot = (cot: Cotizacion) =>
@@ -349,7 +353,7 @@ export default function CotizacionesPage() {
     }
   }
 
-  async function convertir(cot: Cotizacion) {
+  function convertir(cot: Cotizacion) {
     if (convirtiendo) return;
     // "Consumidor Final" solo sirve para generar la cotización: para convertirla
     // en pedido hay que seleccionar un cliente real.
@@ -364,23 +368,28 @@ export default function CotizacionesPage() {
       );
       return;
     }
-    setConvirtiendo(cot.id);
     setError(null);
-    try {
-      const { cotizacion } = await convertirCotizacion(cot.id);
-      setCotizaciones((prev) =>
-        prev.map((c) => (c.id === cot.id ? cotizacion : c)),
-      );
-      setAviso(
-        `Cotización #${cot.numero} convertida en el pedido ${cotizacion.pedidoComanda ?? ""}.`,
-      );
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "No se pudo convertir la cotización",
-      );
-    } finally {
-      setConvirtiendo(null);
-    }
+    setConvirtiendo(cot);
+  }
+
+  /** Pedido base (editable en el asistente) con los datos de la cotización. */
+  function pedidoDesdeCotizacion(cot: Cotizacion): Pedido {
+    return {
+      id: crypto.randomUUID(),
+      comanda: "",
+      consecutivo: 0,
+      fecha: new Date().toISOString(),
+      punto: cot.punto,
+      cliente: cot.cliente,
+      carrito: cot.carrito ?? [],
+      entrega: null,
+      pago: null,
+      total: cot.total ?? totalCotizacion(cot.carrito ?? []),
+      valorDomicilio: 0,
+      observacion: cot.observacion,
+      vendedorNombre: cot.vendedorNombre,
+      vendedorCedula: cot.vendedorCedula,
+    };
   }
 
   return (
@@ -476,9 +485,19 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="px-4 py-3">
                       {confirmada ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                          ✓ Pedido {cot.pedidoComanda ?? ""}
-                        </span>
+                        cot.pedidoComanda && puedeVerPedidos ? (
+                          <Link
+                            href={`${rutaPedidos}?comanda=${encodeURIComponent(cot.pedidoComanda)}`}
+                            title="Ver el pedido generado"
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 underline-offset-2 transition hover:bg-emerald-100 hover:underline"
+                          >
+                            ✓ Pedido {cot.pedidoComanda} →
+                          </Link>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            ✓ Pedido {cot.pedidoComanda ?? ""}
+                          </span>
+                        )
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                           Borrador
@@ -506,11 +525,11 @@ export default function CotizacionesPage() {
                         {!confirmada && puedeConvertir && (
                           <button
                             onClick={() => convertir(cot)}
-                            disabled={convirtiendo === cot.id}
-                            title="Convertir en pedido (con los precios de la cotización)"
+                            disabled={convirtiendo?.id === cot.id}
+                            title="Abrir el pedido precargado con la cotización para revisarlo y guardarlo"
                             className="rounded-lg bg-brand-wine px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
                           >
-                            {convirtiendo === cot.id ? "Convirtiendo…" : "Confirmar"}
+                            Confirmar
                           </button>
                         )}
                         {puedeEliminarCot(cot) && (
@@ -559,6 +578,23 @@ export default function CotizacionesPage() {
         />
       )}
 
+      {convirtiendo && (
+        <WizardPedido
+          key={convirtiendo.id}
+          pedidos={[]}
+          cotizacion={{ numero: convirtiendo.numero, pedido: pedidoDesdeCotizacion(convirtiendo) }}
+          guardar={async (pedido) => {
+            const r = await convertirCotizacion(convirtiendo.id, pedido);
+            setCotizaciones((prev) => prev.map((c) => (c.id === r.cotizacion.id ? r.cotizacion : c)));
+            setAviso(
+              `Cotización COT-${String(convirtiendo.numero ?? 0).padStart(5, "0")} convertida en el pedido ${r.cotizacion.pedidoComanda ?? ""}.`,
+            );
+            return r.pedido;
+          }}
+          onCrear={() => undefined}
+          onCerrar={() => setConvirtiendo(null)}
+        />
+      )}
       {aBorrar && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">

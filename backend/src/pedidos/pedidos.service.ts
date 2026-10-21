@@ -378,7 +378,7 @@ export class PedidosService implements OnModuleInit {
         ELSE (fecha AT TIME ZONE 'America/Bogota')::date
       END`;
     const hoy = `(now() AT TIME ZONE 'America/Bogota')::date`;
-    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito'))`;
+    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'devolución', 'devolucion'))`;
 
     const params: unknown[] = [];
     let scope: string;
@@ -936,7 +936,14 @@ export class PedidosService implements OnModuleInit {
    *
    * Devuelve el pedido final ya con el consecutivo y la comanda definitivos.
    */
-  async guardar(pedido: PedidoData, user?: JwtPayload): Promise<PedidoData> {
+  async guardar(
+    pedido: PedidoData,
+    user?: JwtPayload,
+    opciones?: {
+      /** Se ejecuta dentro de la misma transacción, justo antes del COMMIT. */
+      antesDeConfirmar?: (client: PoolClient, pedido: PedidoData, esNuevo: boolean) => Promise<void>;
+    },
+  ): Promise<PedidoData> {
     const id = String(pedido.id ?? '').trim();
     if (!id) {
       throw new Error('El pedido no tiene id.');
@@ -1036,6 +1043,13 @@ export class PedidosService implements OnModuleInit {
         typeof finalPedido.consecutivo === 'number'
           ? finalPedido.consecutivo
           : null;
+      // La devolución es final: una pantalla con datos viejos no puede revertirla.
+      const esDevolucion = (s: unknown) =>
+        ['devolución', 'devolucion'].includes(String(s ?? '').trim().toLowerCase());
+      if (prevData && esDevolucion(prevData.estado)) {
+        finalPedido.estado = prevData.estado;
+        finalPedido.anulado = prevData.anulado;
+      }
       const estado = finalPedido.estado ? String(finalPedido.estado) : null;
       const anulado = finalPedido.anulado === true;
       const fecha = finalPedido.fecha
@@ -1080,7 +1094,7 @@ export class PedidosService implements OnModuleInit {
       }
       // Solo bloquear anulación si el pedido ya fue facturado o despachado al ERP.
       const yaFacturadoODespachado =
-        ['facturado', 'despachado', 'en tránsito', 'en transito', 'entregado'].includes(
+        ['facturado', 'despachado', 'en tránsito', 'en transito', 'entregado', 'devolución', 'devolucion'].includes(
           normEstado(estadoAnterior),
         );
       if (estaAnulandoAhora && yaFacturadoODespachado) {
@@ -1265,8 +1279,172 @@ export class PedidosService implements OnModuleInit {
         });
       }
 
+      if (opciones?.antesDeConfirmar) {
+        await opciones.antesDeConfirmar(client, finalPedido, !prev.rowCount);
+      }
+
       await client.query('COMMIT');
       return finalPedido;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Registra la devolución (total o parcial) de un pedido ya facturado: guarda
+   * los productos devueltos, la factura de la devolución y el valor devuelto,
+   * descuenta ese valor de `facturaValor` (lo que liquida el Cuadre de caja) y
+   * deja el pedido en estado "Devolución". Todo en una sola transacción.
+   */
+  async registrarDevolucion(
+    id: string,
+    body: {
+      facturaNumero?: unknown;
+      valorDevuelto?: unknown;
+      motivo?: unknown;
+      productos?: unknown;
+    },
+    user?: JwtPayload,
+  ): Promise<{ pedido: PedidoData; meta: DespachoMeta }> {
+    const facturaNumero = String(body?.facturaNumero ?? '').trim();
+    const valorDevuelto = Math.round(Number(body?.valorDevuelto));
+    const motivo = String(body?.motivo ?? '').trim();
+    if (!facturaNumero || facturaNumero.length > 60) {
+      throw new BadRequestException('Ingresa el número de la factura de la devolución.');
+    }
+    if (!Number.isFinite(valorDevuelto) || valorDevuelto <= 0) {
+      throw new BadRequestException('Ingresa el valor devuelto (mayor que 0).');
+    }
+    if (motivo.length > 300) {
+      throw new BadRequestException('El motivo no puede superar 300 caracteres.');
+    }
+    const solicitados = Array.isArray(body?.productos) ? body.productos : [];
+    if (solicitados.length === 0 || solicitados.length > 200) {
+      throw new BadRequestException('Selecciona al menos un producto devuelto.');
+    }
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const prev = await client.query<{ data: PedidoData; meta: DespachoMeta }>(
+        `SELECT data, meta FROM pedidos WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      if (!prev.rowCount) throw new NotFoundException('Pedido no encontrado.');
+      const data = prev.rows[0].data ?? {};
+      const meta = prev.rows[0].meta ?? {};
+      const estadoAnterior = String(data.estado ?? '');
+      const estadoNorm = estadoAnterior.trim().toLowerCase();
+      if (data.anulado === true) {
+        throw new BadRequestException('No se puede registrar una devolución en un pedido anulado.');
+      }
+      if (estadoNorm === 'devolución' || estadoNorm === 'devolucion' || meta.devolucion) {
+        throw new BadRequestException('Este pedido ya tiene una devolución registrada.');
+      }
+      const estadosValidos = ['facturado', 'despachado', 'en tránsito', 'en transito', 'entregado', 'rechazado'];
+      if (!estadosValidos.includes(estadoNorm)) {
+        throw new BadRequestException('Solo se registran devoluciones de pedidos facturados o despachados.');
+      }
+      const valorAnterior = Number(meta.facturaValor);
+      if (!Number.isFinite(valorAnterior) || valorAnterior <= 0) {
+        throw new BadRequestException('El pedido no tiene un valor facturado.');
+      }
+      if (valorDevuelto > valorAnterior) {
+        throw new BadRequestException('El valor devuelto no puede superar el valor facturado.');
+      }
+
+      type Item = {
+        id?: string;
+        cantidad?: number;
+        producto?: { referencia?: string; producto?: string; um?: string; precio?: number };
+      };
+      const carrito = (Array.isArray(data.carrito) ? data.carrito : []) as Item[];
+      const usados = new Set<string>();
+      const productos = solicitados.map((raw) => {
+        const s = (raw ?? {}) as { itemId?: unknown; cantidad?: unknown };
+        const itemId = String(s.itemId ?? '');
+        const item = carrito.find((i) => String(i.id ?? '') === itemId);
+        if (!item || usados.has(itemId)) {
+          throw new BadRequestException('Uno de los productos devueltos no pertenece al pedido.');
+        }
+        usados.add(itemId);
+        const original = Number(item.cantidad) || 0;
+        const cantidad = Math.round(Number(s.cantidad) * 1000) / 1000;
+        if (!Number.isFinite(cantidad) || cantidad <= 0 || cantidad > original) {
+          throw new BadRequestException(
+            `Cantidad devuelta inválida para ${item.producto?.producto ?? 'un producto'}.`,
+          );
+        }
+        const precio = Number(item.producto?.precio) || 0;
+        return {
+          itemId,
+          referencia: String(item.producto?.referencia ?? ''),
+          producto: String(item.producto?.producto ?? ''),
+          um: String(item.producto?.um ?? ''),
+          precio,
+          cantidadOriginal: original,
+          cantidadDevuelta: cantidad,
+          cantidadFinal: Math.round((original - cantidad) * 1000) / 1000,
+          valor: Math.round(precio * cantidad),
+        };
+      });
+
+      let usuarioNombre: string | null = null;
+      if (user?.sub) {
+        const u = await client.query<{ nombre: string }>(
+          `SELECT nombre FROM usuarios WHERE id = $1::bigint LIMIT 1`,
+          [user.sub],
+        );
+        usuarioNombre = u.rows[0]?.nombre ?? null;
+      }
+      const fecha = new Date().toISOString();
+      const valorNuevo = valorAnterior - valorDevuelto;
+      const devolucion = {
+        facturaNumero,
+        valorAnterior,
+        valorDevuelto,
+        valorNuevo,
+        motivo: motivo || null,
+        productos,
+        estadoAnterior,
+        fecha,
+        usuarioId: user?.sub ?? null,
+        usuarioNombre,
+      };
+      const cambiosMeta = { devolucion, facturaValor: valorNuevo };
+      const trazaPrevia = Array.isArray(data.trazabilidad) ? data.trazabilidad : [];
+      const nuevoData: PedidoData = {
+        ...data,
+        estado: 'Devolución',
+        trazabilidad: [
+          ...trazaPrevia,
+          {
+            tipo: 'estado',
+            estadoAnterior,
+            estadoNuevo: 'Devolución',
+            motivo: `Devolución factura ${facturaNumero}: $${valorDevuelto.toLocaleString('es-CO')}${motivo ? ` · ${motivo}` : ''}`,
+            fecha,
+            usuarioId: user?.sub ?? null,
+            usuarioNombre,
+            usuarioCedula: user?.cedula ?? null,
+          },
+        ],
+      };
+      await client.query(
+        `UPDATE pedidos
+            SET estado = 'Devolución',
+                data = $2::jsonb,
+                meta = COALESCE(meta, '{}'::jsonb) || $3::jsonb,
+                actualizado_en = now()
+          WHERE id = $1`,
+        [id, JSON.stringify(nuevoData), JSON.stringify(cambiosMeta)],
+      );
+      await client.query('COMMIT');
+      const { trazabilidad: _traza, ...pedido } = nuevoData;
+      return { pedido, meta: { ...meta, ...cambiosMeta } };
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;
@@ -3521,7 +3699,7 @@ export class PedidosService implements OnModuleInit {
           `SELECT id, data->>'comanda' as comanda, estado, data
            FROM pedidos
            WHERE (data->>'comanda') = ANY($1)
-             AND LOWER(COALESCE(estado, '')) != 'rechazado'`,
+             AND LOWER(COALESCE(estado, '')) NOT IN ('rechazado', 'devolución', 'devolucion')`,
           [[...comandasRechazadas]],
         );
 

@@ -48,9 +48,10 @@ export function eliminarCotizacion(id: string): Promise<{ id: string }> {
 
 export function convertirCotizacion(
   id: string,
+  pedido?: Pedido,
 ): Promise<{ pedido: Pedido; cotizacion: Cotizacion }> {
   return apiFetch<{ pedido: Pedido; cotizacion: Cotizacion }>(
     `/cotizaciones/${id}/convertir`,
-    { method: "POST" },
+    { method: "POST", body: JSON.stringify(pedido ? { pedido } : {}) },
   );
 }

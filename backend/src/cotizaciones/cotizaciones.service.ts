@@ -177,6 +177,7 @@ export class CotizacionesService implements OnModuleInit {
   async convertir(
     id: string,
     user?: JwtPayload,
+    editado?: Record<string, unknown> | null,
   ): Promise<{ pedido: unknown; cotizacion: CotizacionData }> {
     const res = await this.pool.query<{ data: CotizacionData }>(
       `SELECT data FROM cotizaciones WHERE id = $1`,
@@ -206,7 +207,25 @@ export class CotizacionesService implements OnModuleInit {
     const carrito = Array.isArray(cot.carrito) ? cot.carrito : [];
     const total = typeof cot.total === 'number' ? cot.total : 0;
 
-    const pedido: Record<string, unknown> = {
+    const pedido: Record<string, unknown> = editado
+      ? {
+          ...editado,
+          // El servidor fija la identidad y el estado inicial del pedido nuevo.
+          id: randomUUID(),
+          consecutivo: 0,
+          comanda: undefined,
+          estado: 'En proceso',
+          anulado: false,
+          motivo: undefined,
+          clonadoDe: undefined,
+          trazabilidad: undefined,
+          numeroDia: undefined,
+          numeroDiaFecha: undefined,
+          fecha: new Date().toISOString(),
+          cotizacionNumero: cot.numero,
+          cotizacionId: id,
+        }
+      : {
       id: randomUUID(),
       consecutivo: 0,
       punto: cot.punto,
@@ -223,16 +242,50 @@ export class CotizacionesService implements OnModuleInit {
       fecha: new Date().toISOString(),
       // Referencia a la cotización de origen (trazabilidad).
       cotizacionNumero: cot.numero,
+      cotizacionId: id,
     };
+    if (editado) {
+      const puntoEd = (pedido.punto ?? {}) as { id?: unknown };
+      const clienteEd = (pedido.cliente ?? {}) as { id?: unknown; nit_cedula?: unknown };
+      const carritoEd = Array.isArray(pedido.carrito) ? pedido.carrito : [];
+      if (!puntoEd.id || !clienteEd.id || carritoEd.length === 0) {
+        throw new BadRequestException('El pedido necesita punto de venta, cliente y productos.');
+      }
+      if (
+        String(clienteEd.id).trim().toLowerCase() === 'consumidor-final' ||
+        String(clienteEd.nit_cedula ?? '').trim() === '222222222'
+      ) {
+        throw new BadRequestException('Selecciona un cliente real para crear el pedido.');
+      }
+    }
 
-    const finalPedido = await this.pedidos.guardar(pedido, user);
-    const finalId = (finalPedido as { id?: string }).id;
-    const finalComanda = (finalPedido as { comanda?: string }).comanda;
-
-    cot.estado = 'confirmada';
-    cot.pedidoId = finalId;
-    cot.pedidoComanda = finalComanda;
-    const cotizacion = await this.guardar(cot);
+    let cotizacion: CotizacionData = cot;
+    const finalPedido = await this.pedidos.guardar(pedido, user, {
+      antesDeConfirmar: async (client, creado, esNuevo) => {
+        if (!esNuevo) throw new BadRequestException('No se pudo crear el pedido de la cotización.');
+        const actual = await client.query<{ data: CotizacionData }>(
+          `SELECT data FROM cotizaciones WHERE id = $1 FOR UPDATE`,
+          [id],
+        );
+        const data = actual.rows[0]?.data;
+        if (!data) throw new NotFoundException('Cotización no encontrada.');
+        if (data.pedidoId) {
+          throw new BadRequestException('Esta cotización ya fue convertida en pedido.');
+        }
+        cotizacion = {
+          ...data,
+          estado: 'confirmada',
+          pedidoId: String(creado.id ?? ''),
+          pedidoComanda: String(creado.comanda ?? ''),
+        };
+        await client.query(
+          `UPDATE cotizaciones
+              SET estado = 'confirmada', pedido_id = $2, data = $3::jsonb, actualizado_en = now()
+            WHERE id = $1`,
+          [id, cotizacion.pedidoId, JSON.stringify(cotizacion)],
+        );
+      },
+    });
 
     return { pedido: finalPedido, cotizacion };
   }

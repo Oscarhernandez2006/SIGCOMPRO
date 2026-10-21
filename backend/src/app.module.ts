@@ -24,6 +24,7 @@ import { RunErrandsModule } from './run-errands/run-errands.module';
 import { ExtensionesModule } from './extensiones/extensiones.module';
 import { DireccionesModule } from './direcciones/direcciones.module';
 import { PlanesModule } from './planes/planes.module';
+import { AlmuerzosModule } from './almuerzos/almuerzos.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PlanesModule } from './planes/planes.module';
     ExtensionesModule,
     DireccionesModule,
     PlanesModule,
+    AlmuerzosModule,
   ],
   controllers: [AppController],
 })

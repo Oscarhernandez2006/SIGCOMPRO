@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -21,12 +22,17 @@ import { PermisosGuard } from '../auth/guards/permisos.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Permisos } from '../auth/decorators/permisos.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UsersService } from '../users/users.service';
+import { tieneAccesoTotal } from '../users/permisos.catalog';
 
 @Controller('pedidos')
 @UseGuards(JwtAuthGuard, PermisosGuard)
 @Permisos('pedidos', 'despacho')
 export class PedidosController {
-  constructor(private readonly pedidos: PedidosService) {}
+  constructor(
+    private readonly pedidos: PedidosService,
+    private readonly users: UsersService,
+  ) {}
 
   /** Estado completo: pedidos + metadata de despacho + impresos. */
   @Get()
@@ -171,6 +177,24 @@ export class PedidosController {
     @Req() req: Request & { user?: JwtPayload },
   ) {
     return this.pedidos.guardar(pedido, req.user);
+  }
+
+  /** Registra la devolución (total o parcial) de un pedido facturado. */
+  @Post(':id/devolucion')
+  @Permisos('despacho')
+  async devolucion(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request & { user?: JwtPayload },
+  ) {
+    const user = req.user;
+    if (!tieneAccesoTotal(user?.rol)) {
+      const permisos = user?.sub ? (await this.users.obtenerCacheado(user.sub)).permisos ?? [] : [];
+      if (!permisos.includes('despacho.devolucion') && !permisos.includes('despacho.estado')) {
+        throw new ForbiddenException('No tienes permiso para registrar devoluciones.');
+      }
+    }
+    return this.pedidos.registrarDevolucion(id, body ?? {}, user);
   }
 
   /** Mezcla cambios en la metadata de despacho de un pedido. */

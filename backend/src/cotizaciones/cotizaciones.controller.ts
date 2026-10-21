@@ -50,8 +50,13 @@ export class CotizacionesController {
   @Post(':id/convertir')
   convertir(
     @Param('id') id: string,
+    @Body() body: { pedido?: Record<string, unknown> } | undefined,
     @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.cotizaciones.convertir(id, req.user);
+    const pedido =
+      body?.pedido && typeof body.pedido === 'object' && !Array.isArray(body.pedido)
+        ? body.pedido
+        : null;
+    return this.cotizaciones.convertir(id, req.user, pedido);
   }
 }
