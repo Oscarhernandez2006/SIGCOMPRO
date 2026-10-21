@@ -24,12 +24,14 @@ function diaLocal(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(d);
+  return ["year", "month", "day"].map((tipo) => partes.find((parte) => parte.type === tipo)?.value).join("-");
 }
 
 function hoyISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return diaLocal(new Date().toISOString());
 }
 
 /** ¿El método de pago es "efectivo"? El resto son Otros Medios de Pago (O.M.P.). */
@@ -165,13 +167,25 @@ export default function CuadreCajaPage() {
     setUsuario(u);
   }, [router]);
 
+  const cargaActual = useRef(0);
   const cargar = useCallback(async () => {
     if (usuario === null) return;
+    const carga = ++cargaActual.current;
+    if (!fecha) {
+      setPedidos([]);
+      setMeta({});
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     setError(null);
     try {
       const cargaPuntos = esAdmin ? listarPuntosVenta() : misPuntosVenta();
-      const [ps, estado] = await Promise.all([cargaPuntos, cargarEstadoPedidos()]);
+      const [ps, estado] = await Promise.all([
+        cargaPuntos,
+        cargarEstadoPedidos({ rango: "cuadre", fecha }),
+      ]);
+      if (carga !== cargaActual.current) return;
       setPuntos(ps);
       setPedidos(estado.pedidos ?? []);
       setMeta(estado.meta ?? {});
@@ -188,14 +202,18 @@ export default function CuadreCajaPage() {
       }
       setLiq(inicial);
     } catch (e) {
+      if (carga !== cargaActual.current) return;
+      setPedidos([]);
+      setMeta({});
       setError(e instanceof Error ? e.message : "No se pudo cargar la información");
     } finally {
-      setCargando(false);
+      if (carga === cargaActual.current) setCargando(false);
     }
-  }, [usuario, esAdmin]);
+  }, [usuario, esAdmin, fecha]);
 
   useEffect(() => {
-    cargar();
+    void cargar();
+    return () => { cargaActual.current += 1; };
   }, [cargar]);
 
   const idsVisibles = useMemo(

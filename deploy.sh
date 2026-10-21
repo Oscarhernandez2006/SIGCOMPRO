@@ -1,3 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+
+SERVICE_NAME="${1:-sigcompro-sigcompro-jej3vi}"
+docker service inspect "$SERVICE_NAME" >/dev/null
+
 docker service update \
   --label-add 'traefik.enable=true' \
   --label-add 'traefik.http.routers.sigcompro.rule=Host(`sigcompro.grupo-santacruz.com`)' \
@@ -12,4 +18,4 @@ docker service update \
   --label-add 'traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.scheme=https' \
   --label-add 'traefik.http.middlewares.sigcompro-redirect-https.redirectscheme.permanent=true' \
   --label-add 'traefik.docker.network=dokploy-network' \
-  sigcompro-sigcompro-jej3vi
+  "$SERVICE_NAME"

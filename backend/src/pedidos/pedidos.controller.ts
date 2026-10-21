@@ -30,6 +30,7 @@ export class PedidosController {
 
   /** Estado completo: pedidos + metadata de despacho + impresos. */
   @Get()
+  @Permisos('pedidos', 'despacho', 'cuadre_caja')
   estado(
     @Query('desde') desde?: string,
     @Query('rango') rango?: string,

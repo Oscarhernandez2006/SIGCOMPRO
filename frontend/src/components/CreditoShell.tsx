@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeAccederApartado } from "@/lib/permisos";
+import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 
 const IcoCart = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
@@ -70,7 +71,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [usuario, setUsuario]     = useState<Usuario | null>(null);
   const [ready, setReady]         = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useSidebarDrawer();
 
   useEffect(() => {
     const token = getToken();
@@ -117,6 +118,9 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               key={item.href}
               href={item.href}
               onClick={onNavigate}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-brand-wine-dark text-white shadow-sm"
@@ -136,11 +140,12 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream-soft text-brand-black">
+    <SidebarLayout>
       {/* Sidebar desktop */}
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
+        <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
+        <SidebarToggle />
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-5">
+        <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold text-white">Carnes Santacruz</p>
@@ -151,7 +156,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
         <div className="mx-4 mb-3 border-t border-brand-cream/15" />
 
         {/* User badge */}
-        <div className="mx-3 mb-3 flex items-center gap-3 rounded-xl bg-brand-wine-dark/60 px-3 py-2.5">
+        <div data-sidebar-user className="mx-3 mb-3 flex items-center gap-3 rounded-xl bg-brand-wine-dark/60 px-3 py-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-wine-dark text-xs font-bold text-white">
             {iniciales}
           </div>
@@ -168,6 +173,8 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           {puedeCambiarPanel && (
             <Link
               href="/seleccionar-panel"
+              title="Cambiar de panel"
+              aria-label="Cambiar de panel"
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-brand-cream/10 hover:text-white"
             >
               {IcoSwitch}
@@ -176,6 +183,8 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           )}
           <button
             onClick={cerrarSesion}
+            title={"Cerrar sesi\u00f3n"}
+            aria-label={"Cerrar sesi\u00f3n"}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-rose-700/30 hover:text-rose-200"
           >
             {IcoLogout}
@@ -213,6 +222,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-brand-black/50 lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside
+            data-sidebar-drawer role="dialog" aria-modal="true" aria-label="Menú principal"
           className="absolute inset-y-0 left-0 h-full w-72 bg-brand-wine text-brand-cream"
             onClick={(e) => e.stopPropagation()}
           >
@@ -259,7 +269,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="p-4 lg:ml-64 lg:p-6">{children}</main>
-    </div>
+      <main data-sidebar-content className="p-4 lg:ml-64 lg:p-6">{children}</main>
+    </SidebarLayout>
   );
 }

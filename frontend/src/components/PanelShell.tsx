@@ -10,6 +10,7 @@ import { cargarResumenPedidos } from "@/lib/pedidos";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
+import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 
 interface NavItem {
   label: string;
@@ -156,7 +157,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [ready, setReady] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useSidebarDrawer();
 
   useEffect(() => {
     const token = getToken();
@@ -244,6 +245,9 @@ export default function PanelShell({ children }: { children: ReactNode }) {
               key={item.href}
               href={item.href}
               onClick={onNavigate}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-brand-amber text-white shadow-sm"
@@ -260,10 +264,11 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream-soft text-brand-black">
+    <SidebarLayout>
       {/* ---------- Sidebar (desktop) ---------- */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
-        <div className="flex items-center gap-3 px-5 py-5">
+      <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
+        <SidebarToggle />
+        <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
           <Image
             src="/LOGOCARNESSANTACRUZ.png"
             alt="Carnes Santacruz"
@@ -283,23 +288,26 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           {puedeCambiarPanel && (
             <Link
               href="/seleccionar-panel"
+              title="Cambiar de panel"
+              aria-label="Cambiar de panel"
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/80 transition hover:bg-brand-cream/10 hover:text-brand-cream"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
               </svg>
-              Cambiar de panel
+              <span>Cambiar de panel</span>
             </Link>
           )}
           <button
             onClick={cerrarSesion}
             title="Cerrar sesión"
+            aria-label="Cerrar sesión"
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/80 transition hover:bg-brand-cream/10 hover:text-brand-cream"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H3m12 0-4-4m4 4-4 4m6-13h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2" />
             </svg>
-            Cerrar sesión
+            <span>Cerrar sesión</span>
           </button>
         </div>
       </aside>
@@ -311,7 +319,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 bg-brand-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-brand-wine text-brand-cream shadow-2xl">
+          <aside data-sidebar-drawer role="dialog" aria-modal="true" aria-label="Menú principal" className="absolute inset-y-0 left-0 flex w-64 flex-col bg-brand-wine text-brand-cream shadow-2xl">
             <div className="flex items-center justify-between px-5 py-5">
               <div className="flex items-center gap-2">
                 <Image
@@ -380,7 +388,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
       )}
 
       {/* ---------- Contenido ---------- */}
-      <div className="lg:pl-64">
+      <div data-sidebar-content className="lg:pl-64">
         {/* Topbar */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-wine-dark/15 bg-brand-cream/90 px-4 py-3 backdrop-blur-md sm:px-6">
           <button
@@ -454,6 +462,6 @@ export default function PanelShell({ children }: { children: ReactNode }) {
         </div>
       )}
       <ChatBubble />
-    </div>
+    </SidebarLayout>
   );
 }

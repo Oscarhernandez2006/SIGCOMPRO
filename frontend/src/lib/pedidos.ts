@@ -108,13 +108,13 @@ export interface EstadoPedidos {
  * - `desde`: polling incremental — solo lo cambiado desde ese instante.
  * - `rango`: alcance del conjunto. 'hoy' (Pedidos/Despacho, mucho más liviano),
  *   'fecha' (un día concreto, para ver días anteriores), 'posteriores'. Sin
- *   `rango` = comportamiento previo (activos + últimos días) para Cuadre de
- *   caja, Históricos y Dashboard.
- * - `fecha`: día concreto (YYYY-MM-DD) cuando `rango='fecha'`.
+ *   `rango` = comportamiento previo (activos + últimos días).
+ *   'cuadre' consulta el día de despacho en Bogotá, sin límite de antigüedad.
+ * - `fecha`: día concreto (YYYY-MM-DD) para 'fecha' o 'cuadre'.
  */
 export interface OpcionesCargaPedidos {
   desde?: string;
-  rango?: "hoy" | "fecha" | "posteriores" | "todo" | "rango";
+  rango?: "hoy" | "fecha" | "posteriores" | "todo" | "rango" | "cuadre";
   fecha?: string;
   /** Fin del rango cuando `rango === "rango"` (con `fecha` como inicio, ambos opcionales). */
   hasta?: string;

@@ -245,6 +245,9 @@ export class PedidosService implements OnModuleInit {
       scope = `((${diaEfectivo}) > ${hoy})`;
     } else if (rango === 'todo') {
       scope = 'true';
+    } else if (rango === 'cuadre' && fechaValida(fecha)) {
+      params.push(fecha);
+      scope = `((COALESCE(NULLIF(meta->>'despachoFin', '')::timestamptz, fecha) AT TIME ZONE 'America/Bogota')::date = $${params.length}::date)`;
     } else if (rango === 'fecha' && fechaValida(fecha)) {
       params.push(fecha);
       scope = `((${diaEfectivo}) = $${params.length}::date)`;
@@ -274,7 +277,7 @@ export class PedidosService implements OnModuleInit {
     fecha?: string,
     hasta?: string,
   ): Promise<EstadoPedidos> {
-    // Conjunto de trabajo. Por DEFECTO (cuadre de caja, históricos, dashboard)
+    // Conjunto de trabajo. Por DEFECTO (históricos, dashboard)
     // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
     // Despacho piden rango='hoy' (mucho más liviano) y cargan días ANTERIORES
     // solo cuando el usuario aplica ese filtro (rango='fecha'&fecha=YYYY-MM-DD).
