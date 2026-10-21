@@ -1,7 +1,10 @@
 "use client";
 
-import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Pencil, RefreshCw, X } from "lucide-react";
+import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, RefreshCw, X } from "lucide-react";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { apiFetch } from "@/lib/api";
 import { getUsuario } from "@/lib/auth";
 import styles from "./SidebarLayout.module.css";
@@ -10,7 +13,7 @@ type PanelSidebar = "administrativo" | "operativo" | "club" | "run-errands";
 const SidebarContext = createContext({
   collapsed: false, toggle: () => {}, editing: false, saving: false, canEdit: false, loaded: false,
   error: "", orden: [] as string[], edit: () => {}, cancel: () => {}, save: async () => {},
-  move: (_id: string, _direction: number, _siblings: string[]) => {},
+  move: (_id: string, _overId: string, _siblings: string[]) => {},
 });
 
 type MenuElementProps = {
@@ -18,33 +21,50 @@ type MenuElementProps = {
   "aria-label"?: string; "data-sidebar-id"?: string; "data-sidebar-children"?: boolean;
 };
 
-export function SidebarNav({ children, className }: { children: ReactNode; className?: string }) {
+function menuKey(node: ReactNode) {
+  return isValidElement<MenuElementProps>(node) ? node.props["data-sidebar-id"] || node.props.href || "" : "";
+}
+
+function SortableMenuItem({ node }: { node: ReactElement<MenuElementProps> }) {
+  const { editing, saving } = useContext(SidebarContext);
+  const id = menuKey(node);
+  const group = !!node.props["data-sidebar-id"];
+  const title = node.props.title || node.props["aria-label"] || id;
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !editing || saving });
+  const content = group ? cloneElement(node, {}, Children.map(node.props.children, (child) => {
+    if (!isValidElement<MenuElementProps>(child) || !child.props["data-sidebar-children"]) return child;
+    return cloneElement(child, {}, <SortableMenuList>{child.props.children}</SortableMenuList>);
+  })) : node;
+
+  return <div ref={setNodeRef} data-sidebar-entry data-dragging={isDragging || undefined} className={editing ? styles.orderRow : undefined} style={{ transform: CSS.Transform.toString(transform), transition }}>
+    <div className={styles.orderContent} onClickCapture={(event) => { if (editing && !group) { event.preventDefault(); event.stopPropagation(); } }}>{content}</div>
+    {editing && <button ref={setActivatorNodeRef} type="button" {...attributes} {...listeners} className={styles.dragHandle} aria-label={`Arrastrar ${title}`} title={`Arrastrar ${title}`} disabled={saving}><GripVertical aria-hidden="true" /></button>}
+  </div>;
+}
+
+function SortableMenuList({ children }: { children: ReactNode }) {
   const { editing, saving, orden, move } = useContext(SidebarContext);
-  const renderItems = (nodes: ReactNode): ReactNode => {
-    const elements = Children.toArray(nodes);
-    const keyOf = (node: ReactNode) => isValidElement<MenuElementProps>(node) ? node.props["data-sidebar-id"] || node.props.href || "" : "";
-    const ranks = new Map(orden.map((id, index) => [id, index]));
-    const sorted = elements.filter(keyOf).sort((first, second) => (ranks.get(keyOf(first)) ?? orden.length + elements.indexOf(first)) - (ranks.get(keyOf(second)) ?? orden.length + elements.indexOf(second)));
-    const siblings = sorted.map(keyOf);
-    return [...elements.filter((node) => !keyOf(node)), ...sorted.map((node, index) => {
-      if (!isValidElement<MenuElementProps>(node)) return node;
-      const id = keyOf(node);
-      const group = !!node.props["data-sidebar-id"];
-      const title = node.props.title || node.props["aria-label"] || id;
-      const content = group ? cloneElement(node, {}, Children.map(node.props.children, (child) => {
-        if (!isValidElement<MenuElementProps>(child) || !child.props["data-sidebar-children"]) return child;
-        return cloneElement(child, {}, renderItems(child.props.children));
-      })) : node;
-      return <div key={id} data-sidebar-entry className={editing ? styles.orderRow : undefined}>
-        <div className={styles.orderContent} onClickCapture={(event) => { if (editing && !group) { event.preventDefault(); event.stopPropagation(); } }}>{content}</div>
-        {editing && <div className={styles.orderActions}>
-          <button type="button" aria-label={`Subir ${title}`} title={`Subir ${title}`} disabled={saving || index === 0} onClick={() => move(id, -1, siblings)}><ArrowUp aria-hidden="true" /></button>
-          <button type="button" aria-label={`Bajar ${title}`} title={`Bajar ${title}`} disabled={saving || index === sorted.length - 1} onClick={() => move(id, 1, siblings)}><ArrowDown aria-hidden="true" /></button>
-        </div>}
-      </div>;
-    })];
-  };
-  return <nav className={className} data-sidebar-editing={editing}>{renderItems(children)}</nav>;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const elements = Children.toArray(children);
+  const ranks = new Map(orden.map((id, index) => [id, index]));
+  const sorted = elements.filter(menuKey).sort((first, second) => (ranks.get(menuKey(first)) ?? orden.length + elements.indexOf(first)) - (ranks.get(menuKey(second)) ?? orden.length + elements.indexOf(second)));
+  const siblings = sorted.map(menuKey);
+  return <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ screenReaderInstructions: { draggable: "Para mover esta opcion, pulsa espacio, usa las flechas y confirma con espacio. Escape cancela el arrastre." } }} onDragEnd={({ active, over }) => {
+    if (editing && !saving && over && active.id !== over.id) move(String(active.id), String(over.id), siblings);
+  }}>
+    {elements.filter((node) => !menuKey(node))}
+    <SortableContext items={siblings} strategy={verticalListSortingStrategy}>
+      {sorted.map((node) => isValidElement<MenuElementProps>(node) ? <SortableMenuItem key={menuKey(node)} node={node} /> : null)}
+    </SortableContext>
+  </DndContext>;
+}
+
+export function SidebarNav({ children, className }: { children: ReactNode; className?: string }) {
+  const { editing } = useContext(SidebarContext);
+  return <nav className={className} data-sidebar-editing={editing}><SortableMenuList>{children}</SortableMenuList></nav>;
 }
 
 export function useSidebarDrawer() {
@@ -149,12 +169,11 @@ export default function SidebarLayout({ children, panel = "operativo" }: { child
     return () => { active = false; clearInterval(interval); };
   }, [panel, editing, reload]);
 
-  const move = (id: string, direction: number, siblings: string[]) => {
+  const move = (id: string, overId: string, siblings: string[]) => {
     const index = siblings.indexOf(id);
-    const target = index + direction;
+    const target = siblings.indexOf(overId);
     if (index < 0 || target < 0 || target >= siblings.length || saving) return;
-    const reordered = [...siblings];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const reordered = arrayMove(siblings, index, target);
     setOrden((previous) => {
       let position = 0;
       const members = new Set(siblings);

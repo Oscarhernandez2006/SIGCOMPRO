@@ -32,9 +32,11 @@ de pendientes se consulta por separado, sin el limite del listado.
 
 ## Orden de los menus
 
-El lapiz junto al control de expandir activa la organizacion en vivo con
-flechas de subir/bajar. Guardar confirma y Cancelar restaura el orden anterior.
-Tambien funciona en movil y en los submenus administrativos.
+El lapiz junto al control de expandir activa la organizacion por arrastre
+desde el asa de seis puntos de cada opcion, sin botones de subir/bajar.
+Guardar confirma y Cancelar restaura el orden anterior. Se usa dnd-kit para
+raton, pantallas tactiles y teclado. Cada submenu conserva su nivel y tambien
+puede reorganizarse internamente.
 
 El orden es global por panel y se guarda en `configuracion`, con claves
 `sidebar:orden:administrativo`, `sidebar:orden:operativo`, `sidebar:orden:club`

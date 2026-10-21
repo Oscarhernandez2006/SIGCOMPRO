@@ -68,8 +68,9 @@
 }
 
 .orderRow {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  grid-template-columns: minmax(0, 1fr) 36px;
   align-items: start;
   border-radius: 6px;
   background: rgb(255 255 255 / 4%);
@@ -79,32 +80,48 @@
   min-width: 0;
 }
 
-.orderActions {
+.layout nav .dragHandle {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.layout nav .orderActions button {
-  display: flex;
-  min-height: 24px;
-  width: 28px;
+  min-height: 44px;
+  width: 36px;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
+  color: rgb(255 255 255 / 65%);
+  cursor: grab;
+  touch-action: none;
 }
 
-.orderActions button:hover {
+.dragHandle:hover,
+.dragHandle:focus-visible {
   background: rgb(255 255 255 / 15%);
+  color: #fff;
 }
 
-.orderActions button:disabled {
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragHandle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.dragHandle:disabled {
+  cursor: default;
   opacity: 0.3;
 }
 
-.orderActions svg {
-  width: 14px;
-  height: 14px;
+.dragHandle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.orderRow[data-dragging="true"] {
+  z-index: 10;
+  background: var(--sidebar-background, var(--color-brand-wine));
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+  outline: 1px solid rgb(255 255 255 / 30%);
 }
 
 .orderError {
