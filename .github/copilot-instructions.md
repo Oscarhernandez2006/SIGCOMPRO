@@ -19,10 +19,13 @@ backend/src/
   app.module.ts, database/database.module.ts (PG_POOL)
   auth/ (JWT + clave-dinámica), users/ (permisos.catalog.ts), clientes/, puntos-venta/,
   productos/ (listas precio, @Cron 7:50am sync), pedidos/, despacho vía pedidos,
-  cotizaciones/, congelados/, configuracion/ (personal, cortes, cuadre), motivos/, ubicaciones/
+  cotizaciones/, congelados/, configuracion/ (personal, cortes, cuadre), motivos/, ubicaciones/,
+  direcciones/ (hoja de direcciones de Drivin: tabla `direcciones`, 66 columnas en jsonb por letra, `corregida` = amarillo),
+  planes/ (solo admin: planes/escenarios de Drivin por día y esquema de cada punto; lógica en pedidos.service)
 frontend/src/
-  app/(panel)/  -> pedidos, despacho, cuadre-caja, cotizaciones, congelados, historicos, ubicaciones
-  app/admin/    -> usuarios, configuracion (Gestión de recursos), dashboard
+  app/(panel)/  -> pedidos, despacho, cuadre-caja, cotizaciones, congelados, historicos, ubicaciones, direcciones (grilla tipo Excel)
+  app/admin/    -> usuarios, configuracion (Gestión de recursos), dashboard, planes-esquemas (Drivin)
+  components/ValidarCedula.tsx -> botón "Validar" junto al NIT (consulta ADRES; automática con la extensión de `extension-adres/`)
   app/seleccionar-panel, layout.tsx, page.tsx (login)
   components/ (AdminShell, PanelShell, DireccionInput, MapaDireccion, ReferenciaInput, ...)
   lib/ (api.ts=apiFetch, auth.ts=sesión en cookies, pedidos.ts, despacho.ts, configuracion.ts, ...)

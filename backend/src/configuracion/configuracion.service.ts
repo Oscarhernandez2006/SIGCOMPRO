@@ -14,6 +14,11 @@ export interface PersonaAsignada {
   puntos: string[];
   /** ¿Activa? Si es false, no aparece en los selectores de despacho. */
   activo?: boolean;
+  /**
+   * Cédula (solo dígitos). `undefined` = nunca se ha definido (se intenta
+   * completar desde `domiciliarios_cedula`); `''` = se dejó vacía a propósito.
+   */
+  cedula?: string;
 }
 
 /** Registro global de personas, centrado en la persona (no en el punto). */
@@ -80,13 +85,47 @@ export class ConfiguracionService implements OnModuleInit {
     return migrado;
   }
 
+  /**
+   * Registro global con la cédula de cada persona. A quien aún no tiene cédula
+   * definida se le completa desde `domiciliarios_cedula` (cargada con nombres
+   * completos) si su nombre casa con UN solo registro de esa tabla.
+   */
+  async obtenerRegistroConCedulas(): Promise<RegistroPersonal> {
+    return this.completarCedulas(await this.obtenerRegistro());
+  }
+
+  private async completarCedulas(
+    registro: RegistroPersonal,
+  ): Promise<RegistroPersonal> {
+    const pendientes = [
+      ...registro.porcionadores,
+      ...registro.domiciliarios,
+    ].filter((p) => p.cedula === undefined);
+    if (pendientes.length === 0) return registro;
+    const res = await this.pool.query<{ cedula: string; nombre: string }>(
+      `SELECT cedula, nombre FROM domiciliarios_cedula`,
+    );
+    const cargadas = res.rows.map((r) => ({
+      cedula: soloDigitos(r.cedula),
+      tokens: tokensNombre(r.nombre),
+    }));
+    for (const p of pendientes) {
+      const corto = tokensNombre(p.nombre);
+      const candidatas = cargadas.filter(
+        (c) => c.cedula && nombreCasa(corto, c.tokens),
+      );
+      if (candidatas.length === 1) p.cedula = candidatas[0].cedula;
+    }
+    return registro;
+  }
+
   /** Guarda (reemplaza) el registro global. Solo administradores. */
   async guardarRegistro(
     datos: Partial<RegistroPersonal>,
   ): Promise<RegistroPersonal> {
     const registro = this.normalizarRegistro(datos);
     await this.persistirRegistro(registro);
-    return registro;
+    return this.completarCedulas(registro);
   }
 
   private async persistirRegistro(registro: RegistroPersonal): Promise<void> {
@@ -406,8 +445,85 @@ export class ConfiguracionService implements OnModuleInit {
             ),
           ]
         : [];
-      salida.push({ nombre, puntos, activo: obj?.activo !== false });
+      const persona: PersonaAsignada = {
+        nombre,
+        puntos,
+        activo: obj?.activo !== false,
+      };
+      if (obj?.cedula !== undefined && obj?.cedula !== null) {
+        persona.cedula = soloDigitos(obj.cedula);
+      }
+      salida.push(persona);
     }
     return salida;
   }
+}
+
+/** Deja solo dígitos (máx. 15) de una cédula. */
+function soloDigitos(valor: unknown): string {
+  return String(valor ?? '')
+    .replace(/\D+/g, '')
+    .slice(0, 15);
+}
+
+/** Palabras del nombre sin tildes, mayúsculas ni signos. */
+function tokensNombre(nombre: unknown): string[] {
+  return String(nombre ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .split(' ')
+    .filter(Boolean);
+}
+
+/** ¿Las palabras difieren a lo sumo en una letra? (solo palabras de 5+ letras). */
+function casiIguales(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let dif = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (++dif > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else {
+      i++;
+      j++;
+    }
+  }
+  return dif + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** Palabra del nombre corto vs. palabra del completo (admite iniciales: "L." ~ "Luis"). */
+function palabraCasa(corta: string, completa: string): boolean {
+  return (
+    (corta.length === 1 && completa.startsWith(corta)) ||
+    casiIguales(corta, completa)
+  );
+}
+
+/**
+ * ¿El nombre corto ("Jhon Viloria Orozco") corresponde al completo
+ * ("Jhon Jairo Viloria Orozco")? Todas sus palabras deben aparecer en orden y
+ * la última (segundo apellido) debe coincidir con la última del completo.
+ */
+function nombreCasa(corto: string[], completo: string[]): boolean {
+  if (corto.length < 2 || completo.length === 0) return false;
+  if (!palabraCasa(corto[corto.length - 1], completo[completo.length - 1])) {
+    return false;
+  }
+  let j = 0;
+  for (const t of corto) {
+    while (j < completo.length && !palabraCasa(t, completo[j])) j++;
+    if (j >= completo.length) return false;
+    j++;
+  }
+  return true;
 }

@@ -15,13 +15,15 @@ import { listarProductos, listarListasPrecio, sincronizarProductos, type Product
 import { getUsuario, tieneAccesoAdministrativo, puedeMultiPunto } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
-import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
+import { cargarEstadoPedidos, guardarPedidoApi, actualizarMetaApi, descargarExcelDespacho, enviarADrivinApi, obtenerComprobanteApi, subirComprobanteApi, cargarTrazabilidad, cargarPedidosCliente, type DespachoMeta } from "@/lib/pedidos";
 import { listarCongeladosApi, guardarCongeladoApi, eliminarCongeladoApi } from "@/lib/congelados";
 import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
-import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
+import { yaDespachado, colorEstado, estadoReplicaVista, permiteReenvioDrivin } from "@/lib/despacho";
+import { gramosPorUnidad } from "@/lib/peso";
 import CrearClienteModal from "@/components/CrearClienteModal";
+import ZoomImagen from "@/components/ZoomImagen";
 
 const PASOS = ["Cliente", "Productos", "Entrega y pago", "Confirmar"] as const;
 
@@ -414,9 +416,30 @@ export default function PedidosPage() {
     setMotivoModal(null);
   };
 
-  // Reimprime/descarga el Excel de despacho del pedido.
-  const reimprimirExcel = (p: Pedido) => {
-    descargarExcelDespacho(p.id).catch(() => alert("No se pudo generar el Excel de despacho."));
+  // Reenvía a Drivin un pedido facturado/despachado/entregado (p. ej. tras
+  // corregir el barrio del cliente). Antes de Facturado no se permite.
+  const [reenvio, setReenvio] = useState<{ estado: "enviando" | "ok" | "error"; comanda: string; msg?: string } | null>(null);
+  const reenviarDrivin = async (p: Pedido) => {
+    if (reenvio?.estado === "enviando") return;
+    if (p.anulado || !permiteReenvioDrivin(p.estado)) {
+      alert("Solo se puede reenviar un pedido Facturado, Despachado o Entregado.");
+      return;
+    }
+    if (
+      meta[p.id]?.drivinEnviado &&
+      !confirm(`El pedido #${p.comanda} ya se subió a Drivin. ¿Reenviarlo de todas formas?`)
+    ) {
+      return;
+    }
+    setReenvio({ estado: "enviando", comanda: p.comanda });
+    try {
+      await enviarADrivinApi(p.id);
+      await actualizarMetaApi(p.id, { drivinEnviado: true }).catch(() => { /* ignore */ });
+      setMeta((prev) => ({ ...prev, [p.id]: { ...prev[p.id], drivinEnviado: true } }));
+      setReenvio({ estado: "ok", comanda: p.comanda });
+    } catch (e) {
+      setReenvio({ estado: "error", comanda: p.comanda, msg: e instanceof Error ? e.message : "" });
+    }
   };
 
   // Sincroniza la lista de precios desde la API externa (permiso pedidos.sincronizar).
@@ -700,14 +723,22 @@ export default function PedidosPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
                             </svg>
                           </button>
-                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver y Reimprimir. */}
+                          {p.punto?.drivin !== false && permiteReenvioDrivin(p.estado) && (
+                            <button
+                              onClick={() => reenviarDrivin(p)}
+                              disabled={reenvio?.estado === "enviando"}
+                              aria-label="Reenvío a Drivin"
+                              title="Reenvío: volver a subir el pedido a Drivin (después de corregir los datos del cliente, p. ej. el barrio)"
+                              className="rounded-lg border border-sky-200 p-1.5 text-sky-600 transition hover:bg-sky-50 disabled:opacity-50"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                              </svg>
+                            </button>
+                          )}
+                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver, Reimprimir y Reenvío. */}
                           {!yaDespachado(p.estado) && (
                           <>
-                          <button onClick={permite.imprimir ? () => reimprimirExcel(p) : sinPermiso.mostrar} aria-label="Descargar Excel" title="Descargar el Excel de despacho" className={`rounded-lg border border-brand-brown/15 p-1.5 text-green-700 transition hover:bg-brand-cream-soft ${permite.imprimir ? "" : "opacity-50"}`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v2.625a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V14.25M12 3v12m0 0-3.75-3.75M12 15l3.75-3.75" />
-                            </svg>
-                          </button>
                           <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} aria-label="Editar pedido" title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 p-1.5 text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
@@ -776,6 +807,38 @@ export default function PedidosPage() {
               ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {reenvio && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            {reenvio.estado === "enviando" ? (
+              <>
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" />
+                <p className="mt-3 text-sm font-semibold text-brand-black">Reenviando el pedido #{reenvio.comanda} a Drivin…</p>
+              </>
+            ) : reenvio.estado === "ok" ? (
+              <>
+                <p className="font-serif text-lg font-bold text-emerald-700">Reenviado con éxito</p>
+                <p className="mt-1 text-sm text-brand-black">El pedido #{reenvio.comanda} se subió a Drivin.</p>
+              </>
+            ) : (
+              <>
+                <p className="font-serif text-lg font-bold text-red-600">Hubo un error al reenviar el pedido</p>
+                <p className="mt-1 text-sm text-brand-black">Pedido #{reenvio.comanda}</p>
+                {reenvio.msg && <p className="mt-2 break-words text-xs text-brand-brown/70">{reenvio.msg}</p>}
+              </>
+            )}
+            {reenvio.estado !== "enviando" && (
+              <button
+                onClick={() => setReenvio(null)}
+                className="mt-5 w-full rounded-xl bg-brand-wine py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Aceptar
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2625,6 +2688,8 @@ export interface ItemCarrito {
   notas: string;
   /** Preparación excluyente (solo productos por kg, alternativa a Porcionado). */
   preparacion?: "" | "ENTERO" | "RELAJADO" | "PICADO" | "MOLIDA";
+  /** Gramos aproximados por unidad (productos de unidad sin medida en la descripción). */
+  pesoVariable?: number;
 }
 
 function UltimosPedidosModal({
@@ -3239,6 +3304,10 @@ function ConfigProducto({
   const [cortes, setCortes] = useState<string[]>([]);
   const [gramos, setGramos] = useState(inicial?.gramos ? String(inicial.gramos) : "");
   const [unidades, setUnidades] = useState(inicial?.unidades ? String(inicial.unidades) : "");
+  // Se digita en KILOS, pero se guarda en gramos (`pesoVariable`), que es como lo lee el resto del sistema.
+  const [pesoVariable, setPesoVariable] = useState(
+    inicial?.pesoVariable ? String(Number((inicial.pesoVariable / 1000).toFixed(3))) : "",
+  );
   // Ítems nuevos ya guardan la preparación en su propio campo (sin tocar las
   // notas); los antiguos aún pueden traerla embebida en el texto ("ENTERO / ...").
   const notasIniciales = inicial?.preparacion
@@ -3277,6 +3346,10 @@ function ConfigProducto({
   const paso = esKilo ? 0.5 : 1;
   const minimo = esKilo ? 0.5 : 1;
   const cant = parseFloat(cantidad.replace(",", ".")) || 0;
+  const gUnidad = esKilo ? null : gramosPorUnidad(producto.producto);
+  // Producto de unidad sin medida en la descripción: se digita el peso aproximado por unidad.
+  const sinMedida = !esKilo && gUnidad === null;
+  const pv = Math.round((parseFloat(pesoVariable.replace(",", ".")) || 0) * 1000);
   const g = parseFloat(gramos) || 0;
   const u = parseFloat(unidades) || 0;
   const pesoG = cant * 1000;
@@ -3327,6 +3400,7 @@ function ConfigProducto({
       unidades: puedePorcionar ? u : 0,
       notas: notas.trim(),
       preparacion: preparacionEfectiva,
+      pesoVariable: sinMedida && pv > 0 ? pv : undefined,
     });
   }
 
@@ -3377,8 +3451,47 @@ function ConfigProducto({
                 title="Aumentar la cantidad"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-brown/15 text-lg text-brand-brown hover:bg-brand-cream-soft"
               >+</button>
+              {gUnidad !== null && (
+                <div
+                  className="relative"
+                  title={`Cada unidad equivale a ${gUnidad.toLocaleString("es-CO")} g`}
+                >
+                  <span className="absolute -top-4 left-0 right-0 text-center text-[10px] font-semibold uppercase text-brand-brown/60">Kilos</span>
+                  <span className="flex h-10 w-24 items-center justify-center rounded-xl border border-brand-brown/15 bg-brand-cream-soft/50 text-sm font-bold text-brand-wine">
+                    {Number(((cant * gUnidad) / 1000).toFixed(3)).toLocaleString("es-CO")}
+                  </span>
+                </div>
+              )}
+              {sinMedida && (
+                <div className="relative">
+                  <label className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[10px] font-semibold uppercase text-brand-brown/60">Kg de 1 unidad</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={pesoVariable}
+                    placeholder="0,5"
+                    title="Kilos de UNA sola unidad (ej. 1,5). El total se calcula solo."
+                    onChange={(e) => {
+                      const v = e.target.value.replace(",", ".");
+                      if (/^\d*\.?\d{0,3}$/.test(v)) setPesoVariable(v);
+                    }}
+                    className="h-10 w-24 rounded-xl border border-brand-brown/15 text-center text-sm font-semibold outline-none focus:border-brand-amber"
+                  />
+                </div>
+              )}
               <span className="ml-auto text-lg font-bold text-brand-wine">{formatoCOP(subtotal)}</span>
             </div>
+            {sinMedida && (
+              <div className="mt-2 rounded-lg border border-brand-brown/15 bg-brand-cream-soft/50 px-2 py-1.5 text-center">
+                <p className="text-[10px] font-semibold uppercase text-brand-brown/60">Kilos totales</p>
+                <p className="text-sm font-bold text-brand-wine">{Number(((cant * pv) / 1000).toFixed(3)).toLocaleString("es-CO")}</p>
+                <p className="text-[10px] text-brand-black/50">
+                  {pv > 0
+                    ? `${cant.toLocaleString("es-CO")} unidad${cant === 1 ? "" : "es"} × ${(pv / 1000).toLocaleString("es-CO")} kg (se calcula solo)`
+                    : "Digita arriba los kilos de UNA unidad; el total se calcula solo"}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Empaque al vacío (solo productos por kg) */}
@@ -4201,7 +4314,7 @@ export function numerosDelDia(pedidos: Pedido[]): Map<string, number> {
   return mapa;
 }
 
-/** Lee una imagen (archivo) y la comprime a JPEG (máx 1280px) como data URL base64. */
+/** Lee una imagen (archivo) y la comprime a JPEG (máx 2000px) como data URL base64. */
 async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime: string }> {
   const dataUrl0 = await new Promise<string>((res, rej) => {
     const r = new FileReader();
@@ -4215,7 +4328,7 @@ async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime
     i.onload = () => res(i);
     i.src = dataUrl0;
   });
-  const maxLado = 1280;
+  const maxLado = 2000;
   let { width, height } = img;
   if (width > maxLado || height > maxLado) {
     if (width >= height) { height = Math.round((height * maxLado) / width); width = maxLado; }
@@ -4227,7 +4340,7 @@ async function comprimirComprobante(file: File): Promise<{ dataUrl: string; mime
   const ctx = canvas.getContext("2d");
   if (!ctx) return { dataUrl: dataUrl0, mime: file.type || "image/jpeg" };
   ctx.drawImage(img, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.7), mime: "image/jpeg" };
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), mime: "image/jpeg" };
 }
 
 export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { pedido: Pedido; onCerrar: () => void; numeroDia?: number; meta?: DespachoMeta; clones?: string[] }) {
@@ -4433,7 +4546,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
 
       {compAbierto && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/60 p-4" onClick={() => setCompAbierto(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-brand-brown/10 px-5 py-4">
               <div>
                 <h3 className="font-serif text-lg font-bold text-brand-wine">Comprobante de pago</h3>
@@ -4448,8 +4561,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-amber border-t-transparent" />
               ) : compImg.length ? (
                 compImg.map((src, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={src} alt={`Comprobante ${i + 1}`} className="mx-auto max-h-[70vh] w-auto rounded-lg" />
+                  <ZoomImagen key={i} src={src} alt={`Comprobante ${i + 1}`} alto="62vh" className="w-full" />
                 ))
               ) : (
                 <p className="px-4 py-8 text-center text-sm font-medium text-brand-black">

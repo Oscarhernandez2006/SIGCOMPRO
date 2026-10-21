@@ -6,11 +6,13 @@ import { PedidosController } from './pedidos.controller';
 import { UsersModule } from '../users/users.module';
 import { UbicacionesModule } from '../ubicaciones/ubicaciones.module';
 import { DrivinSyncJob } from '../jobs/drivin-sync.job';
+import { ExtensionesModule } from '../extensiones/extensiones.module';
 
 @Module({
   imports: [
     UsersModule,
     UbicacionesModule,
+    ExtensionesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

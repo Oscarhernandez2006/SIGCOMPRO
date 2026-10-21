@@ -121,10 +121,13 @@ export interface DetalleLiquidacion {
   puntoNombre: string;
   fecha: string;
   persona: string;
+  /** Kilos "Porcionado" (corte/gramos/porciones). */
   kilos: number;
   entero: number;
   relajado: number;
   molida: number;
+  /** Total de kilos del pedido (o segmento): Porcionado + Entero + Relajado/Picado + Molido. */
+  kilosTotal: number;
   prepMs: number | null;
   prepATiempo: boolean;
   entregaATiempo: boolean;
@@ -247,6 +250,7 @@ export function calcularLiquidacion(
       entero: 0,
       relajado: 0,
       molida: 0,
+      kilosTotal,
       prepMs,
       prepATiempo,
       entregaATiempo,
@@ -312,6 +316,7 @@ export function calcularLiquidacion(
           entero: segEntero,
           relajado: segRelajado,
           molida: segMolida,
+          kilosTotal: segTotalKg,
           prepMs: segPrepMs,
           prepATiempo: segPrepATiempo,
           entregaATiempo,

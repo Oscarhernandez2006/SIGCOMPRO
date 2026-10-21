@@ -7,6 +7,7 @@ import { puedeVerModulo, puedeAccion, rutaOperativaInicial } from "@/lib/permiso
 import { cargarResumenPedidos, type DespachoMeta, type OpcionesCargaPedidos } from "@/lib/pedidos";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { objetivoDespacho, colorEstado, yaDespachado, porcionadoresDe } from "@/lib/despacho";
+import { pesoPedidoKg } from "@/lib/peso";
 import { ReplicasEstado, type Pedido } from "@/app/(panel)/pedidos/page";
 import {
   Panel,
@@ -210,13 +211,6 @@ function calcularHogarVsHoreca(pedidos: Pedido[], metaMap: Record<string, Despac
   };
 }
 
-/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
-function pesoPedidoKg(p: Pedido): number {
-  return (p.carrito ?? []).reduce((s, i) => {
-    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
-    return s + (esKilo ? Number(i.cantidad) || 0 : 0);
-  }, 0);
-}
 
 /** Ranking de productos más vendidos. */
 function rankingProductos(pedidos: Pedido[], topN = 10) {

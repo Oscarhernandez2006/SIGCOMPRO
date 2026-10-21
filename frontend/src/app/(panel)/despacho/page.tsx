@@ -6,6 +6,7 @@ import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdministrativo } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
+import ZoomImagen from "@/components/ZoomImagen";
 import {
   cargarEstadoPedidos,
   actualizarMetaApi,
@@ -19,11 +20,16 @@ import {
   eliminarComprobanteApi,
   cargarAsignacionesDrivin,
   cargarEntregasDrivin,
+  agregarReplicaApi,
+  parcharReplicaApi,
+  quitarReplicaApi,
   type DespachoMeta,
+  type ReplicaPedido,
   type SegmentoAlistamiento,
 } from "@/lib/pedidos";
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
+import { pesoPedidoKg } from "@/lib/peso";
 import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
@@ -41,16 +47,21 @@ import {
 } from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+/** Día (YYYY-MM-DD) en Bogotá de una fecha ISO (o de ahora). */
+const diaBogota = (iso?: string | null) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(
+    iso ? new Date(iso) : new Date(),
+  );
 
 /**
- * Comprime una imagen (archivo) a JPEG redimensionado (máx. 1280 px de lado)
- * y la devuelve como data URL base64. Reduce el peso del comprobante para
- * guardarlo/transmitirlo sin saturar el servidor ni la base de datos.
+ * Comprime una imagen (archivo) a JPEG redimensionado (máx. 2000 px de lado)
+ * y la devuelve como data URL base64. Reduce el peso del comprobante sin
+ * perder la nitidez de la letra pequeña (para poder leerlo con zoom).
  */
 function comprimirImagen(
   file: File,
-  maxLado = 1280,
-  calidad = 0.7,
+  maxLado = 2000,
+  calidad = 0.85,
 ): Promise<{ dataUrl: string; mime: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -85,14 +96,6 @@ function comprimirImagen(
     };
     reader.readAsDataURL(file);
   });
-}
-
-/** Peso total del pedido en kilos (suma los ítems vendidos por KG). */
-function pesoPedidoKg(p: Pedido): number {
-  return (p.carrito ?? []).reduce((s, i) => {
-    const esKilo = (i.producto?.um || "").trim().toUpperCase() === "KG";
-    return s + (esKilo ? i.cantidad || 0 : 0);
-  }, 0);
 }
 
 /** Un segmento por cada línea del carrito, sin porcionador ni tiempos (punto de partida). */
@@ -164,6 +167,14 @@ function esPosteriorFuturo(p: Pedido): boolean {
   return Boolean(
     p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoyISO(),
   );
+}
+/**
+ * ¿Alguna réplica del pedido va en camino (POD "in-transit" de Drivin)? El
+ * pedido puede seguir Entregado (se entregó el envío base) aunque sus réplicas
+ * aún estén en reparto: igual debe verse en la card "En tránsito".
+ */
+function tieneReplicaEnTransito(p: Pedido, m?: DespachoMeta): boolean {
+  return !p.anulado && (m?.replicas ?? []).some((r) => r.estado === "in-transit");
 }
 
 /** Formatea milisegundos como cronómetro "1:59:32" (h:mm:ss) usando el valor absoluto. */
@@ -460,6 +471,42 @@ export default function DespachoPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ids cuyo pedido base ya se subió a Drivin al despachar (evita reenvíos).
   const drivinDespachoRef = useRef<Set<string>>(new Set());
+  // Réplicas: cambios atómicos en curso (evita repetir la misma petición
+  // mientras llega la respuesta) y creaciones pendientes por "id|numero"
+  // (subir a Drivin / marcar enviado esperan a que la réplica exista).
+  const replicasEnVuelo = useRef<Set<string>>(new Set());
+  const creacionesReplica = useRef<Map<string, Promise<void>>>(new Map());
+  /** Reemplaza las réplicas locales por la lista vigente que devolvió el servidor. */
+  const aplicarReplicas = (id: string, replicas: ReplicaPedido[]) =>
+    setMeta((prev) => ({ ...prev, [id]: { ...prev[id], replicas } }));
+  /** Cambio optimista de UNA réplica en el estado local. */
+  const cambiarReplicaLocal = (id: string, numero: number, cambios: Partial<ReplicaPedido>) =>
+    setMeta((prev) => {
+      const actuales = prev[id]?.replicas ?? [];
+      return {
+        ...prev,
+        [id]: {
+          ...prev[id],
+          replicas: actuales.map((r) => (r.numero === numero ? { ...r, ...cambios } : r)),
+        },
+      };
+    });
+  /** Envía un cambio atómico de una réplica (una sola petición en vuelo por clave). */
+  const parcharReplica = (
+    id: string,
+    numero: number,
+    cambios: Parameters<typeof parcharReplicaApi>[2],
+    siCodigo?: string,
+  ) => {
+    const clave = `${id}|${numero}|${JSON.stringify(cambios)}`;
+    if (replicasEnVuelo.current.has(clave)) return;
+    replicasEnVuelo.current.add(clave);
+    cambiarReplicaLocal(id, numero, cambios);
+    parcharReplicaApi(id, numero, cambios, siCodigo)
+      .then((r) => aplicarReplicas(id, r.replicas))
+      .catch(() => { /* se reintenta en el siguiente ciclo de sincronización */ })
+      .finally(() => replicasEnVuelo.current.delete(clave));
+  };
   // Resultado del envío a Drivin al despachar (modal central).
   const [drivinModal, setDrivinModal] = useState<{
     estado: "enviando" | "ok" | "error";
@@ -729,21 +776,10 @@ export default function DespachoPage() {
               (r, i) => sts[i] && sts[i] !== r.estado,
             );
             if (hayCambioEstado) {
-              setMeta((prev) => {
-                const actuales = prev[p.id]?.replicas ?? [];
-                if (actuales.length === 0) return prev;
-                let cambio = false;
-                const fusion = actuales.map((r) => {
-                  const nuevo = res[`${p.comanda}-${r.numero}`]?.status;
-                  if (nuevo && nuevo !== r.estado) {
-                    cambio = true;
-                    return { ...r, estado: nuevo };
-                  }
-                  return r;
-                });
-                if (!cambio) return prev;
-                actualizarMetaApi(p.id, { replicas: fusion }).catch(() => { /* ignore */ });
-                return { ...prev, [p.id]: { ...prev[p.id], replicas: fusion } };
+              // Cambio atómico POR réplica (no se reescribe la lista entera).
+              reps.forEach((r, i) => {
+                const nuevo = sts[i];
+                if (nuevo && nuevo !== r.estado) parcharReplica(p.id, r.numero, { estado: nuevo });
               });
             }
             // El rechazo (o entrega parcial) del envío ORIGINAL (comanda base)
@@ -891,7 +927,12 @@ export default function DespachoPage() {
       if (!idsDrivin.has(String(p.punto.id))) continue; // punto manual: no toca Drivin
       const m = meta[p.id] ?? {};
       const est = norm(p.estado);
-      if (est !== "facturado" && est !== "despachado") continue;
+      const baseActiva = est === "facturado" || est === "despachado";
+      // Las réplicas se siguen sincronizando aunque el pedido ya vaya En tránsito
+      // o esté Entregado (Drivin puede desasignar una réplica en cualquier momento).
+      const replicasActivas =
+        baseActiva || est === "en tránsito" || est === "en transito" || est === "entregado";
+      if (!replicasActivas) continue;
 
       // BASE: refleja la asignación de Drivin (o su AUSENCIA).
       //  - asg = {code,nombre} -> Drivin asignó un domiciliario.
@@ -902,7 +943,9 @@ export default function DespachoPage() {
       const enMapaBase = p.comanda in asignacionesDrivin;
       const asg = enMapaBase ? asignacionesDrivin[p.comanda] : undefined;
       const teniaDomi = !!(m.domiciliario || m.domiciliarioCodigo);
-      if (asg) {
+      if (!baseActiva) {
+        // Pedido En tránsito / Entregado: la base no se toca, solo sus réplicas.
+      } else if (asg) {
         // Drivin tiene un domiciliario asignado.
         const cambioDomi = m.domiciliarioCodigo !== asg.code;
         // NO auto-despachar si hay comprobante subido sin confirmar.
@@ -953,33 +996,28 @@ export default function DespachoPage() {
       }
 
       // RÉPLICAS: cada réplica es una orden aparte en Drivin (código "comanda-N").
-      // Se baja su domiciliario asignado igual que la base.
-      const reps = m.replicas ?? [];
-      if (reps.length > 0) {
-        let cambioRep = false;
-        const nuevas = reps.map((r) => {
-          const key = `${p.comanda}-${r.numero}`;
-          // undefined = la réplica ya no está en la ruta de Drivin (desasignada).
-          const a = key in asignacionesDrivin ? asignacionesDrivin[key] : undefined;
-          if (a) {
-            if (r.domiciliarioCodigo !== a.code) {
-              cambioRep = true;
-              return { ...r, domiciliario: a.nombre, domiciliarioCodigo: a.code };
-            }
-            return r;
+      // Se baja su domiciliario asignado igual que la base. Cada cambio es
+      // ATÓMICO y condicionado al domiciliario que se vio (no se reescribe la
+      // lista entera, así varias pantallas y el servidor no se pisan).
+      const hoy = diaBogota();
+      for (const r of m.replicas ?? []) {
+        const key = `${p.comanda}-${r.numero}`;
+        // null = sigue en Drivin SIN domiciliario; undefined = fuera de la ruta de hoy.
+        const a = key in asignacionesDrivin ? asignacionesDrivin[key] : undefined;
+        const codigo = r.domiciliarioCodigo ?? "";
+        if (a) {
+          if (codigo !== a.code) {
+            parcharReplica(p.id, r.numero, { domiciliario: a.nombre, domiciliarioCodigo: a.code }, codigo);
           }
-          // Desasignada (null o fuera de la ruta): limpia si tenía domiciliario.
-          if (mapaTieneDatos && (r.domiciliario || r.domiciliarioCodigo)) {
-            cambioRep = true;
-            return { ...r, domiciliario: "", domiciliarioCodigo: "" };
-          }
-          return r;
-        });
-        if (cambioRep) {
-          setMeta((prev) => {
-            actualizarMetaApi(p.id, { replicas: nuevas }).catch(() => { /* ignore */ });
-            return { ...prev, [p.id]: { ...prev[p.id], replicas: nuevas } };
-          });
+          continue;
+        }
+        if (!mapaTieneDatos || !(r.domiciliario || r.domiciliarioCodigo)) continue;
+        // Fuera del mapa (que solo trae los escenarios de HOY): se libera solo si
+        // la réplica se subió hoy y no está ya entregada/rechazada.
+        const subidaHoy = r.drivinEnviadoEn ? diaBogota(r.drivinEnviadoEn) === hoy : baseActiva;
+        const final = r.estado === "approved" || r.estado === "rejected";
+        if (a === null || (subidaHoy && !final)) {
+          parcharReplica(p.id, r.numero, { domiciliario: "", domiciliarioCodigo: "" }, codigo);
         }
       }
     }
@@ -1498,41 +1536,66 @@ export default function DespachoPage() {
   };
 
 
-  // Agrega la siguiente réplica en secuencia (máx. 5) con su domiciliario.
+  // Agrega la siguiente réplica en secuencia (máx. 5) con su domiciliario. Es
+  // ATÓMICO en el servidor; si otra pantalla ya creó esa réplica, avisa.
   const crearReplica = (id: string, domiciliario: string, code?: string) => {
     const actuales = meta[id]?.replicas ?? [];
-    const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
-    if (max >= 5) return;
-    actualizarMeta(id, {
-      replicas: [
-        ...actuales,
-        { numero: max + 1, domiciliario, domiciliarioCodigo: code },
-      ],
-    });
+    const numero = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0) + 1;
+    if (numero > 5) return;
+    setMeta((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        replicas: [...(prev[id]?.replicas ?? []), { numero, domiciliario, domiciliarioCodigo: code }],
+      },
+    }));
+    const clave = `${id}|${numero}`;
+    const creacion = agregarReplicaApi(id, numero, domiciliario, code).then((r) =>
+      aplicarReplicas(id, r.replicas),
+    );
+    creacionesReplica.current.set(clave, creacion);
+    creacion
+      .catch((e) => {
+        setMeta((prev) => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            replicas: (prev[id]?.replicas ?? []).filter((r) => r.numero !== numero),
+          },
+        }));
+        alert(e instanceof Error ? e.message : "No se pudo crear la réplica.");
+      })
+      .finally(() => creacionesReplica.current.delete(clave));
   };
+  /** Espera a que termine de guardarse la creación de una réplica (si está en curso). */
+  const esperarCreacionReplica = (id: string, numero: number) =>
+    creacionesReplica.current.get(`${id}|${numero}`) ?? Promise.resolve();
   // Quita la última réplica (para mantener la secuencia).
   const quitarUltimaReplica = (id: string) => {
     const actuales = meta[id]?.replicas ?? [];
     if (actuales.length === 0) return;
     const max = actuales.reduce((mx, r) => Math.max(mx, r.numero), 0);
-    actualizarMeta(id, { replicas: actuales.filter((r) => r.numero !== max) });
+    setMeta((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], replicas: (prev[id]?.replicas ?? []).filter((r) => r.numero !== max) },
+    }));
+    quitarReplicaApi(id, max)
+      .then((r) => aplicarReplicas(id, r.replicas))
+      .catch((e) => alert(e instanceof Error ? e.message : "No se pudo quitar la réplica."));
   };
   const descargarReplica = (p: Pedido, numero: number) => {
     descargarExcelDespacho(p.id, numero).catch(() =>
       alert("No se pudo generar el Excel de la réplica."),
     );
   };
-  // Marca una réplica como ya subida a Drivin (setMeta funcional para leer el
-  // estado más reciente, incluso si la réplica se acaba de crear).
+  // Marca una réplica como ya subida a Drivin (cambio atómico; espera a que la
+  // réplica exista si se acaba de crear).
   const marcarReplicaDrivin = (id: string, numero: number) => {
-    setMeta((prev) => {
-      const actuales = prev[id]?.replicas ?? [];
-      const replicas = actuales.map((r) =>
-        r.numero === numero ? { ...r, drivinEnviado: true } : r,
+    void esperarCreacionReplica(id, numero)
+      .catch(() => undefined)
+      .then(() =>
+        parcharReplica(id, numero, { drivinEnviado: true, drivinEnviadoEn: new Date().toISOString() }),
       );
-      actualizarMetaApi(id, { replicas }).catch(() => { /* ignore */ });
-      return { ...prev, [id]: { ...prev[id], replicas } };
-    });
   };
 
   const pedidosVisibles = useMemo(() => {
@@ -1556,8 +1619,11 @@ export default function DespachoPage() {
   // "De hoy": pedidos para hoy (programados con fecha de hoy o no programados
   // creados hoy). Los contadores y cronómetros del día se basan en estos.
   const pedidosDeHoy = useMemo(
-    () => pedidosVisibles.filter(esDeHoy),
-    [pedidosVisibles],
+    () =>
+      pedidosVisibles.filter(
+        (p) => esDeHoy(p) || tieneReplicaEnTransito(p, meta[p.id]),
+      ),
+    [pedidosVisibles, meta],
   );
   // Posteriores: programados para un día futuro Y con la comanda YA IMPRESA.
   // Un posterior SIN imprimir se queda en la vista de hoy (para poder imprimir
@@ -1656,6 +1722,11 @@ export default function DespachoPage() {
         return esDeHoy(p) || (esPosteriorFuturo(p) && impresos.has(p.id));
       // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
       // solo aparece bajo "Atrasados", así el conteo coincide con la tabla.
+      if (vista === "transito") {
+        // Incluye pedidos con réplicas en camino aunque el pedido ya figure Entregado.
+        const repEnTransito = tieneReplicaEnTransito(p, meta[p.id]);
+        return (esDeHoy(p) || repEnTransito) && (estadoSel?.match(p) || repEnTransito) && !atrasadosIds.has(p.id);
+      }
       if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
       // Vista por defecto: activos de HOY + posteriores aún no impresos (para
       // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
@@ -1666,7 +1737,7 @@ export default function DespachoPage() {
       if (esPosteriorFuturo(p) && !impresos.has(p.id)) return true;
       return false;
     });
-  }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos]);
+  }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos, meta]);
 
   // Pedidos visibles cuya comanda AÚN no se ha impreso (excluye anulados).
   const noImpresos = useMemo(
@@ -1813,10 +1884,14 @@ export default function DespachoPage() {
                 ? atrasados.length
                 : def.key === "posteriores"
                   ? posterioresFuturos.length
-                  : // Un pedido atrasado se contabiliza SOLO en la card "Atrasados"
-                    // (aunque su estado real sea alistado/producción/etc.), para no
-                    // duplicarlo ni inflar el Total.
-                    pedidosDeHoy.filter((p) => def.match(p) && !atrasadosIds.has(p.id)).length;
+                  : def.key === "transito"
+                    ? pedidosDeHoy.filter(
+                        (p) => (def.match(p) || tieneReplicaEnTransito(p, meta[p.id])) && !atrasadosIds.has(p.id),
+                      ).length
+                    : // Un pedido atrasado se contabiliza SOLO en la card "Atrasados"
+                      // (aunque su estado real sea alistado/producción/etc.), para no
+                      // duplicarlo ni inflar el Total.
+                      pedidosDeHoy.filter((p) => def.match(p) && !atrasadosIds.has(p.id)).length;
             // El Total = TODOS los pedidos de cualquier estado: los de hoy +
             // los Posteriores (programados a futuro ya impresos). Así el Total
             // coincide con la suma de todas las cards (incluida Posteriores).
@@ -3104,9 +3179,12 @@ export default function DespachoPage() {
           onDescargar={() =>
             descargarReplica(modalReplica.pedido, modalReplica.numero)
           }
-          onDrivin={() =>
-            enviarADrivinApi(modalReplica.pedido.id, modalReplica.numero)
-          }
+          onDrivin={async () => {
+            // Solo se sube si la réplica quedó creada (evita subir un número que
+            // otra pantalla ya usó).
+            await esperarCreacionReplica(modalReplica.pedido.id, modalReplica.numero);
+            return enviarADrivinApi(modalReplica.pedido.id, modalReplica.numero);
+          }}
           onMarcarEnviado={() =>
             marcarReplicaDrivin(modalReplica.pedido.id, modalReplica.numero)
           }
@@ -3354,7 +3432,7 @@ export default function DespachoPage() {
             onClick={() => setCompModal(null)}
           >
             <div
-              className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2 border-b border-brand-brown/10 px-4 py-3">
@@ -3383,15 +3461,16 @@ export default function DespachoPage() {
                   </svg>
                 </button>
               </div>
-              <div className="relative overflow-auto bg-brand-cream-soft/40 p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imgActual} alt={`Comprobante ${idx + 1}`} className="mx-auto max-h-[55vh] w-auto rounded-lg" />
+              <div className="relative bg-brand-cream-soft/40 p-3">
+                {imgActual && (
+                  <ZoomImagen key={`${cid}-${idx}`} src={imgActual} alt={`Comprobante ${idx + 1}`} alto="64vh" />
+                )}
                 {total > 1 && (
                   <>
                     <button
                       type="button"
                       onClick={() => setCompModal({ id: cid, indice: (idx - 1 + total) % total })}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
+                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
                       aria-label="Anterior"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
@@ -3401,7 +3480,7 @@ export default function DespachoPage() {
                     <button
                       type="button"
                       onClick={() => setCompModal({ id: cid, indice: (idx + 1) % total })}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-1.5 text-white transition hover:bg-black/60"
                       aria-label="Siguiente"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">

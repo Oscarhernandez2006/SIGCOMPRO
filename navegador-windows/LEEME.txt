@@ -1,0 +1,26 @@
+NAVEGADOR SIGCOMPRO (Windows)
+=============================
+
+Es un navegador (Chrome for Testing) que abre SIGCOMPRO con la extension de
+validacion de cedula en ADRES ya instalada. Va aparte del Chrome normal del
+equipo: tiene su propio perfil y su propia sesion.
+
+INSTALAR (una sola vez por PC)
+  1. Descomprimir el .zip en cualquier carpeta.
+  2. Doble clic en INSTALAR.cmd
+     - No pide permisos de administrador.
+     - Crea el acceso directo "SIGCOMPRO" en el escritorio y en el menu Inicio.
+     - Abre SIGCOMPRO al terminar.
+  3. Ya se puede borrar la carpeta descomprimida.
+
+USAR
+  Doble clic en el icono "SIGCOMPRO" del escritorio. En "Nuevo cliente", el
+  boton "Validar" junto al NIT consulta la cedula en ADRES automaticamente.
+
+ACTUALIZAR (nueva version del navegador o de la extension)
+  Descomprimir el .zip nuevo y volver a ejecutar INSTALAR.cmd. La sesion y los
+  datos del perfil se conservan.
+
+DIRECCION DE SIGCOMPRO
+  El archivo url.txt tiene la direccion que abre el icono. Por defecto:
+  https://sigcompro.grupo-santacruz.com

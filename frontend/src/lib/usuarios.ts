@@ -153,6 +153,17 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: "liquidacion_variable",
         label: "Liquidación variable",
       },
+      {
+        key: "direcciones",
+        label: "Direcciones",
+        acciones: [
+          { key: "direcciones.editar", label: "Editar celdas y agregar filas" },
+          { key: "direcciones.marcar", label: "Marcar / quitar amarillo (corregida)" },
+          { key: "direcciones.eliminar", label: "Eliminar filas" },
+          { key: "direcciones.exportar", label: "Exportar a Excel" },
+          { key: "direcciones.importar", label: "Importar Excel (agrega filas nuevas)" },
+        ],
+      },
     ],
   },
   {

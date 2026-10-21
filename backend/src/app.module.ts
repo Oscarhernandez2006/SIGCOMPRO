@@ -21,6 +21,9 @@ import { LiquidacionVariableModule } from './liquidacion-variable/liquidacion-va
 import { MachineLearningModule } from './machine-learning/machine-learning.module';
 import { ChatModule } from './chat/chat.module';
 import { RunErrandsModule } from './run-errands/run-errands.module';
+import { ExtensionesModule } from './extensiones/extensiones.module';
+import { DireccionesModule } from './direcciones/direcciones.module';
+import { PlanesModule } from './planes/planes.module';
 
 @Module({
   imports: [
@@ -47,6 +50,9 @@ import { RunErrandsModule } from './run-errands/run-errands.module';
     MachineLearningModule,
     ChatModule,
     RunErrandsModule,
+    ExtensionesModule,
+    DireccionesModule,
+    PlanesModule,
   ],
   controllers: [AppController],
 })

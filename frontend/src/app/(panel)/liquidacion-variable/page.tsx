@@ -320,8 +320,15 @@ export default function LiquidacionVariablePage() {
                           <td className="px-4 py-2 font-semibold text-brand-wine">{d.comanda}</td>
                           <td className="px-4 py-2 text-brand-black">{d.persona}</td>
                           <td className="px-4 py-2 text-brand-black">{d.puntoNombre}</td>
-                          <td className="px-4 py-2 text-right text-brand-black">
-                            {d.kilos % 1 === 0 ? d.kilos : d.kilos.toFixed(1)}
+                          <td
+                            className="px-4 py-2 text-right text-brand-black"
+                            title={
+                              rol === "porcionador"
+                                ? `Porcionado ${fmtKg(d.kilos)} · Entero ${fmtKg(d.entero)} · Relajado/Picado ${fmtKg(d.relajado)} · Molido ${fmtKg(d.molida)}`
+                                : undefined
+                            }
+                          >
+                            {fmtKg(d.kilosTotal)}
                           </td>
                           <td className="px-4 py-2 text-right text-brand-black">{duracionLiq(d.prepMs)}</td>
                           <td className="px-4 py-2 text-center">
@@ -371,6 +378,11 @@ export default function LiquidacionVariablePage() {
       )}
     </div>
   );
+}
+
+/** Kilos con máximo 2 decimales (sin ceros sobrantes). */
+function fmtKg(kg: number): string {
+  return String(Number((kg || 0).toFixed(2)));
 }
 
 /** Celda de la tabla de porcionadores: kg y plata en líneas separadas. */

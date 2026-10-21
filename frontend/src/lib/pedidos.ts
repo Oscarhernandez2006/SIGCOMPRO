@@ -69,6 +69,8 @@ export interface DespachoMeta {
     domiciliarioCodigo?: string;
     /** La réplica ya se subió a Drivin correctamente. */
     drivinEnviado?: boolean;
+    /** Momento (ISO) en que la réplica se subió a Drivin. */
+    drivinEnviadoEn?: string;
     /**
      * Estado de entrega (POD) que reporta Drivin para esta réplica:
      * 'pending' | 'in-transit' | 'approved' (entregado) | 'rejected'.
@@ -204,6 +206,46 @@ export function actualizarMetaApi(
   return apiFetch<{ id: string }>(`/pedidos/${id}/meta`, {
     method: "PATCH",
     body: JSON.stringify(cambios),
+  });
+}
+
+export type ReplicaPedido = NonNullable<DespachoMeta["replicas"]>[number];
+type RespuestaReplicas = { replicas: ReplicaPedido[]; cambio: boolean };
+
+/**
+ * Operaciones ATÓMICAS sobre réplicas: el servidor aplica el cambio sobre la
+ * lista actual de la BD (no se reescribe la lista entera con datos viejos de
+ * esta pantalla). Devuelven la lista de réplicas vigente.
+ */
+export function agregarReplicaApi(
+  id: string,
+  numero: number,
+  domiciliario: string,
+  domiciliarioCodigo?: string,
+): Promise<RespuestaReplicas> {
+  return apiFetch<RespuestaReplicas>(`/pedidos/${id}/replicas`, {
+    method: "POST",
+    body: JSON.stringify({ numero, domiciliario, domiciliarioCodigo }),
+  });
+}
+
+/** Cambia campos de una réplica. Con `siCodigo`, solo si su domiciliarioCodigo actual es ese. */
+export function parcharReplicaApi(
+  id: string,
+  numero: number,
+  cambios: Partial<Pick<ReplicaPedido, "domiciliario" | "domiciliarioCodigo" | "estado" | "drivinEnviado" | "drivinEnviadoEn">>,
+  siCodigo?: string,
+): Promise<RespuestaReplicas> {
+  return apiFetch<RespuestaReplicas>(`/pedidos/${id}/replicas/${numero}`, {
+    method: "PATCH",
+    body: JSON.stringify({ cambios, siCodigo }),
+  });
+}
+
+/** Quita una réplica (solo la última). */
+export function quitarReplicaApi(id: string, numero: number): Promise<RespuestaReplicas> {
+  return apiFetch<RespuestaReplicas>(`/pedidos/${id}/replicas/${numero}`, {
+    method: "DELETE",
   });
 }
 

@@ -182,6 +182,47 @@ export class PedidosController {
     return this.pedidos.actualizarMeta(id, cambios);
   }
 
+  /** Agrega la siguiente réplica (atómico: no pisa cambios de otras pantallas). */
+  @Post(':id/replicas')
+  @Permisos('despacho')
+  agregarReplica(
+    @Param('id') id: string,
+    @Body() body: { numero?: number; domiciliario?: string; domiciliarioCodigo?: string },
+  ) {
+    return this.pedidos.agregarReplica(
+      id,
+      Number(body?.numero),
+      String(body?.domiciliario ?? ''),
+      body?.domiciliarioCodigo,
+    );
+  }
+
+  /**
+   * Cambia campos de UNA réplica (domiciliario, estado, envío a Drivin). Con
+   * `siCodigo` solo aplica si su domiciliarioCodigo actual es ese.
+   */
+  @Patch(':id/replicas/:numero')
+  @Permisos('despacho')
+  parcharReplica(
+    @Param('id') id: string,
+    @Param('numero') numero: string,
+    @Body() body: { cambios?: Record<string, unknown>; siCodigo?: string | null },
+  ) {
+    return this.pedidos.parcharReplica(
+      id,
+      Number(numero),
+      body?.cambios ?? {},
+      typeof body?.siCodigo === 'string' ? body.siCodigo : undefined,
+    );
+  }
+
+  /** Quita una réplica (solo la última, para mantener la secuencia). */
+  @Delete(':id/replicas/:numero')
+  @Permisos('despacho')
+  quitarReplica(@Param('id') id: string, @Param('numero') numero: string) {
+    return this.pedidos.quitarReplica(id, Number(numero));
+  }
+
   /** Marca un pedido como impreso. */
   @Patch(':id/impreso')
   marcarImpreso(

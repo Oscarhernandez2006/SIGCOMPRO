@@ -272,7 +272,7 @@ export default function ReferenciaInput({
           className={`campo ${
             partes.tipoConjunto
               ? ""
-              : "cursor-not-allowed bg-brand-cream-soft/40 placeholder:text-brand-black"
+              : "cursor-not-allowed bg-brand-cream-soft/40"
           }`}
         />
       </div>
@@ -367,7 +367,9 @@ export default function ReferenciaInput({
       </div>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <span className="text-xs text-brand-black">
+        <span
+          className={`text-xs ${componer(partes) ? "text-brand-black" : "text-brand-black/40"}`}
+        >
           {componer(partes) ? (
             <>
               Se guardará como:{" "}
