@@ -82,7 +82,7 @@ async function main() {
     if (!app || app.sourceType !== 'github' || app.owner !== 'Oscarhernandez2006' || app.repository !== 'SIGCOMPRO' || app.branch !== branch || app.buildType !== 'dockerfile' || !app.autoDeploy) {
         throw new Error('La aplicacion de Dokploy no coincide con el repositorio, rama o Dockerfile esperado.');
     }
-    const active = await sql`SELECT "deploymentId" FROM deployment WHERE "applicationId" = ${app.applicationId} AND status IN ('running', 'queued')`;
+    const active = await sql`SELECT "deploymentId" FROM deployment WHERE "applicationId" = ${app.applicationId} AND status::text IN ('running', 'queued')`;
     if (active.length) throw new Error('Ya existe un despliegue activo. Espere a que termine antes de reintentar.');
     const previous = await sql`SELECT "deploymentId" FROM deployment WHERE "applicationId" = ${app.applicationId}`;
     const known = new Set(previous.map(item => item.deploymentId));
