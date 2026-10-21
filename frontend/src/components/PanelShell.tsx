@@ -10,7 +10,7 @@ import { cargarResumenPedidos } from "@/lib/pedidos";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
-import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 import PendientesCreditoBadge from "./PendientesCreditoBadge";
 import { ShoppingBag, UtensilsCrossed } from "lucide-react";
@@ -31,7 +31,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Aprobación almuerzo", href: "/almuerzos", modulo: "despacho", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
-  { label: "Pedidos a crédito", href: "/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
+  { label: "Club Yo Soy Santacruz", href: "/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -271,7 +271,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
     return (
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+      <SidebarNav className="flex flex-1 flex-col gap-1 px-3">
         {itemsVisibles.map((item) => {
           const active = pathname === item.href;
           return (
@@ -293,12 +293,12 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
-      </nav>
+      </SidebarNav>
     );
   }
 
   return (
-    <SidebarLayout>
+    <SidebarLayout panel="operativo">
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
@@ -395,6 +395,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             </div>
             <div className="mx-3 mb-2 border-t border-brand-cream/10" />
             <NavList onNavigate={() => setMobileOpen(false)} />
+            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-1 border-t border-brand-cream/10 p-3">
               {puedeCambiarPanel && (
                 <Link

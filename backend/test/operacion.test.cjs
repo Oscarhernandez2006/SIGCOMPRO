@@ -8,6 +8,8 @@ const { MenuService } = require('../src/menu/menu.service');
 const { CreditoEmpleadosService } = require('../src/credito-empleados/credito-empleados.service');
 const { TiendaEmpleadosService } = require('../src/tienda-empleados/tienda-empleados.service');
 const { AlmuerzosService } = require('../src/almuerzos/almuerzos.service');
+const { ConfiguracionService } = require('../src/configuracion/configuracion.service');
+const { PedidosService } = require('../src/pedidos/pedidos.service');
 
 function poolWith(handler = () => ({ rows: [], rowCount: 0 })) {
   const calls = [];
@@ -127,4 +129,126 @@ test('disponibilidad exige documento propio, almuerzo de hoy y hora iniciada', a
   assert.match(pool.calls[0].statement, /dia = .*America\/Bogota/);
   assert.match(pool.calls[0].statement, /inicio <= now\(\)/);
   assert.match(pool.calls[0].statement, /COALESCE\(disponible_en, now\(\)\)/);
+});
+
+test('el orden del sidebar persiste por panel y acepta administradores', async () => {
+  const pool = poolWith(statement => ({ rows: statement.startsWith('SELECT') ? [{ valor: ['/despacho', '/pedidos'] }] : [] }));
+  const configuracion = new ConfiguracionService(pool);
+  await configuracion.guardarOrdenSidebar('operativo', ['/despacho', '/pedidos'], { rol: 'administrador app' });
+  assert.deepEqual(pool.calls[0].parameters, ['sidebar:orden:operativo', '["/despacho","/pedidos"]']);
+  assert.deepEqual(await configuracion.obtenerOrdenSidebar('operativo'), { orden: ['/despacho', '/pedidos'] });
+});
+
+test('asignar el permiso a un no administrador no permite cambiar el menu', async () => {
+  const pool = poolWith();
+  const configuracion = new ConfiguracionService(pool);
+  for (const rol of ['despacho', 'facturador', 'gerencia', 'gerente']) {
+    await assert.rejects(configuracion.guardarOrdenSidebar('operativo', ['/pedidos'], { rol, permisos: ['sidebar.organizar'] }), error => error.getStatus() === 403);
+  }
+  assert.equal(pool.calls.length, 0);
+});
+
+test('el orden rechaza paneles desconocidos, enlaces externos y duplicados', async () => {
+  const configuracion = new ConfiguracionService(poolWith());
+  const user = { rol: 'desarrollador' };
+  for (const orden of [['https://otro.com'], ['/pedidos', '/pedidos'], ['/pedidos', 2], Array(151).fill('/pedidos')]) {
+    await assert.rejects(configuracion.guardarOrdenSidebar('operativo', orden, user), error => error.getStatus() === 400);
+  }
+  await assert.rejects(configuracion.obtenerOrdenSidebar('otro-panel'), error => error.getStatus() === 400);
+});
+
+test('despacho normal y resumen excluyen las compras del club', async () => {
+  const pool = poolWith();
+  const pedidos = new PedidosService(pool, {}, { get: () => undefined }, {});
+  await pedidos.estado(undefined, 'hoy');
+  assert.match(pool.calls[0].statement, /COALESCE\(data->>'canal', ''\) <> 'club'/);
+});
+
+test('el club se enlaza una sola vez y conserva comandas y compras', async () => {
+  const pool = poolWith();
+  const pedidos = new PedidosService(pool, {}, { get: () => undefined }, {});
+  await pedidos.estadoClub(undefined, { sub: '4', rol: 'despacho' });
+  assert.match(pool.calls[0].statement, /ON CONFLICT \(id\) DO NOTHING/);
+  assert.match(pool.calls[0].statement, /'comanda', '1CSE' \|\| c.numero_comanda/);
+  assert.match(pool.calls[0].statement, /'entrega', 'recoge'/);
+  assert.doesNotMatch(pool.calls[0].statement, /UPDATE credito_empleados_pedidos/);
+  const lectura = pool.calls.find(call => call.statement.includes("(data - 'trazabilidad')"));
+  assert.match(lectura.statement, /data->>'canal' = 'club'/);
+  assert.match(lectura.statement, /usuario_punto_venta/);
+  assert.equal(lectura.parameters[0], '4');
+});
+
+function despachoClub(metaChanges = {}, failCredito = false) {
+  const actual = {
+    id: 'club:compra-1', creditoPedidoId: 'compra-1', canal: 'club',
+    consecutivo: 1, comanda: '1CSE1', numeroDia: 1, numeroDiaFecha: '2026-10-21',
+    punto: { id: '1', nombre: 'Centro' }, cliente: { nombre: 'Colaborador', nit_cedula: '123456' },
+    fecha: '2026-10-21T15:00:00.000Z', estado: 'Facturado', total: 10000,
+    entrega: 'recoge', pago: 'Crédito empleados', carrito: [],
+  };
+  const calls = [];
+  const client = {
+    async query(statement, parameters = []) {
+      calls.push({ statement, parameters });
+      if (statement.includes('SELECT consecutivo, data, meta FROM pedidos')) {
+        return { rowCount: 1, rows: [{ consecutivo: 1, data: actual, meta: { facturaNumero: 'FV-1', facturaValor: 10000, porcionador: 'Preparador', ...metaChanges } }] };
+      }
+      if (failCredito && statement.includes('UPDATE credito_empleados_pedidos')) throw new Error('Fallo simulado credito');
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const pool = { connect: async () => client };
+  return { service: new PedidosService(pool, {}, { get: () => undefined }, {}), actual, calls };
+}
+
+test('entregar en PDV cierra la compra en la misma transaccion', async () => {
+  const { service, actual, calls } = despachoClub();
+  const guardado = await service.guardar({ ...actual, estado: 'Entregado' });
+  assert.equal(guardado.comanda, '1CSE1');
+  assert.equal(guardado.entrega, 'recoge');
+  assert.equal(guardado.pago, 'Crédito');
+  const ledgerIndex = calls.findIndex(call => call.statement.includes('UPDATE credito_empleados_pedidos'));
+  assert.ok(ledgerIndex > 0);
+  assert.deepEqual(calls[ledgerIndex].parameters, ['compra-1', 'entregado', 'FV-1']);
+  assert.ok(ledgerIndex < calls.findIndex(call => call.statement === 'COMMIT'));
+});
+
+test('fallar la actualizacion de credito revierte todo el cierre', async () => {
+  const { service, actual, calls } = despachoClub({}, true);
+  await assert.rejects(service.guardar({ ...actual, estado: 'Entregado' }), /Fallo simulado credito/);
+  assert.ok(calls.some(call => call.statement === 'ROLLBACK'));
+  assert.ok(!calls.some(call => call.statement === 'COMMIT'));
+});
+
+test('el club no entrega sin factura y porcionador ni admite reparto', async () => {
+  for (const meta of [{ facturaNumero: '' }, { facturaValor: 0 }, { porcionador: '' }]) {
+    const { service, actual } = despachoClub(meta);
+    await assert.rejects(service.guardar({ ...actual, estado: 'Entregado' }), error => error.getStatus() === 400);
+  }
+  const { service, actual } = despachoClub();
+  await assert.rejects(service.guardar({ ...actual, estado: 'En tránsito' }), error => error.getStatus() === 400);
+});
+
+test('las rutas antiguas no pueden tramitar una compra vinculada', async () => {
+  const pool = poolWith(() => ({ rows: [{ existe: 1 }], rowCount: 1 }));
+  await assert.rejects(new TiendaEmpleadosService(pool).actualizarEstado('compra-1', 'entregado'), error => error.getStatus() === 400);
+  await assert.rejects(new CreditoEmpleadosService(pool, {}).actualizarEstadoPedido('compra-1', 'facturado'), error => error.getStatus() === 400);
+  assert.ok(pool.calls.every(call => call.statement.startsWith('SELECT')));
+});
+
+test('despachar no modifica identidad, productos ni importe de una compra', async () => {
+  const { service, actual } = despachoClub();
+  const resultado = await service.guardar({ ...actual, estado: 'Entregado', cliente: { nombre: 'Otro' }, carrito: [], total: 1, pago: 'Efectivo', entrega: 'domicilio' });
+  assert.deepEqual(resultado.cliente, actual.cliente);
+  assert.deepEqual(resultado.carrito, actual.carrito);
+  assert.equal(resultado.total, 10000);
+  assert.equal(resultado.pago, 'Crédito');
+  assert.equal(resultado.entrega, 'recoge');
+});
+
+test('la busqueda del historico comercial excluye comandas del club', async () => {
+  const pool = poolWith();
+  await new PedidosService(pool, {}, { get: () => undefined }, {}).buscar('1CSE');
+  assert.match(pool.calls[0].statement, /COALESCE\(data->>'canal', ''\) <> 'club' AND \(/);
 });

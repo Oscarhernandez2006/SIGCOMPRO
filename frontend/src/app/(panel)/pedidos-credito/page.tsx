@@ -1,1 +1,1 @@
-export { default } from "../../credito-empleados/tienda/page";
+export { default } from "../despacho/page";

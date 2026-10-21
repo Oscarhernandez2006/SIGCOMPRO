@@ -42,6 +42,78 @@
   min-width: 0;
 }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.layout [data-sidebar-actions]:has(.editButton) {
+  grid-template-columns: minmax(0, 1fr) 76px;
+}
+
+.layout [data-sidebar-actions]:has([data-editing="true"]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.layout [data-sidebar-actions]:has(.editButton) > button {
+  padding-inline: 8px;
+  gap: 8px;
+}
+
+.editButton {
+  border-color: rgb(255 255 255 / 25%);
+}
+
+.orderRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: start;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.orderContent {
+  min-width: 0;
+}
+
+.orderActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.layout nav .orderActions button {
+  display: flex;
+  min-height: 24px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.orderActions button:hover {
+  background: rgb(255 255 255 / 15%);
+}
+
+.orderActions button:disabled {
+  opacity: 0.3;
+}
+
+.orderActions svg {
+  width: 14px;
+  height: 14px;
+}
+
+.orderError {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #fecaca;
+  overflow-wrap: anywhere;
+}
+
 .toggle {
   display: flex;
   width: 36px;
@@ -172,6 +244,14 @@
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: 4px;
+  }
+
+  .layout[data-collapsed="true"] [data-sidebar-actions]:has(.editButton) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout[data-collapsed="true"] .controls {
+    flex-direction: column;
   }
 
   .layout[data-collapsed="true"] [data-sidebar-actions] > .toggle {

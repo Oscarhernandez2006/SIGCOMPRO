@@ -141,6 +141,7 @@ export interface EstadoPedidos {
  * - `fecha`: día concreto (YYYY-MM-DD) para 'fecha' o 'cuadre'.
  */
 export interface OpcionesCargaPedidos {
+  canal?: "club";
   desde?: string;
   rango?: "hoy" | "fecha" | "posteriores" | "todo" | "rango" | "cuadre";
   fecha?: string;
@@ -157,7 +158,7 @@ export function cargarEstadoPedidos(
   if (opts?.fecha) p.set("fecha", opts.fecha);
   if (opts?.hasta) p.set("hasta", opts.hasta);
   const qs = p.toString();
-  return apiFetch<EstadoPedidos>(`/pedidos${qs ? `?${qs}` : ""}`);
+  return apiFetch<EstadoPedidos>(`/pedidos${opts?.canal === "club" ? "/club" : ""}${qs ? `?${qs}` : ""}`);
 }
 
 /**

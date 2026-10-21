@@ -34,6 +34,12 @@ export class PedidosController {
     private readonly users: UsersService,
   ) {}
 
+  @Get('club')
+  @Permisos('credito_empleados', 'despacho')
+  estadoClub(@Query('desde') desde: string | undefined, @Req() req: Request & { user?: JwtPayload }) {
+    return this.pedidos.estadoClub(desde, req.user);
+  }
+
   /** Estado completo: pedidos + metadata de despacho + impresos. */
   @Get()
   @Permisos('pedidos', 'despacho', 'cuadre_caja')

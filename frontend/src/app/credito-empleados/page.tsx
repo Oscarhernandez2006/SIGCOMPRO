@@ -539,6 +539,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
         : []
     : [];
   const esTienda = pedido?.origen === "tienda";
+  const despacho = pedido?.despacho;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -585,6 +586,15 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <Dato label="Punto de venta">{pedido.punto_nombre}</Dato>
                 <Dato label="Fecha">{fechaCorta(pedido.creado_en)}</Dato>
+                {despacho && <>
+                  <Dato label="Proceso">{despacho.pedido.estado || "—"}</Dato>
+                  <Dato label="Porcionador">{despacho.meta.porcionador || "—"}</Dato>
+                  <Dato label="Inicio de preparación">{despacho.meta.inicio ? fechaCorta(despacho.meta.inicio) : "—"}</Dato>
+                  <Dato label="Fin de preparación">{despacho.meta.fin ? fechaCorta(despacho.meta.fin) : "—"}</Dato>
+                  <Dato label="Facturador">{despacho.meta.facturadoPor || "—"}</Dato>
+                  <Dato label="Valor facturado">{money(Number(despacho.meta.facturaValor) || 0)}</Dato>
+                  <Dato label="Entrega en PDV">{despacho.meta.entregadoEn || despacho.meta.despachoFin ? fechaCorta(despacho.meta.entregadoEn || despacho.meta.despachoFin || "") : "—"}</Dato>
+                </>}
                 <Dato label="Nómina">
                   {pedido.nomina_fecha
                     ? new Date(pedido.nomina_fecha + "T00:00:00").toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" })
@@ -619,6 +629,14 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
               )}
 
               {/* Observación */}
+              {!!despacho?.pedido.trazabilidad?.length && <section>
+                <h3 className="mb-2 text-sm font-semibold text-brand-wine">Trazabilidad del despacho</h3>
+                <ol className="divide-y divide-brand-brown/10">
+                  {despacho.pedido.trazabilidad.map((evento, index) => <li key={`${evento.fecha}:${index}`} className="flex flex-wrap justify-between gap-2 py-2 text-xs">
+                    <span>{evento.estadoNuevo || evento.tipo}{evento.usuarioNombre ? ` · ${evento.usuarioNombre}` : ""}</span><time>{fechaCorta(evento.fecha)}</time>
+                  </li>)}
+                </ol>
+              </section>}
               {pedido.observacion && (
                 <Dato label="Observación">{pedido.observacion}</Dato>
               )}
@@ -663,7 +681,7 @@ export default function CreditoEmpleadosPage() {
   const [errorPedidos, setErrorPedidos] = useState<string | null>(null);
 
   const [filtroCedula, setFiltroCedula] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("entregado");
   const [filtroDesde, setFiltroDesde]   = useState("");
   const [filtroHasta, setFiltroHasta]   = useState("");
   const [filtroPunto, setFiltroPunto]   = useState("");
@@ -845,6 +863,7 @@ export default function CreditoEmpleadosPage() {
               <option value="">Todos</option>
               <option value="pendiente">Pendiente</option>
               <option value="facturado">Facturado</option>
+              <option value="entregado">Entregado</option>
               <option value="anulado">Anulado</option>
             </select>
           </div>

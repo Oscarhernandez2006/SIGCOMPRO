@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeAccederApartado } from "@/lib/permisos";
-import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 
 const IcoCart = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
@@ -105,7 +105,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
       .filter((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))
       .reduce<string | null>((mejor, i) => (i.href.length > (mejor?.length ?? -1) ? i.href : mejor), null);
     return (
-      <nav className="flex flex-1 flex-col gap-0.5 px-3">
+      <SidebarNav className="flex flex-1 flex-col gap-0.5 px-3">
         <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-brand-cream/40">
           Menú
         </p>
@@ -133,12 +133,12 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
-      </nav>
+      </SidebarNav>
     );
   }
 
   return (
-    <SidebarLayout>
+    <SidebarLayout panel="club">
       {/* Sidebar desktop */}
         <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
         {/* Logo */}
@@ -146,7 +146,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
           <div className="leading-tight">
             <p className="font-serif text-base font-bold text-white">Carnes Santacruz</p>
-            <p className="text-[11px] text-brand-cream/70">Compras Empleados</p>
+            <p className="text-[11px] text-brand-cream/70">Club Yo Soy Santacruz</p>
           </div>
         </div>
 
@@ -211,7 +211,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
             </svg>
           </div>
-          <p className="font-serif text-lg font-bold text-brand-wine">Compras Empleados</p>
+          <p className="font-serif text-base font-bold text-brand-wine">Club Yo Soy Santacruz</p>
         </div>
         <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-brand-wine/10 text-xs font-bold text-brand-wine">
           {iniciales}
@@ -227,7 +227,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-4">
-              <p className="font-serif text-lg font-bold text-white">Compras Empleados</p>
+              <p className="font-serif text-base font-bold text-white">Club Yo Soy Santacruz</p>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
@@ -246,6 +246,7 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               <p className="truncate text-xs font-semibold text-white">{usuario?.nombre ?? "Usuario"}</p>
             </div>
             <NavList onNavigate={() => setMobileOpen(false)} />
+            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-0.5 border-t border-brand-cream/15 p-3">
               {puedeCambiarPanel && (
                 <Link

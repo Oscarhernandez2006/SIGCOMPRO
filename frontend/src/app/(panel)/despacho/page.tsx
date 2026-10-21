@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { imprimirComanda, METODOS, numerosDelDia, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdministrativo } from "@/lib/auth";
@@ -402,6 +403,7 @@ function tiempoEnEstado(iso: string): string {
 }
 
 export default function DespachoPage() {
+  const esClub = usePathname().includes("pedidos-credito");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [impresos, setImpresos] = useState<Set<string>>(new Set());
   // Metadata de despacho (porcionador, etapas, liberación) por id de pedido.
@@ -581,8 +583,8 @@ export default function DespachoPage() {
   // IDs de los puntos del usuario integrados con Drivin (config por punto). Los
   // que NO están aquí siguen el flujo MANUAL (no suben ni bajan de Drivin).
   const idsDrivin = useMemo(
-    () => new Set(puntosAsignados.filter((p) => p.drivin).map((p) => String(p.id))),
-    [puntosAsignados],
+    () => new Set(esClub ? [] : puntosAsignados.filter((p) => p.drivin).map((p) => String(p.id))),
+    [puntosAsignados, esClub],
   );
 
   // Carga inicial + auto-actualización (polling). Cada 7 s (y al volver a la
@@ -605,7 +607,7 @@ export default function DespachoPage() {
       // haciendo cada poll mucho más liviano (KB en vez de MB). Alcance 'hoy':
       // activos (cualquier fecha) + finalizados de hoy — Despacho nunca muestra
       // finalizados de días anteriores, así que no cambia lo que se ve.
-      cargarEstadoPedidos({ desde, rango: "hoy" })
+      cargarEstadoPedidos({ desde, rango: "hoy", canal: esClub ? "club" : undefined })
         .then((e) => {
           if (!activo) return;
           desde = e.ahora ?? desde;
@@ -676,7 +678,7 @@ export default function DespachoPage() {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [esClub]);
 
   // Carga los selectores de porcionadores y domiciliarios por punto de venta.
   useEffect(() => {
@@ -1114,7 +1116,7 @@ export default function DespachoPage() {
       Boolean(mm.facturaNumero?.trim()) &&
       typeof mm.facturaValor === "number" &&
       mm.facturaValor > 0;
-    if (n === "facturado" || n === "despachado") {
+    if (n === "facturado" || n === "despachado" || (esClub && n === "entregado")) {
       const verbo = n === "facturado" ? "facturar" : "despachar";
       if (!mm.porcionador?.trim()) {
         alert(`No se puede ${verbo} sin un porcionador asignado.`);
@@ -1228,7 +1230,7 @@ export default function DespachoPage() {
     // Para facturar/despachar, garantiza que la factura ya quedó PERSISTIDA en
     // el backend antes de guardar el pedido (evita que la validación del backend
     // falle por una carrera si el último dato de factura seguía en vuelo).
-    if (n === "facturado" || n === "despachado") {
+    if (n === "facturado" || n === "despachado" || (esClub && n === "entregado")) {
       try {
         await actualizarMetaApi(id, {
           facturaNumero: mm.facturaNumero,
@@ -1241,7 +1243,7 @@ export default function DespachoPage() {
     // Al facturar/despachar, si el backend RECHAZA el guardado (p. ej. por falta
     // de número o valor de factura) se revierte el estado optimista para no
     // mostrarlo como hecho.
-    const revertible = n === "facturado" || n === "despachado";
+    const revertible = n === "facturado" || n === "despachado" || (esClub && n === "entregado");
     setPedidos((prev) => {
       const estadoAnterior = prev.find((p) => p.id === id)?.estado;
       const next = prev.map((p) => (p.id === id ? { ...p, estado } : p));
@@ -1795,7 +1797,7 @@ export default function DespachoPage() {
       {/* Encabezado + cards Total/Entregados alineadas al grid (misma columna/tamaño). */}
       <div className="mb-3 grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <div className="col-span-2 flex flex-col justify-center sm:col-span-1 lg:col-span-2 xl:col-span-3">
-          <h1 className="font-serif text-3xl font-bold text-brand-wine">Despacho</h1>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">{esClub ? "Club Yo Soy Santacruz" : "Despacho"}</h1>
           <p className="mt-1 text-sm text-brand-black">
             Seguimiento de los pedidos del día en Carnes Santacruz.
           </p>
@@ -2225,7 +2227,8 @@ export default function DespachoPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
                                 </svg>
                                 <select
-                                  value={p.pago ?? ""}
+                                  value={esClub ? "Crédito" : p.pago ?? ""}
+                                  disabled={esClub}
                                   onChange={(ev) => cambiarPago(p.id, ev.target.value)}
                                   className="cursor-pointer rounded bg-transparent py-0.5 pr-1 text-[11px] font-semibold text-brand-amber outline-none focus:ring-1 focus:ring-brand-amber"
                                 >
@@ -2677,7 +2680,7 @@ export default function DespachoPage() {
                                 Entregado{m.entregadoEn ? ` · ${fmtHora(m.entregadoEn)}` : ""}
                               </p>
                             )}
-                            {!pedidoEsDrivin && !despachado && (
+                            {!esClub && !pedidoEsDrivin && !despachado && (
                               <button
                                 onClick={() => actualizarMeta(p.id, { domiciliario: "", domiciliarioCodigo: "" })}
                                 className="mt-1 text-[10px] font-semibold text-brand-black underline hover:text-brand-brown"
@@ -2795,7 +2798,9 @@ export default function DespachoPage() {
                         </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
-                        {!pedidoEsDrivin && norm(estado) === "entregado" ? (
+                        {esClub && !despachado ? (
+                          <button type="button" onClick={() => cambiarEstado(p.id, "Entregado")} disabled={anulado || !facturado || !puedeEstado("Entregado")} className="w-full rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Entregado en PDV</button>
+                        ) : !pedidoEsDrivin && norm(estado) === "entregado" ? (
                           <div className="flex w-full items-center justify-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3.5 w-3.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />

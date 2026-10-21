@@ -125,7 +125,7 @@ export function panelesAccesibles(usuario: Usuario | null): PanelAccesible[] {
   if (inicioCredito) {
     paneles.push({
       key: "credito_empleados",
-      label: "Compras Empleados",
+      label: "Club Yo Soy Santacruz",
       href: inicioCredito,
     });
   }

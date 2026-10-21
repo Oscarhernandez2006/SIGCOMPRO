@@ -19,7 +19,7 @@ import { resumenPendientesExtension } from "@/lib/extensiones";
 import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
-import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 import PendientesCreditoBadge from "./PendientesCreditoBadge";
 import { ShoppingBag, UtensilsCrossed } from "lucide-react";
@@ -40,7 +40,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Aprobación almuerzo", href: "/admin/almuerzos", modulo: "despacho", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
-  { label: "Pedidos a crédito", href: "/admin/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
+  { label: "Club Yo Soy Santacruz", href: "/admin/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
     href: "/admin/dashboard",
@@ -384,14 +384,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     );
     const esActivo = (href: string) => pathname.startsWith(href);
     return (
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
+      <SidebarNav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
         {items.map((item) => {
           // Grupo con sub-opciones (ej. Configuración).
           if (item.children && item.children.length > 0) {
             const algunHijoActivo = item.children.some((h) => esActivo(h.href));
             const abierto = gruposAbiertos[item.label] ?? algunHijoActivo;
             return (
-              <div key={item.label}>
+              <div key={item.label} data-sidebar-id={`grupo:${item.href}`} title={item.label}>
                 <button
                   type="button"
                   title={item.label}
@@ -422,7 +422,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   </svg>
                 </button>
                 {abierto && (
-                  <div className="mt-1 space-y-1 border-l border-brand-cream/10 pl-3">
+                  <div data-sidebar-children className="mt-1 space-y-1 border-l border-brand-cream/10 pl-3">
                     {item.children.map((hijo) => {
                       const active = esActivo(hijo.href);
                       return (
@@ -480,16 +480,16 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               ) : (
                 item.href === "/admin/pedidos-credito" ? <div className="relative shrink-0">{item.icon}<PendientesCreditoBadge /></div> : item.icon
               )}
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className="min-w-0 whitespace-normal break-words">{item.label}</span>
             </Link>
           );
         })}
-      </nav>
+      </SidebarNav>
     );
   }
 
   return (
-    <SidebarLayout>
+    <SidebarLayout panel="administrativo">
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine-dark text-brand-cream lg:flex">
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
@@ -571,6 +571,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             </div>
             <div className="mx-3 mb-2 border-t border-brand-cream/10" />
             <NavList onNavigate={() => setMobileOpen(false)} />
+            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-1 border-t border-brand-cream/10 p-3">
               {puedeCambiarPanel && (
                 <Link

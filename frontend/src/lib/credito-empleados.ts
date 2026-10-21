@@ -1,4 +1,6 @@
 import { apiFetch } from "./api";
+import type { DespachoMeta } from "./pedidos";
+import type { Pedido } from "@/app/(panel)/pedidos/page";
 
 export interface TrabajadorCredito {
   cedula: string;
@@ -36,6 +38,7 @@ export interface ItemCompraCredito {
 
 export interface PedidoCredito {
   id: string;
+  despacho?: { pedido: Pedido; meta: DespachoMeta; impreso: boolean } | null;
   comanda: string;
   trabajador_cedula: string;
   trabajador_nombre: string;

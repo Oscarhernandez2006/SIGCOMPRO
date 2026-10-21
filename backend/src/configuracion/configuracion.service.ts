@@ -1,6 +1,7 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
+import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 /** Personal de despacho de un punto (vista que consume el módulo de despacho). */
 export interface PersonalDespacho {
@@ -60,6 +61,37 @@ export class ConfiguracionService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+  }
+
+  private claveOrdenSidebar(panel: string) {
+    if (!['administrativo', 'operativo', 'club', 'run-errands'].includes(panel)) {
+      throw new BadRequestException('Panel no valido.');
+    }
+    return `sidebar:orden:${panel}`;
+  }
+
+  async obtenerOrdenSidebar(panel: string): Promise<{ orden: string[] }> {
+    const clave = this.claveOrdenSidebar(panel);
+    const { rows } = await this.pool.query<{ valor: string[] }>(
+      `SELECT valor FROM configuracion WHERE clave = $1 LIMIT 1`, [clave],
+    );
+    return { orden: Array.isArray(rows[0]?.valor) ? rows[0].valor : [] };
+  }
+
+  async guardarOrdenSidebar(panel: string, orden: unknown, user: JwtPayload) {
+    if (!['administrador', 'administrador app', 'desarrollador'].includes(String(user.rol ?? '').trim().toLowerCase())) {
+      throw new ForbiddenException('Solo los administradores pueden organizar el menu.');
+    }
+    const clave = this.claveOrdenSidebar(panel);
+    if (!Array.isArray(orden) || orden.length > 150 || orden.some((item) => typeof item !== 'string' || item.length > 200 || !/^(?:grupo:)?\/[a-zA-Z0-9/_-]+$/.test(item)) || new Set(orden).size !== orden.length) {
+      throw new BadRequestException('El orden del menu no es valido.');
+    }
+    await this.pool.query(
+      `INSERT INTO configuracion (clave, valor, actualizado_en) VALUES ($1, $2::jsonb, now())
+       ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, actualizado_en = now()`,
+      [clave, JSON.stringify(orden)],
+    );
+    return { orden };
   }
 
   /* ------------------------------------------------------------------ */

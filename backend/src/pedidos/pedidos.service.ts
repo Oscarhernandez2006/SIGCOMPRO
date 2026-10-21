@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -18,6 +19,7 @@ import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { ExtensionesService } from '../extensiones/extensiones.service';
 import { pesoCarritoKg } from '../common/peso';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
+import { tieneAccesoTotal } from '../users/permisos.catalog';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
@@ -365,6 +367,7 @@ export class PedidosService implements OnModuleInit {
     rango?: string,
     fecha?: string,
     hasta?: string,
+    canal?: string,
   ): { scope: string; params: unknown[] } {
     const dias =
       Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
@@ -411,7 +414,41 @@ export class PedidosService implements OnModuleInit {
     } else {
       scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;
     }
-    return { scope, params };
+    const filtroCanal = canal === 'club' ? `data->>'canal' = 'club'` : `COALESCE(data->>'canal', '') <> 'club'`;
+    return { scope: `(${scope}) AND (${filtroCanal})`, params };
+  }
+
+  async estadoClub(desde?: string, user?: JwtPayload) {
+    await this.pool.query(`
+      INSERT INTO pedidos (id, consecutivo, punto_id, estado, anulado, fecha, data, meta)
+      SELECT 'club:' || c.id, c.numero_comanda::int, c.punto_id,
+        CASE WHEN c.estado = 'facturado' THEN 'Facturado' ELSE 'En proceso' END, false, c.creado_en,
+        jsonb_build_object(
+          'id', 'club:' || c.id, 'canal', 'club', 'creditoPedidoId', c.id,
+          'comanda', '1CSE' || c.numero_comanda, 'consecutivo', c.numero_comanda,
+          'numeroDia', c.numero_comanda, 'numeroDiaFecha', to_char(c.creado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD'),
+          'fecha', c.creado_en, 'total', c.total, 'estado', CASE WHEN c.estado = 'facturado' THEN 'Facturado' ELSE 'En proceso' END,
+          'entrega', 'recoge', 'pago', 'Crédito', 'observacion', COALESCE(c.observacion, ''),
+          'punto', jsonb_build_object('id', c.punto_id, 'nombre', c.punto_nombre, 'codigo', p.codigo, 'direccion', p.direccion, 'drivin', false),
+          'cliente', jsonb_build_object('id', 'club-cliente:' || c.trabajador_cedula, 'nit_cedula', c.trabajador_cedula,
+            'nombre', c.trabajador_nombre, 'direccion', COALESCE(p.direccion, ''), 'telefono', COALESCE(c.telefono, ''),
+            'barrio', COALESCE(p.barrio, ''), 'ciudad', COALESCE(p.ciudad, ''), 'activo', true),
+          'carrito', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'id', c.id || ':' || linea.numero, 'cantidad', COALESCE((linea.item->>'cantidad')::numeric, 1),
+            'observacion', COALESCE(linea.item->>'observacion', ''),
+            'producto', jsonb_build_object('referencia', COALESCE(linea.item->>'referencia', 'CLUB'),
+              'producto', COALESCE(linea.item->>'producto', 'Compra club'), 'um', COALESCE(linea.item->>'um', 'UN'),
+              'precio', COALESCE((linea.item->>'precio')::numeric, 0))))
+            FROM jsonb_array_elements(CASE WHEN jsonb_array_length(COALESCE(c.tienda_items, '[]'::jsonb)) > 0 THEN c.tienda_items
+              ELSE jsonb_build_array(jsonb_build_object('referencia', 'CLUB', 'producto', 'Compra club', 'um', 'UN', 'precio', c.total, 'cantidad', 1)) END)
+              WITH ORDINALITY AS linea(item, numero)), '[]'::jsonb),
+          'trazabilidad', jsonb_build_array(jsonb_build_object('tipo', 'creacion', 'estadoNuevo', 'En proceso', 'fecha', c.creado_en))),
+        jsonb_build_object('domiciliario', 'Recoge en PDV', 'facturaNumero', COALESCE(c.factura_numero, ''), 'facturaValor', c.total)
+      FROM credito_empleados_pedidos c JOIN puntos_venta p ON p.id::text = c.punto_id
+      WHERE c.estado IN ('pendiente', 'facturado')
+      ON CONFLICT (id) DO NOTHING
+    `);
+    return this.estado(desde, 'hoy', undefined, undefined, 'club', user);
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
@@ -420,6 +457,8 @@ export class PedidosService implements OnModuleInit {
     rango?: string,
     fecha?: string,
     hasta?: string,
+    canal?: string,
+    user?: JwtPayload,
   ): Promise<EstadoPedidos> {
     // Conjunto de trabajo. Por DEFECTO (históricos, dashboard)
     // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
@@ -433,7 +472,12 @@ export class PedidosService implements OnModuleInit {
       desde && !Number.isNaN(Date.parse(desde)) ? desde : null;
     const ahora = new Date().toISOString();
 
-    const { scope, params } = this.construirScope(rango, fecha, hasta);
+    const { scope, params } = this.construirScope(rango, fecha, hasta, canal);
+    let alcanceUsuario = 'true';
+    if (canal === 'club' && user && !tieneAccesoTotal(user.rol)) {
+      params.push(user.sub);
+      alcanceUsuario = `punto_id IN (SELECT punto_venta_id::text FROM usuario_punto_venta WHERE usuario_id = $${params.length})`;
+    }
     params.push(desdeValido);
     const idxDesde = params.length;
 
@@ -449,7 +493,7 @@ export class PedidosService implements OnModuleInit {
       // trazabilidad se consulta aparte y bajo demanda (ver trazabilidad()).
       `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
        FROM pedidos
-       WHERE ${scope}
+      WHERE ${scope} AND ${alcanceUsuario}
          AND ($${idxDesde}::timestamptz IS NULL OR actualizado_en > $${idxDesde}::timestamptz)
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
       params,
@@ -598,11 +642,11 @@ export class PedidosService implements OnModuleInit {
     }>(
       `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
          FROM pedidos
-        WHERE lower(coalesce(data->>'comanda', '')) LIKE $1
+        WHERE COALESCE(data->>'canal', '') <> 'club' AND (lower(coalesce(data->>'comanda', '')) LIKE $1
            OR lower(coalesce(consecutivo::text, '')) LIKE $1
            OR lower(coalesce(data->>'consecutivo', '')) LIKE $1
            OR lower(coalesce(data->'cliente'->>'nombre', '')) LIKE $1
-           OR lower(coalesce(data->'cliente'->>'nit_cedula', '')) LIKE $1
+           OR lower(coalesce(data->'cliente'->>'nit_cedula', '')) LIKE $1)
         ORDER BY fecha DESC NULLS LAST, creado_en DESC
         LIMIT 300`,
       [like],
@@ -850,6 +894,7 @@ export class PedidosService implements OnModuleInit {
       `SELECT COALESCE(MAX((data->>'numeroDia')::int), 0) AS mx
          FROM pedidos
         WHERE punto_id = $1
+          AND COALESCE(data->>'canal', '') <> 'club'
           AND ( (data->>'numeroDiaFecha') = $2
                 OR ( COALESCE(data->>'numeroDiaFecha','') = ''
                      AND (${diaEntregaSql}) = $2 ) )`,
@@ -868,6 +913,7 @@ export class PedidosService implements OnModuleInit {
   private async refrescarClientes(pedidos: PedidoData[]): Promise<void> {
     const nits = new Set<string>();
     for (const p of pedidos) {
+      if (p.canal === 'club') continue;
       const nit = p.cliente?.nit_cedula
         ? String(p.cliente.nit_cedula).trim()
         : '';
@@ -901,6 +947,7 @@ export class PedidosService implements OnModuleInit {
     }
 
     for (const p of pedidos) {
+      if (p.canal === 'club') continue;
       const nit = p.cliente?.nit_cedula
         ? String(p.cliente.nit_cedula).trim()
         : '';
@@ -969,6 +1016,25 @@ export class PedidosService implements OnModuleInit {
         ? (prev.rows[0].data ?? {})
         : null;
 
+      if (prevData?.canal === 'club') {
+        if (puntoId !== String(prevData.punto?.id)) throw new BadRequestException('No se puede cambiar el punto de una compra del club.');
+        finalPedido.canal = 'club';
+        finalPedido.creditoPedidoId = prevData.creditoPedidoId;
+        finalPedido.cliente = prevData.cliente;
+        finalPedido.carrito = prevData.carrito;
+        finalPedido.total = prevData.total;
+        finalPedido.entregaProgramada = prevData.entregaProgramada;
+        finalPedido.fechaProgramada = prevData.fechaProgramada;
+        finalPedido.entrega = 'recoge';
+        finalPedido.pago = 'Crédito';
+        if (user && !tieneAccesoTotal(user.rol)) {
+          const asignado = await client.query(`SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2`, [user.sub, String(prevData.punto?.id)]);
+          if (!asignado.rowCount) throw new ForbiddenException('No tiene asignado el punto de este pedido del club.');
+        }
+      } else if (id.startsWith('club:') || pedido.canal === 'club') {
+        throw new BadRequestException('El pedido del club debe proceder de una compra registrada.');
+      }
+
       if (prev.rowCount) {
         // Edición: conserva el consecutivo, la comanda y la fecha originales
         // para no romper la trazabilidad ni reasignar números.
@@ -1017,7 +1083,7 @@ export class PedidosService implements OnModuleInit {
         ]);
         const max = await client.query<{ siguiente: number }>(
           `SELECT COALESCE(MAX(consecutivo), 0) + 1 AS siguiente
-             FROM pedidos WHERE punto_id = $1`,
+             FROM pedidos WHERE punto_id = $1 AND COALESCE(data->>'canal', '') <> 'club'`,
           [puntoId],
         );
         const consecutivo = Number(max.rows[0].siguiente) || 1;
@@ -1076,7 +1142,7 @@ export class PedidosService implements OnModuleInit {
       const normEstado = (s: unknown) => String(s ?? '').trim().toLowerCase();
       const nuevoEstadoNorm = normEstado(estado);
       const entraAFacturadoODespachado =
-        (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado') &&
+        (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado' || (prevData?.canal === 'club' && nuevoEstadoNorm === 'entregado')) &&
         nuevoEstadoNorm !== normEstado(estadoAnterior);
       const replicasActuales = Array.isArray(
         (metaActual as { replicas?: unknown }).replicas,
@@ -1110,6 +1176,12 @@ export class PedidosService implements OnModuleInit {
             'No se puede facturar o despachar sin número y valor de factura.',
           );
         }
+        if (prevData?.canal === 'club' && !String(metaActual.porcionador || '').trim()) {
+          throw new BadRequestException('Asigne el porcionador antes de facturar o entregar la compra del club.');
+        }
+      }
+      if (prevData?.canal === 'club' && ['en tránsito', 'en transito'].includes(nuevoEstadoNorm)) {
+        throw new BadRequestException('Las compras del club se recogen en el punto de venta.');
       }
       const metaDestino: DespachoMeta = estaAnulandoAhora ? {} : metaActual;
       // Red de seguridad: `meta.fin`/`meta.despachoFin` normalmente los guarda
@@ -1279,6 +1351,18 @@ export class PedidosService implements OnModuleInit {
         });
       }
 
+      if (prevData?.canal === 'club' && prevData.creditoPedidoId) {
+        const terminado = ['despachado', 'entregado', 'en tránsito', 'en transito'].includes(nuevoEstadoNorm);
+        const estadoCredito = anulado ? 'anulado' : terminado ? 'entregado' : nuevoEstadoNorm === 'facturado' ? 'facturado' : 'pendiente';
+        await client.query(
+          `UPDATE credito_empleados_pedidos SET estado = $2,
+             cartera_estado = CASE WHEN $2 = 'anulado' THEN 'anulado' WHEN $2 IN ('facturado', 'entregado') THEN 'facturado' ELSE 'pendiente' END,
+             factura_numero = COALESCE(NULLIF($3, ''), factura_numero), actualizado_en = now()
+           WHERE id = $1`,
+          [String(prevData.creditoPedidoId), estadoCredito, String(metaDestino.facturaNumero || '')],
+        );
+      }
+
       if (opciones?.antesDeConfirmar) {
         await opciones.antesDeConfirmar(client, finalPedido, !prev.rowCount);
       }
@@ -1442,6 +1526,12 @@ export class PedidosService implements OnModuleInit {
           WHERE id = $1`,
         [id, JSON.stringify(nuevoData), JSON.stringify(cambiosMeta)],
       );
+      if (data.canal === 'club' && data.creditoPedidoId) {
+        await client.query(
+          `UPDATE credito_empleados_pedidos SET estado = 'entregado', total = $2, cartera_estado = 'facturado', actualizado_en = now() WHERE id = $1`,
+          [String(data.creditoPedidoId), valorNuevo],
+        );
+      }
       await client.query('COMMIT');
       const { trazabilidad: _traza, ...pedido } = nuevoData;
       return { pedido, meta: { ...meta, ...cambiosMeta } };

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeAccederApartado } from "@/lib/permisos";
-import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 
 const IcoDashboard = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 shrink-0">
@@ -89,7 +89,7 @@ export default function RunErrandsShell({ children }: { children: ReactNode }) {
       .filter((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))
       .reduce<string | null>((mejor, i) => (i.href.length > (mejor?.length ?? -1) ? i.href : mejor), null);
     return (
-      <nav className="flex flex-1 flex-col gap-0.5 px-3">
+      <SidebarNav className="flex flex-1 flex-col gap-0.5 px-3">
         <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-brand-cream/40">Menú</p>
         {navItems.map((item) => {
           const active = item.href === hrefActivo;
@@ -111,12 +111,12 @@ export default function RunErrandsShell({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
-      </nav>
+      </SidebarNav>
     );
   }
 
   return (
-    <SidebarLayout>
+    <SidebarLayout panel="run-errands">
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
@@ -177,6 +177,7 @@ export default function RunErrandsShell({ children }: { children: ReactNode }) {
               </button>
             </div>
             <NavList onNavigate={() => setMobileOpen(false)} />
+            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-0.5 border-t border-brand-cream/15 p-3">
               {puedeCambiarPanel && (
                 <Link href="/seleccionar-panel" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-brand-cream/10 hover:text-white">

@@ -55,6 +55,7 @@ export interface TrabajadorCreditoResumen extends TrabajadorCredito {
 
 export interface PedidoCredito {
   id: string;
+  despacho?: { pedido: Record<string, unknown>; meta: Record<string, unknown>; impreso: boolean } | null;
   comanda: string;
   trabajador_cedula: string;
   trabajador_nombre: string;
@@ -549,6 +550,8 @@ export class CreditoEmpleadosService implements OnModuleInit {
     id: string,
     estado: 'pendiente' | 'facturado' | 'anulado',
   ): Promise<PedidoCredito> {
+    const vinculado = await this.pool.query(`SELECT 1 FROM pedidos WHERE id = $1`, [`club:${id}`]);
+    if (vinculado.rowCount) throw new BadRequestException('Gestione esta compra desde el despacho de Club Yo Soy Santacruz.');
     const st = String(estado).trim().toLowerCase();
     if (st !== 'pendiente' && st !== 'facturado' && st !== 'anulado') {
       throw new BadRequestException('Estado inválido');
@@ -581,7 +584,9 @@ export class CreditoEmpleadosService implements OnModuleInit {
               total, observacion, estado, cartera_referencia, cartera_estado,
               creado_por_id, creado_por_nombre, creado_en, actualizado_en,
               to_char(nomina_fecha, 'YYYY-MM-DD') AS nomina_fecha,
-              factura_numero, factura_total_leido, factura_validada, factura_imagen,
+                factura_numero, factura_total_leido, factura_validada, factura_imagen,
+                (SELECT jsonb_build_object('pedido', pedidos.data, 'meta', pedidos.meta, 'impreso', pedidos.impreso)
+                  FROM pedidos WHERE pedidos.id = 'club:' || credito_empleados_pedidos.id) AS despacho,
               entrega, direccion, telefono,
               COALESCE(origen, 'manual') AS origen,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,

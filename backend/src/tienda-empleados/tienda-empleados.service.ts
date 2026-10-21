@@ -785,6 +785,8 @@ export class TiendaEmpleadosService implements OnModuleInit {
     estado: string,
     extra?: { factura_imagen?: string | null; factura_numero?: string | null },
   ): Promise<PedidoTienda> {
+    const vinculado = await this.pool.query(`SELECT 1 FROM pedidos WHERE id = $1`, [`club:${id}`]);
+    if (vinculado.rowCount) throw new BadRequestException('Gestione esta compra desde el despacho de Club Yo Soy Santacruz.');
     const st = String(estado ?? '').trim().toLowerCase();
     if (!ESTADOS_VALIDOS.includes(st)) throw new BadRequestException('Estado inválido');
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import {
   ConfiguracionService,
   RegistroPersonal,
@@ -6,11 +6,22 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 @Controller('configuracion')
 @UseGuards(JwtAuthGuard)
 export class ConfiguracionController {
   constructor(private readonly configuracion: ConfiguracionService) {}
+
+  @Get('sidebar/:panel')
+  ordenSidebar(@Param('panel') panel: string) {
+    return this.configuracion.obtenerOrdenSidebar(panel);
+  }
+
+  @Put('sidebar/:panel')
+  guardarOrdenSidebar(@Param('panel') panel: string, @Body() body: { orden?: unknown }, @Req() req: { user: JwtPayload }) {
+    return this.configuracion.guardarOrdenSidebar(panel, body?.orden, req.user);
+  }
 
   /**
    * Registro global de porcionadores y domiciliarios con los puntos donde
