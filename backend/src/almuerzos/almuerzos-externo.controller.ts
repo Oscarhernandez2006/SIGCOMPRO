@@ -31,4 +31,9 @@ export class AlmuerzosExternoController {
   cancelar(@Param('id') id: string, @Body() body: { documento?: string }) {
     return this.almuerzos.cancelar(id, body?.documento);
   }
+
+  @Patch(':id/disponible')
+  disponible(@Param('id') id: string, @Body() body: { documento?: string }) {
+    return this.almuerzos.disponible(id, body?.documento);
+  }
 }

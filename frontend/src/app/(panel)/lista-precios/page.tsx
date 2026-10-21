@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { getUsuario, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
 import {
@@ -10,7 +11,7 @@ import {
   type PuntoVenta,
 } from "@/lib/puntos-venta";
 import { listarProductos, type ProductoPrecio } from "@/lib/productos";
-import { obtenerMenuConfig, guardarMenuConfig } from "@/lib/menu";
+import { obtenerMenuConfig, guardarMenuConfig, listarMenus, crearMenu, type ListaMenu } from "@/lib/menu";
 import {
   PORTADA_IMG,
   paginarItems,
@@ -194,6 +195,13 @@ export default function ListaPreciosPage() {
   const [copiado, setCopiado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [listas, setListas] = useState<ListaMenu[]>([{ id: "general", nombre: "General" }]);
+  const [listaId, setListaId] = useState("general");
+  const [nombreLista, setNombreLista] = useState("");
+  const [mostrarCrear, setMostrarCrear] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [configCargada, setConfigCargada] = useState("");
+  const [seleccionGuardada, setSeleccionGuardada] = useState("[]");
 
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
 
@@ -242,29 +250,43 @@ export default function ListaPreciosPage() {
       setSeleccion([]);
       return;
     }
+    let vigente = true;
     if (lista) {
       setCargandoCat(true);
       listarProductos(lista)
-        .then((prods) => setCatalogo(prods))
-        .catch(() => setCatalogo([]))
-        .finally(() => setCargandoCat(false));
+        .then((prods) => { if (vigente) setCatalogo(prods); })
+        .catch(() => { if (vigente) setCatalogo([]); })
+        .finally(() => { if (vigente) setCargandoCat(false); });
     } else {
       setCatalogo([]);
     }
-    obtenerMenuConfig(pid)
-      .then((items) =>
-        setSeleccion(
-          items.map((it) => ({
+    listarMenus(pid).then((items) => { if (vigente) setListas(items); }).catch((e) => { if (vigente) setError(e instanceof Error ? e.message : "No se pudieron cargar las listas"); });
+    return () => { vigente = false; };
+  }, [punto?.id, punto?.lista_precio]);
+
+  useEffect(() => {
+    if (!puntoId) return;
+    let vigente = true;
+    setConfigCargada("");
+    setGuardado(false);
+    setCopiado(false);
+    obtenerMenuConfig(puntoId, listaId)
+      .then((items) => {
+        if (!vigente) return;
+        const normalizados = items.map((it) => ({
             referencia: it.referencia,
             producto: it.producto,
             categoria: (it.categoria || "").trim() || SIN_CATEGORIA,
             um: it.um,
             precio: Number(it.precio) || 0,
-          })),
-        ),
-      )
-      .catch(() => setSeleccion([]));
-  }, [punto?.id, punto?.lista_precio]);
+          }));
+        setSeleccion(normalizados);
+        setSeleccionGuardada(JSON.stringify(normalizados));
+        setConfigCargada(`${puntoId}:${listaId}`);
+      })
+      .catch((e) => { if (vigente) { setSeleccion([]); setError(e instanceof Error ? e.message : "No se pudo cargar la lista"); } });
+    return () => { vigente = false; };
+  }, [puntoId, listaId]);
 
   const categorias = useMemo(() => {
     const set = new Set<string>();
@@ -373,7 +395,8 @@ export default function ListaPreciosPage() {
     setGuardando(true);
     setError(null);
     try {
-      await guardarMenuConfig(punto.id, seleccion);
+      await guardarMenuConfig(punto.id, seleccion, listaId);
+      setSeleccionGuardada(JSON.stringify(seleccion));
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2500);
     } catch (e) {
@@ -383,13 +406,32 @@ export default function ListaPreciosPage() {
     } finally {
       setGuardando(false);
     }
-  }, [punto, seleccion]);
+  }, [punto, seleccion, listaId]);
+
+  const confirmarCambio = () => seleccionGuardada === JSON.stringify(seleccion) || window.confirm("Hay cambios sin guardar. ¿Desea descartarlos?");
+
+  async function crearLista() {
+    if (!punto || !nombreLista.trim() || !confirmarCambio()) return;
+    setCreando(true);
+    setError(null);
+    try {
+      const nueva = await crearMenu(punto.id, nombreLista.trim());
+      setListas((prev) => [...prev, nueva]);
+      setListaId(nueva.id);
+      setNombreLista("");
+      setMostrarCrear(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo crear la lista");
+    } finally { setCreando(false); }
+  }
 
   if (cargando) {
     return <p className="text-sm text-brand-black">Cargando…</p>;
   }
 
   const origen = typeof window !== "undefined" ? window.location.origin : "";
+  const urlPublica = `${origen}/tienda/${slugTienda(punto)}${listaId === "general" ? "" : `/${encodeURIComponent(listaId)}`}`;
+  const listaLista = configCargada === `${puntoId}:${listaId}`;
 
   return (
     <div>
@@ -419,7 +461,8 @@ export default function ListaPreciosPage() {
           </span>
           <select
             value={puntoId}
-            onChange={(e) => setPuntoId(e.target.value)}
+            disabled={guardando || creando}
+            onChange={(e) => { if (confirmarCambio()) { setPuntoId(e.target.value); setListaId("general"); setListas([{ id: "general", nombre: "General" }]); } }}
             className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           >
             {puntos.length === 0 && <option value="">Sin puntos asignados</option>}
@@ -430,6 +473,17 @@ export default function ListaPreciosPage() {
             ))}
           </select>
         </label>
+        <label className="inline-flex items-center gap-2 text-xs font-semibold">
+          Lista:
+          <select value={listaId} disabled={guardando || creando} onChange={(event) => { if (confirmarCambio()) setListaId(event.target.value); }} className="max-w-56 rounded-lg border border-brand-brown/15 bg-white px-3 py-2 text-sm">
+            {listas.map((lista) => <option key={lista.id} value={lista.id}>{lista.nombre}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!punto || guardando || creando} onClick={() => setMostrarCrear((prev) => !prev)} className="inline-flex items-center gap-2 rounded-lg border border-brand-wine/25 px-3 py-2 text-sm text-brand-wine disabled:opacity-40"><Plus className="h-4 w-4" aria-hidden="true" />Crear lista</button>
+        {mostrarCrear && <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void crearLista(); }}>
+          <input aria-label="Nombre de la nueva lista" placeholder="Nombre de la lista" maxLength={80} required value={nombreLista} disabled={creando} onChange={(event) => setNombreLista(event.target.value)} className="rounded-lg border border-brand-brown/20 px-3 py-2 text-sm" />
+          <button disabled={creando || !nombreLista.trim()} className="rounded-lg bg-brand-wine px-3 py-2 text-sm text-white disabled:opacity-40">{creando ? "Creando…" : "Crear"}</button>
+        </form>}
         {punto && !punto.lista_precio && (
           <span className="text-xs font-medium text-amber-700">
             Este punto no tiene lista de precios configurada.
@@ -442,7 +496,7 @@ export default function ListaPreciosPage() {
         <button
           type="button"
           onClick={guardar}
-          disabled={guardando || !punto}
+          disabled={guardando || !punto || !listaLista || creando}
           className="inline-flex items-center gap-2 rounded-xl border border-brand-wine/25 bg-white px-4 py-2 text-sm font-semibold text-brand-wine transition hover:bg-brand-wine/5 disabled:cursor-not-allowed disabled:opacity-40"
           title="Guardar la configuración que verá el cliente en el menú"
         >
@@ -469,10 +523,10 @@ export default function ListaPreciosPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-brand-brown/15 bg-brand-cream-soft/40 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-brand-black">
-              Menú público de esta tienda
+              {listas.find((lista) => lista.id === listaId)?.nombre ?? "General"}
             </div>
             <div className="truncate text-sm text-brand-wine">
-              {`${origen}/tienda/${slugTienda(punto)}`}
+              {urlPublica}
             </div>
           </div>
           <button
@@ -480,7 +534,7 @@ export default function ListaPreciosPage() {
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(
-                  `${origen}/tienda/${slugTienda(punto)}`,
+                  urlPublica,
                 );
                 setCopiado(true);
                 setTimeout(() => setCopiado(false), 2000);
@@ -493,7 +547,7 @@ export default function ListaPreciosPage() {
             {copiado ? "¡Copiado!" : "Copiar link"}
           </button>
           <a
-            href={`${origen}/tienda/${slugTienda(punto)}`}
+            href={urlPublica}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg border border-brand-brown/15 px-3 py-1.5 text-xs font-semibold text-brand-brown transition hover:bg-white"

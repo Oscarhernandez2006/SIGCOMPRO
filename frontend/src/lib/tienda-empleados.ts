@@ -63,6 +63,7 @@ export interface ItemPedidoTienda {
 
 export interface PedidoTienda {
   id: string;
+  comanda: string;
   trabajador_cedula: string;
   trabajador_nombre: string;
   punto_id: string;

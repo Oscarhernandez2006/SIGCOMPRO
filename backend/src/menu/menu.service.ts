@@ -1,6 +1,9 @@
-import { Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
+import { JwtPayload } from '../auth/guards/jwt-auth.guard';
+import { tieneAccesoTotal } from '../users/permisos.catalog';
 
 export interface MenuProducto {
   referencia: string;
@@ -26,6 +29,7 @@ export interface MenuCategoria {
 export interface MenuTienda {
   slug: string;
   nombre: string;
+  listaNombre?: string;
   direccion: string | null;
   telefono: string | null;
   barrio: string | null;
@@ -96,10 +100,60 @@ export class MenuService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS menu_listas (
+        id text PRIMARY KEY,
+        punto_id text NOT NULL,
+        nombre text NOT NULL,
+        items jsonb NOT NULL DEFAULT '[]'::jsonb,
+        actualizado_en timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS menu_listas_punto_idx ON menu_listas (punto_id)`);
+  }
+
+  async listas(puntoId: string) {
+    const { rows } = await this.pool.query<{ id: string; nombre: string }>(
+      `SELECT id, nombre FROM menu_listas WHERE punto_id = $1 ORDER BY actualizado_en, id`,
+      [String(puntoId)],
+    );
+    return [{ id: 'general', nombre: 'General' }, ...rows];
+  }
+
+  async verificarPunto(user: JwtPayload, puntoId: string) {
+    if (tieneAccesoTotal(user.rol)) return;
+    const { rowCount } = await this.pool.query(
+      `SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2 LIMIT 1`,
+      [user.sub, puntoId],
+    );
+    if (!rowCount) throw new ForbiddenException('No tiene asignado este punto de venta.');
+  }
+
+  async crearLista(puntoId: string, nombre: unknown) {
+    const titulo = typeof nombre === 'string' ? nombre.trim() : '';
+    if (!titulo || titulo.length > 80) throw new BadRequestException('Escriba un nombre de hasta 80 caracteres');
+    const id = randomUUID();
+    const { rows } = await this.pool.query<{ id: string; nombre: string }>(
+      `INSERT INTO menu_listas (id, punto_id, nombre, items)
+       SELECT $1, id::text, $3, COALESCE((SELECT items FROM menu_config WHERE punto_id = $2), '[]'::jsonb)
+       FROM puntos_venta WHERE id::text = $2 AND activo = true
+       RETURNING id, nombre`,
+      [id, String(puntoId), titulo],
+    );
+    if (!rows[0]) throw new NotFoundException('Punto de venta no encontrado');
+    return rows[0];
   }
 
   /** Ítems guardados (curados) del menú de un punto. */
-  async obtenerConfig(puntoId: string): Promise<ItemMenu[]> {
+  async obtenerConfig(puntoId: string, listaId = 'general'): Promise<ItemMenu[]> {
+    if (listaId !== 'general') {
+      const { rows } = await this.pool.query<{ items: ItemMenu[] }>(
+        `SELECT items FROM menu_listas WHERE punto_id = $1 AND id = $2`,
+        [String(puntoId), listaId],
+      );
+      if (!rows[0]) throw new NotFoundException('Lista no encontrada');
+      return rows[0].items;
+    }
     const res = await this.pool.query<{ items: ItemMenu[] }>(
       `SELECT items FROM menu_config WHERE punto_id = $1`,
       [String(puntoId)],
@@ -111,6 +165,7 @@ export class MenuService implements OnModuleInit {
   async guardarConfig(
     puntoId: string,
     items: unknown,
+    listaId = 'general',
   ): Promise<{ ok: true; total: number }> {
     const limpios = Array.isArray(items)
       ? items
@@ -129,6 +184,14 @@ export class MenuService implements OnModuleInit {
           .filter((x): x is ItemMenu => x !== null)
       : [];
 
+    if (listaId !== 'general') {
+      const result = await this.pool.query(
+        `UPDATE menu_listas SET items = $3::jsonb, actualizado_en = now() WHERE punto_id = $1 AND id = $2`,
+        [String(puntoId), listaId, JSON.stringify(limpios)],
+      );
+      if (!result.rowCount) throw new NotFoundException('Lista no encontrada');
+      return { ok: true, total: limpios.length };
+    }
     await this.pool.query(
       `INSERT INTO menu_config (punto_id, items, actualizado_en)
        VALUES ($1, $2::jsonb, now())
@@ -163,7 +226,7 @@ export class MenuService implements OnModuleInit {
   }
 
   /** Menú público de una tienda por su slug (código o nombre). */
-  async tienda(slug: string): Promise<MenuTienda> {
+  async tienda(slug: string, listaId = 'general'): Promise<MenuTienda> {
     const objetivo = slugify(slug);
     const puntos = await this.puntosActivos();
     const punto = puntos.find(
@@ -177,9 +240,10 @@ export class MenuService implements OnModuleInit {
 
     // Preferimos la configuración curada del punto; si no hay, mostramos toda
     // la lista de precios como respaldo.
-    const config = await this.obtenerConfig(punto.id);
+    const config = await this.obtenerConfig(punto.id, listaId);
+    const lista = listaId === 'general' ? undefined : (await this.listas(punto.id)).find((item) => item.id === listaId);
     const categorias =
-      config.length > 0
+      config.length > 0 || listaId !== 'general'
         ? this.agrupar(config)
         : punto.lista_precio?.trim()
           ? await this.productos(punto.lista_precio)
@@ -188,6 +252,7 @@ export class MenuService implements OnModuleInit {
     return {
       slug: this.slugDe(punto),
       nombre: punto.nombre,
+      listaNombre: lista?.nombre,
       direccion: punto.direccion,
       telefono: punto.telefono,
       barrio: punto.barrio,

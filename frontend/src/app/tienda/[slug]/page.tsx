@@ -25,6 +25,7 @@ interface MenuCategoria {
 interface MenuTienda {
   slug: string;
   nombre: string;
+  listaNombre?: string;
   direccion: string | null;
   telefono: string | null;
   barrio: string | null;
@@ -126,16 +127,16 @@ function HojaPortada({ nombre }: { nombre: string }) {
 export default function TiendaMenuPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string; codigo?: string }>;
 }) {
-  const { slug } = use(params);
+  const { slug, codigo } = use(params);
   const [tienda, setTienda] = useState<MenuTienda | null>(null);
   const [estado, setEstado] = useState<"cargando" | "ok" | "error">("cargando");
 
   useEffect(() => {
     let vigente = true;
     setEstado("cargando");
-    fetch(`${API_URL}/menu/${encodeURIComponent(slug)}`)
+    fetch(`${API_URL}/menu/${encodeURIComponent(slug)}${codigo ? `/listas/${encodeURIComponent(codigo)}` : ""}`)
       .then((r) => {
         if (!r.ok) throw new Error("no encontrada");
         return r.json();
@@ -149,7 +150,7 @@ export default function TiendaMenuPage({
     return () => {
       vigente = false;
     };
-  }, [slug]);
+  }, [slug, codigo]);
 
   // Aplana los productos y los reparte en hojas según su plantilla.
   const paginas = useMemo(() => {

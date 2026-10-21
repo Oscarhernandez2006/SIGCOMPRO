@@ -115,6 +115,13 @@ export class TiendaEmpleadosController {
     return this.tienda.guardarCatalogo(puntoId, body?.items);
   }
 
+  @Get('pedidos/pendientes')
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permisos('credito_empleados')
+  pendientes() {
+    return this.tienda.pendientes();
+  }
+
   @Get('pedidos')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')

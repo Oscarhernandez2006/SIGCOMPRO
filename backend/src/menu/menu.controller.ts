@@ -18,4 +18,9 @@ export class MenuController {
   tienda(@Param('slug') slug: string) {
     return this.menu.tienda(slug);
   }
+
+  @Get(':slug/listas/:listaId')
+  lista(@Param('slug') slug: string, @Param('listaId') listaId: string) {
+    return this.menu.tienda(slug, listaId);
+  }
 }

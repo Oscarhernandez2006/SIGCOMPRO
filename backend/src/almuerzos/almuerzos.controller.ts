@@ -29,7 +29,7 @@ export class AlmuerzosController {
   }
 
   @Patch(':id/reprogramar')
-  reprogramar(@Req() req: ReqUsuario, @Param('id') id: string, @Body() body: { hora?: string }) {
-    return this.almuerzos.reprogramar(req.user!, id, body?.hora);
+  reprogramar(@Req() req: ReqUsuario, @Param('id') id: string, @Body() body: { hora?: string; motivo?: string }) {
+    return this.almuerzos.reprogramar(req.user!, id, body?.hora, body?.motivo);
   }
 }

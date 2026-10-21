@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { getUsuario } from "@/lib/auth";
+import { puedeVerModulo } from "@/lib/permisos";
 import {
   listarPedidosTienda,
   actualizarEstadoPedidoTienda,
@@ -34,7 +36,7 @@ function puntoCorto(nombre: string): string {
 
 export default function PedidosTiendaPage() {
   const [pedidos, setPedidos] = useState<PedidoTienda[]>([]);
-  const [filtro, setFiltro] = useState<string>("");
+  const [filtro, setFiltro] = useState<string>("pendientes");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entregar, setEntregar] = useState<PedidoTienda | null>(null);
@@ -44,11 +46,12 @@ export default function PedidosTiendaPage() {
   const [fOrigen, setFOrigen] = useState("");
   const [fDesde, setFDesde] = useState("");
   const [fHasta, setFHasta] = useState("");
+  const [usuario] = useState(() => getUsuario());
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const data = await listarPedidosTienda();
+      const data = await listarPedidosTienda({ estado: filtro || undefined });
       setPedidos(data);
       setError(null);
     } catch (e) {
@@ -56,7 +59,7 @@ export default function PedidosTiendaPage() {
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [filtro]);
 
   useEffect(() => {
     void cargar();
@@ -74,10 +77,10 @@ export default function PedidosTiendaPage() {
     const hastaTs = fHasta ? new Date(`${fHasta}T00:00:00`).getTime() + 86_400_000 : null;
     const desdeTs = fDesde ? new Date(`${fDesde}T00:00:00`).getTime() : null;
     return pedidos.filter((p) => {
-      if (filtro && p.estado !== filtro) return false;
+      if (filtro === "pendientes" ? !["pendiente", "facturado"].includes(p.estado) : filtro && p.estado !== filtro) return false;
       if (fPunto && p.punto_nombre !== fPunto) return false;
       if (fOrigen && (p.origen || "manual") !== fOrigen) return false;
-      if (q && !`${p.trabajador_nombre} ${p.trabajador_cedula}`.toLowerCase().includes(q)) return false;
+      if (q && !`${p.comanda} ${p.trabajador_nombre} ${p.trabajador_cedula}`.toLowerCase().includes(q)) return false;
       const ts = new Date(p.creado_en).getTime();
       if (desdeTs !== null && ts < desdeTs) return false;
       if (hastaTs !== null && ts >= hastaTs) return false;
@@ -91,10 +94,13 @@ export default function PedidosTiendaPage() {
     try {
       const actualizado = await actualizarEstadoPedidoTienda(id, estado);
       setPedidos((prev) => prev.map((p) => (p.id === id ? actualizado : p)));
+      window.dispatchEvent(new Event("credito-actualizado"));
     } catch (e) {
       alert(e instanceof Error ? e.message : "No se pudo cambiar el estado.");
     }
   }
+
+  if (!puedeVerModulo(usuario, "credito_empleados")) return <p className="text-sm text-red-700">Sin permiso para pedidos a crédito.</p>;
 
   return (
     <div>
@@ -134,6 +140,7 @@ export default function PedidosTiendaPage() {
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Estado</label>
             <select value={filtro} onChange={(e) => setFiltro(e.target.value)}
               className="h-9 rounded-lg border border-brand-brown/20 bg-white px-2.5 text-sm outline-none transition focus:border-brand-wine">
+              <option value="pendientes">Pendientes de entrega</option>
               <option value="">Todos</option>
               <option value="pendiente">Nuevos</option>
               <option value="facturado">Preparados</option>
@@ -171,7 +178,7 @@ export default function PedidosTiendaPage() {
               className="h-9 rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine [color-scheme:light]" />
           </div>
           {hayFiltros && (
-            <button type="button" onClick={() => { setBusq(""); setFiltro(""); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
+            <button type="button" onClick={() => { setBusq(""); setFiltro("pendientes"); setFPunto(""); setFOrigen(""); setFDesde(""); setFHasta(""); }}
               className="h-9 rounded-lg border border-brand-brown/20 px-3 text-sm text-brand-black transition hover:bg-brand-cream-soft">
               Limpiar
             </button>
@@ -195,7 +202,7 @@ export default function PedidosTiendaPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-brand-brown/10 bg-neutral-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-brand-black">
-                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Comanda / Fecha</th>
                   <th className="px-4 py-3">Colaborador</th>
                   <th className="px-4 py-3">Punto</th>
                   <th className="px-4 py-3">Entrega</th>
@@ -213,6 +220,7 @@ export default function PedidosTiendaPage() {
                     <tr key={p.id} onClick={() => setDetalleId(p.id)}
                       className="cursor-pointer border-b border-brand-brown/8 transition hover:bg-brand-cream-soft/50">
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
+                        <p className="mb-1 text-sm font-bold text-brand-wine">{p.comanda}</p>
                         {new Date(p.creado_en).toLocaleString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td className="px-4 py-3">
@@ -227,7 +235,7 @@ export default function PedidosTiendaPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-brand-black">{puntoCorto(p.punto_nombre)}</td>
-                      <td className="px-4 py-3 text-xs text-brand-black">{p.entrega === "domicilio" ? "Domicilio" : "Recoge"}</td>
+                      <td className="px-4 py-3 text-xs text-brand-black">Recoge en PDV</td>
                       <td className="px-4 py-3 text-right">
                         <p className="font-semibold tabular-nums text-brand-black">{copTienda(p.total)}</p>
                         {p.items.length > 0 && (
@@ -288,6 +296,7 @@ export default function PedidosTiendaPage() {
           onEntregado={(act) => {
             setPedidos((prev) => prev.map((p) => (p.id === act.id ? act : p)));
             setEntregar(null);
+            window.dispatchEvent(new Event("credito-actualizado"));
           }}
         />
       )}
@@ -330,7 +339,7 @@ function DetallePedidoModal({ id, onClose }: { id: string; onClose: () => void }
       <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-4">
           <div>
-            <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle del pedido</h2>
+            <h2 className="font-serif text-lg font-bold text-brand-wine">{pedido?.comanda || "Detalle del pedido"}</h2>
             <p className="text-xs text-brand-black">Información completa</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar"

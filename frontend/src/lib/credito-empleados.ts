@@ -36,13 +36,14 @@ export interface ItemCompraCredito {
 
 export interface PedidoCredito {
   id: string;
+  comanda: string;
   trabajador_cedula: string;
   trabajador_nombre: string;
   punto_id: string;
   punto_nombre: string;
   total: number;
   observacion: string | null;
-  estado: "pendiente" | "facturado" | "anulado";
+  estado: "pendiente" | "facturado" | "entregado" | "anulado";
   cartera_referencia: string | null;
   cartera_estado: string | null;
   creado_por_id: string | null;
@@ -121,6 +122,7 @@ export function listarPedidosCredito(filtros: {
   desde?: string;
   hasta?: string;
   origen?: string;
+  nomina_fecha?: string;
 }): Promise<PedidoCredito[]> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filtros)) {
@@ -151,8 +153,8 @@ export function crearPedidoCredito(input: {
   });
 }
 
-export function resumenNomina(): Promise<ResumenNomina[]> {
-  return apiFetch<ResumenNomina[]>("/credito-empleados/resumen-nomina");
+export function resumenNomina(mes?: string): Promise<ResumenNomina[]> {
+  return apiFetch<ResumenNomina[]>(`/credito-empleados/resumen-nomina${mes ? `?mes=${encodeURIComponent(mes)}` : ""}`);
 }
 
 export interface DashboardMetrics {

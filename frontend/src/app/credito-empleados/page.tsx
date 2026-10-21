@@ -27,15 +27,16 @@ function fechaCorta(v: string) {
 }
 
 const ESTADO_BADGE: Record<string, string> = {
+  entregado: "border-emerald-200 bg-emerald-50 text-emerald-700",
   pendiente: "border-amber-200 bg-amber-50 text-amber-700",
   facturado: "border-brand-wine/25 bg-brand-wine/5 text-brand-wine",
   anulado:   "border-neutral-200 bg-neutral-100 text-neutral-500",
 };
-const ESTADO_LABEL: Record<string, string> = { pendiente: "Pendiente", facturado: "Facturado", anulado: "Anulado" };
+const ESTADO_LABEL: Record<string, string> = { pendiente: "Pendiente", facturado: "Facturado", entregado: "Entregado", anulado: "Anulado" };
 
 function EstadoBadge({ estado }: { estado: string }) {
   const dot: Record<string, string> = {
-    pendiente: "bg-amber-400", facturado: "bg-brand-wine", anulado: "bg-neutral-400",
+    pendiente: "bg-amber-400", facturado: "bg-brand-wine", entregado: "bg-emerald-500", anulado: "bg-neutral-400",
   };
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ESTADO_BADGE[estado] ?? "border-brand-brown/20 bg-brand-brown/5 text-brand-brown"}`}>
@@ -507,6 +508,20 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeButton = document.querySelector<HTMLButtonElement>('[data-detalle-credito] button[aria-label="Cerrar"]');
+    closeButton?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "Tab") { event.preventDefault(); closeButton?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("keydown", handleKey); document.body.style.overflow = previousOverflow; if (previousFocus instanceof HTMLElement) previousFocus.focus(); };
+  }, [onClose]);
+
+  useEffect(() => {
     let vivo = true;
     setCargando(true);
     obtenerPedidoCredito(id)
@@ -528,14 +543,14 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-brand-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+      <div data-detalle-credito role="dialog" aria-modal="true" aria-label="Detalle de compra a crédito" className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
         <div className="flex items-center gap-3 border-b border-brand-brown/10 px-5 py-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-wine/10 text-brand-wine">
             <Icon d={Ico.wallet} cls="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="font-serif text-lg font-bold text-brand-wine">Detalle de la compra</h2>
-            <p className="text-xs text-brand-black">Información completa del pedido</p>
+            <h2 className="font-serif text-lg font-bold text-brand-wine">{pedido?.comanda || "Detalle de la compra"}</h2>
+            <p className="text-xs text-brand-black">{pedido?.punto_nombre || "Compra a crédito"}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar"
             className="rounded-lg p-1.5 text-brand-black transition hover:bg-brand-cream-soft hover:text-brand-brown">
@@ -576,7 +591,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
                     : "—"}
                 </Dato>
                 {pedido.factura_numero && <Dato label="N° factura">{pedido.factura_numero}</Dato>}
-                {pedido.entrega && <Dato label="Entrega">{pedido.entrega === "domicilio" ? "Domicilio" : "Recoge en punto"}</Dato>}
+                <Dato label="Entrega">Recoge en punto de venta</Dato>
                 {pedido.telefono && <Dato label="Teléfono">{pedido.telefono}</Dato>}
               </div>
               {pedido.direccion && <Dato label="Dirección">{pedido.direccion}</Dato>}
@@ -592,7 +607,7 @@ function DetalleCompraModal({ id, onClose }: { id: string; onClose: () => void }
                           {it.cantidad}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-brand-black">{it.nombre}</p>
+                          <p className="break-words text-brand-black">{it.nombre}</p>
                           {it.obs && <p className="text-[11px] italic text-brand-black">“{it.obs}”</p>}
                         </div>
                         <span className="text-[11px] text-brand-black">{it.um}</span>
@@ -658,12 +673,22 @@ export default function CreditoEmpleadosPage() {
   const [modalNueva, setModalNueva]   = useState(false);
   const [confirmacion, setConfirmacion] = useState<{ pedido: PedidoCredito; nuevoEstado: "facturado" | "anulado" | "pendiente" } | null>(null);
   const [resumen, setResumen] = useState<ResumenNomina[]>([]);
+  const [mesNomina, setMesNomina] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit" }).format(new Date()));
+  const [quincena, setQuincena] = useState("");
+  const [errorNomina, setErrorNomina] = useState<string | null>(null);
 
   const puedeCrear         = puedeAccion(usuario, "credito_empleados.pedidos") || puedeAccion(usuario, "credito_empleados");
   const puedeCambiarEstado = puedeAccion(usuario, "credito_empleados.estado")  || puedeAccion(usuario, "credito_empleados");
 
   useEffect(() => { misPuntosVenta().then(setPuntos).catch(() => setPuntos([])); }, []);
-  useEffect(() => { resumenNomina().then(setResumen).catch(() => setResumen([])); }, []);
+  useEffect(() => {
+    let vigente = true;
+    setResumen([]);
+    setErrorNomina(null);
+    if (!mesNomina) return;
+    resumenNomina(mesNomina).then((data) => { if (vigente) setResumen(data); }).catch((e) => { if (vigente) setErrorNomina(e instanceof Error ? e.message : "No se pudo consultar la nomina"); });
+    return () => { vigente = false; };
+  }, [mesNomina]);
 
   const cargarPedidos = useCallback(async () => {
     setCargando(true); setErrorPedidos(null);
@@ -675,10 +700,11 @@ export default function CreditoEmpleadosPage() {
         desde:    filtroDesde || undefined,
         hasta:    filtroHasta || undefined,
         origen:   filtroOrigen || undefined,
+        nomina_fecha: quincena || undefined,
       }));
     } catch (e) { setErrorPedidos(e instanceof ApiError ? e.message : "No se pudieron cargar los pedidos."); }
     finally { setCargando(false); }
-  }, [filtroCedula, filtroEstado, filtroPunto, filtroDesde, filtroHasta, filtroOrigen]);
+  }, [filtroCedula, filtroEstado, filtroPunto, filtroDesde, filtroHasta, filtroOrigen, quincena]);
 
   useEffect(() => { void cargarPedidos(); }, [cargarPedidos]);
 
@@ -686,12 +712,12 @@ export default function CreditoEmpleadosPage() {
     if (!confirmacion) return;
     const act = await actualizarEstadoPedidoCredito(confirmacion.pedido.id, confirmacion.nuevoEstado);
     setPedidos((prev) => prev.map((p) => (p.id === act.id ? act : p)));
-    resumenNomina().then(setResumen).catch(() => {});
+    resumenNomina(mesNomina).then(setResumen).catch(() => {});
   }
 
   const nPendiente     = pedidos.filter((p) => p.estado === "pendiente").length;
   const totalPendiente = pedidos.filter((p) => p.estado === "pendiente").reduce((s, p) => s + Number(p.total || 0), 0);
-  const totalFacturado = pedidos.filter((p) => p.estado === "facturado").reduce((s, p) => s + Number(p.total || 0), 0);
+  const totalFacturado = pedidos.filter((p) => p.estado === "facturado" || p.estado === "entregado").reduce((s, p) => s + Number(p.total || 0), 0);
 
   const kpis = [
     { label: "Total pedidos",  val: String(pedidos.length),  color: "text-brand-black",   bg: "bg-brand-brown/8",  ico: Ico.wallet  },
@@ -705,7 +731,7 @@ export default function CreditoEmpleadosPage() {
       {/* Encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-brand-wine">Compras a crédito</h1>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">Registro de compras</h1>
           <p className="mt-0.5 text-sm text-brand-black">Registro de compras de colaboradores contra su cupo asignado.</p>
         </div>
         {puedeCrear && (
@@ -735,6 +761,18 @@ export default function CreditoEmpleadosPage() {
       </div>
 
       {/* Cobros por nómina */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm font-semibold">Nómina
+          <input type="month" aria-label="Mes de nómina" value={mesNomina} onChange={(event) => { setMesNomina(event.target.value); setQuincena(""); }} className="rounded-lg border border-brand-brown/20 bg-white px-3 py-2" />
+        </label>
+        <label className="flex items-center gap-2 text-sm">Quincena
+          <select aria-label="Quincena de cobro" value={quincena} onChange={(event) => setQuincena(event.target.value)} className="rounded-lg border border-brand-brown/20 bg-white px-3 py-2">
+            <option value="">Todas las compras</option>
+            {resumen.map((item) => <option key={item.nomina_fecha} value={item.nomina_fecha}>{item.nomina_fecha} · {money(item.total)}</option>)}
+          </select>
+        </label>
+        {errorNomina && <p role="alert" className="text-sm text-red-700">{errorNomina}</p>}
+      </div>
       {resumen.length > 0 && (
         <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
           <div className="flex items-center gap-2 border-b border-brand-brown/8 px-4 py-3">
@@ -982,7 +1020,7 @@ export default function CreditoEmpleadosPage() {
       {modalNueva && (
         <ModalNuevaCompra puntos={puntos} usuario={usuario} onClose={() => setModalNueva(false)} onCreado={() => {
           void cargarPedidos();
-          resumenNomina().then(setResumen).catch(() => {});
+                  resumenNomina(mesNomina).then(setResumen).catch(() => {});
         }} />
       )}
       {confirmacion && (

@@ -86,7 +86,7 @@ export function rutaOperativaInicial(usuario: Usuario | null): string | null {
       return RUTA_MODULO[key] ?? null;
     }
   }
-  return null;
+  return puedeVerModulo(usuario, "credito_empleados") ? "/pedidos-credito" : null;
 }
 
 /** Lista de paneles a los que el usuario tiene acceso. */

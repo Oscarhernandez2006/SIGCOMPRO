@@ -121,7 +121,7 @@ export default function AlmuerzosPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-brand-wine">Solicitudes de almuerzo</h1>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">Aprobación almuerzo</h1>
           <p className="mt-1 max-w-2xl text-sm text-brand-black">
             Los domiciliarios piden su almuerzo desde Mi Variable Liquidación. Apruébalo, recházalo o
             reprográmalo: siempre dura 1 hora y se marca como terminado automáticamente.
@@ -229,8 +229,8 @@ export default function AlmuerzosPage() {
         <ReprogramarModal
           s={reprogramar}
           onCerrar={() => setReprogramar(null)}
-          onGuardar={async (hora) => {
-            if (await ejecutar(reprogramar.id, () => reprogramarAlmuerzo(reprogramar.id, hora))) setReprogramar(null);
+          onGuardar={async (hora, motivo) => {
+            if (await ejecutar(reprogramar.id, () => reprogramarAlmuerzo(reprogramar.id, hora, motivo))) setReprogramar(null);
           }}
           guardando={trabajando === reprogramar.id}
         />
@@ -284,10 +284,10 @@ function Tarjeta({ s, ahora, children }: { s: SolicitudAlmuerzo; ahora: number; 
         </div>
         <span
           className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-            enCurso ? "border-orange-200 bg-orange-50 text-orange-700" : COLOR_ALMUERZO[s.estado]
+            s.disponible_en ? "border-emerald-200 bg-emerald-50 text-emerald-700" : enCurso ? "border-orange-200 bg-orange-50 text-orange-700" : COLOR_ALMUERZO[s.estado]
           }`}
         >
-          {enCurso ? `En almuerzo · ${restanteMin} min` : ETIQUETA_ALMUERZO[s.estado]}
+          {s.disponible_en ? "Disponible" : enCurso ? `En almuerzo · ${restanteMin} min` : ETIQUETA_ALMUERZO[s.estado]}
         </span>
       </div>
       <p className="mt-3 text-base font-bold text-brand-wine">
@@ -299,6 +299,8 @@ function Tarjeta({ s, ahora, children }: { s: SolicitudAlmuerzo; ahora: number; 
         </p>
       )}
       {s.nota && <p className="mt-1 break-words text-brand-black">“{s.nota}”</p>}
+      {s.motivo_reprogramacion && <p className="mt-2 break-words rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">Motivo de reprogramación: {s.motivo_reprogramacion}</p>}
+      {s.disponible_en && <p className="mt-2 text-xs font-semibold text-emerald-700">Disponible desde las {fmtHora(s.disponible_en)}</p>}
       <p className="mt-2 text-xs text-brand-black">Solicitó a las {fmtHora(s.solicitado_en)}</p>
       {s.resuelto_por_nombre && s.resuelto_en && (
         <p className="text-xs text-brand-black">
@@ -336,10 +338,11 @@ function ReprogramarModal({
 }: {
   s: SolicitudAlmuerzo;
   onCerrar: () => void;
-  onGuardar: (hora: string) => void;
+  onGuardar: (hora: string, motivo: string) => void;
   guardando: boolean;
 }) {
   const [hora, setHora] = useState(() => sumarHora(horaBogota(s.inicio)));
+  const [motivo, setMotivo] = useState("");
   const valida = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
   return (
     <Modal titulo="Reprogramar almuerzo" onCerrar={onCerrar}>
@@ -360,13 +363,17 @@ function ReprogramarModal({
       <p className="mt-2 text-sm text-brand-black">
         Quedará de <b>{valida ? hora : "—"}</b> a <b>{valida ? sumarHora(hora) : "—"}</b> (1 hora).
       </p>
+      <label className="mt-4 block text-sm font-semibold text-brand-black">
+        Motivo de reprogramación
+        <textarea required maxLength={300} rows={3} value={motivo} onChange={(event) => setMotivo(event.target.value)} className="mt-1 w-full rounded-lg border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500" />
+      </label>
       <div className="mt-5 flex justify-end gap-2">
         <button onClick={onCerrar} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-semibold text-brand-black hover:bg-brand-cream-soft">
           Cancelar
         </button>
         <button
-          onClick={() => onGuardar(hora)}
-          disabled={!valida || guardando}
+          onClick={() => onGuardar(hora, motivo.trim())}
+          disabled={!valida || !motivo.trim() || guardando}
           className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Reprogramar"}

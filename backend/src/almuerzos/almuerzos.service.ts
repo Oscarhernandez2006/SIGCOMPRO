@@ -39,13 +39,15 @@ export interface SolicitudAlmuerzo {
   resuelto_por_nombre: string | null;
   resuelto_en: string | null;
   motivo_rechazo: string | null;
+  motivo_reprogramacion: string | null;
+  disponible_en: string | null;
   terminado_en: string | null;
   actualizado_en: string;
 }
 
 const COLUMNAS = `id::text, punto_id, punto_nombre, to_char(dia, 'YYYY-MM-DD') AS dia,
   documento, domiciliario, hora_solicitada, inicio, fin, estado, nota, solicitado_en,
-  resuelto_por_nombre, resuelto_en, motivo_rechazo, terminado_en, actualizado_en`;
+  resuelto_por_nombre, resuelto_en, motivo_rechazo, motivo_reprogramacion, disponible_en, terminado_en, actualizado_en`;
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const HORA_MIN = '06:00';
@@ -91,6 +93,7 @@ export class AlmuerzosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await this.pool.query(`ALTER TABLE almuerzos_solicitudes ADD COLUMN IF NOT EXISTS motivo_reprogramacion text, ADD COLUMN IF NOT EXISTS disponible_en timestamptz`);
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_almuerzos_punto_dia ON almuerzos_solicitudes (punto_id, dia)`,
     );
@@ -224,8 +227,10 @@ export class AlmuerzosService implements OnModuleInit {
   }
 
   /** Mueve el almuerzo a otra hora (siempre 1 hora). Solo antes de que inicie. */
-  async reprogramar(user: JwtPayload, id: string, hora?: string) {
+  async reprogramar(user: JwtPayload, id: string, hora?: string, motivo?: string) {
     const h = String(hora ?? '').trim();
+    const razon = String(motivo ?? '').trim();
+    if (!razon || razon.length > 300) throw new BadRequestException('Indique el motivo de reprogramacion (hasta 300 caracteres).');
     await this.validarHora(h);
     return this.resolver(
       user,
@@ -233,8 +238,9 @@ export class AlmuerzosService implements OnModuleInit {
       ['pendiente', 'aprobada', 'reprogramada'],
       `estado = 'reprogramada',
        inicio = ((dia + $5::time) AT TIME ZONE 'America/Bogota'),
-       fin = ((dia + $5::time) AT TIME ZONE 'America/Bogota') + interval '1 hour'`,
-      [h],
+      fin = ((dia + $5::time) AT TIME ZONE 'America/Bogota') + interval '1 hour',
+      motivo_reprogramacion = $6`,
+          [h, razon],
       'Solo se puede reprogramar un almuerzo que aún no ha iniciado.',
       `estado = 'pendiente' OR inicio > now()`,
     );
@@ -308,16 +314,22 @@ export class AlmuerzosService implements OnModuleInit {
     }
   }
 
-  async cancelar(id: string, documento: unknown) {
+  async disponible(id: string, documento: unknown) {
     const doc = soloDigitos(documento);
     if (!/^\d+$/.test(id) || doc.length < 5) throw new NotFoundException('Solicitud no encontrada.');
     const r = await this.pool.query<SolicitudAlmuerzo>(
-      `UPDATE almuerzos_solicitudes SET estado = 'cancelada', actualizado_en = now()
-        WHERE id = $1 AND documento = $2 AND estado = 'pendiente'
+      `UPDATE almuerzos_solicitudes SET estado = 'terminada', disponible_en = COALESCE(disponible_en, now()),
+           terminado_en = COALESCE(terminado_en, now()), actualizado_en = now()
+        WHERE id = $1 AND documento = $2 AND estado IN ('aprobada', 'reprogramada', 'terminada')
+          AND dia = (now() AT TIME ZONE 'America/Bogota')::date AND inicio <= now()
         RETURNING ${COLUMNAS}`,
       [id, doc],
     );
-    if (!r.rowCount) throw new BadRequestException('Solo se puede cancelar una solicitud pendiente.');
+    if (!r.rowCount) throw new BadRequestException('Solo puede confirmar su regreso de un almuerzo iniciado hoy.');
     return r.rows[0];
+  }
+
+  async cancelar(_id: string, _documento: unknown): Promise<SolicitudAlmuerzo> {
+    throw new ForbiddenException('Los almuerzos no se pueden cancelar.');
   }
 }

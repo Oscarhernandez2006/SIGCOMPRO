@@ -67,6 +67,7 @@ export interface SaldoTrabajador {
 
 export interface PedidoTienda {
   id: string;
+  comanda: string;
   trabajador_cedula: string;
   trabajador_nombre: string;
   punto_id: string;
@@ -599,7 +600,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
     observacion?: string;
   }): Promise<PedidoTienda> {
     const cedula = String(input.cedula ?? '').trim();
-    const entrega = String(input.entrega ?? '').trim().toLowerCase();
+    const entrega = 'recoge';
     if (!cedula) throw new BadRequestException('Falta la cédula del trabajador');
     if (entrega !== 'recoge' && entrega !== 'domicilio') {
       throw new BadRequestException('Selecciona cómo recibes el pedido');
@@ -637,9 +638,6 @@ export class TiendaEmpleadosService implements OnModuleInit {
 
     const direccion = String(input.direccion ?? '').trim() || null;
     const telefono = String(input.telefono ?? '').trim() || null;
-    if (entrega === 'domicilio' && (!direccion || !telefono)) {
-      throw new BadRequestException('Para domicilio ingresa la dirección y el teléfono');
-    }
     const observacion = String(input.observacion ?? '').trim() || null;
 
     const saldo = await this.saldoPorCedula(cedula);
@@ -689,6 +687,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
   private filaAPedido(r: Record<string, unknown>): PedidoTienda {
     return {
       id: String(r.id ?? ''),
+      comanda: String(r.comanda ?? ''),
       trabajador_cedula: String(r.trabajador_cedula ?? ''),
       trabajador_nombre: String(r.trabajador_nombre ?? ''),
       punto_id: String(r.punto_id ?? ''),
@@ -712,7 +711,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
 
   async obtenerPedido(id: string): Promise<PedidoTienda> {
     const res = await this.pool.query(
-      `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
+      `SELECT id, CONCAT('1CSE', numero_comanda) AS comanda, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
               observacion, estado, entrega, direccion, telefono, metodo_pago,
               COALESCE(origen, 'manual') AS origen, factura_numero, factura_imagen,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
@@ -740,7 +739,9 @@ export class TiendaEmpleadosService implements OnModuleInit {
       cond.push(`COALESCE(origen, 'manual') = $${i++}`);
       val.push(filtros.origen.trim().toLowerCase());
     }
-    if (filtros.estado?.trim()) {
+    if (filtros.estado === 'pendientes') {
+      cond.push(`estado IN ('pendiente', 'facturado')`);
+    } else if (filtros.estado?.trim()) {
       cond.push(`estado = $${i++}`);
       val.push(filtros.estado.trim().toLowerCase());
     }
@@ -758,7 +759,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
     }
     const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
     const res = await this.pool.query(
-      `SELECT id, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
+      `SELECT id, CONCAT('1CSE', numero_comanda) AS comanda, trabajador_cedula, trabajador_nombre, punto_id, punto_nombre, total,
               observacion, estado, entrega, direccion, telefono, metodo_pago,
               COALESCE(origen, 'manual') AS origen, factura_numero,
               COALESCE(tienda_items, '[]'::jsonb) AS tienda_items,
@@ -770,6 +771,13 @@ export class TiendaEmpleadosService implements OnModuleInit {
       val,
     );
     return res.rows.map((r) => this.filaAPedido(r as Record<string, unknown>));
+  }
+
+  async pendientes() {
+    const { rows } = await this.pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM credito_empleados_pedidos WHERE estado IN ('pendiente', 'facturado')`,
+    );
+    return { total: Number(rows[0]?.total) || 0 };
   }
 
   async actualizarEstado(

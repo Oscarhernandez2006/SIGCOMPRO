@@ -57,7 +57,7 @@ export default function SolicitudesExtensionPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-brand-wine">Aprobación de extensiones</h1>
+        <h1 className="font-serif text-3xl font-bold text-brand-wine">Aprobación extensión</h1>
         <p className="mt-1 text-sm text-brand-brown/70">
           Aprueba o rechaza las extensiones de domiciliarios que solicita Despacho en cada punto.
           Los pedidos cuentan desde que se envía la solicitud; si se rechaza, se descartan.

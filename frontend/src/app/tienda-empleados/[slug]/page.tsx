@@ -825,7 +825,7 @@ export default function TiendaEmpleadosStore({
               <>
                 <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-black">¿Cómo recibes tu pedido?</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {(["recoge", "domicilio"] as const).map((op) => (
+                  {(["recoge"] as const).map((op) => (
                     <button
                       key={op}
                       onClick={() => setEntrega(op)}

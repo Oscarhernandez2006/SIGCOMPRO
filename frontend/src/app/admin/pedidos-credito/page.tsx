@@ -1,0 +1,1 @@
+export { default } from "../../credito-empleados/tienda/page";

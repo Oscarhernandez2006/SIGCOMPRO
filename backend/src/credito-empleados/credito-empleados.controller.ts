@@ -90,8 +90,8 @@ export class CreditoEmpleadosController {
   @Get('resumen-nomina')
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permisos('credito_empleados')
-  resumenNomina() {
-    return this.credito.resumenNomina();
+  resumenNomina(@Query('mes') mes?: string) {
+    return this.credito.resumenNomina(mes);
   }
 
   @Get('dashboard')
@@ -111,8 +111,9 @@ export class CreditoEmpleadosController {
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
     @Query('origen') origen?: string,
+    @Query('nomina_fecha') nomina_fecha?: string,
   ) {
-    return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta, origen });
+    return this.credito.listarPedidos({ cedula, estado, punto_id, desde, hasta, origen, nomina_fecha });
   }
 
   /** Detalle completo de un pedido (incluye la imagen de la factura). */
