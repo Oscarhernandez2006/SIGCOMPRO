@@ -143,7 +143,6 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
     <SidebarLayout>
       {/* Sidebar desktop */}
         <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
-        <SidebarToggle />
         {/* Logo */}
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
           <Image src="/LOGOCARNESSANTACRUZ.png" alt="Carnes Santacruz" width={120} height={120} priority className="h-11 w-auto drop-shadow" />
@@ -181,15 +180,18 @@ export default function CreditoShell({ children }: { children: ReactNode }) {
               <span>Cambiar de panel</span>
             </Link>
           )}
-          <button
-            onClick={cerrarSesion}
-            title={"Cerrar sesi\u00f3n"}
-            aria-label={"Cerrar sesi\u00f3n"}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-rose-700/30 hover:text-rose-200"
-          >
-            {IcoLogout}
-            <span>Cerrar sesión</span>
-          </button>
+          <div data-sidebar-actions>
+            <button
+              onClick={cerrarSesion}
+              title={"Cerrar sesi\u00f3n"}
+              aria-label={"Cerrar sesi\u00f3n"}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/75 transition hover:bg-rose-700/30 hover:text-rose-200"
+            >
+              {IcoLogout}
+              <span>Cerrar sesión</span>
+            </button>
+            <SidebarToggle />
+          </div>
         </div>
       </aside>
 

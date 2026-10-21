@@ -3,8 +3,13 @@
 }
 
 .layout [data-sidebar] {
+  --sidebar-background: var(--color-brand-wine);
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.layout [data-sidebar][class~="bg-brand-wine-dark"] {
+  --sidebar-background: var(--color-brand-wine-dark);
 }
 
 .layout nav {
@@ -26,23 +31,33 @@
   overflow-wrap: anywhere;
 }
 
+.layout [data-sidebar-actions] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.layout [data-sidebar-actions] > button {
+  min-width: 0;
+}
+
 .toggle {
   display: flex;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
-  align-self: flex-end;
-  margin: 8px 14px 0;
-  border-radius: 6px;
-  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sidebar-background) 85%, #000);
+  color: #fff;
   cursor: pointer;
 }
 
 .toggle:hover,
 .toggle:focus-visible {
-  background: rgb(255 255 255 / 15%);
+  background: color-mix(in srgb, var(--sidebar-background) 75%, #000);
 }
 
 .toggle:focus-visible {
@@ -51,8 +66,8 @@
 }
 
 .toggle svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .layout [data-sidebar-brand] img {
@@ -152,9 +167,23 @@
     border: 0;
     padding-left: 0;
   }
+
+  .layout[data-collapsed="true"] [data-sidebar-actions] {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 4px;
+  }
+
+  .layout[data-collapsed="true"] [data-sidebar-actions] > .toggle {
+    order: -1;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .toggle {
+    transition: background-color 180ms ease;
+  }
+
   .layout [data-sidebar] {
     transition: width 180ms ease;
   }

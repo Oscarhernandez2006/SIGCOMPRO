@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import styles from "./SidebarLayout.module.css";
 
 const SidebarContext = createContext({ collapsed: false, toggle: () => {} });
@@ -63,7 +63,7 @@ export function SidebarToggle() {
       title={label}
       className={styles.toggle}
     >
-      {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+      {collapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}
     </button>
   );
 }

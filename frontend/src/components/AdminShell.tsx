@@ -488,7 +488,6 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     <SidebarLayout>
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine-dark text-brand-cream lg:flex">
-        <SidebarToggle />
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
           <Image
             src="/LOGOCARNESSANTACRUZ.png"
@@ -519,17 +518,20 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               <span>Cambiar de panel</span>
             </Link>
           )}
-          <button
-            onClick={cerrarSesion}
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/80 transition hover:bg-brand-cream/10 hover:text-brand-cream"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H3m12 0-4-4m4 4-4 4m6-13h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2" />
-            </svg>
-            <span>Cerrar sesión</span>
-          </button>
+          <div data-sidebar-actions>
+            <button
+              onClick={cerrarSesion}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-brand-cream/80 transition hover:bg-brand-cream/10 hover:text-brand-cream"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H3m12 0-4-4m4 4-4 4m6-13h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2" />
+              </svg>
+              <span>Cerrar sesión</span>
+            </button>
+            <SidebarToggle />
+          </div>
         </div>
       </aside>
 
