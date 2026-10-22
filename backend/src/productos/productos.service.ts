@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Pool } from 'pg';
@@ -17,6 +18,7 @@ export interface ProductoPrecioRow {
   fecha_activacion: string | null;
   fecha_inactivacion: string | null;
   sincronizado_en: string;
+  agotado: boolean;
 }
 
 export interface ListaPrecio {
@@ -96,6 +98,15 @@ export class ProductosService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE productos_precios ADD COLUMN IF NOT EXISTS categoria text`,
     );
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS productos_agotados (
+        lista_precio text NOT NULL,
+        referencia text NOT NULL,
+        agotado_por text,
+        actualizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (lista_precio, referencia)
+      )
+    `);
   }
 
   private apiUrl(cia: number): string {
@@ -312,27 +323,43 @@ export class ProductosService implements OnModuleInit {
     const params: unknown[] = [];
     let i = 1;
     if (listaPrecio) {
-      cond.push(`lista_precio = $${i++}`);
+      cond.push(`p.lista_precio = $${i++}`);
       params.push(listaPrecio);
     }
     if (buscar?.trim()) {
       cond.push(
-        `(producto ILIKE $${i} OR referencia ILIKE $${i} OR categoria ILIKE $${i})`,
+        `(p.producto ILIKE $${i} OR p.referencia ILIKE $${i} OR p.categoria ILIKE $${i})`,
       );
       params.push(`%${buscar.trim()}%`);
       i++;
     }
     const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
     const res = await this.pool.query<ProductoPrecioRow>(
-      `SELECT id, lista_precio, desc_lista, referencia, producto, categoria, cia, um,
-              precio, fecha_activacion, fecha_inactivacion, sincronizado_en
-       FROM productos_precios
+            `SELECT p.id, p.lista_precio, p.desc_lista, p.referencia, p.producto, p.categoria, p.cia, p.um,
+              p.precio, p.fecha_activacion, p.fecha_inactivacion, p.sincronizado_en,
+              (a.referencia IS NOT NULL) AS agotado
+             FROM productos_precios p
+             LEFT JOIN productos_agotados a ON a.lista_precio = p.lista_precio AND a.referencia = p.referencia
        ${where}
-       ORDER BY producto NULLS LAST
+             ORDER BY p.producto NULLS LAST
        LIMIT 1000`,
       params,
     );
     return res.rows;
+  }
+
+  async actualizarAgotado(lista: string, referencia: string, agotado: boolean, usuario: string) {
+    const listaLimpia = String(lista ?? '').trim();
+    const referenciaLimpia = String(referencia ?? '').trim();
+    if (!listaLimpia || !referenciaLimpia || typeof agotado !== 'boolean') throw new BadRequestException('Lista, referencia y estado agotado son obligatorios.');
+    const producto = await this.pool.query(`SELECT 1 FROM productos_precios WHERE lista_precio = $1 AND referencia = $2 LIMIT 1`, [listaLimpia, referenciaLimpia]);
+    if (!producto.rowCount) throw new NotFoundException('El producto no existe en esa lista.');
+    if (agotado) {
+      await this.pool.query(`INSERT INTO productos_agotados (lista_precio, referencia, agotado_por) VALUES ($1, $2, $3) ON CONFLICT (lista_precio, referencia) DO UPDATE SET agotado_por = EXCLUDED.agotado_por, actualizado_en = now()`, [listaLimpia, referenciaLimpia, usuario || null]);
+    } else {
+      await this.pool.query(`DELETE FROM productos_agotados WHERE lista_precio = $1 AND referencia = $2`, [listaLimpia, referenciaLimpia]);
+    }
+    return { lista_precio: listaLimpia, referencia: referenciaLimpia, agotado };
   }
 
   async ultimaSincronizacion(): Promise<string | null> {

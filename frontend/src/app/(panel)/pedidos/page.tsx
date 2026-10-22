@@ -726,6 +726,7 @@ export default function PedidosPage() {
                       {!p.anulado && p.entregaProgramada && p.fechaProgramada && (
                         <span className="text-[11px] font-semibold text-blue-600">Posterior</span>
                       )}
+                      {meta[p.id]?.devolucion && <span title={meta[p.id]?.devolucion?.motivo || "Se registró una devolución"} className="inline-flex w-fit items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2 py-0.5 text-[10px] font-bold text-fuchsia-700">Devolución · {formatoCOP(meta[p.id]?.devolucion?.valorDevuelto ?? 0)}</span>}
                     </div>
                     {p.motivo && (
                       <p className="mt-0.5 text-[11px] text-brand-black">{p.motivo}</p>
@@ -2884,6 +2885,7 @@ function PasoProductos({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<ProductoPrecio | null>(null);
+  const [agotadoPendiente, setAgotadoPendiente] = useState<ProductoPrecio | null>(null);
   const [ultimosAbierto, setUltimosAbierto] = useState(false);
   // Sugerencias ocultadas con la "X" (solo visual, en memoria; no toca la BD).
   const [ocultos, setOcultos] = useState<Set<string>>(() => new Set());
@@ -2960,6 +2962,11 @@ function PasoProductos({
 
   const enCarrito = (id: string) => carrito.some((i) => i.producto.id === id);
 
+  const seleccionarProducto = (producto: ProductoPrecio) => {
+    if (producto.agotado) setAgotadoPendiente(producto);
+    else setConfig(producto);
+  };
+
   return (
     <div className="flex gap-3">
       {/* Historial del cliente (columna lateral) */}
@@ -2982,7 +2989,7 @@ function PasoProductos({
               return (
                 <button
                   key={h.id}
-                  onClick={() => setConfig(p)}
+                  onClick={() => seleccionarProducto(p)}
                   title={`Agregar ${p.producto || "producto"} al pedido`}
                   className={`flex flex-col rounded-lg border p-2 text-left transition ${
                     enCarrito(p.id)
@@ -3095,7 +3102,7 @@ function PasoProductos({
             items.filter((p) => !ocultos.has(p.id)).map((p) => (
               <div key={p.id} className="relative">
                 <button
-                  onClick={() => setConfig(p)}
+                  onClick={() => seleccionarProducto(p)}
                   title={`Agregar ${p.producto || "producto"} al pedido`}
                   className={`flex w-full flex-col rounded-xl border p-3 pr-8 text-left transition ${
                     enCarrito(p.id)
@@ -3117,6 +3124,8 @@ function PasoProductos({
                   <span className="mt-2 text-sm font-bold text-brand-wine">
                     {formatoCOP(p.precio)}
                   </span>
+                  {p.agotado && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Agotado</span>}
+                  {p.agotado && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Agotado · requiere confirmación</span>}
                 </button>
                 <button
                   type="button"
@@ -3134,6 +3143,22 @@ function PasoProductos({
           )}
         </div>
       </div>
+
+      {agotadoPendiente && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-black/55 p-4" onClick={() => setAgotadoPendiente(null)}>
+        <section role="alertdialog" aria-modal="true" aria-labelledby="producto-agotado-titulo" className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700"><span className="h-3 w-3 rounded-full bg-red-600" /></span>
+            <div><h2 id="producto-agotado-titulo" className="font-serif text-lg font-bold text-brand-wine">Producto marcado como agotado</h2>
+              <p className="mt-1 text-sm text-brand-black">{agotadoPendiente.producto || agotadoPendiente.referencia} · Ref. {agotadoPendiente.referencia}</p>
+              <p className="mt-2 text-sm text-brand-black">Confirma con el punto de venta antes de agregarlo al pedido.</p>
+            </div>
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setAgotadoPendiente(null)} className="rounded-lg border border-brand-brown/20 px-3 py-2 text-sm font-semibold">Volver</button>
+            <button type="button" onClick={() => { setConfig(agotadoPendiente); setAgotadoPendiente(null); }} className="rounded-lg bg-brand-wine px-3 py-2 text-sm font-semibold text-white">Agregar al pedido</button>
+          </div>
+        </section>
+      </div>}
 
       {config && (
         <ConfigProducto

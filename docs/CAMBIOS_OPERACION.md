@@ -25,10 +25,34 @@ redirige al despacho del club y no permite cambiar estados por la API antigua.
 
 El panel de credito se llama Club Yo Soy Santacruz. Su registro muestra por
 defecto los entregados y el detalle incluye preparacion, factura y trazabilidad.
-La
-consulta personal Mi credito redirige al registro. La nomina se consulta por
+La consulta personal Mi credito redirige al registro. La nomina se consulta por
 mes y quincena (13 y 27); los periodos sin compras devuelven cero. El contador
-de pendientes se consulta por separado, sin el limite del listado.
+de pendientes se consulta por separado, sin el limite del listado, y se actualiza
+al cerrar una compra o mediante polling.
+
+La entrega en PDV requiere la foto de la factura junto a la cedula. La evidencia
+se conserva aparte del comprobante de pago, y leerla o subirla requiere acceso
+al pedido y al punto de venta.
+
+El despacho comercial consulta solo los pedidos sin `canal=club`; busquedas y
+contadores diarios tambien excluyen ese canal. Las actualizaciones del club
+quedan restringidas a sus pedidos y puntos autorizados.
+
+El contador del sidebar se actualiza por evento despues de una entrega y por
+consulta periodica. El listado del club incluye entregados e historicos; el
+despacho comercial los excluye por canal.
+
+## Productos agotados
+
+El estado se persiste aparte de `productos_precios`, identificado por lista y
+referencia para que la sincronizacion diaria de precios no lo borre. Solo roles
+administradores pueden cambiarlo. El selector avisa antes de agregar un agotado,
+pero permite confirmar y continuar con el pedido.
+
+En la pantalla de pedidos, los agotados se identifican en el catalogo y tambien
+al recuperar un producto del historial del cliente.
+
+Los pedidos y el historico muestran un distintivo con el importe devuelto.
 
 ## Orden de los menus
 
@@ -60,6 +84,10 @@ SIGCOMPRO verifica que sea su almuerzo, que corresponda a hoy y que haya
 iniciado; guarda `disponible_en` y muestra Disponible. El fin automatico de la
 hora no equivale a confirmacion de disponibilidad.
 
+Aprobacion almuerzo admite despacho, supervisor general y administradores
+autorizados; el Supervisor general puede consultar sus puntos sin exigir el
+permiso de despacho heredado. El catalogo de roles incluye ambos permisos.
+
 ## Verificacion y puesta en marcha
 
 ```powershell
@@ -69,6 +97,10 @@ node --test SIGCOMPRO/backend/test/operacion.test.cjs
 Los cambios de esquema son aditivos y se ejecutan en `onModuleInit`, siguiendo
 el patron existente. Las filas historicas de compras reciben consecutivo al
 agregar la columna identity; este numero no se recalcula al consultar.
+
+Los cambios de agotados y de evidencia de entrega crean tablas aditivas en el
+inicio del backend; no arrancarlo localmente con `.env`, porque apunta a
+produccion.
 
 Para el flujo completo de almuerzos deben actualizarse SIGCOMPRO y
 LIQUIDACION-DRIVIN-WEB, desplegando primero el backend de SIGCOMPRO. No arrancar

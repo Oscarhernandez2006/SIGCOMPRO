@@ -132,7 +132,7 @@ export class AlmuerzosService implements OnModuleInit {
   }
 
   private async verificarPunto(user: JwtPayload, puntoId: string): Promise<void> {
-    if (tieneAccesoTotal(user.rol)) return;
+    if (tieneAccesoTotal(user.rol) || ['supervisor general', 'supervisor_general'].includes(String(user.rol ?? '').trim().toLowerCase())) return;
     const r = await this.pool.query(
       `SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2 LIMIT 1`,
       [user.sub, puntoId],

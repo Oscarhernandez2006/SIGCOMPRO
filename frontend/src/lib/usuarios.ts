@@ -30,7 +30,9 @@ export interface ActualizarUsuarioInput {
 
 /** Roles disponibles para asignar a los usuarios. */
 export const ROLES_SUGERIDOS = [
+  "Administrador",
   "Gerente",
+  "Supervisor general",
   "Administrador pdv",
   "Administrador app",
   "Supervisor",
@@ -100,6 +102,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: "historicos",
         label: "Históricos",
       },
+      { key: "almuerzos", label: "Aprobación almuerzo" },
       {
         key: "monitoreo",
         label: "Monitoreo",

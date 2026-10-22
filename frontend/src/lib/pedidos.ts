@@ -20,6 +20,7 @@ export interface SegmentoAlistamiento {
 
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */
 export interface DespachoMeta {
+  evidenciaEntregaClub?: boolean;
   porcionador?: string;
   inicio?: string;
   fin?: string;
@@ -316,6 +317,21 @@ export function obtenerComprobanteApi(
   id: string,
 ): Promise<ComprobantePago | null> {
   return apiFetch<ComprobantePago | null>(`/pedidos/${id}/comprobante`);
+}
+
+export interface EvidenciaEntregaClub {
+  imagen: string;
+  mime: string | null;
+  subidoPor: string | null;
+  creadoEn: string;
+}
+
+export function obtenerEvidenciaEntregaClubApi(id: string): Promise<EvidenciaEntregaClub | null> {
+  return apiFetch(`/pedidos/${encodeURIComponent(id)}/evidencia-entrega-club`);
+}
+
+export function subirEvidenciaEntregaClubApi(id: string, imagen: string, mime: string | null, subidoPor?: string | null): Promise<{ id: string }> {
+  return apiFetch(`/pedidos/${encodeURIComponent(id)}/evidencia-entrega-club`, { method: "POST", body: JSON.stringify({ imagen, mime, subidoPor }) });
 }
 
 /** AGREGA una imagen al comprobante de pago de un pedido. Queda sin confirmar. */

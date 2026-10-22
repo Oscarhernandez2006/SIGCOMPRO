@@ -10,6 +10,8 @@ const { TiendaEmpleadosService } = require('../src/tienda-empleados/tienda-emple
 const { AlmuerzosService } = require('../src/almuerzos/almuerzos.service');
 const { ConfiguracionService } = require('../src/configuracion/configuracion.service');
 const { PedidosService } = require('../src/pedidos/pedidos.service');
+const { ProductosService } = require('../src/productos/productos.service');
+const { AlmuerzosController } = require('../src/almuerzos/almuerzos.controller');
 
 function poolWith(handler = () => ({ rows: [], rowCount: 0 })) {
   const calls = [];
@@ -191,8 +193,9 @@ function despachoClub(metaChanges = {}, failCredito = false) {
     async query(statement, parameters = []) {
       calls.push({ statement, parameters });
       if (statement.includes('SELECT consecutivo, data, meta FROM pedidos')) {
-        return { rowCount: 1, rows: [{ consecutivo: 1, data: actual, meta: { facturaNumero: 'FV-1', facturaValor: 10000, porcionador: 'Preparador', ...metaChanges } }] };
+        return { rowCount: 1, rows: [{ consecutivo: 1, data: actual, meta: { facturaNumero: 'FV-1', facturaValor: 10000, porcionador: 'Preparador', evidenciaEntregaClub: true, ...metaChanges } }] };
       }
+      if (statement.includes('FROM comprobantes_entrega_club')) return { rowCount: metaChanges.evidenciaEntregaClub === false ? 0 : 1, rows: metaChanges.evidenciaEntregaClub === false ? [] : [{ existe: 1 }] };
       if (failCredito && statement.includes('UPDATE credito_empleados_pedidos')) throw new Error('Fallo simulado credito');
       return { rows: [], rowCount: 1 };
     },
@@ -237,6 +240,34 @@ test('las rutas antiguas no pueden tramitar una compra vinculada', async () => {
   assert.ok(pool.calls.every(call => call.statement.startsWith('SELECT')));
 });
 
+test('agotados se guardan aparte del catalogo sincronizado y se exponen al selector', async () => {
+  const pool = poolWith((statement) => {
+    if (statement.includes('SELECT 1 FROM productos_precios')) return { rows: [{ existe: 1 }], rowCount: 1 };
+    return { rows: [], rowCount: 1 };
+  });
+  const service = new ProductosService(pool, { get: () => undefined });
+  await service.actualizarAgotado('001', 'RES1', true, '12345');
+  await service.actualizarAgotado('001', 'RES1', false, '12345');
+  assert.match(pool.calls[1].statement, /INSERT INTO productos_agotados/);
+  assert.deepEqual(pool.calls[1].parameters, ['001', 'RES1', '12345']);
+  assert.match(pool.calls[3].statement, /DELETE FROM productos_agotados/);
+  await service.listar('001');
+  assert.match(pool.calls[4].statement, /LEFT JOIN productos_agotados/);
+  assert.match(pool.calls[4].statement, /AS agotado/);
+});
+
+test('agotado requiere un producto existente y valores completos', async () => {
+  const pool = poolWith(() => ({ rows: [], rowCount: 0 }));
+  const service = new ProductosService(pool, { get: () => undefined });
+  await assert.rejects(service.actualizarAgotado('', 'RES1', true, '1'), error => error.getStatus() === 400);
+  await assert.rejects(service.actualizarAgotado('001', 'NO-EXISTE', true, '1'), error => error.getStatus() === 404);
+});
+
+test('la foto de factura y cedula es obligatoria antes de entregar', async () => {
+  const { service, actual } = despachoClub({ evidenciaEntregaClub: false });
+  await assert.rejects(service.guardar({ ...actual, estado: 'Entregado' }), /foto de la factura junto a la cedula/i);
+});
+
 test('despachar no modifica identidad, productos ni importe de una compra', async () => {
   const { service, actual } = despachoClub();
   const resultado = await service.guardar({ ...actual, estado: 'Entregado', cliente: { nombre: 'Otro' }, carrito: [], total: 1, pago: 'Efectivo', entrega: 'domicilio' });
@@ -251,4 +282,46 @@ test('la busqueda del historico comercial excluye comandas del club', async () =
   const pool = poolWith();
   await new PedidosService(pool, {}, { get: () => undefined }, {}).buscar('1CSE');
   assert.match(pool.calls[0].statement, /COALESCE\(data->>'canal', ''\) <> 'club' AND \(/);
+});
+
+test('agotados pertenecen a la lista y referencia y el listado soporta busqueda', async () => {
+  const pool = poolWith((statement) => statement.includes('SELECT 1 FROM productos_precios')
+    ? { rows: [{ existe: 1 }], rowCount: 1 }
+    : { rows: [], rowCount: 1 });
+  const service = new ProductosService(pool, { get: () => undefined });
+  await service.actualizarAgotado('001', 'RES1', true, 'admin');
+  await service.actualizarAgotado('002', 'RES1', true, 'admin');
+  assert.deepEqual(pool.calls[1].parameters.slice(0, 2), ['001', 'RES1']);
+  assert.deepEqual(pool.calls[3].parameters.slice(0, 2), ['002', 'RES1']);
+  await service.listar('001', 'res');
+  assert.match(pool.calls[4].statement, /p\.lista_precio = \$1/);
+  assert.match(pool.calls[4].statement, /p\.producto ILIKE \$2/);
+});
+
+test('la evidencia de entrega solo se carga para pedidos club y devuelve la imagen', async () => {
+  const pool = poolWith(statement => {
+    if (statement.includes('SELECT punto_id, data FROM pedidos')) return { rows: [{ punto_id: '4', data: { canal: 'club' } }], rowCount: 1 };
+    if (statement.includes('usuario_punto_venta')) return { rows: [{ permitido: 1 }], rowCount: 1 };
+    if (statement.includes('SELECT e.imagen')) return { rows: [{ imagen: 'data:image/jpeg;base64,abc', mime: 'image/jpeg', subido_por: 'Admin', creado_en: '2026-10-21' }], rowCount: 1 };
+    return { rows: [], rowCount: 1 };
+  });
+  const evidencia = await new PedidosService(pool, {}, { get: () => undefined }, {}).obtenerEvidenciaEntregaClub('club:1', { sub: '9', rol: 'despacho' });
+  assert.equal(evidencia.imagen, 'data:image/jpeg;base64,abc');
+  assert.ok(pool.calls.some(call => call.statement.includes('usuario_punto_venta')));
+});
+
+test('supervisor general puede aprobar almuerzos sin permiso de despacho heredado', async () => {
+  const controller = new AlmuerzosController({}, { obtenerCacheado: async id => ({ permisos: id === '3' ? ['despacho'] : [] }) });
+  await controller.autorizar({ sub: '1', rol: 'supervisor general' });
+  await controller.autorizar({ sub: '2', rol: 'administrador pdv' });
+  await controller.autorizar({ sub: '3', id: '3', rol: 'despacho' });
+  await assert.rejects(controller.autorizar({ sub: '4', rol: 'televendedor' }), error => error.getStatus() === 403);
+});
+
+test('entrega del club actualiza nomina sin dejar el pedido pendiente', async () => {
+  const pool = poolWith(() => ({ rows: [{ total: '0' }], rowCount: 1 }));
+  const pendientes = await new TiendaEmpleadosService(pool).pendientes();
+  assert.deepEqual(pendientes, { total: 0 });
+  assert.match(pool.calls[0].statement, /estado IN \('pendiente', 'facturado'\)/);
+  assert.doesNotMatch(pool.calls[0].statement, /entregado/);
 });

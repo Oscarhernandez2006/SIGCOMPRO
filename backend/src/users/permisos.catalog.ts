@@ -81,6 +81,7 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: 'historicos',
         label: 'Históricos',
       },
+      { key: 'almuerzos', label: 'Aprobación almuerzo' },
       {
         key: 'monitoreo',
         label: 'Monitoreo',

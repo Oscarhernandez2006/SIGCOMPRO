@@ -30,7 +30,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/almuerzos", modulo: "despacho", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
+  { label: "Aprobación almuerzo", href: "/almuerzos", modulo: "almuerzos", roles: ["despacho", "supervisor general", "supervisor_general", "administrador pdv"], icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
   { label: "Club Yo Soy Santacruz", href: "/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
@@ -262,6 +262,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
   const rolUsuario = (usuario?.rol ?? "").trim().toLowerCase();
   const itemsVisibles = navItems.filter((item) =>
+    (!item.roles || tieneAccesoAdministrativo(usuario?.rol) || item.roles.includes((usuario?.rol ?? "").trim().toLowerCase())) &&
     item.roles
       ? esAdmin || item.roles.includes(rolUsuario)
       : item.soloAdmin

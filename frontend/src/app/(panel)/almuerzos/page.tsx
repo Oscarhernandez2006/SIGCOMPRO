@@ -49,11 +49,12 @@ export default function AlmuerzosPage() {
 
   useEffect(() => {
     const u = getUsuario();
-    if (!puedeVerModulo(u, "despacho")) {
+    const rolPermitido = tieneAccesoAdministrativo(u?.rol) || ["despacho", "supervisor general", "supervisor_general", "administrador pdv"].includes((u?.rol ?? "").trim().toLowerCase());
+    if (!rolPermitido || (!tieneAccesoAdministrativo(u?.rol) && !["supervisor general", "supervisor_general"].includes((u?.rol ?? "").trim().toLowerCase()) && !puedeVerModulo(u, "despacho") && !puedeVerModulo(u, "almuerzos"))) {
       router.replace("/");
       return;
     }
-    (tieneAccesoAdministrativo(u?.rol) ? listarPuntosVenta() : misPuntosVenta())
+    (tieneAccesoAdministrativo(u?.rol) || ['supervisor general', 'supervisor_general'].includes((u?.rol ?? '').trim().toLowerCase()) ? listarPuntosVenta() : misPuntosVenta())
       .then((ps) => {
         setListo(true);
         setPuntos(ps);

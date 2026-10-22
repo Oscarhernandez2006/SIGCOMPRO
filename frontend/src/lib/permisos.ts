@@ -22,6 +22,7 @@ export interface PanelAccesible {
 export const RUTA_MODULO: Record<string, string> = {
   pedidos: "/pedidos",
   despacho: "/despacho",
+  almuerzos: "/almuerzos",
   clientes: "/clientes",
   dashboard: "/dashboard",
   cuadre_caja: "/cuadre-caja",

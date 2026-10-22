@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api";
 import {
   listarListasPrecio,
   listarProductos,
+  actualizarProductoAgotado,
   sincronizarProductos,
   ultimaSincronizacion,
   type ListaPrecio,
@@ -33,6 +34,7 @@ export default function AdminProductosPage() {
   const [sincronizando, setSincronizando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ultima, setUltima] = useState<string | null>(null);
+  const [actualizandoAgotado, setActualizandoAgotado] = useState<string | null>(null);
 
   const cargarListas = useCallback(async () => {
     try {
@@ -88,6 +90,18 @@ export default function AdminProductosPage() {
     } finally {
       setSincronizando(false);
     }
+  }
+
+  async function alternarAgotado(producto: ProductoPrecio) {
+    const key = `${producto.lista_precio}:${producto.referencia}`;
+    setActualizandoAgotado(key);
+    setError(null);
+    try {
+      await actualizarProductoAgotado(producto.lista_precio, producto.referencia, !producto.agotado);
+      setProductos((previous) => previous.map((item) => item.id === producto.id ? { ...item, agotado: !producto.agotado } : item));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo cambiar la disponibilidad del producto");
+    } finally { setActualizandoAgotado(null); }
   }
 
   const termino = buscar.trim().toLowerCase();
@@ -203,6 +217,7 @@ export default function AdminProductosPage() {
                   <th className="px-4 py-3 font-semibold">Producto</th>
                   <th className="px-4 py-3 font-semibold">UM</th>
                   <th className="px-4 py-3 text-right font-semibold">Precio</th>
+                  <th className="px-4 py-3 text-right font-semibold">Disponibilidad</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-brown/5">
@@ -217,6 +232,12 @@ export default function AdminProductosPage() {
                     <td className="px-4 py-3 text-brand-black">{p.um ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-brand-wine">
                       {fmtPrecio.format(p.precio)}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button type="button" role="switch" aria-checked={Boolean(p.agotado)} aria-label={`${p.agotado ? "Marcar disponible" : "Marcar agotado"}: ${p.producto ?? p.referencia}`} disabled={actualizandoAgotado === `${p.lista_precio}:${p.referencia}`} onClick={() => void alternarAgotado(p)} className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition disabled:opacity-50 ${p.agotado ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                        <span className={`h-2 w-2 rounded-full ${p.agotado ? "bg-red-600" : "bg-emerald-600"}`} />
+                        {p.agotado ? "Agotado" : "Disponible"}
+                      </button>
                     </td>
                   </tr>
                 ))}

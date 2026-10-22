@@ -39,7 +39,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/admin/almuerzos", modulo: "despacho", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
+  { label: "Aprobación almuerzo", href: "/admin/almuerzos", modulo: "almuerzos", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
   { label: "Club Yo Soy Santacruz", href: "/admin/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",

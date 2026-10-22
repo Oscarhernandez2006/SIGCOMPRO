@@ -18,7 +18,7 @@ export default function PendientesCreditoBadge() {
       finally { cargando = false; }
     };
     void cargar();
-    const intervalo = setInterval(cargar, 20000);
+    const intervalo = setInterval(cargar, 5000);
     window.addEventListener("credito-actualizado", cargar);
     return () => { vigente = false; clearInterval(intervalo); window.removeEventListener("credito-actualizado", cargar); };
   }, []);

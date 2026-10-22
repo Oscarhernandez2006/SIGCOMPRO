@@ -19,6 +19,7 @@ export interface ProductoPrecio {
   fecha_activacion: string | null;
   fecha_inactivacion: string | null;
   sincronizado_en: string;
+  agotado?: boolean;
 }
 
 export function listarListasPrecio(): Promise<ListaPrecio[]> {
@@ -47,4 +48,8 @@ export function sincronizarProductos(): Promise<{
   return apiFetch<{ total: number; listas: number }>("/productos/sincronizar", {
     method: "POST",
   });
+}
+
+export function actualizarProductoAgotado(lista_precio: string, referencia: string, agotado: boolean): Promise<{ lista_precio: string; referencia: string; agotado: boolean }> {
+  return apiFetch('/productos/agotado', { method: 'PATCH', body: JSON.stringify({ lista_precio, referencia, agotado }) });
 }

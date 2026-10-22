@@ -36,8 +36,8 @@ export class PedidosController {
 
   @Get('club')
   @Permisos('credito_empleados', 'despacho')
-  estadoClub(@Query('desde') desde: string | undefined, @Req() req: Request & { user?: JwtPayload }) {
-    return this.pedidos.estadoClub(desde, req.user);
+  estadoClub(@Query('desde') desde: string | undefined, @Query('rango') rango: string | undefined, @Query('fecha') fecha: string | undefined, @Query('hasta') hasta: string | undefined, @Req() req: Request & { user?: JwtPayload }) {
+    return this.pedidos.estadoClub(desde, req.user, rango, fecha, hasta);
   }
 
   /** Estado completo: pedidos + metadata de despacho + impresos. */
@@ -177,12 +177,17 @@ export class PedidosController {
 
   /** Crea o actualiza un pedido completo. */
   @Put(':id')
-  guardar(
-    @Param('id') _id: string,
+  @Permisos('pedidos', 'despacho', 'credito_empleados')
+  async guardar(
+    @Param('id') id: string,
     @Body() pedido: Record<string, unknown>,
     @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.pedidos.guardar(pedido, req.user);
+    const user = req.user;
+    const permisos = user?.sub ? (await this.users.obtenerCacheado(user.sub)).permisos ?? [] : [];
+    const clubOnly = !tieneAccesoTotal(user?.rol) && permisos.includes('credito_empleados') && !permisos.includes('pedidos') && !permisos.includes('despacho');
+    if (clubOnly && (!id.startsWith('club:') || String(pedido.id ?? '') !== id)) throw new ForbiddenException('Solo puedes gestionar compras de Club Yo Soy Santacruz.');
+    return this.pedidos.guardar({ ...pedido, id }, user, { clubOnly });
   }
 
   /** Registra la devolución (total o parcial) de un pedido facturado. */
@@ -205,11 +210,17 @@ export class PedidosController {
 
   /** Mezcla cambios en la metadata de despacho de un pedido. */
   @Patch(':id/meta')
-  actualizarMeta(
+  @Permisos('pedidos', 'despacho', 'credito_empleados')
+  async actualizarMeta(
     @Param('id') id: string,
     @Body() cambios: Record<string, unknown>,
+    @Req() req: Request & { user?: JwtPayload },
   ) {
-    return this.pedidos.actualizarMeta(id, cambios);
+    const user = req.user;
+    const permisos = user?.sub ? (await this.users.obtenerCacheado(user.sub)).permisos ?? [] : [];
+    const clubOnly = !tieneAccesoTotal(user?.rol) && permisos.includes('credito_empleados') && !permisos.includes('pedidos') && !permisos.includes('despacho');
+    if (clubOnly && !id.startsWith('club:')) throw new ForbiddenException('Solo puedes gestionar compras del Club Yo Soy Santacruz.');
+    return this.pedidos.actualizarMeta(id, cambios, user, clubOnly);
   }
 
   /** Agrega la siguiente réplica (atómico: no pisa cambios de otras pantallas). */
@@ -303,6 +314,26 @@ export class PedidosController {
       id,
       Number.isFinite(n) ? n : undefined,
     );
+  }
+
+  @Get(':id/evidencia-entrega-club')
+  @Permisos('despacho', 'credito_empleados')
+  async evidenciaEntregaClub(@Param('id') id: string, @Req() req: Request & { user?: JwtPayload }) {
+    await this.verificarAccesoClub(id, req.user);
+    return this.pedidos.obtenerEvidenciaEntregaClub(id, req.user);
+  }
+
+  @Post(':id/evidencia-entrega-club')
+  @Permisos('despacho', 'credito_empleados')
+  async evidenciaEntregaClubSubir(@Param('id') id: string, @Body() body: { imagen?: string; mime?: string; subidoPor?: string }, @Req() req: Request & { user?: JwtPayload }) {
+    await this.verificarAccesoClub(id, req.user);
+    return this.pedidos.guardarEvidenciaEntregaClub(id, String(body?.imagen ?? ''), body?.mime ?? null, body?.subidoPor ?? null, req.user);
+  }
+
+  private async verificarAccesoClub(id: string, user?: JwtPayload) {
+    if (tieneAccesoTotal(user?.rol)) return;
+    const permisos = user?.sub ? (await this.users.obtenerCacheado(user.sub)).permisos ?? [] : [];
+    if (!id.startsWith('club:') || (!permisos.includes('credito_empleados') && !permisos.includes('despacho'))) throw new ForbiddenException('No tienes acceso a esta compra del club.');
   }
 
   /** Borra todos los pedidos. Solo administrador/desarrollador. */
