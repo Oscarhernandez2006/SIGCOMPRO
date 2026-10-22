@@ -775,7 +775,15 @@ export class TiendaEmpleadosService implements OnModuleInit {
 
   async pendientes() {
     const { rows } = await this.pool.query<{ total: string }>(
-      `SELECT COUNT(*)::text AS total FROM credito_empleados_pedidos WHERE estado IN ('pendiente', 'facturado')`,
+      `SELECT COUNT(*)::text AS total
+         FROM credito_empleados_pedidos c
+         LEFT JOIN pedidos p ON p.id = 'club:' || c.id AND p.data->>'canal' = 'club'
+        WHERE c.estado IN ('pendiente', 'facturado')
+          AND (p.id IS NULL OR (
+            NOT p.anulado
+            AND lower(COALESCE(p.data->>'estado', '')) NOT IN
+              ('despachado', 'en tránsito', 'en transito', 'entregado', 'rechazado', 'devolución', 'devolucion', 'anulado', 'cancelado')
+          ))`,
     );
     return { total: Number(rows[0]?.total) || 0 };
   }
