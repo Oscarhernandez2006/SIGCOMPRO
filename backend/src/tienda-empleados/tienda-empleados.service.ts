@@ -777,7 +777,7 @@ export class TiendaEmpleadosService implements OnModuleInit {
     const { rows } = await this.pool.query<{ total: string }>(
       `SELECT COUNT(*)::text AS total
          FROM credito_empleados_pedidos c
-         LEFT JOIN pedidos p ON p.id = 'club:' || c.id AND p.data->>'canal' = 'club'
+         LEFT JOIN pedidos p ON p.id = 'club:' || c.id
         WHERE c.estado IN ('pendiente', 'facturado')
           AND (p.id IS NULL OR (
             NOT p.anulado

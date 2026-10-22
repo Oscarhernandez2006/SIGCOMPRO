@@ -98,7 +98,7 @@ test('conteo de pendientes no tiene limite de listado y solo incluye abiertos', 
 test('el contador ignora compras facturadas cuyo despacho ya las marco entregadas', async () => {
   const pool = poolWith(() => ({ rows: [{ total: '0' }] }));
   assert.deepEqual(await new TiendaEmpleadosService(pool).pendientes(), { total: 0 });
-  assert.match(pool.calls[0].statement, /LEFT JOIN pedidos p ON p\.id = 'club:' \|\| c\.id/);
+  assert.match(pool.calls[0].statement, /LEFT JOIN pedidos p ON p\.id = 'club:' \|\| c\.id\s+WHERE c\.estado/);
   assert.match(pool.calls[0].statement, /lower\(COALESCE\(p\.data->>'estado', ''\)\) NOT IN/);
   assert.match(pool.calls[0].statement, /'entregado'/);
   assert.match(pool.calls[0].statement, /NOT p\.anulado/);
