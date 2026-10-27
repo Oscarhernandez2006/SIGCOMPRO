@@ -3,11 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { PedidosService } from '../pedidos/pedidos.service';
 
 /**
- * Mantiene SIGCOMPRO sincronizado con Drivin: si un domiciliario es
- * desasignado o un pedido es cancelado directamente en Drivin, este job lo
- * refleja acá automáticamente sin depender de que alguien tenga Despacho
- * abierto en el navegador (esa sincronización solo corre mientras la pestaña
- * está activa).
+ * Mantiene SIGCOMPRO sincronizado con Drivin: refleja cambios de domiciliario
+ * y cancelaciones sin depender de que alguien tenga Despacho abierto.
  */
 @Injectable()
 export class DrivinSyncJob {
@@ -54,7 +51,7 @@ export class DrivinSyncJob {
     }
   }
 
-  /** Cada minuto en horario de operación (6am-10pm, todos los días). */
+  /** Cada minuto en horario de operación; reconcilia cambios fallidos en la corrida siguiente. */
   @Cron('0 * 6-22 * * *', {
     name: 'sincronizar-desasignaciones-drivin',
     timeZone: 'America/Bogota',
@@ -63,7 +60,7 @@ export class DrivinSyncJob {
     try {
       const count = await this.pedidos.sincronizarDesasignacionesDrivin();
       if (count > 0) {
-        this.logger.log(`✓ Sincronización desasignaciones: ${count} pedidos actualizados`);
+        this.logger.log(`✓ Sincronización Drivin: ${count} pedidos actualizados`);
       }
     } catch (error) {
       this.logger.error(
@@ -97,9 +94,9 @@ export class DrivinSyncJob {
   })
   async sincronizarCompleto() {
     try {
-      const desasignados = await this.pedidos.sincronizarDesasignacionesDrivin();
+      const asignaciones = await this.pedidos.sincronizarDesasignacionesDrivin();
       const cancelados = await this.pedidos.sincronizarCancelacionesDrivin();
-      this.logger.log(`✓ Sincronización completa: ${desasignados} desasignados, ${cancelados} cancelados`);
+      this.logger.log(`✓ Sincronización completa: ${asignaciones} asignaciones actualizadas, ${cancelados} cancelados`);
     } catch (error) {
       this.logger.error(
         `✗ Error en sincronización completa: ${error instanceof Error ? error.message : String(error)}`,

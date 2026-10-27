@@ -2591,7 +2591,7 @@ export class PedidosService implements OnModuleInit {
     const { mapa, completo } = await this.lecturaAsignaciones;
     // Un mapa incompleto haría ver como "desasignadas" las órdenes del escenario
     // que falló; se devuelve vacío para que nadie desasigne con datos parciales.
-    if (!completo) return {};
+    if (!completo) return this.cacheAsignaciones?.datos ?? {};
     this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
     return mapa;
   }
@@ -2599,12 +2599,15 @@ export class PedidosService implements OnModuleInit {
   private async leerAsignacionesDrivin(fresco: boolean): Promise<{
     mapa: Record<string, { code: string; nombre: string } | null>;
     completo: boolean;
+    hayEscenarios: boolean;
   }> {
     const out: Record<string, { code: string; nombre: string } | null> = {};
     let completo = true;
+    let hayEscenarios = false;
     try {
       const hoy = this.diaBogota();
       const scenarios = await this.drivinScenarios(hoy, fresco);
+      hayEscenarios = scenarios.length > 0;
       const vehiculos = await this.drivinVehicles();
       const nombrePorCode = new Map<string, string>();
       for (const v of vehiculos) {
@@ -2615,21 +2618,38 @@ export class PedidosService implements OnModuleInit {
         nombrePorCode.set(v.code, nombre || v.code);
       }
       const tokens = scenarios.filter((s) => s.token).map((s) => s.token as string);
-      // Consulta los escenarios EN PARALELO (antes era secuencial y tardaba).
-      const grupos = await Promise.all(
-        tokens.map(async (t) => {
+      // Limita la concurrencia para no saturar Drivin cuando hay muchos
+      // esquemas. Si falla cualquier escenario, el mapa no se usa para aplicar
+      // cambios: la siguiente corrida vuelve a intentarlo con datos completos.
+      const grupos: Array<
+        Array<{
+          orders?: Array<{ code?: string; vehicle_code?: string | null }>;
+        }>
+      > = Array.from({ length: tokens.length }, () => []);
+      let siguienteToken = 0;
+      const leerEscenario = async () => {
+        while (siguienteToken < tokens.length) {
+          const indice = siguienteToken++;
+          const token = tokens[indice];
           try {
             const r = await this.drivinGet<{
               response?: Array<{
                 orders?: Array<{ code?: string; vehicle_code?: string | null }>;
               }>;
-            }>(`/orders?token=${encodeURIComponent(t)}`);
-            return Array.isArray(r?.response) ? r.response : [];
-          } catch {
+            }>(`/orders?token=${encodeURIComponent(token)}`);
+            grupos[indice] = Array.isArray(r?.response) ? r.response : [];
+          } catch (e) {
             completo = false;
-            return [];
+            this.logger.warn(
+              `No se pudieron leer órdenes del escenario Drivin ${indice + 1}/${tokens.length}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            );
           }
-        }),
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(4, tokens.length) }, () => leerEscenario()),
       );
       for (const arr of grupos) {
         for (const g of arr) {
@@ -2655,16 +2675,15 @@ export class PedidosService implements OnModuleInit {
         }`,
       );
     }
-    return { mapa: out, completo };
+    return { mapa: out, completo, hayEscenarios };
   }
 
   /**
-   * Sincroniza asignaciones/desasignaciones de Drivin en el servidor (no
-   * depende de que alguien tenga Despacho abierto), con las MISMAS reglas que
-   * esa vista:
-   *  - Pedido base: si Drivin quitó el domiciliario (orden sin vehículo o fuera
-   *    de la ruta), se libera y un Despachado vuelve a Facturado. Solo pedidos
-   *    de HOY en Facturado/Despachado.
+   * Sincroniza cambios de domiciliario de Drivin en el servidor (no depende de
+   * que alguien tenga Despacho abierto), con las mismas reglas que esa vista:
+   *  - Pedido base: refleja el domiciliario asignado o lo libera si Drivin lo
+   *    quitó; si está Despachado y queda sin vehículo vuelve a Facturado.
+   *    Solo pedidos de HOY en Facturado/Despachado.
    *  - Réplicas ("comanda-N"): se baja el domiciliario que Drivin asignó o se
    *    libera si lo quitó, AUNQUE el pedido ya esté En tránsito/Entregado.
    * Solo si el mapa de Drivin se leyó COMPLETO. Cada cambio de réplica es
@@ -2673,10 +2692,19 @@ export class PedidosService implements OnModuleInit {
   async sincronizarDesasignacionesDrivin(): Promise<number> {
     if (this.sincronizandoDesasignaciones) return 0;
     this.sincronizandoDesasignaciones = true;
-    let desasignados = 0;
+    let sincronizados = 0;
+    let lockClient: PoolClient | null = null;
+    let bloqueoTomado = false;
     try {
-      const { mapa, completo } = await this.leerAsignacionesDrivin(true);
-      if (!completo || Object.keys(mapa).length === 0) return 0;
+      lockClient = await this.pool.connect();
+      const lock = await lockClient.query<{ ok: boolean }>(
+        `SELECT pg_try_advisory_lock(hashtext('drivin_sincronizar_asignaciones')) AS ok`,
+      );
+      if (!lock.rows[0]?.ok) return 0;
+      bloqueoTomado = true;
+
+      const { mapa, completo, hayEscenarios } = await this.leerAsignacionesDrivin(true);
+      if (!completo || (Object.keys(mapa).length === 0 && !hayEscenarios)) return 0;
       // Comparte el mapa recién leído con las pantallas de Despacho.
       this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
 
@@ -2706,12 +2734,6 @@ export class PedidosService implements OnModuleInit {
          WHERE (
              de_hoy
              AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado')
-             AND (
-               COALESCE(meta->>'domiciliario', '') <> ''
-               OR COALESCE(meta->>'domiciliarioCodigo', '') <> ''
-               OR LOWER(COALESCE(estado, '')) = 'despachado'
-               OR jsonb_typeof(meta->'replicas') = 'array'
-             )
            )
            OR (
              jsonb_typeof(meta->'replicas') = 'array'
@@ -2727,9 +2749,10 @@ export class PedidosService implements OnModuleInit {
       for (const ped of res.rows) {
         try {
           const data = ped.data ?? {};
-          const meta = (ped.meta ?? {}) as {
+          const meta = (ped.meta ?? {}) as DespachoMeta & {
             domiciliario?: string | null;
             domiciliarioCodigo?: string | null;
+            comprobante?: { tiene?: boolean; confirmado?: boolean } | null;
             replicas?: ReplicaMeta[];
           };
           const comanda = String(data.comanda ?? '').trim();
@@ -2750,11 +2773,49 @@ export class PedidosService implements OnModuleInit {
 
           // --- Pedido base (solo de hoy, Facturado/Despachado) ---
           let desasignar = false;
+          let cambioBase = false;
           if (ped.de_hoy && (est === 'facturado' || est === 'despachado')) {
             const enMapa = comanda in mapa;
             const asg = enMapa ? mapa[comanda] : undefined;
             const teniaDomi = !!(meta.domiciliario || meta.domiciliarioCodigo);
-            desasignar = !asg && (enMapa ? teniaDomi || est === 'despachado' : teniaDomi);
+            if (asg) {
+              const cambio = meta.domiciliarioCodigo !== asg.code || meta.domiciliario !== asg.nombre;
+              if (cambio) {
+                // Condicionado a que la asignación local siga siendo la que
+                // leímos; no pisa un cambio manual/concurrente más reciente.
+                const r = await this.pool.query(
+                  `UPDATE pedidos
+                     SET meta = COALESCE(meta, '{}'::jsonb)
+                                || jsonb_build_object('domiciliario', $2, 'domiciliarioCodigo', $3),
+                         actualizado_en = now()
+                   WHERE id = $1
+                     AND COALESCE(meta->>'domiciliario', '') = $4
+                     AND COALESCE(meta->>'domiciliarioCodigo', '') = $5`,
+                  [
+                    ped.id,
+                    asg.nombre,
+                    asg.code,
+                    String(meta.domiciliario ?? ''),
+                    String(meta.domiciliarioCodigo ?? ''),
+                  ],
+                );
+                cambioBase = Boolean(r.rowCount);
+              }
+              // También reintenta completar el estado si el guardado previo
+              // falló después de sincronizar la metadata.
+              const comprobantePendiente = !!meta.comprobante?.tiene && !meta.comprobante.confirmado;
+              if (est === 'facturado' && !comprobantePendiente) {
+                const guardado = await this.guardar(
+                  { ...data, id: ped.id, estado: 'Despachado' },
+                  undefined,
+                );
+                cambioBase ||= String(guardado.estado ?? '').trim().toLowerCase() === 'despachado';
+              }
+            } else {
+              desasignar = enMapa
+                ? (teniaDomi || est === 'despachado')
+                : teniaDomi;
+            }
             if (desasignar && teniaDomi) {
               // Condicionado a que siga el MISMO domiciliario que se vio.
               const r = await this.pool.query(
@@ -2814,10 +2875,11 @@ export class PedidosService implements OnModuleInit {
             }
           }
 
-          if (desasignar || cambiosReplicas > 0) {
-            desasignados++;
+          if (desasignar || cambioBase || cambiosReplicas > 0) {
+            sincronizados++;
             this.logger.log(
               `Drivin sincronizado ${comanda} (${ped.id}):` +
+                (cambioBase ? ' domiciliario actualizado' : '') +
                 (desasignar ? ' domiciliario liberado' : '') +
                 (desasignar && est === 'despachado' ? ' y vuelve a Facturado' : '') +
                 (cambiosReplicas ? ` · ${cambiosReplicas} réplica(s) actualizada(s)` : ''),
@@ -2838,9 +2900,23 @@ export class PedidosService implements OnModuleInit {
         }`,
       );
     } finally {
+      if (lockClient) {
+        if (bloqueoTomado) {
+          await lockClient
+            .query(`SELECT pg_advisory_unlock(hashtext('drivin_sincronizar_asignaciones'))`)
+            .catch((e) =>
+              this.logger.warn(
+                `No se pudo liberar el bloqueo de sincronización Drivin: ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
+              ),
+            );
+        }
+        lockClient.release();
+      }
       this.sincronizandoDesasignaciones = false;
     }
-    return desasignados;
+    return sincronizados;
   }
 
   /* ------------------------------------------------------------------ */
