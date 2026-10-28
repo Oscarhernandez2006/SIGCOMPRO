@@ -10,6 +10,7 @@ const ts = require('typescript');
 require('ts-node').register({ project: path.join(__dirname, '../tsconfig.json'), transpileOnly: true });
 const { RunErrandsService } = require('../src/run-errands/run-errands.service');
 const { TiendaEmpleadosService } = require('../src/tienda-empleados/tienda-empleados.service');
+const { paginarItems } = require('../../frontend/src/lib/menu-plantillas');
 
 function servicio(query) {
   return new RunErrandsService({ query }, { get: () => undefined });
@@ -171,4 +172,18 @@ test('Dashboard: separa cierres Drivin de estados locales y filtra por punto', a
   assert.equal(data.porDia.length, 2);
   assert.equal(data.porDomiciliario.reduce((suma, dom) => suma + dom.value, 0), 3);
   assert.deepEqual(consultas[0].params, ['2026-10-26', '2026-10-27', 'punto-93']);
+});
+
+test('menu público: pescados y vísceras usan fondos distintos con categorías compuestas', () => {
+  const productos = [
+    { referencia: 'V1', producto: 'Hígado', categoria: 'VISCERAS' },
+    { referencia: 'P1', producto: 'Mojarra', categoria: 'PESCADO' },
+    { referencia: 'V2', producto: 'Lengua', categoria: 'Vísceras de Res' },
+    { referencia: 'P2', producto: 'Camarón', categoria: 'Mariscos' },
+  ].map((producto) => ({ ...producto, um: 'KG', precio: 1 }));
+  const paginas = paginarItems(productos);
+  assert.deepEqual(paginas.map((pagina) => pagina.plantilla.clave), ['visceras', 'pescados']);
+  assert.deepEqual(paginas[0].items.map((item) => item.referencia), ['V1', 'V2']);
+  assert.deepEqual(paginas[1].items.map((item) => item.referencia), ['P1', 'P2']);
+  assert.notEqual(paginas[0].plantilla.imagen, paginas[1].plantilla.imagen);
 });

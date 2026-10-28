@@ -58,6 +58,12 @@ const VISCERAS: Plantilla = {
   area: { top: 13.5, left: 28, right: 6, bottom: 12.5 },
   filasPorPagina: 20,
 };
+const PESCADO: Plantilla = {
+  clave: "pescados",
+  imagen: "/menu/pescados.png",
+  area: { top: 15.5, left: 28, right: 6, bottom: 12.5 },
+  filasPorPagina: 20,
+};
 const EMBUTIDOS: Plantilla = {
   clave: "embutidos",
   imagen: "/menu/embutidos.png",
@@ -83,6 +89,7 @@ export const PLANTILLAS: Plantilla[] = [
   CERDO,
   POLLO,
   VISCERAS,
+  PESCADO,
   EMBUTIDOS,
   ASADERO,
   EXTRAS,
@@ -98,14 +105,14 @@ export function slugCategoria(s: string | null | undefined): string {
 
 /** Mapea una categoría del ERP a su plantilla de fondo. */
 export function plantillaDeCategoria(categoria: string): Plantilla {
-  const s = slugCategoria(categoria);
+  const s = slugCategoria(categoria).trim().replace(/\s+/g, "-");
+  if (/(^|-)pescados?(-|$)|(^|-)mariscos?(-|$)|(^|-)seafood(-|$)/.test(s)) return PESCADO;
+  if (/(^|-)visceras?(-|$)|(^|-)menudencias?(-|$)/.test(s)) return VISCERAS;
   if (s.includes("cerdo") || s.includes("porcin")) return CERDO;
   if (s.includes("pollo") || s.includes("ave")) return POLLO;
   if (s.includes("embutido")) return EMBUTIDOS;
   if (s.includes("asader")) return ASADERO;
   if (s.includes("extra")) return EXTRAS;
-  if (s.includes("viscera") || s.includes("pescado") || s.includes("mar"))
-    return VISCERAS;
   if (s.includes("res") || s.includes("bovin") || s.includes("vacun"))
     return RES;
   return EXTRAS;
