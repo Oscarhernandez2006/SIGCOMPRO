@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { getToken, getUsuario, limpiarSesion, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeAccederApartado } from "@/lib/permisos";
+import { History, Truck } from "lucide-react";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 
 const IcoDashboard = (
@@ -46,7 +47,9 @@ const IcoLogout = (
 
 const navItems = [
   { label: "Dashboard", href: "/run-errands/dashboard", icon: IcoDashboard },
-  { label: "Mandados", href: "/run-errands/pedidos", icon: IcoPedidos },
+  { label: "Run-Errands", href: "/run-errands/pedidos", icon: IcoPedidos },
+  { label: "Despacho", href: "/run-errands/despacho", icon: <Truck className="h-4 w-4 shrink-0" /> },
+  { label: "Históricos", href: "/run-errands/historicos", icon: <History className="h-4 w-4 shrink-0" /> },
   { label: "Domiciliarios", href: "/run-errands/domiciliarios", icon: IcoUsers },
   { label: "Clientes", href: "/run-errands/clientes", icon: IcoCliente },
   { label: "Puntos de venta", href: "/run-errands/pdv", icon: IcoStore },

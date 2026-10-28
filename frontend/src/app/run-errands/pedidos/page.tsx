@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ApiError } from "@/lib/api";
@@ -30,6 +31,9 @@ interface FilaForm {
 const FILA_VACIA: FilaForm = { clienteId: "", puntoVentaId: "", domiciliarioId: "", kilos: "1", observaciones: "", schemaName: "" };
 
 export default function PedidosPage() {
+  const pathname = usePathname();
+  const esHistorico = pathname.endsWith("/historicos");
+  const esDespacho = pathname.endsWith("/despacho");
   const usuario = getUsuario();
   const puedeEditar = puedeAccion(usuario, "run_errands.editar");
   const [items, setItems] = useState<Pedido[]>([]);
@@ -60,6 +64,41 @@ export default function PedidosPage() {
 
   useEffect(() => { cargarListas(); }, []);
   useEffect(() => { cargarPedidos(); }, [filtroEstado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!esDespacho && !esHistorico) return;
+    let activo = true;
+    let enVuelo = false;
+    const refrescar = async () => {
+      if (enVuelo || document.visibilityState === "hidden") return;
+      enVuelo = true;
+      try {
+        if (puedeEditar) {
+          const hoy = new Date().toISOString().slice(0, 10);
+          const inicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+          await syncDrivin(inicio, hoy);
+        }
+        const pedidos = await getPedidos(filtroEstado ? { estado: filtroEstado } : {});
+        if (activo) { setItems(pedidos); setError(null); }
+      } catch (e) {
+        if (activo) setError(e instanceof Error ? e.message : "No se pudo consultar Drivin");
+      } finally {
+        enVuelo = false;
+      }
+    };
+    void refrescar();
+    const intervalo = setInterval(() => void refrescar(), 30000);
+    return () => { activo = false; clearInterval(intervalo); };
+  }, [esDespacho, esHistorico, puedeEditar, filtroEstado]);
+
+  const [buscar, setBuscar] = useState("");
+  const [puntoFiltro, setPuntoFiltro] = useState("");
+  const visibles = items.filter((pedido) => {
+    if (esHistorico && !["approved", "rejected"].includes(pedido.drivinEstadoEntrega ?? "")) return false;
+    if (puntoFiltro && pedido.puntoVentaId !== puntoFiltro) return false;
+    const texto = [pedido.numeroPedido, pedido.cliente?.nombre, pedido.cliente?.direccion, pedido.domiciliario?.nombre].join(" ").toLowerCase();
+    return texto.includes(buscar.trim().toLowerCase());
+  });
 
   function abrirCrear() {
     setEditando(null);
@@ -105,8 +144,7 @@ export default function PedidosPage() {
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-brand-wine">Mandados</h1>
-          <p className="mt-1 text-sm text-brand-black/60">Mandados de Run Errands, enviados a Drivin.</p>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">{esHistorico ? "Históricos" : esDespacho ? "Despacho" : "Run-Errands"}</h1>
         </div>
         <div className="flex gap-2">
           {puedeEditar && (
@@ -114,7 +152,7 @@ export default function PedidosPage() {
               {sincronizando ? "Sincronizando…" : "Sincronizar con Drivin"}
             </button>
           )}
-          {puedeEditar && (
+          {puedeEditar && !esHistorico && !esDespacho && (
             <button onClick={abrirCrear} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
               Nuevo mandado
             </button>
@@ -124,20 +162,25 @@ export default function PedidosPage() {
 
       {error && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
+        <input aria-label="Buscar Run-Errands" placeholder="Número, cliente, dirección o domiciliario..." value={buscar} onChange={(e) => setBuscar(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-brand-brown/20 px-3 py-2 text-sm" />
+        <select aria-label="Filtrar por punto" value={puntoFiltro} onChange={(e) => setPuntoFiltro(e.target.value)} className="rounded-lg border border-brand-brown/20 px-3 py-2 text-sm">
+          <option value="">Todos los puntos</option>
+          {pdvs.map((punto) => <option key={punto.id} value={punto.id}>{punto.nombre}</option>)}
+        </select>
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
           <option value="">Todos los estados</option>
           {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-brown/10 bg-white">
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
-        ) : items.length === 0 ? (
+        ) : visibles.length === 0 ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Sin mandados.</div>
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[1000px] text-left text-sm">
             <thead className="bg-brand-cream-soft text-xs font-semibold uppercase tracking-wide text-brand-black/50">
               <tr>
                 <th className="px-4 py-2.5">N° Mandado</th>
@@ -147,11 +190,12 @@ export default function PedidosPage() {
                 <th className="px-4 py-2.5 text-right">Kg</th>
                 <th className="px-4 py-2.5">Estado</th>
                 <th className="px-4 py-2.5">Drivin</th>
-                {puedeEditar && <th className="px-4 py-2.5" />}
+                <th className="px-4 py-2.5">Cierre en Drivin</th>
+                {puedeEditar && !esHistorico && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-brown/10">
-              {items.map((p) => (
+              {visibles.map((p) => (
                 <tr key={p.id}>
                   <td className="px-4 py-2 font-mono text-xs text-brand-black/70">{p.numeroPedido}</td>
                   <td className="px-4 py-2 font-medium text-brand-black">{p.cliente?.nombre ?? "—"}</td>
@@ -159,7 +203,7 @@ export default function PedidosPage() {
                   <td className="px-4 py-2 text-brand-black/70">{p.domiciliario?.nombre ?? "—"}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{p.kilos}</td>
                   <td className="px-4 py-2">
-                    {puedeEditar ? (
+                    {puedeEditar && !esHistorico ? (
                       <select value={p.estado} onChange={(e) => cambiarEstado(p, e.target.value)} className={`rounded-full border-0 px-2 py-0.5 text-xs font-semibold ${ESTADO_COLOR[p.estado] ?? ""}`}>
                         {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
                       </select>
@@ -177,7 +221,14 @@ export default function PedidosPage() {
                       {p.drivinEstadoEnvio}
                     </span>
                   </td>
-                  {puedeEditar && (
+                  <td className="px-4 py-2">
+                    <span className={`inline-block rounded-md px-2 py-1 text-xs font-semibold ${["approved", "rejected"].includes(p.drivinEstadoEntrega ?? "") ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                      {p.drivinEstadoEntrega === "approved" ? "Cerrado: entregado" : p.drivinEstadoEntrega === "rejected" ? "Cerrado: rechazado" : p.drivinEstadoEntrega === "in-transit" ? "Pendiente: en ruta" : p.drivinEstadoEntrega === "partial" ? "Pendiente: entrega parcial" : p.drivinEstadoEntrega === "pending" ? "Pendiente" : "Sin confirmar"}
+                    </span>
+                    {p.drivinMotivoEntrega && <p className="mt-1 text-xs text-brand-black">{p.drivinMotivoEntrega}</p>}
+                    {p.drivinSyncAt && <p className="mt-1 text-xs text-brand-black/60">{new Date(p.drivinSyncAt).toLocaleString("es-CO")}</p>}
+                  </td>
+                  {puedeEditar && !esHistorico && (
                     <td className="px-4 py-2">
                       <div className="flex items-center justify-end gap-3 whitespace-nowrap">
                         {p.drivinEstadoEnvio === "ERROR" && (
@@ -231,7 +282,7 @@ function ClienteCombo({
     const q = query.trim().toLowerCase();
     const lista = !q
       ? clientes
-      : clientes.filter((c) => c.nombre.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q));
+      : clientes.filter((c) => [c.nombre, c.codigo, c.direccion, c.barrio, c.ciudad].some((valor) => valor?.toLowerCase().includes(q)));
     return lista.slice(0, 50);
   }, [clientes, query]);
 
@@ -242,7 +293,7 @@ function ClienteCombo({
         onChange={(e) => { setQuery(e.target.value); setAbierto(true); }}
         onFocus={() => { setQuery(""); setAbierto(true); }}
         onBlur={() => { cerrarTimeout.current = setTimeout(() => setAbierto(false), 150); }}
-        placeholder="Buscar cliente por nombre…"
+        placeholder="Buscar cliente por nombre o dirección…"
         className="w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber"
       />
       {abierto && (
@@ -310,7 +361,7 @@ function ModalPedido({
   const [error, setError] = useState<string | null>(null);
 
   const domiciliariosFiltrados = useMemo(
-    () => (form.puntoVentaId ? domiciliarios.filter((d) => d.puntoVentaId === form.puntoVentaId) : domiciliarios),
+    () => (form.puntoVentaId ? domiciliarios.filter((d) => d.todosLosPuntos || d.puntoVentaId === form.puntoVentaId) : domiciliarios),
     [domiciliarios, form.puntoVentaId],
   );
 
