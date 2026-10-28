@@ -39,7 +39,17 @@ export async function apiFetch<T>(
 
   // 204 No Content u otras respuestas sin cuerpo
   const texto = await res.text();
-  const data = texto ? JSON.parse(texto) : null;
+  let data = null;
+  if (texto.trim()) {
+    try {
+      data = JSON.parse(texto);
+    } catch {
+      throw new ApiError(
+        res.ok ? 502 : res.status,
+        `El servidor no pudo responder correctamente (HTTP ${res.status}). Intenta nuevamente en unos momentos.`,
+      );
+    }
+  }
 
   if (!res.ok) {
     const mensaje =

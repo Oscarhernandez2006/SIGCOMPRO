@@ -257,7 +257,7 @@ export class RunErrandsController {
 
   // ── Dashboard ────────────────────────────────────────────────────────
   @Get('dashboard')
-  dashboard(@Query('desde') desde?: string, @Query('hasta') hasta?: string) {
-    return this.svc.dashboard(desde, hasta);
+  dashboard(@Query('desde') desde?: string, @Query('hasta') hasta?: string, @Query('pdv') pdv?: string) {
+    return this.svc.dashboard(desde, hasta, pdv);
   }
 }

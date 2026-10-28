@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ApiError } from "@/lib/api";
+import { Globe2, Pencil, Plus, Power, Search, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { ActiveBadge, EmptyState, ErrorBanner, fieldClass, IconAction, Metric, Modal, PageHeader, primaryClass, secondaryClass, tableClass } from "@/components/RunErrandsUI";
 import {
   getDomiciliarios,
   crearDomiciliario,
@@ -27,8 +29,13 @@ export default function DomiciliariosPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [buscar, setBuscar] = useState("");
+  const [mostrarForm, setMostrarForm] = useState(false);
+  const [puntoFiltro, setPuntoFiltro] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("");
   const normalizar = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const filtrados = items.filter((item) => normalizar(item.nombre).includes(normalizar(buscar.trim())));
+  const filtrados = items.filter((item) => normalizar(item.nombre).includes(normalizar(buscar.trim())) &&
+    (!puntoFiltro || (puntoFiltro === "GLOBAL" ? item.todosLosPuntos : item.todosLosPuntos || item.puntoVentaId === puntoFiltro)) &&
+    (!estadoFiltro || item.activo === (estadoFiltro === "activo")));
 
   function cargar() {
     setLoading(true);
@@ -40,6 +47,8 @@ export default function DomiciliariosPage() {
   useEffect(cargar, []);
 
   function editar(d: Domiciliario) {
+    setError(null);
+    setMostrarForm(true);
     setEditandoId(d.id);
     setForm({
       nombre: d.nombre, telefono: d.telefono ?? "", cedula: d.cedula ?? "",
@@ -49,6 +58,7 @@ export default function DomiciliariosPage() {
   }
 
   function cancelar() {
+    setMostrarForm(false);
     setEditandoId(null);
     setForm(vacio);
   }
@@ -77,59 +87,41 @@ export default function DomiciliariosPage() {
   }
 
   async function toggleActivo(d: Domiciliario) {
-    await actualizarDomiciliario(d.id, { activo: !d.activo });
-    cargar();
+    try { await actualizarDomiciliario(d.id, { activo: !d.activo }); cargar(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo actualizar el domiciliario."); }
   }
 
   async function eliminar(d: Domiciliario) {
     if (!confirm(`¿Desactivar a "${d.nombre}"?`)) return;
-    await eliminarDomiciliario(d.id);
-    cargar();
+    try { await eliminarDomiciliario(d.id); cargar(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo desactivar el domiciliario."); }
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <h1 className="font-serif text-2xl font-bold text-brand-wine">Domiciliarios</h1>
-      <p className="mt-1 text-sm text-brand-black/60">Mensajeros de Run Errands, asignables por punto de venta.</p>
-
-      {error && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
-
-      {puedeEditar && (
-        <div className="mt-6 grid grid-cols-1 gap-3 rounded-2xl border border-brand-brown/10 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
-          <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Teléfono" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Cédula" value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <label className="flex items-center gap-2 text-sm text-brand-black sm:col-span-2 lg:col-span-5">
-            <input type="checkbox" checked={form.todosLosPuntos} onChange={(e) => setForm({ ...form, todosLosPuntos: e.target.checked })} className="h-4 w-4 accent-brand-wine" />
-            Disponible en todos los puntos
-          </label>
-          <select aria-label="Punto del domiciliario" disabled={form.todosLosPuntos} value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber disabled:opacity-50">
-            <option value="">Sin PDV</option>
-            {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <button onClick={guardar} disabled={guardando || !form.nombre.trim()} className="flex-1 rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              {editandoId ? "Guardar" : "Agregar"}
-            </button>
-            {editandoId && <button onClick={cancelar} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm">Cancelar</button>}
-          </div>
-        </div>
-      )}
-
-      <input
-        aria-label="Buscar domiciliario por nombre"
-        placeholder="Buscar domiciliario por nombre..."
-        value={buscar}
-        onChange={(e) => setBuscar(e.target.value)}
-        className="mt-6 w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
-      />
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-brown/10 bg-white">
+    <div className="mx-auto max-w-[1400px] pb-6">
+      <PageHeader title="Domiciliarios" icon={<Users className="h-6 w-6" />}>
+        {puedeEditar && <button className={primaryClass} onClick={() => { cancelar(); setError(null); setMostrarForm(true); }}><Plus className="h-4 w-4" />Nuevo domiciliario</button>}
+      </PageHeader>
+      <ErrorBanner message={mostrarForm ? null : error} />
+      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Metric title="Registrados" value={items.length} icon={<Users className="h-5 w-5" />} />
+        <Metric title="Activos" value={items.filter((d) => d.activo).length} icon={<UserCheck className="h-5 w-5" />} tone="green" />
+        <Metric title="Todos los puntos" value={items.filter((d) => d.todosLosPuntos && d.activo).length} icon={<Globe2 className="h-5 w-5" />} tone="blue" />
+        <Metric title="Inactivos" value={items.filter((d) => !d.activo).length} icon={<UserX className="h-5 w-5" />} tone="amber" />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-brand-black/40" /><input aria-label="Buscar domiciliario por nombre" placeholder="Buscar por nombre..." value={buscar} onChange={(e) => setBuscar(e.target.value)} className={`${fieldClass} w-full pl-9`} /></div>
+        <select aria-label="Filtrar domiciliarios por punto" value={puntoFiltro} onChange={(e) => setPuntoFiltro(e.target.value)} className={fieldClass}><option value="">Todos los puntos</option><option value="GLOBAL">Disponibilidad global</option>{pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+        <select aria-label="Estado del domiciliario" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)} className={fieldClass}><option value="">Todos los estados</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select>
+        <span className="ml-auto text-xs text-brand-black/55">{filtrados.length} resultados</span>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-brand-brown/10 bg-white">
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
         ) : filtrados.length === 0 ? (
-          <div className="p-6 text-center text-sm text-brand-black/50">Sin domiciliarios.</div>
+          <EmptyState text="No hay domiciliarios que coincidan con los filtros." />
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className={`${tableClass} min-w-[700px]`}>
             <thead className="bg-brand-cream-soft text-xs font-semibold uppercase tracking-wide text-brand-black/50">
               <tr>
                 <th className="px-4 py-2.5">Nombre</th>
@@ -142,19 +134,15 @@ export default function DomiciliariosPage() {
             <tbody className="divide-y divide-brand-brown/10">
               {filtrados.map((d) => (
                 <tr key={d.id}>
-                  <td className="px-4 py-2 font-medium text-brand-black">{d.nombre}</td>
+                  <td className="px-4 py-2 font-medium text-brand-black"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-wine/10 text-xs font-bold text-brand-wine">{d.nombre.split(" ").filter(Boolean).slice(0, 2).map((parte) => parte[0]).join("")}</span><div>{d.nombre}<p className="mt-0.5 text-xs font-normal text-brand-black/50">{d.cedula || "Sin documento"}</p></div></div></td>
                   <td className="px-4 py-2 text-brand-black/70">{d.telefono ?? "—"}</td>
                   <td className="px-4 py-2 text-brand-black/70">{d.todosLosPuntos ? "Todos los puntos" : d.puntoVenta?.nombre ?? "Sin PDV"}</td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${d.activo ? "bg-emerald-50 text-emerald-700" : "bg-brand-black/5 text-brand-black/50"}`}>
-                      {d.activo ? "Activo" : "Inactivo"}
-                    </span>
+                    <ActiveBadge active={d.activo} />
                   </td>
                   {puedeEditar && (
                     <td className="px-4 py-2 text-right">
-                      <button onClick={() => editar(d)} className="mr-3 text-xs font-medium text-brand-amber hover:underline">Editar</button>
-                      <button onClick={() => toggleActivo(d)} className="mr-3 text-xs font-medium text-brand-amber hover:underline">{d.activo ? "Desactivar" : "Activar"}</button>
-                      <button onClick={() => eliminar(d)} className="text-xs font-medium text-rose-600 hover:underline">Eliminar</button>
+                      <div className="flex justify-end gap-1"><IconAction label={`Editar ${d.nombre}`} onClick={() => editar(d)}><Pencil className="h-4 w-4" /></IconAction><IconAction label={`${d.activo ? "Desactivar" : "Activar"} ${d.nombre}`} onClick={() => void toggleActivo(d)}><Power className={`h-4 w-4 ${d.activo ? "text-emerald-600" : ""}`} /></IconAction><IconAction label={`Eliminar ${d.nombre}`} danger onClick={() => void eliminar(d)}><Trash2 className="h-4 w-4" /></IconAction></div>
                     </td>
                   )}
                 </tr>
@@ -163,6 +151,20 @@ export default function DomiciliariosPage() {
           </table>
         )}
       </div>
+      {mostrarForm && puedeEditar && <Modal title={editandoId ? "Editar domiciliario" : "Nuevo domiciliario"} busy={guardando} onClose={cancelar}>
+        <form onSubmit={(event) => { event.preventDefault(); void guardar(); }}>
+          <ErrorBanner message={error} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-brand-black sm:col-span-2">Nombre completo<input required autoFocus value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className={`${fieldClass} mt-1.5 w-full`} /></label>
+            <label className="text-xs font-semibold text-brand-black">Cédula<input value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} className={`${fieldClass} mt-1.5 w-full`} /></label>
+            <label className="text-xs font-semibold text-brand-black">Teléfono<input type="tel" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} className={`${fieldClass} mt-1.5 w-full`} /></label>
+            <label className="text-xs font-semibold text-brand-black sm:col-span-2">Correo electrónico<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={`${fieldClass} mt-1.5 w-full`} /></label>
+            <label className="flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-3 text-sm font-medium text-sky-800 sm:col-span-2"><input type="checkbox" checked={form.todosLosPuntos} onChange={(e) => setForm({ ...form, todosLosPuntos: e.target.checked })} className="h-4 w-4 accent-brand-wine" /><Globe2 className="h-4 w-4" />Disponible en todos los puntos</label>
+            <label className="text-xs font-semibold text-brand-black sm:col-span-2">Punto de venta<select disabled={form.todosLosPuntos} value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value })} className={`${fieldClass} mt-1.5 w-full`}><option value="">Sin asignar</option>{pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label>
+          </div>
+          <div className="mt-6 flex justify-end gap-2 border-t border-brand-brown/10 pt-4"><button type="button" className={secondaryClass} onClick={cancelar} disabled={guardando}>Cancelar</button><button type="submit" className={primaryClass} disabled={guardando || !form.nombre.trim()}>{guardando ? "Guardando..." : "Guardar domiciliario"}</button></div>
+        </form>
+      </Modal>}
     </div>
   );
 }

@@ -70,6 +70,20 @@ export interface DashboardRunErrands {
   totalKilos: number;
   totalClientes: number;
   totalPuntosVenta: number;
+  totalDomiciliarios: number;
+  entregadosDrivin: number;
+  rechazadosDrivin: number;
+  pendientesDrivin: number;
+  erroresEnvio: number;
+  sinDomiciliario: number;
+  pendientesAnteriores: number;
+  tasaEntrega: number;
+  promedioKilos: number;
+  clientesAtendidos: number;
+  ultimaSincronizacion: string | null;
+  porDrivin: { label: string; value: number }[];
+  porDomiciliario: { label: string; value: number; kilos: number; entregados: number; pendientes: number; rechazados: number }[];
+  incidencias: { id: string; numeroPedido: string; cliente: string; punto: string; motivo: string; fecha: string }[];
   porEstado: { label: string; value: number }[];
   porPdv: { label: string; value: number }[];
   porCliente: { label: string; value: number }[];
@@ -173,10 +187,11 @@ export const syncDrivin = (desde: string, hasta: string) =>
 export const eliminarPedido = (id: string) => apiFetch<{ ok: true }>(`${base}/pedidos/${id}`, { method: "DELETE" });
 
 // ── Dashboard ────────────────────────────────────────────────────────────
-export const getDashboardRunErrands = (desde?: string, hasta?: string) => {
+export const getDashboardRunErrands = (desde?: string, hasta?: string, pdv?: string) => {
   const qs = new URLSearchParams();
   if (desde) qs.set("desde", desde);
   if (hasta) qs.set("hasta", hasta);
+  if (pdv) qs.set("pdv", pdv);
   const q = qs.toString();
   return apiFetch<DashboardRunErrands>(`${base}/dashboard${q ? `?${q}` : ""}`);
 };
