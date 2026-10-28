@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ApiError } from "@/lib/api";
+import { MapPin, Pencil, Plus, Search, Trash2, UserCheck, Users } from "lucide-react";
+import { ActiveBadge, EmptyState, ErrorBanner, fieldClass, IconAction, Metric, Modal, PageHeader, primaryClass, secondaryClass, tableClass } from "@/components/RunErrandsUI";
 import { getClientes, crearCliente, actualizarCliente, eliminarCliente, type Cliente } from "@/lib/runErrandsApi";
 
 const vacio = {
@@ -33,6 +35,7 @@ export default function ClientesPage() {
   useEffect(cargar, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function editar(c: Cliente) {
+    setError(null);
     setEditandoId(c.id);
     setForm({
       nombre: c.nombre, direccion: c.direccion ?? "", referencia: c.referencia ?? "", barrio: c.barrio ?? "",
@@ -77,65 +80,53 @@ export default function ClientesPage() {
 
   async function eliminar(c: Cliente) {
     if (!confirm(`¿Desactivar a "${c.nombre}"?`)) return;
-    await eliminarCliente(c.id);
-    cargar();
+    try { await eliminarCliente(c.id); cargar(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo desactivar el cliente."); }
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-brand-wine">Clientes</h1>
-          <p className="mt-1 text-sm text-brand-black/60">Destinos de entrega de Run Errands (sincronizados con Drivin).</p>
-        </div>
+    <div className="mx-auto max-w-[1400px] pb-6">
+      <PageHeader title="Clientes" icon={<Users className="h-6 w-6" />}>
         {puedeEditar && (
-          <button onClick={() => { cancelar(); setMostrarForm(true); }} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
-            Nuevo cliente
+          <button onClick={() => { cancelar(); setError(null); setMostrarForm(true); }} className={primaryClass}>
+            <Plus className="h-4 w-4" />Nuevo cliente
           </button>
         )}
-      </div>
+      </PageHeader>
 
-      {error && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
+      <ErrorBanner message={mostrarForm ? null : error} />
       {aviso && <div className="mt-4 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800">{aviso}</div>}
 
-      <div className="mt-4 flex gap-2">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3"><Metric title="Clientes encontrados" value={items.length} icon={<Users className="h-5 w-5" />} /><Metric title="Activos" value={items.filter((c) => c.activo).length} icon={<UserCheck className="h-5 w-5" />} tone="green" /><Metric title="Ciudades" value={new Set(items.map((c) => c.ciudad).filter(Boolean)).size} icon={<MapPin className="h-5 w-5" />} tone="blue" /></div>
+      <div className="mb-4 flex gap-2">
         <input
           value={buscar}
+          aria-label="Buscar clientes"
           onChange={(e) => setBuscar(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && cargar()}
           placeholder="Buscar por nombre, código, dirección, barrio o ciudad…"
-          className="flex-1 rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber"
+          className={`${fieldClass} flex-1`}
         />
-        <button onClick={cargar} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-medium">Buscar</button>
+        <button onClick={cargar} title="Buscar clientes" aria-label="Buscar clientes" className={secondaryClass}><Search className="h-4 w-4" /></button>
       </div>
 
       {mostrarForm && puedeEditar && (
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-brand-brown/10 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
-          <input placeholder="Nombre *" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Dirección" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Referencia" value={form.referencia} onChange={(e) => setForm({ ...form, referencia: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Barrio" value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Ciudad" value={form.ciudad} onChange={(e) => setForm({ ...form, ciudad: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Región/Departamento" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Teléfono" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <input placeholder="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <div className="flex gap-2 lg:col-span-3">
-            <button onClick={guardar} disabled={guardando || !form.nombre.trim()} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              {editandoId ? "Guardar cambios" : "Crear cliente"}
-            </button>
-            <button onClick={cancelar} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm">Cancelar</button>
-          </div>
-        </div>
+        <Modal title={editandoId ? "Editar cliente" : "Nuevo cliente"} onClose={cancelar} busy={guardando}>
+          <form onSubmit={(event) => { event.preventDefault(); void guardar(); }}>
+            <ErrorBanner message={error} />
+            <div className="grid gap-4 sm:grid-cols-2">{([['nombre', 'Nombre completo'], ['direccion', 'Dirección'], ['referencia', 'Referencia'], ['barrio', 'Barrio'], ['ciudad', 'Ciudad'], ['region', 'Departamento'], ['telefono', 'Teléfono'], ['email', 'Correo electrónico'], ['observaciones', 'Observaciones']] as const).map(([campo, etiqueta]) => <label key={campo} className={`text-xs font-semibold text-brand-black ${campo === 'nombre' || campo === 'direccion' || campo === 'observaciones' ? 'sm:col-span-2' : ''}`}>{etiqueta}<input required={campo === 'nombre'} autoFocus={campo === 'nombre'} type={campo === 'email' ? 'email' : campo === 'telefono' ? 'tel' : 'text'} value={form[campo]} onChange={(e) => setForm({ ...form, [campo]: e.target.value })} className={`${fieldClass} mt-1.5 w-full`} /></label>)}</div>
+            <div className="mt-6 flex justify-end gap-2 border-t border-brand-brown/10 pt-4"><button type="button" className={secondaryClass} onClick={cancelar} disabled={guardando}>Cancelar</button><button type="submit" className={primaryClass} disabled={guardando || !form.nombre.trim()}>{guardando ? "Guardando..." : "Guardar cliente"}</button></div>
+          </form>
+        </Modal>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-brand-brown/10 bg-white">
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
         ) : items.length === 0 ? (
-          <div className="p-6 text-center text-sm text-brand-black/50">Sin clientes.</div>
+          <EmptyState text="No hay clientes que coincidan con la búsqueda." />
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className={`${tableClass} min-w-[780px]`}>
             <thead className="bg-brand-cream-soft text-xs font-semibold uppercase tracking-wide text-brand-black/50">
               <tr>
                 <th className="px-4 py-2.5">Código</th>
@@ -154,14 +145,11 @@ export default function ClientesPage() {
                   <td className="px-4 py-2 text-brand-black/70">{c.direccion ?? "—"}</td>
                   <td className="px-4 py-2 text-brand-black/70">{c.ciudad ?? "—"}</td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.activo ? "bg-emerald-50 text-emerald-700" : "bg-brand-black/5 text-brand-black/50"}`}>
-                      {c.activo ? "Activo" : "Inactivo"}
-                    </span>
+                    <ActiveBadge active={c.activo} />
                   </td>
                   {puedeEditar && (
                     <td className="px-4 py-2 text-right">
-                      <button onClick={() => editar(c)} className="mr-3 text-xs font-medium text-brand-amber hover:underline">Editar</button>
-                      <button onClick={() => eliminar(c)} className="text-xs font-medium text-rose-600 hover:underline">Eliminar</button>
+                      <div className="flex justify-end gap-1"><IconAction label={`Editar ${c.nombre}`} onClick={() => editar(c)}><Pencil className="h-4 w-4" /></IconAction><IconAction label={`Desactivar ${c.nombre}`} danger onClick={() => void eliminar(c)}><Trash2 className="h-4 w-4" /></IconAction></div>
                     </td>
                   )}
                 </tr>

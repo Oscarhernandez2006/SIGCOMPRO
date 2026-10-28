@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { CheckCircle2, Clock3, History, Package, Pencil, Plus, RefreshCw, Search, Send, Truck, XCircle } from "lucide-react";
+import { EmptyState, ErrorBanner, fieldClass, IconAction, Metric, PageHeader, primaryClass, secondaryClass, tableClass } from "@/components/RunErrandsUI";
 import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { ApiError } from "@/lib/api";
@@ -12,6 +14,8 @@ import {
 } from "@/lib/runErrandsApi";
 
 const ESTADOS = ["REVISADO", "EN_PROCESO", "ENTREGADO", "CANCELADO"];
+const fechaBogota = (dias = 0) => new Date(Date.now() - dias * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+const LABEL_ESTADO: Record<string, string> = { REVISADO: "Revisado", EN_PROCESO: "En proceso", ENTREGADO: "Entregado", CANCELADO: "Cancelado" };
 
 const ESTADO_COLOR: Record<string, string> = {
   REVISADO: "bg-sky-50 text-sky-700",
@@ -47,52 +51,47 @@ export default function PedidosPage() {
   const [sincronizando, setSincronizando] = useState(false);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando] = useState<Pedido | null>(null);
+  const [buscar, setBuscar] = useState("");
+  const [puntoFiltro, setPuntoFiltro] = useState("");
+  const [desde, setDesde] = useState(() => fechaBogota(6));
+  const [hasta, setHasta] = useState(() => fechaBogota());
+  const [aviso, setAviso] = useState<string | null>(null);
+  const cargaActual = useRef(0);
+  const sincronizacionEnCurso = useRef(false);
 
   function cargarListas() {
     Promise.all([getClientes("", false), getPuntosVenta(false), getDomiciliarios({}), getEsquemasDrivin()])
       .then(([c, p, d, e]) => { setClientes(c); setPdvs(p); setDomiciliarios(d); setEsquemas(e); })
-      .catch(() => {});
+      .catch((e) => setError(e instanceof Error ? e.message : "No se pudieron cargar las listas."));
   }
 
-  function cargarPedidos() {
-    setLoading(true);
-    getPedidos(filtroEstado ? { estado: filtroEstado } : {})
-      .then(setItems)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Error al cargar"))
-      .finally(() => setLoading(false));
-  }
+  const cargarPedidos = useCallback(async (silencioso = false) => {
+    const carga = ++cargaActual.current;
+    if (!silencioso) setLoading(true);
+    try {
+      if (desde && hasta && desde > hasta) throw new Error("La fecha inicial no puede ser posterior a la final.");
+      const resultado = await getPedidos({ estado: filtroEstado || undefined, desde: desde || undefined, hasta: hasta || undefined });
+      if (carga === cargaActual.current) { setItems(resultado); if (!silencioso) setError(null); }
+    } catch (e) {
+      if (carga === cargaActual.current) setError(e instanceof Error ? e.message : "No se pudieron cargar los mandados.");
+    } finally {
+      if (carga === cargaActual.current) setLoading(false);
+    }
+  }, [filtroEstado, desde, hasta]);
 
   useEffect(() => { cargarListas(); }, []);
-  useEffect(() => { cargarPedidos(); }, [filtroEstado]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
-    if (!esDespacho && !esHistorico) return;
-    let activo = true;
-    let enVuelo = false;
-    const refrescar = async () => {
-      if (enVuelo || document.visibilityState === "hidden") return;
-      enVuelo = true;
-      try {
-        if (puedeEditar) {
-          const hoy = new Date().toISOString().slice(0, 10);
-          const inicio = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-          await syncDrivin(inicio, hoy);
-        }
-        const pedidos = await getPedidos(filtroEstado ? { estado: filtroEstado } : {});
-        if (activo) { setItems(pedidos); setError(null); }
-      } catch (e) {
-        if (activo) setError(e instanceof Error ? e.message : "No se pudo consultar Drivin");
-      } finally {
-        enVuelo = false;
-      }
-    };
-    void refrescar();
-    const intervalo = setInterval(() => void refrescar(), 30000);
-    return () => { activo = false; clearInterval(intervalo); };
-  }, [esDespacho, esHistorico, puedeEditar, filtroEstado]);
-
-  const [buscar, setBuscar] = useState("");
-  const [puntoFiltro, setPuntoFiltro] = useState("");
+    const inicial = setTimeout(() => void cargarPedidos(), 0);
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "visible" && !sincronizacionEnCurso.current) void cargarPedidos(true);
+    }, 30000);
+    return () => { cargaActual.current++; clearTimeout(inicial); clearInterval(intervalo); };
+  }, [cargarPedidos]);
+  useEffect(() => {
+    const busqueda = new URLSearchParams(window.location.search).get("buscar");
+    const inicial = setTimeout(() => { if (busqueda) setBuscar(busqueda); }, 0);
+    return () => clearTimeout(inicial);
+  }, []);
   const visibles = items.filter((pedido) => {
     if (esHistorico && !["approved", "rejected"].includes(pedido.drivinEstadoEntrega ?? "")) return false;
     if (puntoFiltro && pedido.puntoVentaId !== puntoFiltro) return false;
@@ -111,8 +110,8 @@ export default function PedidosPage() {
   }
 
   async function cambiarEstado(p: Pedido, estado: string) {
-    await cambiarEstadoPedido(p.id, estado);
-    cargarPedidos();
+    try { await cambiarEstadoPedido(p.id, estado); await cargarPedidos(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo cambiar el estado."); }
   }
 
   async function cancelar(p: Pedido) {
@@ -121,66 +120,79 @@ export default function PedidosPage() {
   }
 
   async function reintentar(p: Pedido) {
-    await reenviarDrivin(p.id);
-    cargarPedidos();
+    try { await reenviarDrivin(p.id); await cargarPedidos(); }
+    catch (e) { setError(e instanceof Error ? e.message : "No se pudo reenviar a Drivin."); }
   }
 
   async function sincronizar() {
+    if (sincronizacionEnCurso.current) return;
+    if (!desde || !hasta || desde > hasta) { setError("Selecciona un periodo válido para sincronizar."); return; }
+    const cantidad = Math.round((Date.parse(hasta) - Date.parse(desde)) / 86400000) + 1;
+    if (!Number.isFinite(cantidad) || cantidad > 31) { setError("Sincroniza periodos de hasta 31 días."); return; }
+    sincronizacionEnCurso.current = true;
     setSincronizando(true);
+    setError(null);
+    let actualizados = 0;
     try {
-      const hoy = new Date().toISOString().slice(0, 10);
-      const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-      const r = await syncDrivin(hace30, hoy);
-      cargarPedidos();
-      alert(`${r.actualizados} mandado(s) actualizados desde Drivin.`);
+      for (let indice = 0; indice < cantidad; indice++) {
+        setAviso(`Sincronizando Drivin: día ${indice + 1} de ${cantidad}...`);
+        const dia = new Date(Date.parse(desde) + indice * 86400000).toISOString().slice(0, 10);
+        actualizados += (await syncDrivin(dia, dia)).actualizados;
+      }
+      await cargarPedidos();
+      setAviso(`${actualizados} mandados actualizados desde Drivin.`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo sincronizar con Drivin");
+      await cargarPedidos();
+      setAviso(actualizados ? `${actualizados} mandados actualizados antes de la interrupción.` : null);
+      setError(e instanceof Error ? e.message : "No se pudo sincronizar con Drivin");
     } finally {
+      sincronizacionEnCurso.current = false;
       setSincronizando(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-brand-wine">{esHistorico ? "Históricos" : esDespacho ? "Despacho" : "Run-Errands"}</h1>
-        </div>
-        <div className="flex gap-2">
+    <div className="mx-auto max-w-[1500px] pb-6">
+      <PageHeader title={esHistorico ? "Históricos" : esDespacho ? "Despacho" : "Run-Errands"} icon={esHistorico ? <History className="h-6 w-6" /> : esDespacho ? <Truck className="h-6 w-6" /> : <Package className="h-6 w-6" />}>
+          <IconAction label="Actualizar listado" onClick={() => void cargarPedidos()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></IconAction>
           {puedeEditar && (
-            <button onClick={sincronizar} disabled={sincronizando} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-medium disabled:opacity-50">
+            <button onClick={sincronizar} disabled={sincronizando} className={secondaryClass}>
+              <RefreshCw className={`h-4 w-4 ${sincronizando ? "animate-spin" : ""}`} />
               {sincronizando ? "Sincronizando…" : "Sincronizar con Drivin"}
             </button>
           )}
           {puedeEditar && !esHistorico && !esDespacho && (
-            <button onClick={abrirCrear} className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white">
-              Nuevo mandado
+            <button onClick={abrirCrear} className={primaryClass}>
+              <Plus className="h-4 w-4" />Nuevo mandado
             </button>
           )}
-        </div>
-      </div>
+      </PageHeader>
 
-      {error && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
+      <ErrorBanner message={error} />
+      {aviso && <p role="status" className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{aviso}</p>}
+      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric title="Resultados" value={visibles.length} icon={<Package className="h-5 w-5" />} /><Metric title="Pendientes en Drivin" value={visibles.filter((p) => !['approved', 'rejected'].includes(p.drivinEstadoEntrega ?? '')).length} icon={<Clock3 className="h-5 w-5" />} tone="amber" /><Metric title="Entregados confirmados" value={visibles.filter((p) => p.drivinEstadoEntrega === 'approved').length} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" /><Metric title="Rechazados" value={visibles.filter((p) => p.drivinEstadoEntrega === 'rejected').length} icon={<XCircle className="h-5 w-5" />} tone="red" /></div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <input aria-label="Buscar Run-Errands" placeholder="Número, cliente, dirección o domiciliario..." value={buscar} onChange={(e) => setBuscar(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-brand-brown/20 px-3 py-2 text-sm" />
-        <select aria-label="Filtrar por punto" value={puntoFiltro} onChange={(e) => setPuntoFiltro(e.target.value)} className="rounded-lg border border-brand-brown/20 px-3 py-2 text-sm">
+        <div className="relative min-w-[180px] flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-brand-black/40" /><input aria-label="Buscar Run-Errands" placeholder="Número, cliente o dirección..." value={buscar} onChange={(e) => setBuscar(e.target.value)} className={`${fieldClass} w-full pl-9`} /></div>
+        <label className="flex items-center gap-2 text-xs text-brand-black/60">Desde<input aria-label="Desde" type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} className={fieldClass} /></label>
+        <label className="flex items-center gap-2 text-xs text-brand-black/60">Hasta<input aria-label="Hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} className={fieldClass} /></label>
+        <select aria-label="Filtrar por punto" value={puntoFiltro} onChange={(e) => setPuntoFiltro(e.target.value)} className={fieldClass}>
           <option value="">Todos los puntos</option>
           {pdvs.map((punto) => <option key={punto.id} value={punto.id}>{punto.nombre}</option>)}
         </select>
-        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+        <select aria-label="Filtrar por estado" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className={fieldClass}>
           <option value="">Todos los estados</option>
-          {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
+          {ESTADOS.map((e) => <option key={e} value={e}>{LABEL_ESTADO[e]}</option>)}
         </select>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-brown/10 bg-white">
+      <div className="mt-4 overflow-x-auto rounded-lg border border-brand-brown/10 bg-white">
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
         ) : visibles.length === 0 ? (
-          <div className="p-6 text-center text-sm text-brand-black/50">Sin mandados.</div>
+          <EmptyState text={esHistorico ? "No hay cierres confirmados en este periodo." : "No hay mandados para estos filtros."} />
         ) : (
-          <table className="w-full min-w-[1000px] text-left text-sm">
+          <table className={`${tableClass} min-w-[1100px]`}>
             <thead className="bg-brand-cream-soft text-xs font-semibold uppercase tracking-wide text-brand-black/50">
               <tr>
                 <th className="px-4 py-2.5">N° Mandado</th>
@@ -198,24 +210,24 @@ export default function PedidosPage() {
               {visibles.map((p) => (
                 <tr key={p.id}>
                   <td className="px-4 py-2 font-mono text-xs text-brand-black/70">{p.numeroPedido}</td>
-                  <td className="px-4 py-2 font-medium text-brand-black">{p.cliente?.nombre ?? "—"}</td>
+                  <td className="px-4 py-2 font-medium text-brand-black">{p.cliente?.nombre ?? "—"}<p className="mt-1 max-w-56 truncate text-xs font-normal text-brand-black/50" title={p.cliente?.direccion ?? undefined}>{p.cliente?.direccion}</p></td>
                   <td className="px-4 py-2 text-brand-black/70">{p.puntoVenta?.nombre ?? "—"}</td>
                   <td className="px-4 py-2 text-brand-black/70">{p.domiciliario?.nombre ?? "—"}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{p.kilos}</td>
                   <td className="px-4 py-2">
                     {puedeEditar && !esHistorico ? (
                       <select value={p.estado} onChange={(e) => cambiarEstado(p, e.target.value)} className={`rounded-full border-0 px-2 py-0.5 text-xs font-semibold ${ESTADO_COLOR[p.estado] ?? ""}`}>
-                        {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
+                        {ESTADOS.map((e) => <option key={e} value={e}>{LABEL_ESTADO[e]}</option>)}
                       </select>
                     ) : (
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADO_COLOR[p.estado] ?? ""}`}>{p.estado}</span>
+                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${ESTADO_COLOR[p.estado] ?? ""}`}>{LABEL_ESTADO[p.estado] ?? p.estado}</span>
                     )}
                   </td>
                   <td className="px-4 py-2">
                     <span
                       title={p.drivinMensajeEnvio ?? ""}
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        p.drivinEstadoEnvio === "ENVIADO" ? "bg-emerald-50 text-emerald-700" : p.drivinEstadoEnvio === "ERROR" ? "bg-rose-50 text-rose-700" : "bg-brand-black/5 text-brand-black/50"
+                        p.drivinEstadoEnvio === "ENVIADO" ? "bg-sky-50 text-sky-700" : p.drivinEstadoEnvio === "ERROR" ? "bg-rose-50 text-rose-700" : "bg-brand-black/5 text-brand-black/50"
                       }`}
                     >
                       {p.drivinEstadoEnvio}
@@ -230,13 +242,13 @@ export default function PedidosPage() {
                   </td>
                   {puedeEditar && !esHistorico && (
                     <td className="px-4 py-2">
-                      <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                         {p.drivinEstadoEnvio === "ERROR" && (
-                          <button onClick={() => reintentar(p)} className="text-xs font-medium text-brand-amber hover:underline">Reintentar Drivin</button>
+                          <IconAction label={`Reenviar ${p.numeroPedido} a Drivin`} onClick={() => void reintentar(p)}><Send className="h-4 w-4" /></IconAction>
                         )}
-                        <button onClick={() => abrirEditar(p)} className="text-xs font-medium text-brand-black/60 hover:underline">Editar</button>
+                        <IconAction label={`Editar ${p.numeroPedido}`} onClick={() => abrirEditar(p)}><Pencil className="h-4 w-4" /></IconAction>
                         {p.estado !== "CANCELADO" && p.estado !== "ENTREGADO" && (
-                          <button onClick={() => cancelar(p)} className="text-xs font-medium text-rose-600 hover:underline">Cancelar</button>
+                          <IconAction label={`Cancelar ${p.numeroPedido}`} danger onClick={() => void cancelar(p)}><XCircle className="h-4 w-4" /></IconAction>
                         )}
                       </div>
                     </td>

@@ -640,11 +640,11 @@ export class RunErrandsService implements OnModuleInit {
     }
     if (filtros.desde) {
       values.push(filtros.desde);
-      where.push(`pe.fecha >= $${values.length}`);
+      where.push(`pe.fecha >= ($${values.length}::date::timestamp AT TIME ZONE 'America/Bogota')`);
     }
     if (filtros.hasta) {
-      values.push(`${filtros.hasta} 23:59:59`);
-      where.push(`pe.fecha <= $${values.length}`);
+      values.push(filtros.hasta);
+      where.push(`pe.fecha < (($${values.length}::date + 1)::timestamp AT TIME ZONE 'America/Bogota')`);
     }
     const r = await this.pool.query(
       `${this.pedidoSelectBase} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY pe.fecha DESC`,
@@ -764,22 +764,31 @@ export class RunErrandsService implements OnModuleInit {
   }
 
   // ── Dashboard ────────────────────────────────────────────────────────
-  async dashboard(desde?: string, hasta?: string) {
+  async dashboard(desde?: string, hasta?: string, puntoId?: string) {
     const where: string[] = [];
     const values: unknown[] = [];
     if (desde) {
       values.push(desde);
-      where.push(`pe.fecha >= $${values.length}`);
+      where.push(`pe.fecha >= ($${values.length}::date::timestamp AT TIME ZONE 'America/Bogota')`);
     }
     if (hasta) {
-      values.push(`${hasta} 23:59:59`);
-      where.push(`pe.fecha <= $${values.length}`);
+      values.push(hasta);
+      where.push(`pe.fecha < (($${values.length}::date + 1)::timestamp AT TIME ZONE 'America/Bogota')`);
+    }
+    if (puntoId) {
+      values.push(puntoId);
+      where.push(`pe.punto_venta_id = $${values.length}`);
     }
     const r = await this.pool.query(
-      `SELECT pe.estado, pe.kilos, pe.fecha, c.nombre AS cliente_nombre, p.nombre AS pdv_nombre
+            `SELECT pe.id, pe.numero_pedido, pe.estado, pe.kilos, pe.fecha,
+              pe.drivin_estado_envio, pe.drivin_estado_entrega, pe.drivin_sync_at,
+              pe.domiciliario_id, c.nombre AS cliente_nombre, p.nombre AS pdv_nombre,
+              d.nombre AS domiciliario_nombre,
+              to_char(pe.fecha AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS dia
        FROM run_errands_pedidos pe
        JOIN run_errands_clientes c ON c.id = pe.cliente_id
        LEFT JOIN run_errands_puntos_venta p ON p.id = pe.punto_venta_id
+      LEFT JOIN run_errands_domiciliarios d ON d.id = pe.domiciliario_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`,
       values,
     );
@@ -788,6 +797,16 @@ export class RunErrandsService implements OnModuleInit {
     const porCliente = new Map<string, number>();
     const porDia = new Map<string, number>();
     const porEstado = new Map<string, number>();
+    const porDomiciliario = new Map<string, { label: string; value: number; kilos: number; entregados: number; pendientes: number; rechazados: number }>();
+    const porDrivin = new Map<string, number>();
+    const incidencias: { id: string; numeroPedido: string; cliente: string; punto: string; motivo: string; fecha: string }[] = [];
+    let entregadosDrivin = 0;
+    let rechazadosDrivin = 0;
+    let pendientesDrivin = 0;
+    let erroresEnvio = 0;
+    let sinDomiciliario = 0;
+    let pendientesAnteriores = 0;
+    let ultimaSincronizacion: string | null = null;
     let totalKilos = 0;
     for (const p of r.rows) {
       const pdvLabel = (p.pdv_nombre as string) ?? 'Sin PDV';
@@ -795,21 +814,51 @@ export class RunErrandsService implements OnModuleInit {
       porCliente.set(p.cliente_nombre as string, (porCliente.get(p.cliente_nombre as string) ?? 0) + 1);
       porEstado.set(p.estado as string, (porEstado.get(p.estado as string) ?? 0) + 1);
       totalKilos += Number(p.kilos);
-      const dia = new Date(p.fecha as string).toISOString().slice(0, 10);
+      const dia = String(p.dia);
       porDia.set(dia, (porDia.get(dia) ?? 0) + 1);
+      const pod = String(p.drivin_estado_entrega ?? 'sin confirmar');
+      porDrivin.set(pod, (porDrivin.get(pod) ?? 0) + 1);
+      const cerrado = pod === 'approved' || pod === 'rejected';
+      if (pod === 'approved') entregadosDrivin++;
+      else if (pod === 'rejected') rechazadosDrivin++;
+      else pendientesDrivin++;
+      if (p.drivin_estado_envio === 'ERROR') erroresEnvio++;
+      if (!cerrado && !p.domiciliario_id) sinDomiciliario++;
+      if (!cerrado && Date.now() - new Date(p.fecha).getTime() > 86400000) pendientesAnteriores++;
+      const nombre = String(p.domiciliario_nombre ?? 'Sin asignar');
+      const dom = porDomiciliario.get(nombre) ?? { label: nombre, value: 0, kilos: 0, entregados: 0, pendientes: 0, rechazados: 0 };
+      dom.value++;
+      dom.kilos += Number(p.kilos) || 0;
+      if (pod === 'approved') dom.entregados++;
+      else if (pod === 'rejected') dom.rechazados++;
+      else dom.pendientes++;
+      porDomiciliario.set(nombre, dom);
+      if (p.drivin_sync_at) {
+        const instante = new Date(p.drivin_sync_at).toISOString();
+        if (!ultimaSincronizacion || instante > ultimaSincronizacion) ultimaSincronizacion = instante;
+      }
+      if (p.drivin_estado_envio === 'ERROR' || (!cerrado && !p.domiciliario_id)) {
+        incidencias.push({ id: String(p.id), numeroPedido: String(p.numero_pedido),
+          cliente: String(p.cliente_nombre), punto: pdvLabel,
+          motivo: p.drivin_estado_envio === 'ERROR' ? 'Error de envío a Drivin' : 'Sin domiciliario',
+          fecha: new Date(p.fecha).toISOString() });
+      }
     }
 
     const dias14: { label: string; value: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
+    const finSerie = hasta ? new Date(`${hasta}T12:00:00Z`) : new Date();
+    const cantidadDias = desde ? Math.min(31, Math.max(1, Math.round((finSerie.getTime() - new Date(`${desde}T12:00:00Z`).getTime()) / 86400000) + 1)) : 14;
+    for (let i = cantidadDias - 1; i >= 0; i--) {
+      const d = new Date(finSerie);
+      d.setUTCDate(d.getUTCDate() - i);
       const key = d.toISOString().slice(0, 10);
       dias14.push({ label: key.slice(5), value: porDia.get(key) ?? 0 });
     }
 
-    const [{ rows: clienteRows }, { rows: pdvRows }] = await Promise.all([
+    const [{ rows: clienteRows }, { rows: pdvRows }, { rows: domRows }] = await Promise.all([
       this.pool.query(`SELECT COUNT(*) AS n FROM run_errands_clientes WHERE activo = true`),
       this.pool.query(`SELECT COUNT(*) AS n FROM run_errands_puntos_venta WHERE activo = true`),
+      this.pool.query(`SELECT COUNT(*) AS n FROM run_errands_domiciliarios WHERE activo = true`),
     ]);
 
     return {
@@ -817,6 +866,15 @@ export class RunErrandsService implements OnModuleInit {
       totalKilos,
       totalClientes: Number(clienteRows[0].n),
       totalPuntosVenta: Number(pdvRows[0].n),
+      totalDomiciliarios: Number(domRows[0].n),
+      entregadosDrivin, rechazadosDrivin, pendientesDrivin, erroresEnvio, sinDomiciliario, pendientesAnteriores,
+      tasaEntrega: entregadosDrivin + rechazadosDrivin ? Math.round(entregadosDrivin / (entregadosDrivin + rechazadosDrivin) * 1000) / 10 : 0,
+      promedioKilos: r.rows.length ? Math.round(totalKilos / r.rows.length * 10) / 10 : 0,
+      clientesAtendidos: porCliente.size,
+      ultimaSincronizacion,
+      porDrivin: [...porDrivin.entries()].map(([label, value]) => ({ label, value })),
+      porDomiciliario: [...porDomiciliario.values()].sort((a, b) => b.value - a.value),
+      incidencias: incidencias.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 8),
       porEstado: ESTADOS_PEDIDO.map((e) => ({ label: e, value: porEstado.get(e) ?? 0 })),
       porPdv: [...porPdv.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
       porCliente: [...porCliente.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 10),
@@ -987,13 +1045,28 @@ export class RunErrandsService implements OnModuleInit {
   }
 
   async syncDrivin(desdeISO: string, hastaISO: string): Promise<{ actualizados: number }> {
-    let pods: Map<string, { status: string; reason: string | null }>;
-    try {
+    const fechaValida = (valor: string) => /^\d{4}-\d{2}-\d{2}$/.test(valor) &&
+      Number.isFinite(Date.parse(valor)) && new Date(valor).toISOString().slice(0, 10) === valor;
+    if (!fechaValida(desdeISO) || !fechaValida(hastaISO) || desdeISO > hastaISO) {
+      throw new BadRequestException('Selecciona un periodo válido para sincronizar.');
+    }
+    const r = await this.pool.query(
+      `SELECT id, numero_pedido, to_char(fecha AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS dia
+         FROM run_errands_pedidos
+        WHERE fecha >= ($1::date::timestamp AT TIME ZONE 'America/Bogota')
+          AND fecha < (($2::date + 1)::timestamp AT TIME ZONE 'America/Bogota')`,
+      [desdeISO, hastaISO],
+    );
+    if (!r.rows.length) return { actualizados: 0 };
+    const dias = [...new Set<string>(r.rows.map((row) => String(row.dia ?? desdeISO)))];
+    if (dias.length > 31) throw new BadRequestException('Sincroniza periodos de hasta 31 días con actividad.');
+    const pods = new Map<string, { status: string; reason: string | null }>();
+    const consultarDia = async (dia: string) => {
+      try {
       const { status, text } = await this.drivinRequest(
         'GET',
-        `/pods?start_date=${desdeISO}&end_date=${hastaISO}`,
+        `/pods?start_date=${dia}&end_date=${dia}`,
       );
-      pods = new Map();
       if (status >= 200 && status < 300) {
         type OrdenPod = { code?: string; status?: string; customer_status?: string; reason?: string; comment?: string };
         const json = JSON.parse(text) as {
@@ -1012,30 +1085,35 @@ export class RunErrandsService implements OnModuleInit {
           pods.set(orden.code, { status: estado, reason: orden.reason || orden.comment || null });
         }
       } else {
-        throw new Error(`Drivin HTTP ${status}`);
+        throw new BadGatewayException(`Drivin rechazó la consulta (HTTP ${status}). Revisa la conexión y la autorización de Run-Errands.`);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof BadGatewayException) throw error;
       throw new BadGatewayException('No se pudo sincronizar con Drivin. Los estados guardados no se modificaron.');
     }
-
-    const r = await this.pool.query(
-      `SELECT id, numero_pedido FROM run_errands_pedidos WHERE fecha >= $1 AND fecha <= $2`,
-      [desdeISO, `${hastaISO} 23:59:59`],
-    );
-    let actualizados = 0;
+    };
+    for (let indice = 0; indice < dias.length; indice += 2) {
+      await Promise.all(dias.slice(indice, indice + 2).map(consultarDia));
+    }
+    const cambios: { id: string; status: string; reason: string | null; estado: string | null }[] = [];
     for (const row of r.rows) {
       const pod = pods.get(row.numero_pedido as string);
       if (!pod) continue;
       const estadoLocal =
         pod.status === 'approved' ? 'ENTREGADO' : pod.status === 'rejected' ? 'CANCELADO'
         : pod.status === 'pending' || pod.status === 'in-transit' ? 'EN_PROCESO' : null;
-      await this.pool.query(
-        `UPDATE run_errands_pedidos SET drivin_estado_entrega = $2, drivin_motivo_entrega = $3, drivin_sync_at = now()
-         ${estadoLocal ? ', estado = $4' : ''} WHERE id = $1`,
-        estadoLocal ? [row.id, pod.status, pod.reason, estadoLocal] : [row.id, pod.status, pod.reason],
-      );
-      actualizados++;
+      cambios.push({ id: String(row.id), status: pod.status, reason: pod.reason, estado: estadoLocal });
     }
-    return { actualizados };
+    if (cambios.length) {
+      await this.pool.query(
+        `UPDATE run_errands_pedidos AS pedido
+            SET drivin_estado_entrega = cambio.status, drivin_motivo_entrega = cambio.reason,
+                drivin_sync_at = now(), estado = COALESCE(cambio.estado, pedido.estado)
+           FROM jsonb_to_recordset($1::jsonb) AS cambio(id text, status text, reason text, estado text)
+          WHERE pedido.id = cambio.id`,
+        [JSON.stringify(cambios)],
+      );
+    }
+    return { actualizados: cambios.length };
   }
 }
