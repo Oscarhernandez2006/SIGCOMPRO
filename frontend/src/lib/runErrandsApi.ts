@@ -15,6 +15,7 @@ export interface Domiciliario {
   cedula: string | null;
   email: string | null;
   puntoVentaId: string | null;
+  todosLosPuntos: boolean;
   activo: boolean;
   creadoEn: string;
   puntoVenta?: PuntoVenta | null;
@@ -96,11 +97,11 @@ export const getDomiciliarios = (opts: { todos?: boolean; pdv?: string } = {}) =
   return apiFetch<Domiciliario[]>(`${base}/domiciliarios${q ? `?${q}` : ""}`);
 };
 export const crearDomiciliario = (data: {
-  nombre: string; telefono?: string; cedula?: string; email?: string; puntoVentaId?: string | null;
+  nombre: string; telefono?: string; cedula?: string; email?: string; puntoVentaId?: string | null; todosLosPuntos?: boolean;
 }) => apiFetch<Domiciliario>(`${base}/domiciliarios`, { method: "POST", body: JSON.stringify(data) });
 export const actualizarDomiciliario = (
   id: string,
-  data: Partial<{ nombre: string; telefono: string; cedula: string; email: string; puntoVentaId: string | null; activo: boolean }>,
+  data: Partial<{ nombre: string; telefono: string; cedula: string; email: string; puntoVentaId: string | null; activo: boolean; todosLosPuntos: boolean }>,
 ) => apiFetch<Domiciliario>(`${base}/domiciliarios/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const eliminarDomiciliario = (id: string) =>
   apiFetch<{ ok: true }>(`${base}/domiciliarios/${id}`, { method: "DELETE" });

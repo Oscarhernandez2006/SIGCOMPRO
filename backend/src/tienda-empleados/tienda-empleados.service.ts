@@ -8,13 +8,10 @@ import {
 } from '@nestjs/common';
 import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import sharp from 'sharp';
 import * as bcrypt from 'bcryptjs';
 import { PG_POOL } from '../database/database.module';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const tesseract = require('node-tesseract-ocr') as {
-  recognize: (src: Buffer | string, config: Record<string, unknown>) => Promise<string>;
-};
 
 /** Ítem del catálogo curado de la tienda de empleados (por punto). */
 export interface ItemCatalogoTienda {
@@ -509,34 +506,50 @@ export class TiendaEmpleadosService implements OnModuleInit {
     foto: string,
     cedula: string,
   ): Promise<{ ok: boolean; mensaje: string; fotoOptim: string }> {
-    let texto = '';
     let fotoOptim = foto;
     try {
       const base64 = foto.includes(',') ? foto.split(',')[1] : foto;
       const original = Buffer.from(base64, 'base64');
-      let ocrBuffer = original;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-        const sharpMod = require('sharp') as any;
-        // Redimensiona ANTES de procesar: acota memoria/tiempo del OCR y evita
-        // que una foto de celular a resolución completa tumbe el proceso (OOM).
-        const base = sharpMod(original, { failOn: 'none', limitInputPixels: 300000000 })
-          .rotate()
-          .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true });
-        fotoOptim =
-          'data:image/jpeg;base64,' +
-          (await base.clone().jpeg({ quality: 72 }).toBuffer()).toString('base64');
-        ocrBuffer = await base.clone().grayscale().normalise().sharpen().toBuffer();
-      } catch {
-        /* sharp opcional; si falla, usa el buffer original */
+      const base = sharp(original, { limitInputPixels: 40000000 })
+        .rotate()
+        .resize({ width: 2200, height: 2200, fit: 'inside' })
+        .flatten({ background: '#ffffff' });
+      fotoOptim = 'data:image/jpeg;base64,' +
+        (await base.clone().jpeg({ quality: 78 }).toBuffer()).toString('base64');
+      const cedulaLimpia = cedula.replace(/\D/g, '');
+      const coincide = (texto: string) => cedulaLimpia.length >= 5 &&
+        (texto.match(/\d(?:[\d. \t-]*\d)?/g) ?? [])
+          .some((numero) => numero.replace(/\D/g, '') === cedulaLimpia);
+      const variantes = [
+        () => base.clone().grayscale().normalise().sharpen().png().toBuffer(),
+        async () => sharp(await base.clone().grayscale().png().toBuffer())
+          .clahe({ width: 64, height: 64, maxSlope: 3 }).png().toBuffer(),
+        () => base.clone().grayscale().normalise().threshold(155).png().toBuffer(),
+      ];
+      const limite = Date.now() + 30000;
+      for (let intento = 0; intento < variantes.length; intento++) {
+        try {
+          const buffer = await variantes[intento]();
+          const disponible = limite - Date.now();
+          if (disponible <= 0) break;
+          const texto = await new Promise<string>((resolve, reject) => {
+            const proceso = execFile('tesseract', [
+              'stdin', 'stdout', '-l', 'spa', '--oem', '1', '--psm', intento === 1 ? '6' : '11', '--dpi', '300',
+            ], {
+              timeout: Math.min(10000, disponible),
+              killSignal: 'SIGKILL',
+              maxBuffer: 1024 * 1024,
+              windowsHide: true,
+              env: { ...process.env, OMP_THREAD_LIMIT: '1' },
+            }, (error, stdout) => error ? reject(error) : resolve(stdout));
+            proceso.stdin?.on('error', () => undefined);
+            proceso.stdin?.end(buffer);
+          });
+          if (coincide(texto)) return { ok: true, mensaje: 'ok', fotoOptim };
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw error;
+        }
       }
-      // Timeout de seguridad para que una petición no cuelgue el backend.
-      texto = await Promise.race<string>([
-        tesseract.recognize(ocrBuffer, { lang: 'spa', oem: 1, psm: 6 }),
-        new Promise<string>((_, rej) =>
-          setTimeout(() => rej(new Error('OCR timeout')), 25000),
-        ),
-      ]);
     } catch {
       return {
         ok: false,
@@ -545,20 +558,12 @@ export class TiendaEmpleadosService implements OnModuleInit {
       };
     }
 
-    // Dígitos leídos por OCR (sin separadores) y dígitos de la cédula esperada.
-    const digitos = (texto.match(/\d/g) ?? []).join('');
-    const cedulaLimpia = cedula.replace(/\D/g, '');
-    const cedulaEncontrada = cedulaLimpia.length >= 5 && digitos.includes(cedulaLimpia);
-
-    if (!cedulaEncontrada) {
-      return {
+    return {
         ok: false,
         mensaje:
           'No reconocimos el número de tu cédula en la foto. Asegúrate de que se vean claramente los números y vuelve a intentar.',
         fotoOptim,
       };
-    }
-    return { ok: true, mensaje: 'ok', fotoOptim };
   }
 
   // ---------------------------------------------------------------------------

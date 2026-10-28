@@ -57,7 +57,7 @@ export class RunErrandsController {
   @Post('domiciliarios')
   @Permisos('run_errands.editar')
   crearDomiciliario(
-    @Body() body: { nombre: string; telefono?: string; cedula?: string; email?: string; puntoVentaId?: string | null },
+    @Body() body: { nombre: string; telefono?: string; cedula?: string; email?: string; puntoVentaId?: string | null; todosLosPuntos?: boolean },
   ) {
     return this.svc.crearDomiciliario(body);
   }
@@ -69,7 +69,7 @@ export class RunErrandsController {
     @Body()
     body: {
       nombre?: string; telefono?: string; cedula?: string; email?: string;
-      puntoVentaId?: string | null; activo?: boolean;
+      puntoVentaId?: string | null; activo?: boolean; todosLosPuntos?: boolean;
     },
   ) {
     return this.svc.actualizarDomiciliario(id, body);

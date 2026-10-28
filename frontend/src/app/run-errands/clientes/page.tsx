@@ -103,7 +103,7 @@ export default function ClientesPage() {
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && cargar()}
-          placeholder="Buscar por nombre o código…"
+          placeholder="Buscar por nombre, código, dirección, barrio o ciudad…"
           className="flex-1 rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber"
         />
         <button onClick={cargar} className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-medium">Buscar</button>

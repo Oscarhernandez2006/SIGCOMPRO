@@ -14,7 +14,7 @@ import {
   type PuntoVenta,
 } from "@/lib/runErrandsApi";
 
-const vacio = { nombre: "", telefono: "", cedula: "", email: "", puntoVentaId: "" };
+const vacio = { nombre: "", telefono: "", cedula: "", email: "", puntoVentaId: "", todosLosPuntos: false };
 
 export default function DomiciliariosPage() {
   const usuario = getUsuario();
@@ -26,6 +26,9 @@ export default function DomiciliariosPage() {
   const [form, setForm] = useState(vacio);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [buscar, setBuscar] = useState("");
+  const normalizar = (valor: string) => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const filtrados = items.filter((item) => normalizar(item.nombre).includes(normalizar(buscar.trim())));
 
   function cargar() {
     setLoading(true);
@@ -41,6 +44,7 @@ export default function DomiciliariosPage() {
     setForm({
       nombre: d.nombre, telefono: d.telefono ?? "", cedula: d.cedula ?? "",
       email: d.email ?? "", puntoVentaId: d.puntoVentaId ?? "",
+      todosLosPuntos: d.todosLosPuntos ?? false,
     });
   }
 
@@ -58,7 +62,8 @@ export default function DomiciliariosPage() {
         telefono: form.telefono.trim() || undefined,
         cedula: form.cedula.trim() || undefined,
         email: form.email.trim() || undefined,
-        puntoVentaId: form.puntoVentaId || null,
+        puntoVentaId: form.todosLosPuntos ? null : form.puntoVentaId || null,
+        todosLosPuntos: form.todosLosPuntos,
       };
       if (editandoId) await actualizarDomiciliario(editandoId, data);
       else await crearDomiciliario(data);
@@ -94,7 +99,11 @@ export default function DomiciliariosPage() {
           <input placeholder="Nombre" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
           <input placeholder="Teléfono" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
           <input placeholder="Cédula" value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber" />
-          <select value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber">
+          <label className="flex items-center gap-2 text-sm text-brand-black sm:col-span-2 lg:col-span-5">
+            <input type="checkbox" checked={form.todosLosPuntos} onChange={(e) => setForm({ ...form, todosLosPuntos: e.target.checked })} className="h-4 w-4 accent-brand-wine" />
+            Disponible en todos los puntos
+          </label>
+          <select aria-label="Punto del domiciliario" disabled={form.todosLosPuntos} value={form.puntoVentaId} onChange={(e) => setForm({ ...form, puntoVentaId: e.target.value })} className="rounded-xl border border-brand-brown/20 px-3 py-2 text-sm outline-none focus:border-brand-amber disabled:opacity-50">
             <option value="">Sin PDV</option>
             {pdvs.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
@@ -107,10 +116,17 @@ export default function DomiciliariosPage() {
         </div>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
+      <input
+        aria-label="Buscar domiciliario por nombre"
+        placeholder="Buscar domiciliario por nombre..."
+        value={buscar}
+        onChange={(e) => setBuscar(e.target.value)}
+        className="mt-6 w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm outline-none focus:border-brand-amber"
+      />
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-brown/10 bg-white">
         {loading ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Cargando…</div>
-        ) : items.length === 0 ? (
+        ) : filtrados.length === 0 ? (
           <div className="p-6 text-center text-sm text-brand-black/50">Sin domiciliarios.</div>
         ) : (
           <table className="w-full text-left text-sm">
@@ -124,11 +140,11 @@ export default function DomiciliariosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-brown/10">
-              {items.map((d) => (
+              {filtrados.map((d) => (
                 <tr key={d.id}>
                   <td className="px-4 py-2 font-medium text-brand-black">{d.nombre}</td>
                   <td className="px-4 py-2 text-brand-black/70">{d.telefono ?? "—"}</td>
-                  <td className="px-4 py-2 text-brand-black/70">{d.puntoVenta?.nombre ?? "—"}</td>
+                  <td className="px-4 py-2 text-brand-black/70">{d.todosLosPuntos ? "Todos los puntos" : d.puntoVenta?.nombre ?? "Sin PDV"}</td>
                   <td className="px-4 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${d.activo ? "bg-emerald-50 text-emerald-700" : "bg-brand-black/5 text-brand-black/50"}`}>
                       {d.activo ? "Activo" : "Inactivo"}

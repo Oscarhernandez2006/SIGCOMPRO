@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  BadGatewayException,
   Injectable,
   Logger,
   NotFoundException,
@@ -30,6 +31,7 @@ export interface RunErrandsDomiciliario {
   cedula: string | null;
   email: string | null;
   puntoVentaId: string | null;
+  todosLosPuntos: boolean;
   activo: boolean;
   creadoEn: string;
   puntoVenta?: RunErrandsPuntoVenta | null;
@@ -94,6 +96,7 @@ function mapDomiciliario(r: Record<string, unknown>): RunErrandsDomiciliario {
     cedula: (r.cedula as string) ?? null,
     email: (r.email as string) ?? null,
     puntoVentaId: (r.punto_venta_id as string) ?? null,
+    todosLosPuntos: r.todos_los_puntos === true,
     activo: Boolean(r.activo),
     creadoEn: String(r.creado_en),
     puntoVenta: r.pdv_nombre
@@ -177,6 +180,7 @@ function mapPedido(r: Record<string, unknown>): RunErrandsPedido {
           cedula: null,
           email: null,
           puntoVentaId: null,
+          todosLosPuntos: r.dom_todos_los_puntos === true,
           activo: true,
           creadoEn: '',
         }
@@ -218,6 +222,9 @@ export class RunErrandsService implements OnModuleInit {
     `);
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS run_errands_domiciliarios_pdv_idx ON run_errands_domiciliarios(punto_venta_id)`,
+    );
+    await this.pool.query(
+      `ALTER TABLE run_errands_domiciliarios ADD COLUMN IF NOT EXISTS todos_los_puntos boolean NOT NULL DEFAULT false`,
     );
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS run_errands_clientes (
@@ -321,10 +328,10 @@ export class RunErrandsService implements OnModuleInit {
     const where: string[] = [];
     const values: unknown[] = [];
     if (!todos) where.push('d.activo = true');
-    if (pdv === 'SIN') where.push('d.punto_venta_id IS NULL');
+    if (pdv === 'SIN') where.push('d.punto_venta_id IS NULL AND d.todos_los_puntos = false');
     else if (pdv && pdv !== 'TODOS') {
       values.push(pdv);
-      where.push(`d.punto_venta_id = $${values.length}`);
+      where.push(`(d.punto_venta_id = $${values.length} OR d.todos_los_puntos = true)`);
     }
     const r = await this.pool.query(
       `SELECT d.*, p.nombre AS pdv_nombre, p.indicador AS pdv_indicador, p.activo AS pdv_activo
@@ -343,13 +350,15 @@ export class RunErrandsService implements OnModuleInit {
     cedula?: string;
     email?: string;
     puntoVentaId?: string | null;
+    todosLosPuntos?: boolean;
   }): Promise<RunErrandsDomiciliario> {
     if (!data.nombre?.trim()) throw new BadRequestException('Falta el nombre');
     const id = randomUUID();
     await this.pool.query(
-      `INSERT INTO run_errands_domiciliarios (id, nombre, telefono, cedula, email, punto_venta_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, data.nombre.trim(), data.telefono ?? null, data.cedula ?? null, data.email ?? null, data.puntoVentaId ?? null],
+      `INSERT INTO run_errands_domiciliarios (id, nombre, telefono, cedula, email, punto_venta_id, todos_los_puntos)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, data.nombre.trim(), data.telefono ?? null, data.cedula ?? null, data.email ?? null,
+        data.todosLosPuntos === true ? null : data.puntoVentaId ?? null, data.todosLosPuntos === true],
     );
     const [item] = await this.listarDomiciliarioPorId(id);
     return item;
@@ -375,6 +384,7 @@ export class RunErrandsService implements OnModuleInit {
       cedula?: string;
       email?: string;
       puntoVentaId?: string | null;
+      todosLosPuntos?: boolean;
       activo?: boolean;
     },
   ): Promise<RunErrandsDomiciliario> {
@@ -383,7 +393,8 @@ export class RunErrandsService implements OnModuleInit {
       telefono: data.telefono,
       cedula: data.cedula,
       email: data.email,
-      punto_venta_id: data.puntoVentaId,
+      punto_venta_id: data.todosLosPuntos === true ? null : data.puntoVentaId,
+      todos_los_puntos: data.todosLosPuntos,
       activo: data.activo,
     };
     const sets: string[] = [];
@@ -467,7 +478,8 @@ export class RunErrandsService implements OnModuleInit {
     if (!todos) where.push('activo = true');
     if (buscar?.trim()) {
       values.push(`%${buscar.trim()}%`);
-      where.push(`(nombre ILIKE $${values.length} OR codigo ILIKE $${values.length})`);
+      where.push(`(nombre ILIKE $${values.length} OR codigo ILIKE $${values.length}
+        OR direccion ILIKE $${values.length} OR barrio ILIKE $${values.length} OR ciudad ILIKE $${values.length})`);
     }
     const r = await this.pool.query(
       `SELECT * FROM run_errands_clientes ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY nombre ASC`,
@@ -608,7 +620,7 @@ export class RunErrandsService implements OnModuleInit {
       c.referencia AS cli_referencia, c.barrio AS cli_barrio, c.ciudad AS cli_ciudad, c.region AS cli_region,
       c.telefono AS cli_telefono, c.email AS cli_email,
       p.nombre AS pdv_nombre, p.indicador AS pdv_indicador,
-      d.nombre AS dom_nombre, d.telefono AS dom_telefono
+      d.nombre AS dom_nombre, d.telefono AS dom_telefono, d.todos_los_puntos AS dom_todos_los_puntos
     FROM run_errands_pedidos pe
     JOIN run_errands_clientes c ON c.id = pe.cliente_id
     LEFT JOIN run_errands_puntos_venta p ON p.id = pe.punto_venta_id
@@ -983,15 +995,27 @@ export class RunErrandsService implements OnModuleInit {
       );
       pods = new Map();
       if (status >= 200 && status < 300) {
-        const json = JSON.parse(text) as { data?: { attributes?: { code?: string | null; status?: string | null; reason?: string | null } }[] };
-        for (const item of json.data ?? []) {
-          const a = item.attributes ?? {};
-          if (!a.code) continue;
-          pods.set(a.code, { status: (a.status ?? '').toLowerCase(), reason: a.reason ?? null });
+        type OrdenPod = { code?: string; status?: string; customer_status?: string; reason?: string; comment?: string };
+        const json = JSON.parse(text) as {
+          response?: { orders?: OrdenPod[] }[];
+          data?: { attributes?: OrdenPod }[];
+        };
+        if (!Array.isArray(json.response) && !Array.isArray(json.data)) throw new Error('Respuesta POD inválida');
+        const ordenes = Array.isArray(json.response)
+          ? json.response.flatMap((parada) => parada.orders ?? [])
+          : (json.data ?? []).map((item) => item.attributes ?? {});
+        for (const orden of ordenes) {
+          if (!orden.code) continue;
+          const estado = (orden.customer_status || orden.status || '').trim().toLowerCase();
+          const previo = pods.get(orden.code);
+          if (previo && ['approved', 'rejected'].includes(previo.status) && !['approved', 'rejected'].includes(estado)) continue;
+          pods.set(orden.code, { status: estado, reason: orden.reason || orden.comment || null });
         }
+      } else {
+        throw new Error(`Drivin HTTP ${status}`);
       }
     } catch {
-      pods = new Map();
+      throw new BadGatewayException('No se pudo sincronizar con Drivin. Los estados guardados no se modificaron.');
     }
 
     const r = await this.pool.query(
