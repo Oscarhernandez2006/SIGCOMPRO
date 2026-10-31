@@ -39,6 +39,16 @@ export const PG_POOL = 'PG_POOL';
         pool.on('error', (err) => {
           logger.error(`Error en cliente ocioso del pool: ${err.message}`);
         });
+        // El manejador anterior solo cubre clientes OCIOSOS. Un cliente
+        // PRESTADO (pool.connect() en una transacción) que pierde el socket
+        // (read ETIMEDOUT / ECONNRESET con la BD remota) emite 'error' sin
+        // listeners y también tumba el proceso. Se registra y la consulta en
+        // curso falla con su propio error; el pool descarta el cliente.
+        pool.on('connect', (client) => {
+          client.on('error', (err) => {
+            logger.error(`Error en conexión con la BD: ${err.message}`);
+          });
+        });
         return pool;
       },
     },
