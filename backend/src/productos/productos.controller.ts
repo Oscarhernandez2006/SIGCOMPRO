@@ -33,6 +33,11 @@ export class ProductosController {
     return this.productos.ultimaSincronizacion();
   }
 
+  @Get('movimientos')
+  movimientos(@Query('dias') dias?: string) {
+    return this.productos.movimientos(dias ? Number(dias) : undefined);
+  }
+
   @Get()
   listar(@Query('lista') lista?: string, @Query('buscar') buscar?: string) {
     return this.productos.listar(lista, buscar);

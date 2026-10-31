@@ -53,3 +53,8 @@ export function sincronizarProductos(): Promise<{
 export function actualizarProductoAgotado(lista_precio: string, referencia: string, agotado: boolean): Promise<{ lista_precio: string; referencia: string; agotado: boolean }> {
   return apiFetch('/productos/agotado', { method: 'PATCH', body: JSON.stringify({ lista_precio, referencia, agotado }) });
 }
+
+/** Nº de pedidos recientes por referencia (sin ceros a la izquierda). */
+export function movimientosProductos(dias = 90): Promise<Record<string, number>> {
+  return apiFetch<Record<string, number>>(`/productos/movimientos?dias=${dias}`);
+}

@@ -362,6 +362,28 @@ export class ProductosService implements OnModuleInit {
     return { lista_precio: listaLimpia, referencia: referenciaLimpia, agotado };
   }
 
+  /**
+   * Cuántos pedidos (últimos `dias`) incluyen cada referencia, en todos los
+   * puntos. Sirve para ordenar la lista de productos: primero los que sí se
+   * mueven. Devuelve { referencia: nPedidos } (referencia sin ceros a la izq.).
+   */
+  async movimientos(dias = 90): Promise<Record<string, number>> {
+    const d = Math.min(365, Math.max(1, Math.trunc(Number(dias)) || 90));
+    const res = await this.pool.query<{ referencia: string; n: string }>(
+      `SELECT ltrim(btrim(it->'producto'->>'referencia'), '0') AS referencia,
+              COUNT(DISTINCT p.id) AS n
+         FROM pedidos p,
+              jsonb_array_elements(COALESCE(p.data->'carrito', '[]'::jsonb)) AS it
+        WHERE p.fecha >= now() - ($1 || ' days')::interval
+          AND COALESCE(it->'producto'->>'referencia', '') <> ''
+        GROUP BY 1`,
+      [String(d)],
+    );
+    const mapa: Record<string, number> = {};
+    for (const r of res.rows) if (r.referencia) mapa[r.referencia] = Number(r.n) || 0;
+    return mapa;
+  }
+
   async ultimaSincronizacion(): Promise<string | null> {
     const res = await this.pool.query<{ max: string | null }>(
       `SELECT MAX(sincronizado_en) AS max FROM productos_precios`,
