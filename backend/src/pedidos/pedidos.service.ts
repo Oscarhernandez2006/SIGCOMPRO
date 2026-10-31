@@ -1196,11 +1196,15 @@ export class PedidosService implements OnModuleInit {
         );
       }
       // Solo bloquear anulación si el pedido ya fue facturado o despachado al ERP.
+      // Los administradores sí pueden anular/cancelar en cualquier estado.
+      const esAdmin = ['administrador', 'administrador app', 'desarrollador'].includes(
+        normEstado(user?.rol),
+      );
       const yaFacturadoODespachado =
         ['facturado', 'despachado', 'en tránsito', 'en transito', 'entregado', 'devolución', 'devolucion'].includes(
           normEstado(estadoAnterior),
         );
-      if (estaAnulandoAhora && yaFacturadoODespachado) {
+      if (estaAnulandoAhora && yaFacturadoODespachado && !esAdmin) {
         throw new BadRequestException(
           'No se puede anular o cancelar un pedido que ya fue facturado o despachado.',
         );

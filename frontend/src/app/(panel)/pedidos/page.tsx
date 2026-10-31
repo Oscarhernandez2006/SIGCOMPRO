@@ -107,6 +107,10 @@ export default function PedidosPage() {
       imprimir: puedeAccion(usuario, "pedidos.imprimir"),
       clonar: puedeAccion(usuario, "pedidos.clonar"),
       sincronizar: puedeAccion(usuario, "pedidos.sincronizar"),
+      // Los administradores pueden anular/cancelar en CUALQUIER estado (incluso despachado).
+      anularEnCualquierEstado: ["administrador", "administrador app", "desarrollador"].includes(
+        (usuario?.rol ?? "").trim().toLowerCase(),
+      ),
     }),
     [usuario],
   );
@@ -785,14 +789,17 @@ export default function PedidosPage() {
                               </svg>
                             </button>
                           )}
-                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver, Reimprimir y Reenvío. */}
+                          {/* Un pedido DESPACHADO / en tránsito / entregado solo permite Ver, Reimprimir y Reenvío
+                              (los administradores además pueden Anular/Cancelar en cualquier estado). */}
                           {!yaDespachado(p.estado) && (
-                          <>
                           <button onClick={permite.editar ? () => abrirEdicion(p) : sinPermiso.mostrar} aria-label="Editar pedido" title="Editar el pedido" className={`rounded-lg border border-brand-brown/15 p-1.5 text-brand-wine transition hover:bg-brand-cream-soft ${permite.editar ? "" : "opacity-50"}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
                             </svg>
                           </button>
+                          )}
+                          {(!yaDespachado(p.estado) || permite.anularEnCualquierEstado) && (
+                          <>
                           <button
                             onClick={
                               bloqueadoPorReplicas
