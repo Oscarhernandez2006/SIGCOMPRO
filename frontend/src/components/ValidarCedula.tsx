@@ -63,8 +63,6 @@ function ValidarCedulaActiva({
   const [esperando, setEsperando] = useState(false);
   const [conExtension, setConExtension] = useState(false);
   const [manual, setManual] = useState(false);
-  // Último paso que reporta la extensión (ej. "Cédula llenada", "Consultando…").
-  const [paso, setPaso] = useState<string | null>(null);
 
   // Se consulta la cédula base: "1044616409-1" (dirección alterna del mismo
   // cliente) -> "1044616409". El campo del formulario se deja tal cual.
@@ -98,16 +96,14 @@ function ValidarCedulaActiva({
         setNombres(formatear(d.nombres ?? ""));
         setApellidos(formatear(d.apellidos ?? ""));
         if (d.numero && numero && d.numero !== numero) {
-          setAviso(`Ojo: ADRES devolvió la cédula ${d.numero}, no ${numero}.`);
+          setAviso(`Ojo: la validación devolvió la cédula ${d.numero}, no ${numero}.`);
         } else if (!d.nombres && !d.apellidos) {
-          setAviso("ADRES no devolvió nombres. Escríbelos abajo.");
+          setAviso("La validación no devolvió nombres. Escríbelos abajo.");
         } else {
           setAviso(null);
         }
-      } else if (d.tipo === "SIGCOMPRO_ADRES_PROGRESO") {
-        setPaso((d as { texto?: string }).texto ?? null);
       } else if (d.tipo === "SIGCOMPRO_ADRES_ERROR") {
-        setAviso(`ADRES: ${d.mensaje ?? "no se pudo consultar"}`);
+        setAviso(`No se pudo validar: ${d.mensaje ?? "intenta de nuevo"}`);
       }
     };
     window.addEventListener("message", alMensaje);
@@ -135,7 +131,6 @@ function ValidarCedulaActiva({
     setAbierto(true);
     if (ext) {
       // La extensión abre ADRES, llena la cédula y devuelve el resultado.
-      setPaso("Abriendo ADRES…");
       setEsperando(true);
       window.postMessage({ tipo: "SIGCOMPRO_ADRES_CONSULTAR", cedula: numero }, window.location.origin);
       return;
@@ -180,7 +175,7 @@ function ValidarCedulaActiva({
       <button
         type="button"
         onClick={validar}
-        title="Validar la cédula en ADRES y traer el nombre completo"
+        title="Validar la cédula y traer el nombre completo"
         className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-brand-wine/30 px-2.5 text-xs font-semibold text-brand-wine transition hover:bg-brand-wine/10"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
@@ -196,7 +191,7 @@ function ValidarCedulaActiva({
               <div>
                 <h2 className="font-serif text-lg font-bold text-brand-wine">Validar cédula</h2>
                 <p className="text-xs text-brand-black/60">
-                  Consulta en ADRES · Cédula {numero || "—"}
+                  {conExtension ? "Validación de identidad" : "Consulta en ADRES"} · Cédula {numero || "—"}
                   {conSufijo && <> (cliente {cedula.trim()}, dirección alterna)</>}
                 </p>
               </div>
@@ -217,10 +212,9 @@ function ValidarCedulaActiva({
               {numero.length >= 5 && conExtension && esperando && (
                 <div className="flex flex-col items-center gap-3 rounded-xl bg-brand-cream-soft/50 px-4 py-6 text-center">
                   <span className="h-9 w-9 animate-spin rounded-full border-4 border-brand-amber border-t-transparent" />
-                  <p className="text-sm font-semibold text-brand-black">Consultando la cédula {numero} en ADRES…</p>
-                  {paso && <p className="text-xs font-medium text-sky-700">{paso}</p>}
+                  <p className="text-sm font-semibold text-brand-black">Validando información…</p>
                   <p className="text-xs text-brand-black/70">
-                    La consulta corre en segundo plano y los datos llegarán aquí solos en unos segundos. Si ADRES pide un reto del captcha, su ventana se mostrará para resolverlo.
+                    La validación corre en segundo plano y los datos llegarán aquí solos en unos segundos. Si se pide resolver un captcha, se mostrará una ventana para hacerlo.
                   </p>
                   <button
                     type="button"
