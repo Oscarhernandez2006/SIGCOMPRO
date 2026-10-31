@@ -8,6 +8,7 @@ import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdm
 import { puedeAccion } from "@/lib/permisos";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import ZoomImagen from "@/components/ZoomImagen";
+import PuntosEnvioFundacion from "@/components/PuntosEnvioFundacion";
 import { DetalleDevolucionModal, RegistrarDevolucionModal } from "@/components/DevolucionModal";
 import {
   cargarEstadoPedidos,
@@ -440,6 +441,8 @@ export default function DespachoPage() {
     numero: number;
     modo: "crear" | "ver";
   } | null>(null);
+  // Modal "Puntos de envío": direcciones alternas del cliente → órdenes "-NF" a Drivin.
+  const [modalPuntosEnvio, setModalPuntosEnvio] = useState<Pedido | null>(null);
   // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
   // recursos, según el punto) y así cerrar el ciclo a Despachado cuando Drivin
   // rebotó el pedido y no lo asignó.
@@ -2899,6 +2902,25 @@ export default function DespachoPage() {
                                 })}
                             </div>
                           )}
+                          {/* Puntos de envío: direcciones alternas del cliente (fundaciones). */}
+                          <button
+                            type="button"
+                            disabled={anulado}
+                            onClick={() => setModalPuntosEnvio(p)}
+                            title="Enviar este pedido a las direcciones alternas del cliente (órdenes comanda-NF en Drivin)"
+                            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-40"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                            </svg>
+                            Puntos de envío
+                            {(m.enviosFundacion?.length ?? 0) > 0 && (
+                              <span className="rounded-full bg-sky-600 px-1.5 text-[10px] font-bold text-white">
+                                {m.enviosFundacion!.length}
+                              </span>
+                            )}
+                          </button>
                         </div>}
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
@@ -3278,6 +3300,20 @@ export default function DespachoPage() {
             </div>
           </div>
         </div>
+      )}
+      {modalPuntosEnvio && (
+        <PuntosEnvioFundacion
+          pedidoId={modalPuntosEnvio.id}
+          comanda={modalPuntosEnvio.comanda}
+          cliente={modalPuntosEnvio.cliente?.nombre ?? ""}
+          onClose={() => setModalPuntosEnvio(null)}
+          onEnvios={(envios) =>
+            setMeta((prev) => ({
+              ...prev,
+              [modalPuntosEnvio.id]: { ...prev[modalPuntosEnvio.id], enviosFundacion: envios },
+            }))
+          }
+        />
       )}
       {modalReplica && (
         <ModalReplica

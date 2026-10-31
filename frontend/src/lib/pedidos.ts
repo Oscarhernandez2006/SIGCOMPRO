@@ -95,6 +95,8 @@ export interface DespachoMeta {
   comprobante?: { tiene: boolean; confirmado: boolean } | null;
   /** Devolución registrada en Despacho (ya descontada de facturaValor). */
   devolucion?: DevolucionPedido;
+  /** Envíos a FUNDACIÓN: órdenes "comanda-NF" subidas a Drivin hacia direcciones alternas del cliente. */
+  enviosFundacion?: EnvioFundacion[];
 }
 
 export interface ProductoDevuelto {
@@ -480,5 +482,50 @@ export function cargarEntregasDrivin(
   >(`/pedidos/drivin/entregas`, {
     method: "POST",
     body: JSON.stringify({ comandas }),
+  });
+}
+
+/** Punto de envío alterno (fila "cédula-N" de clientes) del cliente de un pedido. */
+export interface PuntoEnvio {
+  sufijo: number;
+  nit: string;
+  nombre: string | null;
+  direccion: string | null;
+  barrio: string | null;
+  ciudad: string | null;
+  telefono: string | null;
+  /** Código de la orden en Drivin: "comanda-NF". */
+  comanda: string;
+}
+
+/** Envío a fundación ya subido a Drivin (meta.enviosFundacion). */
+export interface EnvioFundacion {
+  sufijo: number;
+  nit: string;
+  comanda: string;
+  direccion?: string;
+  barrio?: string;
+  ciudad?: string;
+  drivinEnviadoEn: string;
+}
+
+export function cargarPuntosEnvio(pedidoId: string): Promise<{
+  comanda: string;
+  nitBase: string;
+  puntos: PuntoEnvio[];
+  envios: EnvioFundacion[];
+}> {
+  return apiFetch(`/pedidos/${pedidoId}/puntos-envio`);
+}
+
+/** Sube a Drivin la orden "comanda-NF" hacia el punto de envío alterno N. */
+export function enviarFundacionADrivin(
+  pedidoId: string,
+  sufijo: number,
+  nit: string,
+): Promise<{ status: number; comanda: string }> {
+  return apiFetch(`/pedidos/${pedidoId}/puntos-envio/${sufijo}/drivin`, {
+    method: "POST",
+    body: JSON.stringify({ nit }),
   });
 }

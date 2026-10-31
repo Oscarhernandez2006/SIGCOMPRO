@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -221,6 +222,29 @@ export class PedidosController {
     const clubOnly = !tieneAccesoTotal(user?.rol) && permisos.includes('credito_empleados') && !permisos.includes('pedidos') && !permisos.includes('despacho');
     if (clubOnly && !id.startsWith('club:')) throw new ForbiddenException('Solo puedes gestionar compras del Club Yo Soy Santacruz.');
     return this.pedidos.actualizarMeta(id, cambios, user, clubOnly);
+  }
+
+  /** Puntos de envío alternos (fundaciones) del cliente del pedido + envíos ya hechos. */
+  @Get(':id/puntos-envio')
+  @Permisos('despacho')
+  puntosEnvio(@Param('id') id: string) {
+    return this.pedidos.puntosEnvio(id);
+  }
+
+  /** Sube a Drivin una orden "comanda-NF" hacia el punto de envío alterno N. */
+  @Post(':id/puntos-envio/:sufijo/drivin')
+  @Permisos('despacho')
+  async drivinFundacion(
+    @Param('id') id: string,
+    @Param('sufijo') sufijo: string,
+    @Body() body: { nit?: string },
+  ) {
+    const n = Number(sufijo);
+    const nit = String(body?.nit ?? '').trim();
+    if (!Number.isInteger(n) || n < 1 || !nit) {
+      throw new BadRequestException('Punto de envío inválido.');
+    }
+    return this.pedidos.enviarADrivin(id, undefined, undefined, { nit, sufijo: n });
   }
 
   /** Agrega la siguiente réplica (atómico: no pisa cambios de otras pantallas). */

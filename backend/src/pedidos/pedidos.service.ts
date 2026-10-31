@@ -97,6 +97,17 @@ export type CambiosReplica = Partial<
 
 const MAX_REPLICAS = 5;
 
+/** Envío a FUNDACIÓN: orden "comanda-NF" a un punto de envío alterno del cliente ("cédula-N"). */
+export interface EnvioFundacionMeta {
+  sufijo: number;
+  nit: string;
+  comanda: string;
+  direccion?: string;
+  barrio?: string;
+  ciudad?: string;
+  drivinEnviadoEn: string;
+}
+
 /** Orden de un plan de Drivin, cruzada con su pedido de SIGCOMPRO. */
 export interface OrdenPlan {
   codigo: string;
@@ -1976,7 +1987,11 @@ export class PedidosService implements OnModuleInit {
    * Calcula los campos de despacho de un pedido (el MISMO mapeo que usa el
    * Excel de ruteo). Lo comparten el Excel y el envío directo a Drivin.
    */
-  private async construirDespacho(id: string, replica?: number) {
+  private async construirDespacho(
+    id: string,
+    replica?: number,
+    alterno?: { nit: string; sufijo: number },
+  ) {
     const res = await this.pool.query<{ data: PedidoData }>(
       `SELECT data FROM pedidos WHERE id = $1 LIMIT 1`,
       [id],
@@ -1989,13 +2004,30 @@ export class PedidosService implements OnModuleInit {
     // reenvío tras corregir el cliente suba la información corregida.
     await this.refrescarClientes([pedido]);
 
+    // Punto de envío alterno (fundación): la orden va a OTRA dirección del
+    // mismo cliente (fila "cédula-N" de clientes) con el sufijo "-NF".
+    if (alterno) {
+      const alt = await this.pool.query<NonNullable<PedidoData['cliente']>>(
+        `SELECT id::text AS id, nit_cedula, nombre, direccion, referencia, barrio, ciudad,
+                telefono, correo, lat, lng
+           FROM clientes WHERE nit_cedula = $1 LIMIT 1`,
+        [alterno.nit],
+      );
+      if (!alt.rowCount) throw new NotFoundException('El punto de envío alterno no existe.');
+      pedido.cliente = alt.rows[0];
+    }
+
     const cliente = pedido.cliente ?? {};
     const punto = pedido.punto ?? {};
     // Réplica: el mismo pedido se manda por partes. El ERP lo entiende como el
     // mismo pedido; el sufijo "-N" indica que es una réplica del consecutivo.
     const esReplica =
-      typeof replica === 'number' && replica >= 1 && replica <= 5;
-    const sufijoReplica = esReplica ? `-${replica}` : '';
+      (typeof replica === 'number' && replica >= 1 && replica <= 5) || Boolean(alterno);
+    const sufijoReplica = alterno
+      ? `-${alterno.sufijo}F`
+      : esReplica
+        ? `-${replica}`
+        : '';
     const comanda = `${String(pedido.comanda ?? '')}${sufijoReplica}`;
 
     // Localidad del punto: "PDV Carnes Santacruz La 70" -> "La 70".
@@ -3809,6 +3841,7 @@ export class PedidosService implements OnModuleInit {
     id: string,
     replica?: number,
     vehiculo?: string,
+    alterno?: { nit: string; sufijo: number },
   ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
     const apiKey = this.config.get<string>('DRIVIN_API_KEY');
     if (!apiKey) {
@@ -3817,7 +3850,7 @@ export class PedidosService implements OnModuleInit {
       );
     }
 
-    const d = await this.construirDespacho(id, replica);
+    const d = await this.construirDespacho(id, replica, alterno);
 
     // Config Drivin del punto (interruptor + schema). Si el punto NO está
     // integrado con Drivin, no se sube (flujo manual).
@@ -3925,7 +3958,104 @@ export class PedidosService implements OnModuleInit {
         this.logger.warn(`No se pudo marcar la réplica ${d.comanda} como enviada: ${String(e)}`),
       );
     }
+    if (alterno) {
+      await this.registrarEnvioFundacion(id, {
+        sufijo: alterno.sufijo,
+        nit: alterno.nit,
+        comanda: d.comanda,
+        direccion: d.direccion,
+        barrio: d.barrio,
+        ciudad: d.ciudad,
+        drivinEnviadoEn: new Date().toISOString(),
+      }).catch((e) =>
+        this.logger.warn(`No se pudo registrar el envío ${d.comanda}: ${String(e)}`),
+      );
+    }
     return { status, comanda: d.comanda, respuesta: data };
+  }
+
+  /**
+   * Puntos de envío alternos del cliente del pedido: filas de `clientes` con
+   * nit "cédula-N" (sin la dirección que ya tiene el pedido). Incluye los
+   * envíos a fundación ya hechos (meta.enviosFundacion).
+   */
+  async puntosEnvio(id: string): Promise<{
+    comanda: string;
+    nitBase: string;
+    puntos: Array<{
+      sufijo: number;
+      nit: string;
+      nombre: string | null;
+      direccion: string | null;
+      barrio: string | null;
+      ciudad: string | null;
+      telefono: string | null;
+      comanda: string;
+    }>;
+    envios: EnvioFundacionMeta[];
+  }> {
+    const res = await this.pool.query<{ data: PedidoData; meta: DespachoMeta | null }>(
+      `SELECT data, meta FROM pedidos WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+    const pedido = res.rows[0]?.data;
+    if (!pedido) throw new NotFoundException('Pedido no encontrado');
+    const nitPedido = String(pedido.cliente?.nit_cedula ?? '').trim();
+    const nitBase = nitPedido.replace(/-\d+$/, '');
+    const comanda = String(pedido.comanda ?? '');
+    if (!nitBase) return { comanda, nitBase, puntos: [], envios: [] };
+    const filas = await this.pool.query<{
+      nit_cedula: string;
+      nombre: string | null;
+      direccion: string | null;
+      barrio: string | null;
+      ciudad: string | null;
+      telefono: string | null;
+    }>(
+      `SELECT nit_cedula, nombre, direccion, barrio, ciudad, telefono
+         FROM clientes
+        WHERE nit_cedula ~ ('^' || $1 || '-[0-9]+$') AND nit_cedula <> $2
+          AND COALESCE(activo, true)`,
+      [nitBase.replace(/[^0-9A-Za-z]/g, ''), nitPedido],
+    );
+    const puntos = filas.rows
+      .map((r) => {
+        const sufijo = Number(r.nit_cedula.match(/-(\d+)$/)?.[1] ?? 0);
+        return {
+          sufijo,
+          nit: r.nit_cedula,
+          nombre: r.nombre,
+          direccion: r.direccion,
+          barrio: r.barrio,
+          ciudad: r.ciudad,
+          telefono: r.telefono,
+          comanda: `${comanda}-${sufijo}F`,
+        };
+      })
+      .filter((p) => p.sufijo > 0)
+      .sort((a, b) => a.sufijo - b.sufijo);
+    const envios = Array.isArray(res.rows[0]?.meta?.enviosFundacion)
+      ? (res.rows[0].meta!.enviosFundacion as EnvioFundacionMeta[])
+      : [];
+    return { comanda, nitBase, puntos, envios };
+  }
+
+  /** Guarda (o reemplaza) el registro de un envío a fundación en meta.enviosFundacion. */
+  private async registrarEnvioFundacion(id: string, envio: EnvioFundacionMeta) {
+    await this.pool.query(
+      `UPDATE pedidos
+          SET meta = jsonb_set(
+                COALESCE(meta, '{}'::jsonb),
+                '{enviosFundacion}',
+                (
+                  SELECT COALESCE(jsonb_agg(e), '[]'::jsonb)
+                    FROM jsonb_array_elements(COALESCE(meta->'enviosFundacion', '[]'::jsonb)) e
+                   WHERE (e->>'sufijo')::int <> $2
+                ) || jsonb_build_array($3::jsonb)
+              )
+        WHERE id = $1`,
+      [id, envio.sufijo, JSON.stringify(envio)],
+    );
   }
 
   /**
