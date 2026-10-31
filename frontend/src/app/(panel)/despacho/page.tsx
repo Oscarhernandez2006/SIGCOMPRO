@@ -276,8 +276,8 @@ const ESTADOS: EstadoDef[] = [
   },
   {
     key: "cancelados",
-    label: "Cancelados",
-    sub: "Anulados",
+    label: "Anulados / Cancelados",
+    sub: "Fuera de flujo",
     icon: Icono.xcirculo,
     match: (x) => x.anulado || norm(x.estado) === "anulado",
     chip: "bg-red-100 text-red-500",
@@ -1977,6 +1977,14 @@ export default function DespachoPage() {
               e.key === "total"
                 ? pedidosDeHoy.length + posterioresFuturos.length
                 : valorDeCard(e);
+            // La card de Cancelados discrimina cuántos se anularon y cuántos se cancelaron.
+            let sub = e.sub;
+            if (e.key === "cancelados") {
+              const fuera = pedidosDeHoy.filter((p) => e.match(p) && !atrasadosIds.has(p.id));
+              const nCanc = fuera.filter((p) => norm(p.estado) === "cancelado").length;
+              const nAnul = fuera.length - nCanc;
+              sub = `${nAnul} anulado${nAnul === 1 ? "" : "s"} · ${nCanc} cancelado${nCanc === 1 ? "" : "s"}`;
+            }
             // Todas las cards son interactivas: filtran la tabla por su estado.
             const activo = vista === e.key;
             return (
@@ -2001,7 +2009,7 @@ export default function DespachoPage() {
                 </span>
                 <div className="min-w-0 pr-1">
                   <p className="text-xs font-semibold text-brand-black">{e.label}</p>
-                  {e.sub && <p className="text-[10px] text-brand-black">{e.sub}</p>}
+                  {sub && <p className="text-[10px] text-brand-black">{sub}</p>}
                   <p className="text-[10px] font-semibold text-brand-wine">
                     {activo ? "Mostrando · clic para ocultar" : "Clic para ver"}
                   </p>
@@ -2099,7 +2107,10 @@ export default function DespachoPage() {
             <tbody className="divide-y-4 divide-double divide-brand-brown/20">
               {pedidosFiltrados.map((p) => {
                 const anulado = p.anulado;
-                const estado = anulado ? "Anulado" : p.estado || "En proceso";
+                // Un pedido fuera de flujo puede ser "Anulado" o "Cancelado": se respeta el que guardó Pedidos.
+                const estado = anulado
+                  ? norm(p.estado) === "cancelado" ? "Cancelado" : "Anulado"
+                  : p.estado || "En proceso";
                 const m = meta[p.id] ?? {};
                 const porcSel = porcBorrador[p.id] ?? m.porcionador ?? "";
                 // La facturación exige un porcionador asignado en el alistamiento.
@@ -2385,7 +2396,7 @@ export default function DespachoPage() {
                         <span className="uppercase tracking-wide">{esPosteriorPend ? "Posterior" : norm(estado) === "en proceso" ? "Pendiente" : estado}</span>
                       </div>
                       {anulado && p.motivo && (
-                        <div className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-center text-[11px] font-medium text-red-600">
+                        <div className={`mt-1.5 rounded-lg border px-3 py-1.5 text-center text-[11px] font-medium ${norm(estado) === "cancelado" ? "border-orange-200 bg-orange-50 text-orange-700" : "border-red-200 bg-red-50 text-red-600"}`}>
                           Motivo: {p.motivo}
                         </div>
                       )}

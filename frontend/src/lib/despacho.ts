@@ -85,8 +85,9 @@ export function colorEstado(estado?: string | null): string {
     case "devolucion":
       return "border-red-200 bg-red-100 text-red-700";
     case "anulado":
-    case "cancelado":
       return "border-red-200 bg-red-100 text-red-600";
+    case "cancelado":
+      return "border-orange-200 bg-orange-100 text-orange-700";
     case "en proceso":
     default:
       return "border-amber-200 bg-amber-100 text-amber-700";
