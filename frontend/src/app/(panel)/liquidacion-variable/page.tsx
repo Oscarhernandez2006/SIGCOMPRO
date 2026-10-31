@@ -505,14 +505,13 @@ function ModalTodosPuntos({
   }
 
   const columnas: { key: keyof ConfigLiquidacion; label: string; unidad?: "seg" }[] = [
+    { key: "porcionador_seg_por_kg", label: "Seg. mínimos/kg", unidad: "seg" },
     { key: "porcionador_minimo", label: "Mínimo garantizado" },
     { key: "porcionador_por_kg", label: "Porcionado (kg)" },
-    { key: "porcionador_seg_por_kg", label: "Seg. mínimos/kg", unidad: "seg" },
     { key: "porcionador_entero", label: "Entero (kg)" },
     { key: "porcionador_relajado", label: "Relajado o Picado (kg)" },
     { key: "porcionador_molida", label: "Molido (kg)" },
-    { key: "televentas_por_pedido", label: "Televentas" },
-    { key: "caja_por_pedido", label: "Caja" },
+    { key: "caja_por_pedido", label: "Coordinador" },
     { key: "facturacion_por_pedido", label: "Facturación" },
   ];
 
