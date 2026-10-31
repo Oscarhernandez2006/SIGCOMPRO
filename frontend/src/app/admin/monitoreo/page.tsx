@@ -446,7 +446,7 @@ function PuntoCard({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-semibold text-brand-black">Pedido #{p.comanda}</p>
+                  <p className="font-semibold text-brand-black">Comanda # {p.comanda}</p>
                   <p className="mt-0.5 break-words text-brand-black">
                     {p.cliente?.nombre || p.cliente?.nit_cedula}
                   </p>

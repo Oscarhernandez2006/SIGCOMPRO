@@ -3211,7 +3211,7 @@ export default function DespachoPage() {
                         className="flex items-center justify-between gap-2 rounded-lg border border-brand-amber/30 bg-brand-amber/5 px-3 py-2 text-sm"
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
-                          Pedido #{p.comanda}
+                          Comanda # {p.comanda}
                           <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
@@ -3237,7 +3237,7 @@ export default function DespachoPage() {
                         className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm"
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
-                          Pedido #{p.comanda}
+                          Comanda # {p.comanda}
                           <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
