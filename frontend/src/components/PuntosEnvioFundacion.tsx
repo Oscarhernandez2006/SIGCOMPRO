@@ -123,14 +123,69 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
 
   const enviadoPorSufijo = useMemo(() => new Map(envios.map((e) => [e.sufijo, e])), [envios]);
 
-  async function enviar(p: PuntoEnvio) {
+  // Selección (checks) de direcciones a enviar en lote.
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
+  const [progreso, setProgreso] = useState<{ hecho: number; total: number } | null>(null);
+  const pendientes = useMemo(() => puntos.filter((p) => !enviadoPorSufijo.has(p.sufijo)), [puntos, enviadoPorSufijo]);
+  const todosMarcados = pendientes.length > 0 && pendientes.every((p) => seleccion.has(p.sufijo));
+
+  function alternar(sufijo: number) {
+    setSeleccion((prev) => {
+      const s = new Set(prev);
+      if (s.has(sufijo)) s.delete(sufijo);
+      else s.add(sufijo);
+      return s;
+    });
+  }
+  function alternarTodos() {
+    setSeleccion(todosMarcados ? new Set() : new Set(pendientes.map((p) => p.sufijo)));
+  }
+
+  /** Envía en lote (secuencial, para no saturar Drivin) las direcciones marcadas. */
+  async function enviarSeleccion() {
+    const lista = puntos.filter((p) => seleccion.has(p.sufijo)).sort((a, b) => a.sufijo - b.sufijo);
+    if (lista.length === 0) return;
+    setAviso(null);
+    setProgreso({ hecho: 0, total: lista.length });
+    const ok: string[] = [];
+    const fallos: string[] = [];
+    for (const p of lista) {
+      setEnviando(p.sufijo);
+      try {
+        const r = await enviarFundacionADrivin(pedidoId, p.sufijo, p.nit);
+        ok.push(r.comanda);
+        setSeleccion((prev) => {
+          const s = new Set(prev);
+          s.delete(p.sufijo);
+          return s;
+        });
+      } catch (e) {
+        fallos.push(`${p.comanda}: ${e instanceof ApiError || e instanceof Error ? e.message : "error"}`);
+      }
+      setProgreso({ hecho: ok.length + fallos.length, total: lista.length });
+    }
+    setEnviando(null);
+    setProgreso(null);
+    await cargar();
+    if (fallos.length === 0) {
+      setAviso({ tipo: "ok", texto: `${ok.length} orden${ok.length === 1 ? "" : "es"} enviada${ok.length === 1 ? "" : "s"} a Drivin.` });
+      setPestana("seguimiento");
+    } else {
+      setAviso({
+        tipo: "error",
+        texto: `${ok.length} enviada(s), ${fallos.length} con error: ${fallos.join(" · ")}`,
+      });
+    }
+  }
+
+  /** Reenvío individual de una orden ya subida. */
+  async function reenviar(p: PuntoEnvio) {
     setEnviando(p.sufijo);
     setAviso(null);
     try {
       const r = await enviarFundacionADrivin(pedidoId, p.sufijo, p.nit);
-      setAviso({ tipo: "ok", texto: `Orden ${r.comanda} enviada a Drivin.` });
+      setAviso({ tipo: "ok", texto: `Orden ${r.comanda} reenviada a Drivin.` });
       await cargar();
-      setPestana("seguimiento");
     } catch (e) {
       setAviso({
         tipo: "error",
@@ -170,7 +225,7 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
               Comanda # <span className="font-semibold">{comanda}</span> · {cliente}
             </p>
             <p className="mt-0.5 text-[11px] text-brand-black/70">
-              Cada dirección alterna se sube a Drivin como una orden aparte <span className="font-mono">{comanda}-NF</span> (F = fundación).
+              Marca las direcciones alternas y pulsa «Enviar a Drivin»: cada una sube como orden aparte <span className="font-mono">{comanda}-NF</span> (F = fundación).
             </p>
           </div>
           <button
@@ -238,10 +293,20 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-brand-brown/10 text-[11px] uppercase tracking-wide text-brand-black">
                   <tr>
+                    <th className="w-8 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={todosMarcados}
+                        disabled={pendientes.length === 0 || enviando !== null}
+                        onChange={alternarTodos}
+                        aria-label="Marcar todas las direcciones pendientes"
+                        className="h-4 w-4 accent-sky-600"
+                      />
+                    </th>
                     <th className="px-3 py-2 font-semibold">Código</th>
                     <th className="px-3 py-2 font-semibold">Dirección</th>
                     <th className="px-3 py-2 font-semibold">Orden Drivin</th>
-                    <th className="px-3 py-2 text-right font-semibold"></th>
+                    <th className="px-3 py-2 text-right font-semibold">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-brown/5">
@@ -249,8 +314,26 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
                     const env = enviadoPorSufijo.get(p.sufijo);
                     const st = env ? estados[env.comanda] : undefined;
                     const ev = st ? estadoReplicaVista(st) : null;
+                    const marcado = seleccion.has(p.sufijo);
                     return (
-                      <tr key={p.nit} className="hover:bg-brand-cream-soft/60">
+                      <tr
+                        key={p.nit}
+                        onClick={() => !env && enviando === null && alternar(p.sufijo)}
+                        className={`${env ? "" : "cursor-pointer"} ${marcado ? "bg-sky-50" : "hover:bg-brand-cream-soft/60"}`}
+                      >
+                        <td className="px-3 py-2.5">
+                          {!env && (
+                            <input
+                              type="checkbox"
+                              checked={marcado}
+                              disabled={enviando !== null}
+                              onChange={() => alternar(p.sufijo)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Marcar ${p.direccion ?? p.nit}`}
+                              className="h-4 w-4 accent-sky-600"
+                            />
+                          )}
+                        </td>
                         <td className="px-3 py-2.5 font-mono text-xs text-brand-black">{p.nit}</td>
                         <td className="px-3 py-2.5">
                           <div className="font-medium text-brand-black">{p.direccion ?? "—"}</div>
@@ -261,7 +344,9 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
                         </td>
                         <td className="px-3 py-2.5 font-mono text-xs font-semibold text-brand-wine">{p.comanda}</td>
                         <td className="px-3 py-2.5 text-right">
-                          {env ? (
+                          {enviando === p.sufijo ? (
+                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
+                          ) : env ? (
                             <div className="flex flex-col items-end gap-1">
                               <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${ev?.chip ?? "bg-brand-cream-soft text-brand-black"}`}>
                                 {ev?.label ?? "Enviado"}
@@ -269,7 +354,10 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
                               <button
                                 type="button"
                                 disabled={enviando !== null}
-                                onClick={() => void enviar(p)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void reenviar(p);
+                                }}
                                 className="text-[11px] font-semibold text-sky-600 hover:underline disabled:opacity-50"
                                 title="Volver a subir la orden a Drivin"
                               >
@@ -277,21 +365,7 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
                               </button>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              disabled={enviando !== null}
-                              onClick={() => void enviar(p)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
-                            >
-                              {enviando === p.sufijo ? (
-                                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                              ) : (
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-                                </svg>
-                              )}
-                              Enviar a Drivin
-                            </button>
+                            <span className="text-[11px] text-brand-black/60">Sin enviar</span>
                           )}
                         </td>
                       </tr>
@@ -354,6 +428,35 @@ export default function PuntosEnvioFundacion({ pedidoId, comanda, cliente, onClo
             </>
           )}
         </div>
+
+        {pestana === "puntos" && !cargando && puntos.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-brown/10 bg-brand-cream-soft/40 px-5 py-3">
+            <p className="text-xs text-brand-black">
+              {progreso
+                ? `Enviando ${progreso.hecho} de ${progreso.total}…`
+                : seleccion.size > 0
+                  ? `${seleccion.size} dirección${seleccion.size === 1 ? "" : "es"} marcada${seleccion.size === 1 ? "" : "s"}`
+                  : pendientes.length > 0
+                    ? "Marca las direcciones a las que quieres enviar el pedido."
+                    : "Todas las direcciones ya fueron enviadas."}
+            </p>
+            <button
+              type="button"
+              disabled={seleccion.size === 0 || enviando !== null}
+              onClick={() => void enviarSeleccion()}
+              className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50"
+            >
+              {enviando !== null ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+              )}
+              Enviar a Drivin{seleccion.size > 0 ? ` (${seleccion.size})` : ""}
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
