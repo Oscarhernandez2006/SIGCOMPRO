@@ -2,14 +2,15 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, Activity } from "lucide-react";
 import { puedeVerDashboard, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
 import { resumenPendientesExtension } from "@/lib/extensiones";
 import AlmuerzosPage from "@/app/(panel)/almuerzos/page";
 import SolicitudesExtensionPage from "@/app/admin/solicitudes-extension/page";
+import MonitoreoPage from "@/app/admin/monitoreo/page";
 
-type Vista = "almuerzos" | "extensiones";
+type Vista = "almuerzos" | "extensiones" | "monitoreo";
 
 const ROLES_ALMUERZO = ["despacho", "supervisor general", "supervisor_general", "administrador pdv"];
 
@@ -22,7 +23,7 @@ export function puedeAprobarAlmuerzos(u: Usuario | null | undefined): boolean {
 }
 
 /**
- * Botones "Aprobación almuerzo" y "Aprobación extensión" para la barra superior
+ * Botones "Aprobación almuerzo", "Aprobación extensión" y "Monitoreo" para la barra superior
  * del módulo de Despacho. Abren la misma vista de cada módulo en un modal, así
  * no hay que salir de Despacho para aprobar.
  */
@@ -39,6 +40,7 @@ export default function AprobacionesDespacho({
 
   const veAlmuerzos = puedeAprobarAlmuerzos(usuario);
   const veExtensiones = puedeVerDashboard(usuario?.rol);
+  const veMonitoreo = puedeVerModulo(usuario ?? null, "monitoreo");
   const consultarPendientes = veExtensiones && pendientesExt === undefined;
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function AprobacionesDespacho({
     return () => window.removeEventListener("keydown", onKey);
   }, [vista]);
 
-  if (!veAlmuerzos && !veExtensiones) return null;
+  if (!veAlmuerzos && !veExtensiones && !veMonitoreo) return null;
 
   const pendientes = pendientesExt ?? pendientesLocal;
 
@@ -93,6 +95,12 @@ export default function AprobacionesDespacho({
           <span className="hidden md:inline">Aprobación extensión</span>
         </Boton>
       )}
+      {veMonitoreo && (
+        <Boton onClick={() => setVista("monitoreo")} title="Pedidos retrasados o por vencerse en cada punto de venta">
+          <Activity className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden md:inline">Monitoreo</span>
+        </Boton>
+      )}
 
       {vista &&
         typeof document !== "undefined" &&
@@ -118,7 +126,7 @@ export default function AprobacionesDespacho({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-                {vista === "almuerzos" ? <AlmuerzosPage /> : <SolicitudesExtensionPage />}
+                {vista === "almuerzos" ? <AlmuerzosPage /> : vista === "extensiones" ? <SolicitudesExtensionPage /> : <MonitoreoPage />}
               </div>
             </div>
           </div>,
