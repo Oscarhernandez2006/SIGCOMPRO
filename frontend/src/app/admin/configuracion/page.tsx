@@ -45,6 +45,8 @@ export default function AdminConfiguracionPage() {
 
   const [busqueda, setBusqueda] = useState("");
   const [filtroRol, setFiltroRol] = useState<"todos" | Rol>("todos");
+  const [filtroPunto, setFiltroPunto] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<"" | "activo" | "inactivo">("");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [asignando, setAsignando] = useState<PersonaConRol | null>(null);
   const [editando, setEditando] = useState<PersonaConRol | null>(null);
@@ -89,15 +91,33 @@ export default function AdminConfiguracionPage() {
     const q = busqueda.trim().toLowerCase();
     return personas.filter((p) => {
       if (filtroRol !== "todos" && p.rol !== filtroRol) return false;
-      if (q && !p.nombre.toLowerCase().includes(q) && !(p.cedula ?? "").includes(q)) {
+      if (
+        q &&
+        !p.nombre.toLowerCase().includes(q) &&
+        !(p.cedula ?? "").toLowerCase().includes(q) &&
+        !ETIQUETA_ROL[p.rol].toLowerCase().includes(q)
+      ) {
         return false;
       }
+      if (filtroPunto && !p.puntos.includes(filtroPunto)) return false;
+      if (filtroEstado === "activo" && p.activo === false) return false;
+      if (filtroEstado === "inactivo" && p.activo !== false) return false;
       return true;
     });
-  }, [personas, busqueda, filtroRol]);
+  }, [personas, busqueda, filtroRol, filtroPunto, filtroEstado]);
 
   const totalPorc = registro.porcionadores.length;
   const totalDomi = registro.domiciliarios.length;
+  const hayFiltrosActivos = Boolean(
+    busqueda || filtroRol !== "todos" || filtroPunto || filtroEstado,
+  );
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFiltroRol("todos");
+    setFiltroPunto("");
+    setFiltroEstado("");
+  }
 
   // Persiste todo el registro (guardado optimista).
   async function persistir(nuevo: RegistroPersonal) {
@@ -254,7 +274,7 @@ export default function AdminConfiguracionPage() {
         </button>
       </div>
 
-      {/* Toolbar: buscar + filtro por rol + contadores */}
+      {/* Toolbar: búsqueda y filtros */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-black">
@@ -264,7 +284,7 @@ export default function AdminConfiguracionPage() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o cédula"
+            placeholder="Buscar por nombre, cédula o rol"
             className="w-full rounded-xl border border-brand-brown/15 bg-white py-2.5 pl-9 pr-9 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
           />
           {busqueda && (
@@ -301,6 +321,40 @@ export default function AdminConfiguracionPage() {
             </button>
           ))}
         </div>
+        <select
+          value={filtroPunto}
+          onChange={(e) => setFiltroPunto(e.target.value)}
+          title="Filtrar por punto de venta"
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        >
+          <option value="">Todos los puntos</option>
+          {puntos.map((p) => (
+            <option key={p.id} value={String(p.id)}>{p.nombre}</option>
+          ))}
+        </select>
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value as "" | "activo" | "inactivo")}
+          title="Filtrar por estado"
+          className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm text-brand-black outline-none transition focus:border-brand-amber focus:ring-1 focus:ring-brand-amber"
+        >
+          <option value="">Todos los estados</option>
+          <option value="activo">Activos</option>
+          <option value="inactivo">Inactivos</option>
+        </select>
+        {hayFiltrosActivos && (
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            title="Limpiar todos los filtros"
+            className="rounded-xl border border-brand-brown/15 px-3 py-2.5 text-sm font-medium text-brand-brown transition hover:bg-brand-cream-soft"
+          >
+            Limpiar filtros
+          </button>
+        )}
+        <span className="text-xs text-brand-black">
+          {filtradas.length} de {personas.length}
+        </span>
         {guardando && (
           <span className="text-xs font-medium text-brand-black">Guardando…</span>
         )}

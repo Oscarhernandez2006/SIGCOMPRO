@@ -125,14 +125,14 @@ export function RegistrarDevolucionModal({
                   const n = Number(String(sel[i.id] ?? "").replace(",", "."));
                   const invalida = activo && (!Number.isFinite(n) || n <= 0 || n > Number(i.cantidad));
                   return (
-                    <tr key={i.id} className={`border-t border-brand-brown/5 ${activo ? "bg-fuchsia-50/60" : ""}`}>
+                    <tr key={i.id} className={`border-t border-brand-brown/5 ${activo ? "bg-red-50/60" : ""}`}>
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
                           checked={activo}
                           onChange={() => alternar(i.id, Number(i.cantidad))}
                           aria-label={`Devolver ${i.producto.producto}`}
-                          className="h-4 w-4 accent-fuchsia-600"
+                          className="h-4 w-4 accent-red-600"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -152,7 +152,7 @@ export function RegistrarDevolucionModal({
                           onChange={(e) => setSel((prev) => ({ ...prev, [i.id]: e.target.value }))}
                           aria-label={`Cantidad devuelta de ${i.producto.producto}`}
                           aria-invalid={invalida}
-                          className={`w-24 rounded-lg border px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-fuchsia-500 disabled:bg-brand-cream-soft ${invalida ? "border-red-400" : "border-brand-brown/20"}`}
+                          className={`w-24 rounded-lg border px-2 py-1 text-right text-sm outline-none focus:ring-1 focus:ring-red-500 disabled:bg-brand-cream-soft ${invalida ? "border-red-400" : "border-brand-brown/20"}`}
                         />
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-right text-brand-black">
@@ -175,7 +175,7 @@ export function RegistrarDevolucionModal({
               maxLength={60}
               onChange={(e) => setFacturaNumero(e.target.value)}
               placeholder="Ej. NC-1234"
-              className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-fuchsia-500"
+              className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-red-500"
             />
           </label>
           <label className="text-sm font-semibold text-brand-black">
@@ -186,12 +186,12 @@ export function RegistrarDevolucionModal({
               value={valorManual ?? (sugerido ? String(sugerido) : "")}
               onChange={(e) => setValorManual(e.target.value)}
               placeholder="0"
-              className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-fuchsia-500"
+              className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-red-500"
             />
             <span className="mt-1 block text-xs font-normal text-brand-black">
               Sugerido por productos: {cop(sugerido)}
               {valorManual !== null && (
-                <button type="button" onClick={() => setValorManual(null)} className="ml-2 font-semibold text-fuchsia-700 underline">
+                <button type="button" onClick={() => setValorManual(null)} className="ml-2 font-semibold text-red-700 underline">
                   Usar sugerido
                 </button>
               )}
@@ -205,7 +205,7 @@ export function RegistrarDevolucionModal({
             value={motivo}
             maxLength={300}
             onChange={(e) => setMotivo(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-fuchsia-500"
+            className="mt-1 w-full rounded-xl border border-brand-brown/20 px-3 py-2 text-sm font-normal outline-none focus:border-red-500"
           />
         </label>
 
@@ -216,7 +216,7 @@ export function RegistrarDevolucionModal({
           </div>
           <div>
             <p className="text-xs text-brand-black">Devuelto</p>
-            <p className="font-bold text-fuchsia-700">− {cop(valorDevuelto)}</p>
+            <p className="font-bold text-red-700">− {cop(valorDevuelto)}</p>
           </div>
           <div>
             <p className="text-xs text-brand-black">Nuevo facturado</p>
@@ -232,7 +232,7 @@ export function RegistrarDevolucionModal({
         <button
           onClick={guardar}
           disabled={guardando}
-          className="rounded-xl bg-fuchsia-700 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-800 disabled:opacity-50"
+          className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Registrar devolución"}
         </button>
@@ -280,7 +280,7 @@ export function DetalleDevolucionModal({
           </div>
           <div>
             <p className="text-xs text-brand-black">Devuelto</p>
-            <p className="font-bold text-fuchsia-700">− {cop(devolucion.valorDevuelto)}</p>
+            <p className="font-bold text-red-700">− {cop(devolucion.valorDevuelto)}</p>
           </div>
           <div>
             <p className="text-xs text-brand-black">Valor nuevo</p>
@@ -304,13 +304,13 @@ export function DetalleDevolucionModal({
             </thead>
             <tbody>
               {productosFinales.map((p) => (
-                <tr key={p.id} className={`border-t border-brand-brown/5 ${p.devuelta > 0 ? "bg-fuchsia-50/60" : ""}`}>
+                <tr key={p.id} className={`border-t border-brand-brown/5 ${p.devuelta > 0 ? "bg-red-50/60" : ""}`}>
                   <td className="px-3 py-2">
                     <p className="font-medium text-brand-black">{p.producto}</p>
                     <p className="text-xs text-brand-black">Ref. {p.referencia}</p>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">{cant(p.original, p.um)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-fuchsia-700">
+                  <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-red-700">
                     {p.devuelta > 0 ? `− ${cant(p.devuelta, p.um)}` : "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-brand-black">{cant(p.final, p.um)}</td>

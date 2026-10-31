@@ -1,15 +1,25 @@
 {
   "manifest_version": 3,
   "name": "SIGCOMPRO · Validar cédula en ADRES",
-  "version": "1.6.0",
-  "description": "Llena la cédula en la consulta de ADRES y devuelve nombres y apellidos a SIGCOMPRO.",
+  "version": "1.8.0",
+  "description": "Para televentas de Carnes Santacruz: consulta la cédula del cliente en ADRES y trae nombres y apellidos a SIGCOMPRO.",
+  "icons": {
+    "16": "icons/icono-16.png",
+    "32": "icons/icono-32.png",
+    "48": "icons/icono-48.png",
+    "128": "icons/icono-128.png"
+  },
   "permissions": [
     "storage",
-    "offscreen"
+    "offscreen",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.adres.gov.co/*",
-    "https://aplicaciones.adres.gov.co/*"
+    "https://aplicaciones.adres.gov.co/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://sigcompro.grupo-santacruz.com/*"
   ],
   "background": {
     "service_worker": "background.js"

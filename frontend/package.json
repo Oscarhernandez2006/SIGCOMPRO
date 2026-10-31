@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/empaquetar-extension.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/empaquetar-extension.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "extension:tienda": "node scripts/empaquetar-extension.mjs --tienda"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

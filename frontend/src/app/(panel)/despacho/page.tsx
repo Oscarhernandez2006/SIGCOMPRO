@@ -930,11 +930,12 @@ export default function DespachoPage() {
   }, [pedidos, meta, idsPuntos]);
 
   // SINCRONIZACIÓN CONTINUA con Drivin (el domiciliario lo decide Drivin y puede
-  // CAMBIAR o DESASIGNARSE, incluso después de despachado):
+  // CAMBIAR o DESASIGNARSE, incluso después de despachado o en tránsito):
   //  - Facturado + Drivin asignó  -> guarda el domiciliario y pasa a Despachado.
-  //  - Despachado + Drivin cambió  -> actualiza el domiciliario.
-  //  - Despachado + Drivin DESASIGNÓ -> quita el domiciliario y vuelve a Facturado
-  //    (a esperar hasta que Drivin reasigne).
+  //  - Despachado/En tránsito + Drivin cambió -> actualiza el domiciliario.
+  //  - Despachado/En tránsito + Drivin DESASIGNÓ -> quita el domiciliario y
+  //    vuelve a Facturado (a esperar hasta que Drivin reasigne).
+  //  - Entregado/Rechazado: la base ya no se consulta (solo sus réplicas).
   // Solo aplica a pedidos de los puntos del usuario y ya subidos a Drivin.
   useEffect(() => {
     // Si el mapa vino vacío (posible fallo de lectura), NO desasignamos nada.
@@ -945,11 +946,11 @@ export default function DespachoPage() {
       if (!idsDrivin.has(String(p.punto.id))) continue; // punto manual: no toca Drivin
       const m = meta[p.id] ?? {};
       const est = norm(p.estado);
-      const baseActiva = est === "facturado" || est === "despachado";
-      // Las réplicas se siguen sincronizando aunque el pedido ya vaya En tránsito
-      // o esté Entregado (Drivin puede desasignar una réplica en cualquier momento).
-      const replicasActivas =
-        baseActiva || est === "en tránsito" || est === "en transito" || est === "entregado";
+      const enRuta = est === "despachado" || est === "en tránsito" || est === "en transito";
+      const baseActiva = est === "facturado" || enRuta;
+      // Las réplicas se siguen sincronizando aunque el pedido ya esté Entregado
+      // (Drivin puede desasignar una réplica en cualquier momento).
+      const replicasActivas = baseActiva || est === "entregado";
       if (!replicasActivas) continue;
 
       // BASE: refleja la asignación de Drivin (o su AUSENCIA).
@@ -962,7 +963,7 @@ export default function DespachoPage() {
       const asg = enMapaBase ? asignacionesDrivin[p.comanda] : undefined;
       const teniaDomi = !!(m.domiciliario || m.domiciliarioCodigo);
       if (!baseActiva) {
-        // Pedido En tránsito / Entregado: la base no se toca, solo sus réplicas.
+        // Pedido Entregado: la base no se toca, solo sus réplicas.
       } else if (asg) {
         // Drivin tiene un domiciliario asignado.
         const cambioDomi = m.domiciliarioCodigo !== asg.code;
@@ -995,14 +996,14 @@ export default function DespachoPage() {
         // Drivin DESASIGNÓ (asg null o comanda fuera de la ruta). Si la comanda
         // ya no está en el mapa, solo desasignamos si el pedido tenía un
         // domiciliario de Drivin (así no tocamos pedidos que nunca subieron).
-        const desasignar = enMapaBase ? (teniaDomi || est === "despachado") : teniaDomi;
+        const desasignar = enMapaBase ? (teniaDomi || enRuta) : teniaDomi;
         if (desasignar) {
           setMeta((prev) => {
             const nuevo = { ...prev[p.id], domiciliario: "", domiciliarioCodigo: "" };
             actualizarMetaApi(p.id, { domiciliario: "", domiciliarioCodigo: "" }).catch(() => { /* ignore */ });
             return { ...prev, [p.id]: nuevo };
           });
-          if (est === "despachado") {
+          if (enRuta) {
             setPedidos((prev) => {
               const next = prev.map((x) => (x.id === p.id ? { ...x, estado: "Facturado" as Pedido["estado"] } : x));
               const upd = next.find((x) => x.id === p.id);
@@ -2155,10 +2156,12 @@ export default function DespachoPage() {
                 const impreso = impresos.has(p.id);
                 return (
                   <tr key={p.id} className={anulado ? "opacity-60" : ""}>
-                    {/* Cliente: agrupa televentas, comanda y medio de pago */}
-                    <td className="relative border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="flex w-full items-stretch gap-3 pb-12">
-                        <div className="relative min-w-0 flex-1">
+                    {/* Cliente: agrupa televentas, comanda y medio de pago. La celda
+                        ocupa toda la altura de la fila (h-px + h-full) para que la
+                        línea divisora llegue hasta abajo. */}
+                    <td className="relative h-px border-r border-brand-brown/10 px-3 py-3 align-top">
+                      <div className="flex h-full w-full items-stretch gap-3">
+                        <div className="relative flex min-w-0 flex-1 flex-col">
                           <button
                             type="button"
                             onClick={() => setClienteAbierto((prev) => (prev === p.id ? null : p.id))}
@@ -2255,9 +2258,39 @@ export default function DespachoPage() {
                               </span>
                             )}
                           </div>
+                          {!anulado && (
+                            <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3">
+                              <button
+                                onClick={() => {
+                                  marcarImpreso(p.id);
+                                  imprimirComanda(p, numeroDelDiaPorId.get(p.id));
+                                }}
+                                title={impreso ? "Comanda ya impresa · clic para imprimirla de nuevo" : "Imprimir la comanda del pedido"}
+                                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition ${
+                                  impreso ? "bg-emerald-600 hover:bg-emerald-700" : "bg-brand-wine hover:bg-brand-wine/90"
+                                }`}
+                              >
+                                {impreso ? (
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3.5 w-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                  </svg>
+                                ) : (
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Z" />
+                                  </svg>
+                                )}
+                                {impreso ? "Comanda impresa" : "Imprimir comanda"}
+                              </button>
+                              {!impreso && (
+                                <span className="text-[10px] font-semibold leading-tight text-amber-600">
+                                  Imprime para habilitar el despacho
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="w-px shrink-0 self-stretch bg-brand-brown/10" />
-                        <div className="shrink-0 text-right">
+                        <div className="shrink-0 pl-3 text-right">
                           <p className="whitespace-nowrap text-xs font-semibold text-brand-wine">
                             Comanda #{p.comanda}
                           </p>
@@ -2317,38 +2350,6 @@ export default function DespachoPage() {
                           </p>
                         </div>
                       </div>
-                      {!anulado && (
-                        <div className="absolute inset-x-3 bottom-3 flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              marcarImpreso(p.id);
-                              imprimirComanda(p, numeroDelDiaPorId.get(p.id));
-                            }}
-                            title={impreso ? "Volver a imprimir la comanda del pedido" : "Imprimir la comanda del pedido"}
-                            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition ${
-                              impreso ? "bg-blue-600 hover:bg-blue-700" : "bg-brand-wine hover:bg-brand-wine/90"
-                            }`}
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Z" />
-                            </svg>
-                            {impreso ? "Reimprimir comanda" : "Imprimir comanda"}
-                          </button>
-                          {impreso && (
-                            <span className="inline-flex items-center justify-center gap-1 self-center whitespace-nowrap rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold uppercase leading-none tracking-wide text-emerald-700">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3 w-3">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                              </svg>
-                              Impreso
-                            </span>
-                          )}
-                          {!impreso && (
-                            <span className="self-center text-[10px] font-semibold text-amber-600">
-                              Imprime para habilitar el despacho
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </td>
 
                     {/* Estado */}
@@ -2612,7 +2613,7 @@ export default function DespachoPage() {
                             type="button"
                             onClick={() => setDetalleDevolucionDe(p)}
                             title="Ver el detalle de la devolución"
-                            className="flex w-full items-center justify-between gap-1.5 rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-semibold text-fuchsia-700 transition hover:bg-fuchsia-100"
+                            className="flex w-full items-center justify-between gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-100"
                           >
                             <span>Devolución {m.devolucion.facturaNumero}</span>
                             <span>− {fmtMoneda(m.devolucion.valorDevuelto)}</span>
@@ -2623,7 +2624,7 @@ export default function DespachoPage() {
                               type="button"
                               onClick={() => (permite.devolucion ? setDevolucionDe(p) : sinPermiso.mostrar())}
                               title="Registrar una devolución total o parcial de este pedido"
-                              className={`flex w-full items-center justify-center gap-1.5 rounded-lg border border-fuchsia-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-fuchsia-700 transition hover:bg-fuchsia-50 ${permite.devolucion ? "" : "opacity-50"}`}
+                              className={`flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-50 ${permite.devolucion ? "" : "opacity-50"}`}
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />

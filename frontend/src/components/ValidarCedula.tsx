@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { aNombrePropio, soloTexto } from "@/lib/format";
+import { VALIDACION_ADRES_ACTIVA, detectarExtension } from "@/lib/extension-adres";
 
 const URL_ADRES = "https://www.adres.gov.co/consulte-su-eps";
 
@@ -27,26 +28,6 @@ function leerResultadoAdres(texto: string): { numero: string; nombres: string; a
   return { numero, nombres, apellidos };
 }
 
-/** ¿Está instalada la extensión «SIGCOMPRO · Validar cédula en ADRES»? (saludo con respuesta) */
-function detectarExtension(): Promise<boolean> {
-  if (typeof window === "undefined") return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const alMensaje = (e: MessageEvent) => {
-      if (e.source === window && (e.data as { tipo?: string })?.tipo === "SIGCOMPRO_ADRES_LISTO") {
-        window.removeEventListener("message", alMensaje);
-        clearTimeout(t);
-        resolve(true);
-      }
-    };
-    const t = setTimeout(() => {
-      window.removeEventListener("message", alMensaje);
-      resolve(false);
-    }, 400);
-    window.addEventListener("message", alMensaje);
-    window.postMessage({ tipo: "SIGCOMPRO_ADRES_PING" }, window.location.origin);
-  });
-}
-
 /**
  * Botón "Validar" junto al NIT / Cédula. Con la extensión instalada, ADRES se
  * abre con la cédula ya llena; la televenta solo pulsa «Consultar» y los
@@ -54,7 +35,16 @@ function detectarExtension(): Promise<boolean> {
  * cédula, se abre ADRES y se pega el resultado. Al final se confirma con el
  * cliente y se llenan Nombres y Apellidos con mayúscula inicial.
  */
-export default function ValidarCedula({
+export default function ValidarCedula(props: {
+  cedula: string;
+  onConfirmar: (nombres: string, apellidos: string) => void;
+}) {
+  // Desactivada: no se muestra nada (ni se precarga ADRES).
+  if (!VALIDACION_ADRES_ACTIVA) return null;
+  return <ValidarCedulaActiva {...props} />;
+}
+
+function ValidarCedulaActiva({
   cedula,
   onConfirmar,
 }: {
@@ -87,7 +77,7 @@ export default function ValidarCedula({
     let activo = true;
     let pedida = false;
     detectarExtension().then((ext) => {
-      if (!activo || !ext) return;
+      if (!activo || !ext.instalada) return;
       pedida = true;
       window.postMessage({ tipo: "SIGCOMPRO_ADRES_PRECARGAR" }, window.location.origin);
     });
@@ -140,7 +130,7 @@ export default function ValidarCedula({
     setApellidos("");
     setEditando(false);
     setManual(false);
-    const ext = await detectarExtension();
+    const ext = (await detectarExtension()).instalada;
     setConExtension(ext);
     setAbierto(true);
     if (ext) {
@@ -251,7 +241,7 @@ export default function ValidarCedula({
                     La extensión «SIGCOMPRO · Validar cédula en ADRES» no está instalada en este navegador, por eso la consulta es manual.
                   </p>
                   <p className="mt-1">
-                    Para que sea automática: abre <b>brave://extensions</b> (o chrome://extensions), activa <b>Modo de desarrollador</b>,
+                    Para que sea automática: abre <b>chrome://extensions</b> (o brave://extensions / edge://extensions), activa <b>Modo de desarrollador</b>,
                     pulsa <b>Cargar extensión sin empaquetar</b> y elige la carpeta <b>extension-adres</b>. Luego recarga SIGCOMPRO (F5).
                   </p>
                 </div>

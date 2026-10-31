@@ -260,7 +260,16 @@ export class PedidosService implements OnModuleInit {
   private lecturaAsignaciones: Promise<{
     mapa: Record<string, { code: string; nombre: string } | null>;
     completo: boolean;
+    hayEscenarios: boolean;
   }> | null = null;
+  /** Última lectura COMPLETA del mapa (la comparten las pantallas y la sincronización). */
+  private ultimaLecturaCompleta: {
+    ts: number;
+    mapa: Record<string, { code: string; nombre: string } | null>;
+    hayEscenarios: boolean;
+  } | null = null;
+  /** Última vez que la lista de escenarios se refrescó saltando la caché. */
+  private ultimoRefrescoEscenarios = 0;
   /** Evita que dos corridas de la sincronización de desasignaciones se solapen. */
   private sincronizandoDesasignaciones = false;
   constructor(
@@ -2577,23 +2586,50 @@ export class PedidosService implements OnModuleInit {
   async asignacionesDrivin(): Promise<
     Record<string, { code: string; nombre: string } | null>
   > {
-    if (this.cacheAsignaciones && Date.now() - this.cacheAsignaciones.ts < 5000) {
-      return this.cacheAsignaciones.datos;
-    }
-    // Muchas pantallas de Despacho piden esto a la vez: comparten UNA sola
-    // lectura en curso en vez de lanzar varias contra Drivin (que bajo carga
-    // fallan y dejan el mapa incompleto, sin sincronizar).
-    if (!this.lecturaAsignaciones) {
-      this.lecturaAsignaciones = this.leerAsignacionesDrivin(false).finally(() => {
-        this.lecturaAsignaciones = null;
-      });
-    }
-    const { mapa, completo } = await this.lecturaAsignaciones;
+    const { mapa, completo } = await this.lecturaCompartidaAsignaciones();
     // Un mapa incompleto haría ver como "desasignadas" las órdenes del escenario
-    // que falló; se devuelve vacío para que nadie desasigne con datos parciales.
+    // que falló; se devuelve el último completo para que nadie desasigne con
+    // datos parciales.
     if (!completo) return this.cacheAsignaciones?.datos ?? {};
-    this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
     return mapa;
+  }
+
+  /**
+   * UNA sola lectura de Drivin cada 5s compartida por todas las pantallas de
+   * Despacho y por la sincronización del servidor: si hay una en curso se
+   * espera; si la última completa tiene menos de 5s se reutiliza.
+   * La lista de escenarios se refresca saltando la caché como máximo una vez
+   * por minuto (crear un plan la invalida de inmediato).
+   */
+  private async lecturaCompartidaAsignaciones(): Promise<{
+    mapa: Record<string, { code: string; nombre: string } | null>;
+    completo: boolean;
+    hayEscenarios: boolean;
+  }> {
+    const u = this.ultimaLecturaCompleta;
+    if (u && Date.now() - u.ts < 5000) {
+      return { mapa: u.mapa, completo: true, hayEscenarios: u.hayEscenarios };
+    }
+    if (!this.lecturaAsignaciones) {
+      const fresco = Date.now() - this.ultimoRefrescoEscenarios > 60_000;
+      if (fresco) this.ultimoRefrescoEscenarios = Date.now();
+      this.lecturaAsignaciones = this.leerAsignacionesDrivin(fresco)
+        .then((r) => {
+          if (r.completo) {
+            this.ultimaLecturaCompleta = {
+              ts: Date.now(),
+              mapa: r.mapa,
+              hayEscenarios: r.hayEscenarios,
+            };
+            this.cacheAsignaciones = { ts: Date.now(), datos: r.mapa };
+          }
+          return r;
+        })
+        .finally(() => {
+          this.lecturaAsignaciones = null;
+        });
+    }
+    return this.lecturaAsignaciones;
   }
 
   private async leerAsignacionesDrivin(fresco: boolean): Promise<{
@@ -2682,8 +2718,9 @@ export class PedidosService implements OnModuleInit {
    * Sincroniza cambios de domiciliario de Drivin en el servidor (no depende de
    * que alguien tenga Despacho abierto), con las mismas reglas que esa vista:
    *  - Pedido base: refleja el domiciliario asignado o lo libera si Drivin lo
-   *    quitó; si está Despachado y queda sin vehículo vuelve a Facturado.
-   *    Solo pedidos de HOY en Facturado/Despachado.
+   *    quitó; si está Despachado o En tránsito y queda sin vehículo vuelve a
+   *    Facturado. Solo pedidos de HOY en Facturado/Despachado/En tránsito;
+   *    los Entregados/Rechazados ya no se consultan.
    *  - Réplicas ("comanda-N"): se baja el domiciliario que Drivin asignó o se
    *    libera si lo quitó, AUNQUE el pedido ya esté En tránsito/Entregado.
    * Solo si el mapa de Drivin se leyó COMPLETO. Cada cambio de réplica es
@@ -2703,10 +2740,8 @@ export class PedidosService implements OnModuleInit {
       if (!lock.rows[0]?.ok) return 0;
       bloqueoTomado = true;
 
-      const { mapa, completo, hayEscenarios } = await this.leerAsignacionesDrivin(true);
+      const { mapa, completo, hayEscenarios } = await this.lecturaCompartidaAsignaciones();
       if (!completo || (Object.keys(mapa).length === 0 && !hayEscenarios)) return 0;
-      // Comparte el mapa recién leído con las pantallas de Despacho.
-      this.cacheAsignaciones = { ts: Date.now(), datos: mapa };
 
       const hoy = this.diaBogota();
       const res = await this.pool.query<{
@@ -2733,7 +2768,7 @@ export class PedidosService implements OnModuleInit {
          ) p
          WHERE (
              de_hoy
-             AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado')
+             AND LOWER(COALESCE(estado, '')) IN ('facturado', 'despachado', 'en tránsito', 'en transito')
            )
            OR (
              jsonb_typeof(meta->'replicas') = 'array'
@@ -2771,10 +2806,11 @@ export class PedidosService implements OnModuleInit {
 
           const est = String(ped.estado ?? '').trim().toLowerCase();
 
-          // --- Pedido base (solo de hoy, Facturado/Despachado) ---
+          // --- Pedido base (solo de hoy, Facturado/Despachado/En tránsito) ---
           let desasignar = false;
           let cambioBase = false;
-          if (ped.de_hoy && (est === 'facturado' || est === 'despachado')) {
+          const enRuta = est === 'despachado' || est === 'en tránsito' || est === 'en transito';
+          if (ped.de_hoy && (est === 'facturado' || enRuta)) {
             const enMapa = comanda in mapa;
             const asg = enMapa ? mapa[comanda] : undefined;
             const teniaDomi = !!(meta.domiciliario || meta.domiciliarioCodigo);
@@ -2812,9 +2848,9 @@ export class PedidosService implements OnModuleInit {
                 cambioBase ||= String(guardado.estado ?? '').trim().toLowerCase() === 'despachado';
               }
             } else {
-              desasignar = enMapa
-                ? (teniaDomi || est === 'despachado')
-                : teniaDomi;
+              // Sin vehículo en Drivin: se libera si tenía domiciliario o si
+              // sigue "en ruta" (Despachado/En tránsito) sin nadie asignado.
+              desasignar = enMapa ? (teniaDomi || enRuta) : teniaDomi;
             }
             if (desasignar && teniaDomi) {
               // Condicionado a que siga el MISMO domiciliario que se vio.
@@ -2830,7 +2866,9 @@ export class PedidosService implements OnModuleInit {
               );
               if (!r.rowCount) desasignar = false;
             }
-            if (desasignar && est === 'despachado') {
+            if (desasignar && enRuta) {
+              // Sin domiciliario no puede seguir Despachado/En tránsito: vuelve
+              // a Facturado a esperar que Drivin reasigne.
               await this.guardar({ ...data, id: ped.id, estado: 'Facturado' }, undefined);
             }
           }
@@ -2881,7 +2919,7 @@ export class PedidosService implements OnModuleInit {
               `Drivin sincronizado ${comanda} (${ped.id}):` +
                 (cambioBase ? ' domiciliario actualizado' : '') +
                 (desasignar ? ' domiciliario liberado' : '') +
-                (desasignar && est === 'despachado' ? ' y vuelve a Facturado' : '') +
+                (desasignar && enRuta ? ' y vuelve a Facturado' : '') +
                 (cambiosReplicas ? ` · ${cambiosReplicas} réplica(s) actualizada(s)` : ''),
             );
           }
@@ -3359,7 +3397,11 @@ export class PedidosService implements OnModuleInit {
     // Los planes nuevos deben verse ya (asignaciones, envíos y pestaña Planes).
     this.cacheScenarios.delete(fecha);
     this.cachePlanes.delete(fecha);
-    if (fecha === hoy) this.cacheAsignaciones = null;
+    if (fecha === hoy) {
+      this.cacheAsignaciones = null;
+      this.ultimaLecturaCompleta = null;
+      this.ultimoRefrescoEscenarios = 0;
+    }
 
     await cola;
     const fin = await this.pool.query<{ creado_en: string }>(

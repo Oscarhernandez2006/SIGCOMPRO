@@ -193,6 +193,23 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
   await volverASigcompro(v.tabId ?? v.sigcomproTabId);
 });
 
+// Al instalarse, se conecta a las pestañas de SIGCOMPRO ya abiertas (sin esto
+// habría que recargarlas y se perdería lo que se estaba escribiendo).
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== "install") return;
+  const sigcompro = chrome.runtime.getManifest().content_scripts?.[0];
+  if (!sigcompro) return;
+  const tabs = await chrome.tabs.query({ url: sigcompro.matches });
+  for (const tab of tabs) {
+    if (tab.id == null) continue;
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: sigcompro.js });
+    } catch {
+      /* pestaña no disponible */
+    }
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   (async () => {
     // Al abrir el formulario de cliente: se deja ADRES listo y minimizado.

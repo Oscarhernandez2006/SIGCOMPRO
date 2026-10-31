@@ -45,3 +45,7 @@ Thumbs.db
 # ---------- Archivos de datos locales ----------
 *.xlsm
 Despacho_*.xlsx
+
+# ---------- Extensión empaquetada (se genera en predev/prebuild) ----------
+frontend/public/extension-adres.zip
+frontend/public/extension-adres.json

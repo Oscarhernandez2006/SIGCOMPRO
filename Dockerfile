@@ -33,6 +33,9 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
+# Extensión de validación de cédula (ADRES): se empaqueta en public/ durante
+# el build (prebuild) para que SIGCOMPRO la ofrezca para descargar.
+COPY extension-adres/ /app/extension-adres/
 # Mismo dominio: el frontend llama al backend por ruta relativa /api.
 ARG NEXT_PUBLIC_API_URL=/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL

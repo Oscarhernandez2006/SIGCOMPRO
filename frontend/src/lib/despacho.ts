@@ -83,7 +83,7 @@ export function colorEstado(estado?: string | null): string {
       return "border-rose-200 bg-rose-100 text-rose-600";
     case "devolución":
     case "devolucion":
-      return "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-700";
+      return "border-red-200 bg-red-100 text-red-700";
     case "anulado":
     case "cancelado":
       return "border-red-200 bg-red-100 text-red-600";

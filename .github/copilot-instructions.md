@@ -25,7 +25,8 @@ backend/src/
 frontend/src/
   app/(panel)/  -> pedidos, despacho, cuadre-caja, cotizaciones, congelados, historicos, ubicaciones, direcciones (grilla tipo Excel)
   app/admin/    -> usuarios, configuracion (Gestión de recursos), dashboard, planes-esquemas (Drivin)
-  components/ValidarCedula.tsx -> botón "Validar" junto al NIT (consulta ADRES; automática con la extensión de `extension-adres/`)
+  components/ValidarCedula.tsx -> botón "Validar" junto al NIT (consulta ADRES; automática con la extensión de `extension-adres/`,
+    que SIGCOMPRO empaqueta en `public/extension-adres.zip` en predev/prebuild y ofrece con el botón "Instalar extensión"; subir `version` del manifest al cambiarla)
   app/seleccionar-panel, layout.tsx, page.tsx (login)
   components/ (AdminShell, PanelShell, DireccionInput, MapaDireccion, ReferenciaInput, ...)
   lib/ (api.ts=apiFetch, auth.ts=sesión en cookies, pedidos.ts, despacho.ts, configuracion.ts, ...)

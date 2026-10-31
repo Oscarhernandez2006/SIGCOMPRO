@@ -213,7 +213,10 @@ export default function PanelShell({ children }: { children: ReactNode }) {
 
   // Facturador/Despacho: si quedan pedidos de hoy sin terminar en Despacho, se
   // muestra un modal de aviso antes de salir (en vez de confirm() nativo).
-  const [avisoPendientes, setAvisoPendientes] = useState<number | null>(null);
+  const [avisoPendientes, setAvisoPendientes] = useState<{
+    total: number;
+    porPunto: { id: string; nombre: string; total: number }[];
+  } | null>(null);
 
   function salirAhora() {
     limpiarSesion();
@@ -229,7 +232,21 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           (p) => !p.anulado && !yaDespachado(p.estado) && (p.estado ?? "").trim().toLowerCase() !== "anulado",
         );
         if (pendientes.length > 0) {
-          setAvisoPendientes(pendientes.length);
+          const conteoPorPunto = new Map<string, { id: string; nombre: string; total: number }>();
+          for (const pedido of pendientes) {
+            const id = pedido.punto?.id ?? "sin-punto";
+            const nombre = pedido.punto?.nombre ?? "Punto no identificado";
+            const conteo = conteoPorPunto.get(id);
+            if (conteo) {
+              conteo.total += 1;
+            } else {
+              conteoPorPunto.set(id, { id, nombre, total: 1 });
+            }
+          }
+          setAvisoPendientes({
+            total: pendientes.length,
+            porPunto: [...conteoPorPunto.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+          });
           return;
         }
       } catch {
@@ -480,8 +497,19 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             </div>
             <h3 className="mt-3 font-serif text-lg font-bold text-brand-wine">Tienes pedidos pendientes</h3>
             <p className="mt-1.5 text-sm text-brand-black">
-              Hay {avisoPendientes} pedido{avisoPendientes === 1 ? "" : "s"} sin terminar en Despacho. ¿Seguro que quieres cerrar sesión?
+              Hay {avisoPendientes.total} pedido{avisoPendientes.total === 1 ? "" : "s"} sin terminar en Despacho:
             </p>
+            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-xl bg-brand-cream-soft px-3 py-2 text-left text-sm text-brand-black">
+              {avisoPendientes.porPunto.map((punto) => (
+                <li key={punto.id} className="flex items-start justify-between gap-3">
+                  <span>{punto.nombre}</span>
+                  <span className="shrink-0 font-semibold">
+                    {punto.total} pedido{punto.total === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-brand-black">¿Seguro que quieres cerrar sesión?</p>
             <div className="mt-5 flex justify-center gap-2">
               <button
                 onClick={() => setAvisoPendientes(null)}

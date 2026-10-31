@@ -204,6 +204,94 @@ test('sincronización completa limpia asignaciones cuando el plan ya no tiene ó
   assert.ok(calls.some(call => call.statement.includes(`'{"domiciliario": "", "domiciliarioCodigo": ""}'`)));
 });
 
+test('sincronización Drivin libera un pedido En tránsito desasignado y lo devuelve a Facturado', async () => {
+  const calls = [];
+  const pool = {
+    async query(statement, parameters = []) {
+      calls.push({ statement, parameters });
+      if (statement.includes('SELECT id, punto_id, estado, data, meta, de_hoy')) {
+        assert.match(statement, /'en tránsito', 'en transito'\)\n\s*\)/);
+        return {
+          rows: [{
+            id: 'pedido-1',
+            punto_id: '1',
+            estado: 'En tránsito',
+            data: { comanda: 'C-1', punto: { id: '1', nombre: 'La 93' } },
+            meta: { domiciliario: 'Driver anterior', domiciliarioCodigo: 'VEH-1' },
+            de_hoy: true,
+          }],
+        };
+      }
+      if (statement.includes(`'{"domiciliario": "", "domiciliarioCodigo": ""}'`)) {
+        return { rowCount: 1, rows: [] };
+      }
+      throw new Error(`Consulta inesperada: ${statement}`);
+    },
+    async connect() {
+      return {
+        async query() {
+          return { rows: [{ ok: true }], rowCount: 1 };
+        },
+        release() {},
+      };
+    },
+  };
+  const pedidos = new PedidosService(pool, {}, {}, {});
+  pedidos.leerAsignacionesDrivin = async () => ({
+    mapa: { 'C-1': null },
+    completo: true,
+    hayEscenarios: true,
+  });
+  pedidos.puntoDrivinCfg = async () => ({ drivin: true, schema: '01', localidad: 'La 93' });
+  const guardados = [];
+  pedidos.guardar = async pedido => {
+    guardados.push(pedido);
+    return { ...pedido };
+  };
+
+  assert.equal(await pedidos.sincronizarDesasignacionesDrivin(), 1);
+  const liberacion = calls.find(call => call.statement.includes(`'{"domiciliario": "", "domiciliarioCodigo": ""}'`));
+  assert.deepEqual(liberacion.parameters, ['pedido-1', 'Driver anterior', 'VEH-1']);
+  assert.equal(guardados.length, 1);
+  assert.equal(guardados[0].estado, 'Facturado');
+});
+
+test('sincronización Drivin no toca el domiciliario de un pedido Entregado sin réplicas', async () => {
+  const pool = {
+    async query(statement) {
+      if (statement.includes('SELECT id, punto_id, estado, data, meta, de_hoy')) {
+        // Un pedido Entregado sin réplicas ni siquiera entra en la consulta;
+        // se simula que llegó igual para comprobar que la base no se toca.
+        return {
+          rows: [{
+            id: 'pedido-1',
+            punto_id: '1',
+            estado: 'Entregado',
+            data: { comanda: 'C-1', punto: { id: '1', nombre: 'La 93' } },
+            meta: { domiciliario: 'Driver', domiciliarioCodigo: 'VEH-1' },
+            de_hoy: true,
+          }],
+        };
+      }
+      throw new Error(`No debe modificar un pedido entregado: ${statement}`);
+    },
+    async connect() {
+      return {
+        async query() {
+          return { rows: [{ ok: true }], rowCount: 1 };
+        },
+        release() {},
+      };
+    },
+  };
+  const pedidos = new PedidosService(pool, {}, {}, {});
+  pedidos.leerAsignacionesDrivin = async () => ({ mapa: { 'C-1': null }, completo: true, hayEscenarios: true });
+  pedidos.puntoDrivinCfg = async () => ({ drivin: true, schema: '01', localidad: 'La 93' });
+  pedidos.guardar = async () => { throw new Error('No debe cambiar el estado de un pedido entregado'); };
+
+  assert.equal(await pedidos.sincronizarDesasignacionesDrivin(), 0);
+});
+
 test('conteo de pendientes no tiene limite de listado y solo incluye abiertos', async () => {
   const pool = poolWith(() => ({ rows: [{ total: '527' }] }));
   const tienda = new TiendaEmpleadosService(pool);

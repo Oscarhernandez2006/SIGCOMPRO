@@ -51,8 +51,14 @@ export class DrivinSyncJob {
     }
   }
 
-  /** Cada minuto en horario de operación; reconcilia cambios fallidos en la corrida siguiente. */
-  @Cron('0 * 6-22 * * *', {
+  /**
+   * Cada 5 segundos en horario de operación: consulta en Drivin los pedidos en
+   * Despachado/En tránsito (y Facturado a la espera de domiciliario) y aplica
+   * asignaciones, cambios y desasignaciones. Comparte una sola lectura de
+   * Drivin con las pantallas de Despacho; si una corrida sigue en curso la
+   * siguiente se salta y lo pendiente se reconcilia en la próxima.
+   */
+  @Cron('*/5 * 6-22 * * *', {
     name: 'sincronizar-desasignaciones-drivin',
     timeZone: 'America/Bogota',
   })

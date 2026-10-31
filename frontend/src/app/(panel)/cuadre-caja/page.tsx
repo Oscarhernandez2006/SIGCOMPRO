@@ -1083,7 +1083,7 @@ export default function CuadreCajaPage() {
                             type="button"
                             onClick={() => setDevolucionDe(p)}
                             title="Ver el detalle de la devolución"
-                            className="rounded-full bg-fuchsia-100 px-2 py-0.5 text-[11px] font-bold text-fuchsia-700 underline-offset-2 transition hover:bg-fuchsia-200 hover:underline"
+                            className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700 underline-offset-2 transition hover:bg-red-200 hover:underline"
                           >
                             Sí
                           </button>

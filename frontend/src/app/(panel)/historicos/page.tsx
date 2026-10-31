@@ -412,7 +412,7 @@ export default function HistoricosPage() {
                           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${colorEstado(p.estado)}`}>
                             {p.estado || (anulado ? "Anulado" : "Despachado")}
                           </span>
-                          {m?.devolucion && <span title={m.devolucion.motivo || "Se registró una devolución"} className="rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2 py-0.5 text-[10px] font-bold text-fuchsia-700">Devolución · {formatoCOP(m.devolucion.valorDevuelto)}</span>}
+                          {m?.devolucion && <span title={m.devolucion.motivo || "Se registró una devolución"} className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Devolución · {formatoCOP(m.devolucion.valorDevuelto)}</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-brand-black">{new Date(p.fecha).toLocaleString("es-CO")}</td>

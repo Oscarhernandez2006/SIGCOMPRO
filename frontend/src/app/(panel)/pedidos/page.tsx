@@ -726,7 +726,7 @@ export default function PedidosPage() {
                       {!p.anulado && p.entregaProgramada && p.fechaProgramada && (
                         <span className="text-[11px] font-semibold text-blue-600">Posterior</span>
                       )}
-                      {meta[p.id]?.devolucion && <span title={meta[p.id]?.devolucion?.motivo || "Se registró una devolución"} className="inline-flex w-fit items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2 py-0.5 text-[10px] font-bold text-fuchsia-700">Devolución · {formatoCOP(meta[p.id]?.devolucion?.valorDevuelto ?? 0)}</span>}
+                      {meta[p.id]?.devolucion && <span title={meta[p.id]?.devolucion?.motivo || "Se registró una devolución"} className="inline-flex w-fit items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Devolución · {formatoCOP(meta[p.id]?.devolucion?.valorDevuelto ?? 0)}</span>}
                     </div>
                     {p.motivo && (
                       <p className="mt-0.5 text-[11px] text-brand-black">{p.motivo}</p>

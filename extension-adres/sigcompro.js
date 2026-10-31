@@ -15,7 +15,11 @@
     } else if (d.tipo === "SIGCOMPRO_ADRES_CANCELAR") {
       chrome.runtime.sendMessage({ tipo: "cancelar" });
     } else if (d.tipo === "SIGCOMPRO_ADRES_PING") {
-      window.postMessage({ tipo: "SIGCOMPRO_ADRES_LISTO" }, window.location.origin);
+      // Responde con la versión instalada (SIGCOMPRO avisa si hay una más nueva).
+      window.postMessage(
+        { tipo: "SIGCOMPRO_ADRES_LISTO", version: chrome.runtime.getManifest().version },
+        window.location.origin,
+      );
     }
   });
 
