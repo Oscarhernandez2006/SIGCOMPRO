@@ -4040,6 +4040,31 @@ export class PedidosService implements OnModuleInit {
     return { comanda, nitBase, puntos, envios };
   }
 
+  /**
+   * De una lista de NITs (base o "nit-N"), devuelve los NIT BASE que tienen al
+   * menos una dirección alterna activa distinta de la indicada. Sirve para
+   * mostrar el botón "Puntos de envío" solo donde aplica.
+   */
+  async nitsConPuntosEnvio(nits: string[]): Promise<string[]> {
+    const limpios = [...new Set(nits.map((n) => String(n ?? '').trim()).filter(Boolean))].slice(0, 2000);
+    if (limpios.length === 0) return [];
+    const res = await this.pool.query<{ nit: string }>(
+      `WITH n AS (
+         SELECT nit, regexp_replace(nit, '-[0-9]+$', '') AS base
+           FROM unnest($1::text[]) AS t(nit)
+       )
+       SELECT DISTINCT n.nit
+         FROM n
+         JOIN clientes c
+           ON c.nit_cedula LIKE n.base || '-%'
+          AND c.nit_cedula ~ '-[0-9]+$'
+          AND c.nit_cedula <> n.nit
+          AND COALESCE(c.activo, true)`,
+      [limpios],
+    );
+    return res.rows.map((r) => r.nit);
+  }
+
   /** Guarda (o reemplaza) el registro de un envío a fundación en meta.enviosFundacion. */
   private async registrarEnvioFundacion(id: string, envio: EnvioFundacionMeta) {
     await this.pool.query(

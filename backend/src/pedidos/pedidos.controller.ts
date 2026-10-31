@@ -231,6 +231,13 @@ export class PedidosController {
     return this.pedidos.puntosEnvio(id);
   }
 
+  /** De una lista de NITs, cuáles tienen direcciones alternas ("nit-N"). */
+  @Post('puntos-envio/existen')
+  @Permisos('despacho')
+  nitsConPuntosEnvio(@Body() body: { nits?: string[] }) {
+    return this.pedidos.nitsConPuntosEnvio(Array.isArray(body?.nits) ? body.nits : []);
+  }
+
   /** Sube a Drivin una orden "comanda-NF" hacia el punto de envío alterno N. */
   @Post(':id/puntos-envio/:sufijo/drivin')
   @Permisos('despacho')

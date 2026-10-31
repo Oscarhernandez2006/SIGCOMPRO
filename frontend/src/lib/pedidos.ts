@@ -529,3 +529,11 @@ export function enviarFundacionADrivin(
     body: JSON.stringify({ nit }),
   });
 }
+
+/** De una lista de NITs, cuáles tienen direcciones alternas ("nit-N") para puntos de envío. */
+export function nitsConPuntosEnvio(nits: string[]): Promise<string[]> {
+  return apiFetch<string[]>(`/pedidos/puntos-envio/existen`, {
+    method: "POST",
+    body: JSON.stringify({ nits }),
+  });
+}

@@ -25,6 +25,7 @@ import {
   eliminarComprobanteApi,
   cargarAsignacionesDrivin,
   cargarEntregasDrivin,
+  nitsConPuntosEnvio,
   agregarReplicaApi,
   parcharReplicaApi,
   quitarReplicaApi,
@@ -443,6 +444,30 @@ export default function DespachoPage() {
   } | null>(null);
   // Modal "Puntos de envío": direcciones alternas del cliente → órdenes "-NF" a Drivin.
   const [modalPuntosEnvio, setModalPuntosEnvio] = useState<Pedido | null>(null);
+  // NITs (de los pedidos en pantalla) cuyo cliente tiene direcciones alternas;
+  // solo esos muestran el botón "Puntos de envío". Se consulta por lotes.
+  const [nitsConAlternos, setNitsConAlternos] = useState<Set<string>>(new Set());
+  const nitsConsultados = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const nuevos = [
+      ...new Set(
+        pedidos
+          .map((p) => String(p.cliente?.nit_cedula ?? "").trim())
+          .filter((n) => n && !nitsConsultados.current.has(n)),
+      ),
+    ];
+    if (nuevos.length === 0) return;
+    for (const n of nuevos) nitsConsultados.current.add(n);
+    nitsConPuntosEnvio(nuevos)
+      .then((con) => {
+        if (con.length === 0) return;
+        setNitsConAlternos((prev) => new Set([...prev, ...con]));
+      })
+      .catch(() => {
+        // Si falla, se vuelve a intentar con esos NITs en el siguiente cambio.
+        for (const n of nuevos) nitsConsultados.current.delete(n);
+      });
+  }, [pedidos]);
   // Modal para que un ADMIN asigne un domiciliario MANUAL (de la Gestión de
   // recursos, según el punto) y así cerrar el ciclo a Despachado cuando Drivin
   // rebotó el pedido y no lo asignó.
@@ -2902,7 +2927,9 @@ export default function DespachoPage() {
                                 })}
                             </div>
                           )}
-                          {/* Puntos de envío: direcciones alternas del cliente (fundaciones). */}
+                          {/* Puntos de envío: solo si el cliente tiene direcciones alternas (fundaciones). */}
+                          {(nitsConAlternos.has(String(p.cliente?.nit_cedula ?? "").trim()) ||
+                            (m.enviosFundacion?.length ?? 0) > 0) && (
                           <button
                             type="button"
                             disabled={anulado}
@@ -2921,6 +2948,7 @@ export default function DespachoPage() {
                               </span>
                             )}
                           </button>
+                          )}
                         </div>}
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
