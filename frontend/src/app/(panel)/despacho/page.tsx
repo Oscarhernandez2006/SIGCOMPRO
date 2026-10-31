@@ -523,6 +523,17 @@ export default function DespachoPage() {
     comanda: string;
     msg?: string;
   } | null>(null);
+  // Comanda cuyo número se acaba de copiar al portapapeles (feedback breve).
+  const [comandaCopiada, setComandaCopiada] = useState<string | null>(null);
+  const copiarComanda = (comanda: string) => {
+    navigator.clipboard
+      .writeText(comanda)
+      .then(() => {
+        setComandaCopiada(comanda);
+        setTimeout(() => setComandaCopiada((c) => (c === comanda ? null : c)), 1200);
+      })
+      .catch(() => {});
+  };
 
   // Permisos granulares de despacho y modal de acción no permitida.
   const sinPermiso = useSinPermiso();
@@ -2291,9 +2302,18 @@ export default function DespachoPage() {
                         </div>
                         <div className="w-px shrink-0 self-stretch bg-brand-brown/10" />
                         <div className="shrink-0 pl-3 text-right">
-                          <p className="whitespace-nowrap text-xs font-semibold text-brand-wine">
-                            Comanda #{p.comanda}
-                          </p>
+                          <p className="whitespace-nowrap text-xs font-semibold text-brand-wine">Comanda #</p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copiarComanda(p.comanda);
+                            }}
+                            title="Clic para copiar el número de comanda"
+                            className="whitespace-nowrap rounded px-1 text-sm font-bold text-brand-wine transition hover:bg-brand-wine/10 active:bg-brand-wine/20"
+                          >
+                            {comandaCopiada === p.comanda ? "¡Copiado!" : p.comanda}
+                          </button>
                           {p.clonadoDe && (
                             <p className="mt-0.5 text-[11px] font-medium text-brand-amber">
                               Clonado de #{p.clonadoDe}
