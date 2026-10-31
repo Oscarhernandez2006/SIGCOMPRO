@@ -885,10 +885,10 @@ export default function DespachoPage() {
     };
   }, []);
 
-  // Cierra solo el modal de Drivin cuando el envío fue exitoso (a los 4s).
+  // Cierra solo el modal de Drivin cuando el envío fue exitoso (a los 2s).
   useEffect(() => {
     if (drivinModal?.estado !== "ok") return;
-    const t = setTimeout(() => setDrivinModal(null), 4000);
+    const t = setTimeout(() => setDrivinModal(null), 2000);
     return () => clearTimeout(t);
   }, [drivinModal]);
 
