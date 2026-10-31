@@ -18,11 +18,12 @@ import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import { resumenPendientesExtension } from "@/lib/extensiones";
 import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import ClaveDinamica from "./ClaveDinamica";
+import AprobacionesDespacho from "./AprobacionesDespacho";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 import PendientesCreditoBadge from "./PendientesCreditoBadge";
-import { ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -39,7 +40,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/admin/almuerzos", modulo: "almuerzos", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
   { label: "Club Yo Soy Santacruz", href: "/admin/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
@@ -114,17 +114,6 @@ const navItems: NavItem[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Aprobación extensión",
-    href: "/admin/solicitudes-extension",
-    soloDashboard: true,
-    burbujaExtensiones: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
       </svg>
     ),
   },
@@ -620,6 +609,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </span>
 
           <div className="ml-auto flex items-center gap-3">
+            {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} pendientesExt={pendientesExt} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">

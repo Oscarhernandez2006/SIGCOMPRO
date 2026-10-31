@@ -9,11 +9,12 @@ import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import { cargarResumenPedidos } from "@/lib/pedidos";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
+import AprobacionesDespacho from "./AprobacionesDespacho";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 import PendientesCreditoBadge from "./PendientesCreditoBadge";
-import { ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -30,7 +31,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/almuerzos", modulo: "almuerzos", roles: ["despacho", "supervisor general", "supervisor_general", "administrador pdv"], icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
   { label: "Club Yo Soy Santacruz", href: "/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
@@ -466,6 +466,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           />
 
           <div className="ml-auto flex items-center gap-3">
+            {pathname.startsWith("/despacho") && <AprobacionesDespacho usuario={usuario} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">
