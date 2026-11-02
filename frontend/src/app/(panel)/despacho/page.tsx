@@ -2172,10 +2172,13 @@ export default function DespachoPage() {
                 // "En tránsito" y "Entregado" cuentan como despachado (ya salió a reparto).
                 const despachado = yaDespachado(estado);
                 const facturado = norm(estado) === "facturado" || despachado;
-                // Reenvío a Drivin: Facturado (sin despachar), punto Drivin y la comanda no
-                // aparece en ningún escenario de Drivin (mapa con datos, para no dar falsos positivos).
+                // Reenvío a Drivin: Facturado (sin despachar), punto Drivin, entrega de HOY
+                // (el mapa de asignaciones solo lee los escenarios de hoy) y la comanda no
+                // aparece en ningún escenario (mapa con datos, para no dar falsos positivos).
+                // En Drivin toda orden entra obligatoriamente a un escenario: ausente = no existe.
                 const mostrarReenvioDrivin =
                   facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
+                  diaEntregaISO(p) <= hoyISO() &&
                   Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin);
                 // Solo se puede facturar cuando el pedido ya está alistado. Si el
                 // alistamiento YA terminó (m.fin) pero el estado quedó pegado en
