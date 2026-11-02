@@ -2172,6 +2172,11 @@ export default function DespachoPage() {
                 // "En tránsito" y "Entregado" cuentan como despachado (ya salió a reparto).
                 const despachado = yaDespachado(estado);
                 const facturado = norm(estado) === "facturado" || despachado;
+                // Reenvío a Drivin: Facturado (sin despachar), punto Drivin y la comanda no
+                // aparece en ningún escenario de Drivin (mapa con datos, para no dar falsos positivos).
+                const mostrarReenvioDrivin =
+                  facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
+                  Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin);
                 // Solo se puede facturar cuando el pedido ya está alistado. Si el
                 // alistamiento YA terminó (m.fin) pero el estado quedó pegado en
                 // "En producción", se considera alistado igual (y se auto-corrige).
@@ -2684,6 +2689,7 @@ export default function DespachoPage() {
                             Facturó: {m.facturadoPor}
                           </p>
                         )}
+                        <div className={`grid gap-1.5 ${mostrarReenvioDrivin ? "grid-cols-2" : "grid-cols-1"}`}>
                         {m.devolucion ? (
                           <button
                             type="button"
@@ -2711,14 +2717,13 @@ export default function DespachoPage() {
                         )}
                         {/* Reenvío a Drivin: solo Facturado (aún sin despachar), punto Drivin y
                             la comanda NO aparece en Drivin (se borró o nunca subió). */}
-                        {facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
-                          Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin) && (
+                        {mostrarReenvioDrivin && (
                           <button
                             type="button"
                             onClick={() => reenviarADrivin(p)}
                             disabled={drivinModal?.estado === "enviando"}
                             title="La comanda no está en Drivin. Volver a subir el pedido a Drivin"
-                            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+                            className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -2726,6 +2731,7 @@ export default function DespachoPage() {
                             Reenviar a Drivin
                           </button>
                         )}
+                        </div>
                         {requiereComprobante && (
                           <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
                             {!comp?.tiene ? (
