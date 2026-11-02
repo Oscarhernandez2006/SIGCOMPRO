@@ -3,11 +3,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { UtensilsCrossed, Activity } from "lucide-react";
-import { puedeVerDashboard, tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
+import { tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
-import { resumenPendientesExtension } from "@/lib/extensiones";
+import { esRolDespacho } from "@/lib/extensiones";
 import AlmuerzosPage from "@/app/(panel)/almuerzos/page";
-import SolicitudesExtensionPage from "@/app/admin/solicitudes-extension/page";
+import ExtensionesPage from "@/app/(panel)/extensiones/page";
 import MonitoreoPage from "@/app/admin/monitoreo/page";
 
 type Vista = "almuerzos" | "extensiones" | "monitoreo";
@@ -23,40 +23,17 @@ export function puedeAprobarAlmuerzos(u: Usuario | null | undefined): boolean {
 }
 
 /**
- * Botones "Aprobación almuerzo", "Aprobación extensión" y "Monitoreo" para la barra superior
+ * Botones "Aprobación almuerzo", "Solicitud de extensión" y "Monitoreo" para la barra superior
  * del módulo de Despacho. Abren la misma vista de cada módulo en un modal, así
  * no hay que salir de Despacho para aprobar.
  */
-export default function AprobacionesDespacho({
-  usuario,
-  pendientesExt,
-}: {
-  usuario: Usuario | null | undefined;
-  /** Conteo de extensiones pendientes; si no se pasa, el componente lo consulta. */
-  pendientesExt?: number;
-}) {
+export default function AprobacionesDespacho({ usuario }: { usuario: Usuario | null | undefined }) {
   const [vista, setVista] = useState<Vista | null>(null);
-  const [pendientesLocal, setPendientesLocal] = useState(0);
 
   const veAlmuerzos = puedeAprobarAlmuerzos(usuario);
-  const veExtensiones = puedeVerDashboard(usuario?.rol);
+  // Mismas reglas que tenía la entrada del menú: rol despacho o acceso administrativo.
+  const veExtensiones = esRolDespacho(usuario?.rol) || tieneAccesoAdministrativo(usuario?.rol);
   const veMonitoreo = puedeVerModulo(usuario ?? null, "monitoreo");
-  const consultarPendientes = veExtensiones && pendientesExt === undefined;
-
-  useEffect(() => {
-    if (!consultarPendientes) return;
-    let activo = true;
-    const revisar = () =>
-      resumenPendientesExtension()
-        .then((r) => activo && setPendientesLocal(r.pendientes))
-        .catch(() => {});
-    revisar();
-    const id = setInterval(revisar, 30000);
-    return () => {
-      activo = false;
-      clearInterval(id);
-    };
-  }, [consultarPendientes]);
 
   useEffect(() => {
     if (!vista) return;
@@ -67,8 +44,6 @@ export default function AprobacionesDespacho({
 
   if (!veAlmuerzos && !veExtensiones && !veMonitoreo) return null;
 
-  const pendientes = pendientesExt ?? pendientesLocal;
-
   return (
     <>
       {veAlmuerzos && (
@@ -78,21 +53,11 @@ export default function AprobacionesDespacho({
         </Boton>
       )}
       {veExtensiones && (
-        <Boton onClick={() => setVista("extensiones")} title="Aprobar o rechazar extensiones de domiciliarios">
-          <span className="relative">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
-            {pendientes > 0 && (
-              <span
-                title={`${pendientes} solicitud(es) pendiente(s)`}
-                className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
-              >
-                {pendientes}
-              </span>
-            )}
-          </span>
-          <span className="hidden md:inline">Aprobación extensión</span>
+        <Boton onClick={() => setVista("extensiones")} title="Solicitar extensión de horario para domiciliarios">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+          <span className="hidden md:inline">Solicitud de extensión</span>
         </Boton>
       )}
       {veMonitoreo && (
@@ -126,7 +91,7 @@ export default function AprobacionesDespacho({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-                {vista === "almuerzos" ? <AlmuerzosPage /> : vista === "extensiones" ? <SolicitudesExtensionPage /> : <MonitoreoPage />}
+                {vista === "almuerzos" ? <AlmuerzosPage /> : vista === "extensiones" ? <ExtensionesPage /> : <MonitoreoPage />}
               </div>
             </div>
           </div>,

@@ -9,7 +9,7 @@ Software de pedidos y despacho de Carnes Santacruz (Grupo Santacruz). Monorepo `
 ## Stack
 - **Backend**: NestJS 10, TypeScript. Puerto **3001**, prefijo global **`/api`**. Driver **`pg` (node-postgres) con SQL CRUDO — NO hay ORM** (ni TypeORM/Prisma/etc.). Pool en `PG_POOL` (`backend/src/database/database.module.ts`, `max: 10`, keepAlive).
 - **Frontend**: Next.js 16 (App Router, Turbopack), React 19, Tailwind v4. Puerto **3000**. Lee `frontend/.env.local` (`NEXT_PUBLIC_API_URL`).
-- **BD**: PostgreSQL de PRODUCCIÓN remota (Azure) `DBSIGCOM-PRO` en `20.121.178.90:5436` (DB_SSL=false). Credenciales en `backend/.env` (gitignored). El backend local apunta a esta BD prod.
+- **BD**: PostgreSQL de PRODUCCIÓN remota (Azure) `DBSIGCOM-PRO` en `20.121.178.90:3008` (DB_SSL=false). Credenciales en `backend/.env` (gitignored). El backend local apunta a esta BD prod.
 - **Deploy**: 1 solo contenedor (`Dockerfile` raíz) con **Caddy** en :80 que enruta `/api/*`→backend:3001 y `/*`→frontend:3000. Traefik (ver `deploy.sh`) enruta al puerto 80. Caddyfile tiene `encode zstd gzip`.
 
 ## Estructura

@@ -118,6 +118,17 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Aprobación extensión",
+    href: "/admin/solicitudes-extension",
+    soloDashboard: true,
+    burbujaExtensiones: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ),
+  },
+  {
     label: "Monitoreo",
     href: "/admin/monitoreo",
     soloDashboard: true,
@@ -609,7 +620,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </span>
 
           <div className="ml-auto flex items-center gap-3">
-            {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} pendientesExt={pendientesExt} />}
+            {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">

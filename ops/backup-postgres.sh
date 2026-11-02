@@ -1,4 +1,10 @@
-#!/usr/bin/env bash
+scp ops/backup-postgres.sh ops/restore-postgres.sh adminsvr@20.121.178.90:~/mkdir -p ~/bin ~/backups
+curl -fsSL -o ~/bin/backup-postgres.sh  https://raw.githubusercontent.com/Oscarhernandez2006/SIGCOMPRO/main/ops/backup-postgres.sh
+curl -fsSL -o ~/bin/restore-postgres.sh https://raw.githubusercontent.com/Oscarhernandez2006/SIGCOMPRO/main/ops/restore-postgres.sh
+chmod +x ~/bin/*.sh
+ls -l ~/bin/
+~/bin/backup-postgres.sh
+ls -lh ~/backups/*/#!/usr/bin/env bash
 # Copia de seguridad de TODOS los contenedores PostgreSQL que estén corriendo en
 # el servidor (Dokploy / Docker Swarm). Genera un pg_dump por base de datos en
 #   $BACKUP_ROOT/<app>/<app>_<YYYY-MM-DD_HHMM>.dump   (formato custom, comprimido)
