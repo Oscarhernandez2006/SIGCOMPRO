@@ -3991,6 +3991,46 @@ export class PedidosService implements OnModuleInit {
   }
 
   /**
+   * Elimina una orden en Drivin (DELETE external/v2/orders/{code}). Sin `token`
+   * la borra de la plataforma (Gestor o escenario sin iniciar); con `token` la
+   * quita solo de ese escenario. Si la ruta ya inició queda "CANCELADO" y si ya
+   * fue gestionada conserva su estado. SOLO para pruebas desde el backend: no
+   * tiene interfaz. No toca el pedido en SIGCOMPRO.
+   */
+  async eliminarOrdenDrivin(
+    comanda: string,
+    token?: string,
+  ): Promise<{ status: number; comanda: string; token: string | null; respuesta: unknown }> {
+    const apiKey = this.config.get<string>('DRIVIN_API_KEY');
+    if (!apiKey) {
+      throw new Error('Falta DRIVIN_API_KEY en el backend (.env).');
+    }
+    const code = String(comanda ?? '').trim();
+    if (!code) throw new BadRequestException('Falta la comanda.');
+    const tok = String(token ?? '').trim() || null;
+    const path =
+      `/orders/${encodeURIComponent(code)}` +
+      (tok ? `?token=${encodeURIComponent(tok)}` : '');
+    const { status, text } = await this.drivinRequest('DELETE', path, apiKey, '', 'v2');
+    let data: unknown;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    this.logger.warn(
+      `Drivin DELETE orden ${code}${tok ? ` (escenario ${tok})` : ' (plataforma)'}: status=${status} resp=${(text ?? '').slice(0, 500)}`,
+    );
+    if (status < 200 || status >= 300) {
+      const detalle = typeof data === 'string' ? data : JSON.stringify(data ?? {});
+      throw new BadRequestException(`Drivin respondió ${status}: ${detalle}`);
+    }
+    // Invalida la caché de asignaciones para que el cambio se vea rápido.
+    this.cacheAsignaciones = null;
+    return { status, comanda: code, token: tok, respuesta: data };
+  }
+
+  /**
    * Puntos de envío alternos del cliente del pedido: filas de `clientes` con
    * nit "cédula-N" (sin la dirección que ya tiene el pedido). Incluye los
    * envíos a fundación ya hechos (meta.enviosFundacion).

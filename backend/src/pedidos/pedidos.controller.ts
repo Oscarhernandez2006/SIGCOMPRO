@@ -138,6 +138,22 @@ export class PedidosController {
     return this.pedidos.asignacionesDrivin();
   }
 
+  /**
+   * Elimina una orden en Drivin por su código (SOLO pruebas desde backend, sin
+   * interfaz). `?token=<escenario>` la quita solo de ese escenario; sin token la
+   * borra de la plataforma. Solo administrador/desarrollador.
+   */
+  @Delete('drivin/orden/:comanda')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles('administrador', 'desarrollador')
+  eliminarOrdenDrivin(
+    @Param('comanda') comanda: string,
+    @Query('token') token: string | undefined,
+  ) {
+    return this.pedidos.eliminarOrdenDrivin(comanda, token);
+  }
+
   /** Sincroniza desasignaciones de Drivin: devuelve pedidos a "En proceso" si fueron desasignados. */
   @Post('drivin/sincronizar-desasignaciones')
   @Permisos('despacho')
