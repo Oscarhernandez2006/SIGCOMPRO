@@ -72,3 +72,13 @@ export function reprogramarAlmuerzo(id: string, hora: string, motivo: string): P
     body: JSON.stringify({ hora, motivo }),
   });
 }
+
+export interface ResumenPendientesAlmuerzo {
+  pendientes: number;
+  ultimo: { id: string; domiciliario: string; punto_nombre: string | null } | null;
+}
+
+/** Pendientes de hoy en los puntos del usuario (burbuja y aviso en Despacho). */
+export function resumenPendientesAlmuerzo(): Promise<ResumenPendientesAlmuerzo> {
+  return apiFetch("/almuerzos/pendientes/resumen");
+}

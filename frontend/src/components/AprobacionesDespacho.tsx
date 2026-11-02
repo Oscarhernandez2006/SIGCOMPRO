@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { UtensilsCrossed, Activity } from "lucide-react";
 import { tieneAccesoAdministrativo, type Usuario } from "@/lib/auth";
 import { puedeVerModulo } from "@/lib/permisos";
 import { esRolDespacho } from "@/lib/extensiones";
+import { resumenPendientesAlmuerzo } from "@/lib/almuerzos";
+import { contadorEnTitulo, notificarSistemaAccion, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import AlmuerzosPage from "@/app/(panel)/almuerzos/page";
 import ExtensionesPage from "@/app/(panel)/extensiones/page";
 import MonitoreoPage from "@/app/admin/monitoreo/page";
@@ -35,6 +37,47 @@ export default function AprobacionesDespacho({ usuario }: { usuario: Usuario | n
   const veExtensiones = esRolDespacho(usuario?.rol) || tieneAccesoAdministrativo(usuario?.rol);
   const veMonitoreo = puedeVerModulo(usuario ?? null, "monitoreo");
 
+  // Almuerzos pendientes: burbuja en el botón, contador en la pestaña y aviso
+  // (sonido + notificación del sistema) cuando llega una solicitud nueva.
+  const [pendientesAlm, setPendientesAlm] = useState(0);
+  const maxIdAlmRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!veAlmuerzos) return;
+    let activo = true;
+    const revisar = () => {
+      resumenPendientesAlmuerzo()
+        .then((r) => {
+          if (!activo) return;
+          setPendientesAlm(r.pendientes);
+          contadorEnTitulo(r.pendientes);
+          const id = r.ultimo ? Number(r.ultimo.id) : 0;
+          const previo = maxIdAlmRef.current;
+          if (previo !== null && id > previo && r.ultimo) {
+            sonidoNuevaExtension();
+            notificarSistemaAccion(
+              "Nueva solicitud de almuerzo",
+              `${r.ultimo.domiciliario} · ${r.ultimo.punto_nombre ?? ""}`.trim(),
+              `almuerzo-${r.ultimo.id}`,
+              () => setVista("almuerzos"),
+            );
+          }
+          maxIdAlmRef.current = Math.max(previo ?? 0, id);
+        })
+        .catch(() => {});
+    };
+    revisar();
+    const intervalo = setInterval(revisar, 15000);
+    // El permiso de notificaciones se pide tras una interacción (lo exigen los navegadores).
+    const pedir = () => pedirPermisoNotificaciones();
+    document.addEventListener("click", pedir, { once: true });
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      document.removeEventListener("click", pedir);
+      contadorEnTitulo(0);
+    };
+  }, [veAlmuerzos]);
+
   useEffect(() => {
     if (!vista) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setVista(null);
@@ -48,7 +91,17 @@ export default function AprobacionesDespacho({ usuario }: { usuario: Usuario | n
     <>
       {veAlmuerzos && (
         <Boton onClick={() => setVista("almuerzos")} title="Aprobar, reprogramar o rechazar almuerzos de domiciliarios">
-          <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
+          <span className="relative">
+            <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
+            {pendientesAlm > 0 && (
+              <span
+                title={`${pendientesAlm} solicitud(es) de almuerzo pendiente(s)`}
+                className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+              >
+                {pendientesAlm}
+              </span>
+            )}
+          </span>
           <span className="hidden md:inline">Aprobación almuerzo</span>
         </Boton>
       )}

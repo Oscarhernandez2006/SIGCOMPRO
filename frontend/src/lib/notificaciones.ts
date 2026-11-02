@@ -57,3 +57,28 @@ export function notificarSistema(titulo: string, cuerpo: string, url: string, et
     /* algunos navegadores móviles solo permiten notificaciones vía service worker */
   }
 }
+
+/** Notificación del sistema que, al hacer clic, enfoca la pestaña y ejecuta `accion` (sin navegar). */
+export function notificarSistemaAccion(titulo: string, cuerpo: string, etiqueta: string, accion: () => void) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(titulo, { body: cuerpo, tag: etiqueta, icon: "/LOGOCARNESSANTACRUZ.png" });
+    n.onclick = () => {
+      window.focus();
+      accion();
+      n.close();
+    };
+  } catch {
+    /* algunos navegadores móviles solo permiten notificaciones vía service worker */
+  }
+}
+
+/**
+ * Muestra "(N) " delante del título de la pestaña mientras haya pendientes;
+ * con 0 lo deja limpio. Idempotente: no acumula prefijos.
+ */
+export function contadorEnTitulo(pendientes: number) {
+  if (typeof document === "undefined") return;
+  const base = document.title.replace(/^\(\d+\)\s*/, "");
+  document.title = pendientes > 0 ? `(${pendientes}) ${base}` : base;
+}

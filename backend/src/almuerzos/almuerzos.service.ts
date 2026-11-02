@@ -166,6 +166,35 @@ export class AlmuerzosService implements OnModuleInit {
 
   /* ------------------------------ Despacho ------------------------------ */
 
+  /**
+   * Pendientes de hoy del usuario (sus puntos; todos si es admin/supervisor) +
+   * la más reciente. Alimenta la burbuja y la notificación en Despacho.
+   */
+  async pendientes(user: JwtPayload): Promise<{
+    pendientes: number;
+    ultimo: { id: string; domiciliario: string; punto_nombre: string | null } | null;
+  }> {
+    await this.actualizarVencidas();
+    const rol = String(user.rol ?? '').trim().toLowerCase();
+    const todos = tieneAccesoTotal(user.rol) || ['supervisor general', 'supervisor_general'].includes(rol);
+    const r = await this.pool.query<{ id: string; domiciliario: string; punto_nombre: string | null; total: number }>(
+      `SELECT id::text, domiciliario, punto_nombre, count(*) OVER ()::int AS total
+         FROM almuerzos_solicitudes
+        WHERE estado = 'pendiente'
+          AND dia = (now() AT TIME ZONE 'America/Bogota')::date
+          AND ($1::boolean OR punto_id IN (
+                SELECT punto_venta_id::text FROM usuario_punto_venta WHERE usuario_id = $2))
+        ORDER BY id DESC
+        LIMIT 1`,
+      [todos, user.sub],
+    );
+    const fila = r.rows[0];
+    return {
+      pendientes: fila?.total ?? 0,
+      ultimo: fila ? { id: fila.id, domiciliario: fila.domiciliario, punto_nombre: fila.punto_nombre } : null,
+    };
+  }
+
   async listarPunto(user: JwtPayload, puntoId: string, dia?: string) {
     await this.verificarPunto(user, puntoId);
     await this.actualizarVencidas();

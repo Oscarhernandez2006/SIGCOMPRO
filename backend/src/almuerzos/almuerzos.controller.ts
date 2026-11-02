@@ -23,6 +23,13 @@ export class AlmuerzosController {
     if (!permisos.includes('despacho') && !permisos.includes('almuerzos')) throw new ForbiddenException('No tienes el permiso para aprobar almuerzos.');
   }
 
+  /** Conteo de pendientes de hoy (burbuja y notificación en la barra de Despacho). */
+  @Get('pendientes/resumen')
+  async pendientes(@Req() req: ReqUsuario) {
+    await this.autorizar(req.user);
+    return this.almuerzos.pendientes(req.user!);
+  }
+
   @Get('punto/:puntoId')
   async listarPunto(@Req() req: ReqUsuario, @Param('puntoId') puntoId: string, @Query('dia') dia?: string) {
     await this.autorizar(req.user);
