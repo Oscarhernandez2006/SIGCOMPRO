@@ -551,6 +551,23 @@ export default function DespachoPage() {
     comanda: string;
     msg?: string;
   } | null>(null);
+  // Reenvío manual a Drivin desde la columna Despacho (pedido Facturado cuya
+  // comanda no aparece en Drivin). Mismo modal de progreso que el envío automático.
+  const reenviarADrivin = (p: Pedido) => {
+    if (drivinModal?.estado === "enviando") return;
+    setDrivinModal({ estado: "enviando", comanda: p.comanda });
+    enviarADrivinApi(p.id)
+      .then(() => {
+        setDrivinModal({ estado: "ok", comanda: p.comanda });
+        actualizarMetaApi(p.id, { drivinEnviado: true }).catch(() => { /* ignore */ });
+        setMeta((prev) => ({ ...prev, [p.id]: { ...prev[p.id], drivinEnviado: true } }));
+        // Refresca de una vez las asignaciones para que el botón desaparezca.
+        cargarAsignacionesDrivin().then((mapa) => setAsignacionesDrivin(mapa ?? {})).catch(() => { /* ignore */ });
+      })
+      .catch((e) => {
+        setDrivinModal({ estado: "error", comanda: p.comanda, msg: e instanceof Error ? e.message : "" });
+      });
+  };
   // Comanda cuyo número se acaba de copiar al portapapeles (feedback breve).
   const [comandaCopiada, setComandaCopiada] = useState<string | null>(null);
   const copiarComanda = (comanda: string) => {
@@ -2691,6 +2708,23 @@ export default function DespachoPage() {
                               Devolución
                             </button>
                           )
+                        )}
+                        {/* Reenvío a Drivin: solo Facturado (aún sin despachar), punto Drivin y
+                            la comanda NO aparece en Drivin (se borró o nunca subió). */}
+                        {facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
+                          Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin) && (
+                          <button
+                            type="button"
+                            onClick={() => reenviarADrivin(p)}
+                            disabled={drivinModal?.estado === "enviando"}
+                            title="La comanda no está en Drivin. Volver a subir el pedido a Drivin"
+                            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            Reenviar a Drivin
+                          </button>
                         )}
                         {requiereComprobante && (
                           <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
