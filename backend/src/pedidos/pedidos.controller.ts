@@ -167,12 +167,15 @@ export class PedidosController {
     @Param('id') id: string,
     @Query('replica') replica: string | undefined,
     @Query('vehiculo') vehiculo: string | undefined,
+    @Query('escenario') escenario: string | undefined,
   ) {
     const n = replica ? Number(replica) : undefined;
     return this.pedidos.enviarADrivin(
       id,
       Number.isFinite(n) ? n : undefined,
       vehiculo,
+      undefined,
+      escenario === '1' || escenario === 'true',
     );
   }
 

@@ -420,10 +420,13 @@ export function enviarADrivinApi(
   id: string,
   replica?: number,
   vehiculo?: string,
+  opciones?: { escenario?: boolean },
 ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
   const p = new URLSearchParams();
   if (replica) p.set("replica", String(replica));
   if (vehiculo) p.set("vehiculo", vehiculo);
+  // `escenario`: sube la orden directo al escenario del día (reenvío manual).
+  if (opciones?.escenario) p.set("escenario", "1");
   const qs = p.toString();
   return apiFetch<{ status: number; comanda: string; respuesta: unknown }>(
     `/pedidos/${id}/drivin${qs ? `?${qs}` : ""}`,

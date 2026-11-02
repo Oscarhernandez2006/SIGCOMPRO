@@ -552,16 +552,22 @@ export default function DespachoPage() {
     msg?: string;
   } | null>(null);
   // Reenvío manual a Drivin desde la columna Despacho (pedido Facturado cuya
-  // comanda no aparece en Drivin). Mismo modal de progreso que el envío automático.
+  // comanda no aparece en Drivin). Va DIRECTO al escenario del día: un reenvío
+  // al Gestor solo actualiza la orden y no la mete al escenario.
+  // Comandas reenviadas hace poco (comanda -> ms): se oculta el botón 60s para
+  // dar tiempo a que el mapa de asignaciones de Drivin las refleje.
+  const [reenviadasDrivin, setReenviadasDrivin] = useState<Record<string, number>>({});
   const reenviarADrivin = (p: Pedido) => {
     if (drivinModal?.estado === "enviando") return;
     setDrivinModal({ estado: "enviando", comanda: p.comanda });
-    enviarADrivinApi(p.id)
+    enviarADrivinApi(p.id, undefined, undefined, { escenario: true })
       .then(() => {
         setDrivinModal({ estado: "ok", comanda: p.comanda });
         actualizarMetaApi(p.id, { drivinEnviado: true }).catch(() => { /* ignore */ });
         setMeta((prev) => ({ ...prev, [p.id]: { ...prev[p.id], drivinEnviado: true } }));
-        // Refresca de una vez las asignaciones para que el botón desaparezca.
+        // Oculta el botón de inmediato (el mapa de Drivin se cachea unos segundos)
+        // y refresca las asignaciones.
+        setReenviadasDrivin((prev) => ({ ...prev, [p.comanda]: Date.now() }));
         cargarAsignacionesDrivin().then((mapa) => setAsignacionesDrivin(mapa ?? {})).catch(() => { /* ignore */ });
       })
       .catch((e) => {
@@ -2179,7 +2185,8 @@ export default function DespachoPage() {
                 const mostrarReenvioDrivin =
                   facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
                   diaEntregaISO(p) <= hoyISO() &&
-                  Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin);
+                  Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin) &&
+                  Date.now() - (reenviadasDrivin[p.comanda] ?? 0) > 60_000;
                 // Solo se puede facturar cuando el pedido ya está alistado. Si el
                 // alistamiento YA terminó (m.fin) pero el estado quedó pegado en
                 // "En producción", se considera alistado igual (y se auto-corrige).

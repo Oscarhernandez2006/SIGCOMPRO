@@ -3842,7 +3842,8 @@ export class PedidosService implements OnModuleInit {
     replica?: number,
     vehiculo?: string,
     alterno?: { nit: string; sufijo: number },
-  ): Promise<{ status: number; comanda: string; respuesta: unknown }> {
+    alEscenario = false,
+  ): Promise<{ status: number; comanda: string; respuesta: unknown; escenario?: boolean }> {
     const apiKey = this.config.get<string>('DRIVIN_API_KEY');
     if (!apiKey) {
       throw new Error(
@@ -3864,7 +3865,22 @@ export class PedidosService implements OnModuleInit {
     // La orden se sube al GESTOR DE ÓRDENES del schema (solo `schema_code`, sin
     // `token` ni `autoassign`). El planeador de Drivin la asigna a un vehículo y
     // SIGCOMPRO baja esa asignación después (ver asignacionesDrivin()).
-    const path = `/orders?schema_code=${encodeURIComponent(schema)}`;
+    // Con `alEscenario` (reenvío manual de una comanda que no aparece en ningún
+    // escenario) se agrega el `token` del escenario del día del schema para que
+    // la orden entre DIRECTO al escenario: un upsert al Gestor no la mete.
+    let tokenEscenario: string | null = null;
+    if (alEscenario) {
+      tokenEscenario = await this.tokenScenarioPunto(schema, d.fechaEntrega);
+      if (!tokenEscenario) {
+        throw new BadRequestException(
+          `Drivin no tiene un escenario del ${d.fechaEntrega} para el esquema ${schema}. ` +
+            'Créalo en Drivin y vuelve a intentar.',
+        );
+      }
+    }
+    const path =
+      `/orders?schema_code=${encodeURIComponent(schema)}` +
+      (tokenEscenario ? `&token=${encodeURIComponent(tokenEscenario)}` : '');
     // Vehículo a preasignar, si se indicó (normalmente no: Drivin asigna).
     const vehicleCode = String(vehiculo ?? '').trim() || null;
 
@@ -3940,7 +3956,7 @@ export class PedidosService implements OnModuleInit {
     }
     // Traza de la operación (para diagnosticar en Drivin).
     this.logger.log(
-      `Drivin orden ${d.comanda} (Gestor): status=${status} schema_code=${schema} ` +
+      `Drivin orden ${d.comanda} (${tokenEscenario ? 'Escenario' : 'Gestor'}): status=${status} schema_code=${schema} ` +
         `vehicle_code=${vehicleCode ?? '-'} resp=${(text ?? '').slice(0, 500)}`,
     );
     if (status < 200 || status >= 300) {
@@ -3971,7 +3987,7 @@ export class PedidosService implements OnModuleInit {
         this.logger.warn(`No se pudo registrar el envío ${d.comanda}: ${String(e)}`),
       );
     }
-    return { status, comanda: d.comanda, respuesta: data };
+    return { status, comanda: d.comanda, respuesta: data, escenario: !!tokenEscenario };
   }
 
   /**
