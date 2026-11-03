@@ -26,6 +26,7 @@ import {
   type MetaMap,
   type PedidoResumen,
 } from './dashboard.metricas';
+import { DashboardCache, PROYECCION_RESUMEN_SQL } from './dashboard.cache';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
@@ -257,6 +258,8 @@ export interface EstadoPedidos {
 @Injectable()
 export class PedidosService implements OnModuleInit {
   private readonly logger = new Logger(PedidosService.name);
+  /** Pedidos recientes en RAM para el dashboard (ver `dashboard.cache.ts`). */
+  private dashboardCache!: DashboardCache;
   /** Caché en memoria de scenarios de Drivin por fecha (TTL corto). */
   private cacheScenarios = new Map<
     string,
@@ -297,6 +300,10 @@ export class PedidosService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    this.dashboardCache = new DashboardCache(this.pool, this.logger);
+    // Precarga en segundo plano para que la primera consulta del dashboard ya
+    // encuentre la caché lista (la carga completa tarda ~1 min por la red).
+    setTimeout(() => this.dashboardCache.precargar(), 5_000);
     // Historial de generación de planes de Drivin (automática y manual).
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS drivin_planes_generacion (
@@ -599,7 +606,9 @@ export class PedidosService implements OnModuleInit {
       puntosVisibles: esAdmin ? undefined : new Set(puntos.map((p) => p.id)),
     };
     const carga = opcionesCarga(opciones);
-    const r = await this.resumenLigero(carga.rango, carga.fecha, carga.hasta);
+    const r =
+      (await this.dashboardCache.obtener(carga.rango, carga.fecha, carga.hasta)) ??
+      (await this.resumenLigero(carga.rango, carga.fecha, carga.hasta));
     return {
       puntos,
       esAdmin,
@@ -631,51 +640,7 @@ export class PedidosService implements OnModuleInit {
       data: PedidoData;
       meta: DespachoMeta;
     }>(
-      `SELECT id,
-              jsonb_build_object(
-                'id', id,
-                'comanda', data->>'comanda',
-                'consecutivo', (data->>'consecutivo')::int,
-                'fecha', data->>'fecha',
-                'total', COALESCE((data->>'total')::numeric, 0),
-                'estado', data->>'estado',
-                'anulado', COALESCE((data->>'anulado')::boolean, false),
-                'motivo', data->>'motivo',
-                'pago', data->>'pago',
-                'entrega', data->>'entrega',
-                'valorDomicilio', (data->>'valorDomicilio')::numeric,
-                'vendedorNombre', data->>'vendedorNombre',
-                'vendedorCedula', data->>'vendedorCedula',
-                'entregaProgramada', (data->>'entregaProgramada')::boolean,
-                'fechaProgramada', data->>'fechaProgramada',
-                'horaDespacho', data->>'horaDespacho',
-                'punto', jsonb_build_object(
-                  'id', data->'punto'->>'id',
-                  'nombre', data->'punto'->>'nombre'
-                ),
-                'cliente', jsonb_build_object(
-                  'nit_cedula', data->'cliente'->>'nit_cedula',
-                  'nombre', data->'cliente'->>'nombre',
-                  'horeca', COALESCE((data->'cliente'->>'horeca')::boolean, false)
-                ),
-                'carrito', COALESCE((
-                  SELECT jsonb_agg(jsonb_build_object(
-                    'id', item->>'id',
-                    'cantidad', COALESCE((item->>'cantidad')::numeric, 0),
-                    'porcionado', COALESCE((item->>'porcionado')::boolean, false),
-                    'unidades', (item->>'unidades')::numeric,
-                    'gramos', (item->>'gramos')::numeric,
-                    'pesoVariable', (item->>'pesoVariable')::numeric,
-                    'producto', jsonb_build_object(
-                      'um', item->'producto'->>'um',
-                      'producto', item->'producto'->>'producto',
-                      'referencia', item->'producto'->>'referencia',
-                      'precio', (item->'producto'->>'precio')::numeric
-                    )
-                  ))
-                  FROM jsonb_array_elements(COALESCE(data->'carrito', '[]'::jsonb)) item
-                ), '[]'::jsonb)
-              ) AS data,
+      `SELECT id, ${PROYECCION_RESUMEN_SQL} AS data,
               meta
        FROM pedidos
        WHERE ${scope}
