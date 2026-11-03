@@ -26,7 +26,8 @@ type Item = {
 };
 
 export type PedidoResumen = {
-  id?: string;
+  id: string;
+  comanda?: string | null;
   fecha?: string;
   total?: number | string | null;
   estado?: string | null;
@@ -47,6 +48,11 @@ export type PedidoResumen = {
 
 export type MetaResumen = {
   facturaValor?: number | string | null;
+  facturaNumero?: string | null;
+  facturadoPor?: string | null;
+  despachadoPor?: string | null;
+  entregado?: boolean | null;
+  replicas?: Array<{ numero: number; domiciliario?: string | null; estado?: string | null }> | null;
   pagoConfirmado?: string | null;
   despachoFin?: string | null;
   inicio?: string | null;
@@ -104,7 +110,7 @@ export function hoy0(ahora = Date.now()): number {
   return msDeDia(diaDeMs(ahora));
 }
 
-function sumarDias(dia: string, n: number): string {
+export function sumarDias(dia: string, n: number): string {
   return diaDeMs(msDeDia(dia) + n * DAY);
 }
 
@@ -151,7 +157,7 @@ export function yaDespachado(estado?: string | null): boolean {
   );
 }
 
-function tsPedido(p: PedidoResumen): number {
+export function tsPedido(p: PedidoResumen): number {
   const t = new Date(p.fecha ?? '').getTime();
   return Number.isFinite(t) ? t : 0;
 }
@@ -161,7 +167,7 @@ function diaEntregaISO(p: PedidoResumen): string {
   return esProgramado(p) ? String(p.fechaProgramada) : diaLocal(p.fecha);
 }
 
-function objetivoDespacho(p: PedidoResumen, pagoConfirmado?: string | null): number {
+export function objetivoDespacho(p: PedidoResumen, pagoConfirmado?: string | null): number {
   if (esRecoge(p)) return msDeDia(diaEntregaISO(p), HORA_LIMITE_RECOGE, 0);
   if (esTransferencia(p)) {
     if (pagoConfirmado) return new Date(pagoConfirmado).getTime() + LIMITE_TRANSFERENCIA_MS;
@@ -210,7 +216,7 @@ function esDeHoy(p: PedidoResumen, hoy: string): boolean {
   return false;
 }
 
-function esPosteriorFuturo(p: PedidoResumen, hoy: string): boolean {
+export function esPosteriorFuturo(p: PedidoResumen, hoy: string): boolean {
   return esProgramado(p) && String(p.fechaProgramada) > hoy;
 }
 
@@ -257,7 +263,7 @@ export function calcularMovimientos(
 /* Métricas                                                            */
 /* ------------------------------------------------------------------ */
 
-const PALETA = ['#7b1e3b', '#d98c2b', '#2e7d63', '#2b6cb0', '#8e44ad', '#c0392b', '#16a085', '#e67e22'];
+export const PALETA = ['#7b1e3b', '#d98c2b', '#2e7d63', '#2b6cb0', '#8e44ad', '#c0392b', '#16a085', '#e67e22'];
 const COLOR_ESTADO: Record<string, string> = {
   'En proceso': '#d98c2b',
   'En producción': '#2b6cb0',

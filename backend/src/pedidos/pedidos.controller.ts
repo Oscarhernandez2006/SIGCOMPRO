@@ -87,6 +87,18 @@ export class PedidosController {
     return this.pedidos.dashboard(req.user, { punto, periodo, desde, hasta });
   }
 
+  @Get('mi-resumen')
+  @Permisos('mi_resumen')
+  miResumen(
+    @Req() req: Request & { user: JwtPayload },
+    @Query('periodo') periodo?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('vendedora') vendedora?: string,
+  ) {
+    return this.pedidos.miResumen(req.user, { periodo, desde, hasta, vendedora });
+  }
+
   /** Reporte de clientes que han comprado un producto (por punto / código / general). */
   @Get('reporte-productos')
   @Permisos('reporte_productos')

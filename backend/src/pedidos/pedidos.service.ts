@@ -27,6 +27,8 @@ import {
   type PedidoResumen,
 } from './dashboard.metricas';
 import { DashboardCache, PROYECCION_RESUMEN_SQL } from './dashboard.cache';
+import { calcularMiResumen } from './mi-resumen.metricas';
+import { UsersService } from '../users/users.service';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
@@ -297,6 +299,7 @@ export class PedidosService implements OnModuleInit {
     private readonly ubicaciones: UbicacionesService,
     private readonly config: ConfigService,
     private readonly extensiones: ExtensionesService,
+    private readonly users: UsersService,
   ) {}
 
   async onModuleInit() {
@@ -614,6 +617,46 @@ export class PedidosService implements OnModuleInit {
       esAdmin,
       ...calcularDashboard(r.pedidos as PedidoResumen[], r.meta as MetaMap, opciones),
     };
+  }
+
+  /**
+   * "Mi resumen" agregado en el servidor (app móvil). Misma lógica que la
+   * página web `mi-resumen` (`mi-resumen.metricas.ts`); usa la caché del
+   * dashboard cuando el alcance cabe en ella.
+   */
+  async miResumen(
+    user: JwtPayload,
+    q: { periodo?: string; desde?: string; hasta?: string; vendedora?: string },
+  ) {
+    const esAdmin = tieneAccesoTotal(user.rol);
+    const usuario = await this.users.obtenerCacheado(user.sub);
+    const permisos: string[] = usuario.permisos ?? [];
+    const puedeVerTodos = esAdmin || permisos.includes('mi_resumen.ver_todos');
+    let puntosVisibles: Set<string> | undefined;
+    if (puedeVerTodos && !esAdmin) {
+      const r = await this.pool.query<{ id: string }>(
+        `SELECT punto_venta_id::text AS id FROM usuario_punto_venta WHERE usuario_id = $1`,
+        [user.sub],
+      );
+      puntosVisibles = new Set(r.rows.map((x) => x.id));
+    }
+    const periodo = [0, 1, 7, 30].includes(Number(q.periodo)) ? Number(q.periodo) : 30;
+    const dia = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    const opciones = {
+      nombreUsuario: usuario.nombre ?? '',
+      rol: user.rol,
+      puedeVerTodos,
+      vendedoraSel: q.vendedora,
+      puntosVisibles,
+      periodo,
+      rangoDesde: dia(q.desde),
+      rangoHasta: dia(q.hasta),
+    };
+    const carga = opcionesCarga({ periodo, rangoDesde: opciones.rangoDesde, rangoHasta: opciones.rangoHasta });
+    const r =
+      (await this.dashboardCache.obtener(carga.rango, carga.fecha, carga.hasta)) ??
+      (await this.resumenLigero(carga.rango, carga.fecha, carga.hasta));
+    return calcularMiResumen(r.pedidos as PedidoResumen[], r.meta as MetaMap, opciones);
   }
 
   async resumenLigero(
