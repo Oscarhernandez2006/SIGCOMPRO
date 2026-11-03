@@ -20,6 +20,12 @@ import { ExtensionesService } from '../extensiones/extensiones.service';
 import { pesoCarritoKg } from '../common/peso';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 import { tieneAccesoTotal } from '../users/permisos.catalog';
+import {
+  calcularDashboard,
+  opcionesCarga,
+  type MetaMap,
+  type PedidoResumen,
+} from './dashboard.metricas';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
@@ -558,6 +564,49 @@ export class PedidosService implements OnModuleInit {
    * el payload completo puede pesar 100+ MB y tardar más de un minuto solo en
    * transferirse por la red; esta proyección lo reduce a una fracción.
    */
+  /**
+   * Dashboard ya agregado en el servidor (app móvil). Misma lógica que el
+   * dashboard web (`dashboard.metricas.ts`); el payload es de unos KB en vez
+   * de todos los pedidos del periodo.
+   */
+  async dashboard(
+    user: JwtPayload,
+    q: { punto?: string; periodo?: string; desde?: string; hasta?: string },
+  ) {
+    const esAdmin = tieneAccesoTotal(user.rol);
+    const puntosRes = esAdmin
+      ? await this.pool.query<{ id: string; nombre: string }>(
+          `SELECT id::text AS id, nombre FROM puntos_venta WHERE activo = true ORDER BY id`,
+        )
+      : await this.pool.query<{ id: string; nombre: string }>(
+          `SELECT p.id::text AS id, p.nombre FROM puntos_venta p
+           JOIN usuario_punto_venta upv ON upv.punto_venta_id = p.id
+           WHERE upv.usuario_id = $1 AND p.activo = true ORDER BY p.id`,
+          [user.sub],
+        );
+    const puntos = puntosRes.rows;
+    const periodo = [0, 1, 7, 30].includes(Number(q.periodo)) ? Number(q.periodo) : 30;
+    const dia = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    const puntoId = q.punto && q.punto !== 'todos' ? String(q.punto) : undefined;
+    if (puntoId && !puntos.some((p) => p.id === puntoId)) {
+      throw new ForbiddenException('No tienes acceso a ese punto de venta');
+    }
+    const opciones = {
+      periodo,
+      rangoDesde: dia(q.desde),
+      rangoHasta: dia(q.hasta),
+      puntoId,
+      puntosVisibles: esAdmin ? undefined : new Set(puntos.map((p) => p.id)),
+    };
+    const carga = opcionesCarga(opciones);
+    const r = await this.resumenLigero(carga.rango, carga.fecha, carga.hasta);
+    return {
+      puntos,
+      esAdmin,
+      ...calcularDashboard(r.pedidos as PedidoResumen[], r.meta as MetaMap, opciones),
+    };
+  }
+
   async resumenLigero(
     rango?: string,
     fecha?: string,

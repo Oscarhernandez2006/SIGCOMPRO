@@ -74,6 +74,19 @@ export class PedidosController {
     return this.pedidos.resumenLigero(rango, fecha, hasta);
   }
 
+  /** Dashboard agregado en el servidor (app móvil). */
+  @Get('dashboard')
+  @Permisos('dashboard')
+  dashboard(
+    @Req() req: Request & { user: JwtPayload },
+    @Query('punto') punto?: string,
+    @Query('periodo') periodo?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.pedidos.dashboard(req.user, { punto, periodo, desde, hasta });
+  }
+
   /** Reporte de clientes que han comprado un producto (por punto / código / general). */
   @Get('reporte-productos')
   @Permisos('reporte_productos')
