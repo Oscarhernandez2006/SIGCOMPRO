@@ -49,8 +49,9 @@ export class PedidosController {
     @Query('rango') rango?: string,
     @Query('fecha') fecha?: string,
     @Query('hasta') hasta?: string,
+    @Req() req?: Request & { user?: JwtPayload },
   ) {
-    return this.pedidos.estado(desde, rango, fecha, hasta);
+    return this.pedidos.estado(desde, rango, fecha, hasta, undefined, req?.user);
   }
 
   /** Búsqueda de pedidos en TODO el historial (comanda, consecutivo, nombre o NIT). */

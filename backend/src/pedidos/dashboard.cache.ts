@@ -53,15 +53,12 @@ export const PROYECCION_RESUMEN_SQL = `
     ), '[]'::jsonb)
   )`;
 
-/** Mismas expresiones que `construirScope` (día de entrega efectivo y "activo"). */
-const DIA_EFECTIVO_SQL = `
-  CASE
-    WHEN (data->>'entregaProgramada') = 'true'
-         AND COALESCE(data->>'fechaProgramada', '') <> ''
-    THEN (data->>'fechaProgramada')::date
-    ELSE (fecha AT TIME ZONE 'America/Bogota')::date
-  END`;
-const ACTIVO_SQL = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'devolución', 'devolucion'))`;
+/** Mismas expresiones que `construirScope` (día de entrega efectivo y "activo").
+ *  Ambas están INDEXADAS (idx_pedidos_dia_efectivo / idx_pedidos_activos, ver
+ *  PedidosService.onModuleInit): deben usarse textualmente para que el
+ *  planificador aproveche los índices. */
+export const DIA_EFECTIVO_SQL = `pedidos_dia_efectivo(fecha, data)`;
+export const ACTIVO_SQL = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'devolución', 'devolucion'))`;
 const NO_CLUB_SQL = `COALESCE(data->>'canal', '') <> 'club'`;
 
 /** Días que cubre la caché: 30 del periodo + 30 del anterior (deltas) + margen. */

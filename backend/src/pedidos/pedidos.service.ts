@@ -26,7 +26,7 @@ import {
   type MetaMap,
   type PedidoResumen,
 } from './dashboard.metricas';
-import { DashboardCache, PROYECCION_RESUMEN_SQL } from './dashboard.cache';
+import { ACTIVO_SQL, DIA_EFECTIVO_SQL, DashboardCache, PROYECCION_RESUMEN_SQL } from './dashboard.cache';
 import { calcularMiResumen } from './mi-resumen.metricas';
 import { UsersService } from '../users/users.service';
 
@@ -358,6 +358,29 @@ export class PedidosService implements OnModuleInit {
     await this.pool.query(
       `CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_nit ON pedidos ((data->'cliente'->>'nit_cedula'))`,
     );
+    // Día de ENTREGA efectivo (Bogotá) como función IMMUTABLE para poder
+    // indexarlo: la consulta de Pedidos/Despacho (rango='hoy', cada 7 s por
+    // usuario) filtra por este valor y, sin índice, era un SEQ SCAN de toda la
+    // tabla (~3,5 s con 50k pedidos / 200 MB). Con el índice de expresión más
+    // el índice parcial de activos pasa a ~100 ms (BitmapOr de ambos). La
+    // expresión de construirScope() DEBE ser exactamente esta llamada.
+    await this.pool.query(`
+      CREATE OR REPLACE FUNCTION pedidos_dia_efectivo(fecha timestamptz, data jsonb) RETURNS date
+        LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+        SELECT CASE
+          WHEN (data->>'entregaProgramada') = 'true'
+               AND COALESCE(data->>'fechaProgramada', '') <> ''
+          THEN (data->>'fechaProgramada')::date
+          ELSE (fecha AT TIME ZONE 'America/Bogota')::date
+        END $$
+    `);
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_dia_efectivo ON pedidos ((pedidos_dia_efectivo(fecha, data)))`,
+    );
+    // Índice parcial de pedidos ACTIVOS (predicado idéntico al de construirScope).
+    await this.pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_activos ON pedidos (fecha DESC) WHERE ${ACTIVO_SQL}`,
+    );
     // Contador del "número del día" (turno) por punto y día (YYYY-MM-DD Bogotá).
     // Reinicia solo cada día (clave por día) y se incrementa de forma atómica
     // (O(1), sin escanear pedidos), evitando el timeout al crear pedidos.
@@ -417,16 +440,11 @@ export class PedidosService implements OnModuleInit {
     const dias =
       Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
     // Día de ENTREGA efectivo (zona Bogotá): la fecha programada si el pedido se
-    // dejó para otro día; si no, el día de creación.
-    const diaEfectivo = `
-      CASE
-        WHEN (data->>'entregaProgramada') = 'true'
-             AND COALESCE(data->>'fechaProgramada', '') <> ''
-        THEN (data->>'fechaProgramada')::date
-        ELSE (fecha AT TIME ZONE 'America/Bogota')::date
-      END`;
+    // dejó para otro día; si no, el día de creación. Función IMMUTABLE indexada
+    // en onModuleInit (idx_pedidos_dia_efectivo): no cambiar la llamada.
+    const diaEfectivo = DIA_EFECTIVO_SQL;
     const hoy = `(now() AT TIME ZONE 'America/Bogota')::date`;
-    const activo = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'devolución', 'devolucion'))`;
+    const activo = ACTIVO_SQL;
 
     const params: unknown[] = [];
     let scope: string;
@@ -519,9 +537,15 @@ export class PedidosService implements OnModuleInit {
     const ahora = new Date().toISOString();
 
     const { scope, params } = this.construirScope(rango, fecha, hasta, canal);
+    // Alcance por PUNTOS del usuario. Los roles sin acceso total solo ven, en
+    // todas las pantallas, sus puntos asignados (el frontend ya descartaba el
+    // resto en el navegador): filtrarlo aquí evita transferir los pedidos de
+    // los otros ~13 puntos en cada carga (640 -> ~50 filas, 2,6 MB -> ~200 KB).
+    // Los roles con acceso total (admin, gerencia) siguen recibiendo todo.
     let alcanceUsuario = 'true';
     const supervisorGeneral = ['supervisor general', 'supervisor_general'].includes(String(user?.rol ?? '').trim().toLowerCase());
-    if (canal === 'club' && user && !tieneAccesoTotal(user.rol) && !supervisorGeneral) {
+    const limitarAPuntos = canal === 'club' ? !supervisorGeneral : true;
+    if (user && !tieneAccesoTotal(user.rol) && limitarAPuntos) {
       params.push(user.sub);
       alcanceUsuario = `punto_id IN (SELECT punto_venta_id::text FROM usuario_punto_venta WHERE usuario_id = $${params.length})`;
     }
