@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { panelesAccesibles } from "@/lib/permisos";
 import { guardarSesion } from "@/lib/auth";
+import LogoSigcompro from "@/components/LogoSigcompro";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,31 +81,8 @@ export default function LoginPage() {
 
       {/* ---------- Card de login ---------- */}
       <div className="relative z-10 w-full max-w-sm rounded-3xl border border-white/40 bg-brand-cream/95 p-6 shadow-2xl shadow-brand-wine-dark/50 backdrop-blur-md sm:p-7">
-        {/* Logo dentro de la card: SIGCOMPRO (software) x Carnes Santacruz (cliente) */}
-        <div className="mb-3 flex items-center justify-center gap-3">
-          <Image
-            src="/sigcompro-removebg-preview.png"
-            alt="SIGCOMPRO"
-            width={120}
-            height={120}
-            className="h-16 w-auto"
-          />
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-amber/10">
-            <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-brand-amber" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 1l4 4-4 4" />
-              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-              <path d="M7 23l-4-4 4-4" />
-              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-            </svg>
-          </span>
-          <Image
-            src="/LOGOCARNESSANTACRUZ.png"
-            alt="Carnes Santacruz — Vendemos Vida"
-            width={170}
-            height={170}
-            priority
-            className="h-24 w-auto drop-shadow-md"
-          />
+        <div className="mb-3 flex justify-center">
+          <LogoSigcompro className="h-32 w-auto" />
         </div>
 
         <div className="mb-5 text-center">

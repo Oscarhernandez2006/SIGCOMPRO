@@ -23,6 +23,7 @@ import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
 import PendientesCreditoBadge from "./PendientesCreditoBadge";
+import LogoSigcompro from "./LogoSigcompro";
 import { ShoppingBag } from "lucide-react";
 
 interface NavItem {
@@ -583,7 +584,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       {/* ---------- Contenido ---------- */}
       <div data-sidebar-content className="lg:pl-64">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-wine-dark/15 bg-brand-cream/90 px-4 py-3 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-wine-dark/15 bg-brand-cream/90 px-4 py-3 backdrop-blur-md sm:px-6 md:min-h-[104px]">
           <button
             onClick={() => setMobileOpen(true)}
             className="rounded-lg p-1.5 text-brand-wine hover:bg-brand-wine/10 lg:hidden"
@@ -598,6 +599,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <span className="hidden rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine sm:inline-block">
             Administración
           </span>
+
+          <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+            <LogoSigcompro className="h-[92px] w-auto" />
+          </div>
 
           <div className="ml-auto flex items-center gap-3">
             {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} />}
