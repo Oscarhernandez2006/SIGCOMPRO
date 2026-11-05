@@ -110,6 +110,14 @@ export interface EstadoReplicaVista {
  * por Drivin y el estado de entrega (POD). Fuente única para Despacho, Pedidos,
  * Históricos y Mi Resumen.
  */
+/** ¿La réplica ya tiene domiciliario asignado en Drivin (o un estado posterior)?
+ *  Mientras la última réplica siga "En espera", NO se habilita la siguiente:
+ *  mandar -2, -3… sin que -1 tenga domiciliario solo acumula órdenes sin asignar. */
+export function replicaAsignada(r: { domiciliario?: string; estado?: string }): boolean {
+  const st = (r.estado ?? "").trim().toLowerCase();
+  return !!(r.domiciliario ?? "").trim() || ["approved", "rejected", "partial", "in-transit"].includes(st);
+}
+
 export function estadoReplicaVista(r: {
   domiciliario?: string;
   estado?: string;

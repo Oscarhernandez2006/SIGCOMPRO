@@ -1780,12 +1780,26 @@ export class PedidosService implements OnModuleInit {
       throw new BadRequestException(`Máximo ${MAX_REPLICAS} réplicas por pedido`);
     }
     let conflicto = false;
+    let anteriorEnEspera = 0;
     const res = await this.modificarReplicas(id, (reps) => {
       if (reps.some((r) => Number(r.numero) === numero)) return null; // ya existe (doble clic)
       const max = reps.reduce((mx, r) => Math.max(mx, Number(r.numero) || 0), 0);
       if (numero !== max + 1) {
         conflicto = true;
         return null;
+      }
+      // La réplica anterior debe tener domiciliario asignado en Drivin (o un
+      // estado posterior); si sigue "En espera", no se libera la siguiente.
+      const ultima = reps.find((r) => Number(r.numero) === max);
+      if (ultima) {
+        const st = String(ultima.estado ?? '').trim().toLowerCase();
+        const asignada =
+          !!String(ultima.domiciliario ?? '').trim() ||
+          ['approved', 'rejected', 'partial', 'in-transit'].includes(st);
+        if (!asignada) {
+          anteriorEnEspera = max;
+          return null;
+        }
       }
       return [
         ...reps,
@@ -1799,6 +1813,11 @@ export class PedidosService implements OnModuleInit {
     if (conflicto) {
       throw new ConflictException(
         'Otra persona cambió las réplicas de este pedido. Cierra y vuelve a abrir la réplica.',
+      );
+    }
+    if (anteriorEnEspera) {
+      throw new ConflictException(
+        `La réplica -${anteriorEnEspera} aún está en espera de domiciliario. Asígnala en Drivin antes de crear la -${numero}.`,
       );
     }
     return res;

@@ -50,6 +50,7 @@ import {
   yaDespachado,
   colorEstado,
   estadoReplicaVista,
+  replicaAsignada,
 } from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
@@ -2921,7 +2922,12 @@ export default function DespachoPage() {
                               const reps = m.replicas ?? [];
                               const activa = reps.some((r) => r.numero === n);
                               const maxN = reps.reduce((mx, r) => Math.max(mx, r.numero), 0);
-                              const esSiguiente = n === maxN + 1;
+                              const ultima = reps.find((r) => r.numero === maxN);
+                              // La siguiente solo se libera cuando la última ya tiene
+                              // domiciliario asignado en Drivin (no "En espera").
+                              const ultimaEnEspera = !!ultima && !replicaAsignada(ultima);
+                              const esSiguiente = n === maxN + 1 && !ultimaEnEspera;
+                              const bloqueadaPorEspera = n === maxN + 1 && ultimaEnEspera;
                               // Secuencial: solo el siguiente número (crear) o los ya
                               // generados (ver detalle) son clickeables.
                               const deshabilitado = anulado || (!activa && !esSiguiente);
@@ -2940,7 +2946,9 @@ export default function DespachoPage() {
                                       ? "Ver detalle de la réplica"
                                       : esSiguiente
                                         ? "Crear réplica"
-                                        : "Marca las réplicas en orden"
+                                        : bloqueadaPorEspera
+                                          ? `Asigna primero el domiciliario de la réplica -${maxN} en Drivin`
+                                          : "Marca las réplicas en orden"
                                   }
                                   className={`flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-bold transition disabled:cursor-not-allowed ${
                                     activa
