@@ -20,6 +20,8 @@ const TIPOS_CONJUNTO = [
   "Edificio",
   "Urbanización",
   "Condominio",
+  "Restaurante",
+  "Hotel",
 ] as const;
 
 interface Partes {
@@ -84,7 +86,7 @@ function parsear(valor: string): Partes | null {
     }
     if (
       !r.nombre &&
-      (m = p.match(/^(Conjunto|Edificio|Urbanizaci[oó]n|Condominio)\b\s*(.*)$/i))
+      (m = p.match(/^(Conjunto|Edificio|Urbanizaci[oó]n|Condominio|Restaurante|Hotel)\b\s*(.*)$/i))
     ) {
       const mapa: Record<string, string> = {
         conjunto: "Conjunto",
@@ -92,6 +94,8 @@ function parsear(valor: string): Partes | null {
         urbanización: "Urbanización",
         urbanizacion: "Urbanización",
         condominio: "Condominio",
+        restaurante: "Restaurante",
+        hotel: "Hotel",
       };
       r.tipoConjunto = mapa[m[1].toLowerCase()] ?? m[1];
       r.nombre = m[2].trim();
