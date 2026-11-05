@@ -43,10 +43,12 @@ interface ApiProducto {
 const TOKEN =
   '1b301e683240d8ab5ddb6eb061b112224e15bbe8d28a6e78f0251bdfaef0e4c2';
 
-// Compañía 4: se cargan todas sus listas TPV/PDV (puntos existentes).
+// Compañía 4: se cargan todas sus listas TPV/PDV (puntos existentes) más las
+// de LISTAS_CIA4_EXTRA, que en Siesa no llevan ese prefijo.
 // Compañía 6: solo estas listas adicionales (por su DESC_LISTA, normalizado).
 // Compañía 7: solo San Felipe y Olaya (la 014 "NO USAR" queda excluida).
 const CIAS = [4, 6, 7] as const;
+const LISTAS_CIA4_EXTRA = new Set(['PEREIRA DOSQUEBRADAS']);
 const LISTAS_CIA6_PERMITIDAS = new Set([
   'TPV CONCORD',
   'TPV ALAMEDA',
@@ -64,8 +66,8 @@ function listaPermitida(ciaFuente: number, desc?: string | null): boolean {
   const nombre = nombreLista(desc);
   if (ciaFuente === 6) return LISTAS_CIA6_PERMITIDAS.has(nombre);
   if (ciaFuente === 7) return LISTAS_CIA7_PERMITIDAS.has(nombre);
-  // Compañía 4 (o cualquier otra): todas las listas TPV/PDV.
-  return nombre.includes('TPV') || nombre.includes('PDV');
+  // Compañía 4 (o cualquier otra): todas las listas TPV/PDV + las extra.
+  return nombre.includes('TPV') || nombre.includes('PDV') || LISTAS_CIA4_EXTRA.has(nombre);
 }
 
 @Injectable()
@@ -268,18 +270,17 @@ export class ProductosService implements OnModuleInit {
         );
         total += lote.length;
       }
-      // Conserva solo: listas TPV/PDV de otras compañías (cia 4) y las 3
-      // listas permitidas de cia 6. Elimina cualquier otra residual.
+      // Conserva solo: listas TPV/PDV de otras compañías (cia 4) más las
+      // extra de cia 4, y las listas permitidas de cia 6. Elimina el resto.
       await cliente.query(
         `DELETE FROM productos_precios
-         WHERE upper(btrim(regexp_replace(coalesce(desc_lista,''), '\\s+', ' ', 'g'))) NOT IN (
-           'TPV CONCORD', 'TPV ALAMEDA', 'TPV ALAMEDA 2'
-         )
+         WHERE upper(btrim(regexp_replace(coalesce(desc_lista,''), '\\s+', ' ', 'g'))) <> ALL ($1::text[])
          AND NOT (
            (upper(coalesce(desc_lista,'')) LIKE '%TPV%'
              OR upper(coalesce(desc_lista,'')) LIKE '%PDV%')
            AND coalesce(cia, 0) <> 6
          )`,
+        [[...LISTAS_CIA6_PERMITIDAS, ...LISTAS_CIA4_EXTRA]],
       );
       // Elimina listas residuales/duplicadas con muy pocos productos.
       await cliente.query(
