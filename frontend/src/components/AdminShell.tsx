@@ -584,38 +584,45 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       {/* ---------- Contenido ---------- */}
       <div data-sidebar-content className="lg:pl-64">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-wine-dark/15 bg-brand-cream/90 px-4 py-3 backdrop-blur-md sm:px-6 md:min-h-[104px]">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="rounded-lg p-1.5 text-brand-wine hover:bg-brand-wine/10 lg:hidden"
-            aria-label="Abrir menú"
-            title="Abrir menú"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+        {/* Tres columnas en flujo (izquierda / logo / derecha): el logo se
+            encoge por breakpoint y nunca se superpone a los controles. */}
+        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-brand-wine-dark/15 bg-brand-cream/90 px-3 py-2 backdrop-blur-md sm:gap-3 sm:px-6 sm:py-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="rounded-lg p-1.5 text-brand-wine hover:bg-brand-wine/10 lg:hidden"
+              aria-label="Abrir menú"
+              title="Abrir menú"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
-          <span className="hidden rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine sm:inline-block">
-            Administración
-          </span>
-
-          <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
-            <LogoSigcompro className="h-[92px] w-auto" />
+            <span className="hidden rounded-full bg-brand-wine/10 px-3 py-1 text-xs font-semibold text-brand-wine lg:inline-block">
+              Administración
+            </span>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="pointer-events-none flex min-w-0 flex-1 items-center justify-center overflow-hidden">
+            <LogoSigcompro className="h-12 w-auto max-w-full sm:h-14 lg:h-[72px] xl:h-[92px]" />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-brand-black">
+            <div className="hidden max-w-[160px] text-right md:block">
+              <p className="truncate text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}
               </p>
-              <p className="text-xs capitalize text-brand-black">
+              <p className="truncate text-xs capitalize text-brand-black">
                 {usuario?.rol ?? ""}
               </p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-wine text-sm font-bold text-white">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-wine text-sm font-bold text-white"
+              title={`${usuario?.nombre ?? "Usuario"}${usuario?.rol ? ` · ${usuario.rol}` : ""}`}
+            >
               {iniciales}
             </div>
           </div>
