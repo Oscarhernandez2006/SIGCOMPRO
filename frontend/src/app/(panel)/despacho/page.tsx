@@ -663,6 +663,11 @@ export default function DespachoPage() {
   // Carga inicial + auto-actualización (polling). Cada 7 s (y al volver a la
   // pestaña) agrega los pedidos NUEVOS y su metadata, sin reemplazar los
   // existentes, para no pisar lo que se está editando (factura, estado, etc.).
+  // Instante del último poll EXITOSO de pedidos. Las sincronizaciones con
+  // Drivin solo actúan si el listado está fresco: tras dormir el equipo, el
+  // mapa de Drivin puede llegar antes que el poll y el estado local es viejo.
+  const ultimoPollRef = useRef(0);
+  const listadoFresco = () => Date.now() - ultimoPollRef.current < 20_000;
   useEffect(() => {
     let activo = true;
     let primera = true;
@@ -684,6 +689,7 @@ export default function DespachoPage() {
         .then((e) => {
           if (!activo) return;
           desde = e.ahora ?? desde;
+          ultimoPollRef.current = Date.now();
           if (primera) {
             setPedidos(e.pedidos);
             setMeta(e.meta);
@@ -798,6 +804,8 @@ export default function DespachoPage() {
   // (~30s), para autocorregir incidencias de Drivin sin inflar la consulta.
   const entregaRef = useRef({ pedidos, meta, idsPuntos, idsDrivin });
   entregaRef.current = { pedidos, meta, idsPuntos, idsDrivin };
+  // Último estado POD conocido por código Drivin (comanda o comanda-N).
+  const podRef = useRef<Record<string, string | undefined>>({});
   useEffect(() => {
     let vivo = true;
     let enVuelo = false; // evita encaballar consultas (una a la vez)
@@ -818,6 +826,9 @@ export default function DespachoPage() {
         // Pedidos con réplicas: se consultan también en "facturado" para bajar
         // el estado (POD) de cada réplica ni bien Drivin las asigna/despacha.
         if (e === "facturado" && (mts[p.id]?.replicas ?? []).length > 0) return true;
+        // Facturado que YA había sido despachado (tiene despachoFin): pudo
+        // regresar por error; se revisa su POD para autocorregirlo a Entregado.
+        if (e === "facturado" && mts[p.id]?.despachoFin && revisarEntregados) return true;
         if ((e === "entregado" || e === "rechazado") && revisarEntregados) return true;
         // Revalida anulados/cancelados para corregir casos heredados.
         if ((e === "anulado" || e === "cancelado") && revisarEntregados) return true;
@@ -840,6 +851,7 @@ export default function DespachoPage() {
       try {
         const res = await cargarEntregasDrivin(comandas);
         if (!vivo) return;
+        for (const [codigo, info] of Object.entries(res)) podRef.current[codigo] = info?.status ?? undefined;
         for (const p of candidatos) {
           const reps = mts[p.id]?.replicas ?? [];
           // Estado AGREGADO del pedido. Con réplicas: se entrega cuando TODAS
@@ -1003,6 +1015,8 @@ export default function DespachoPage() {
   useEffect(() => {
     // Si el mapa vino vacío (posible fallo de lectura), NO desasignamos nada.
     const mapaTieneDatos = Object.keys(asignacionesDrivin).length > 0;
+    // Con el listado viejo (equipo dormido, poll en vuelo) no se toca nada.
+    if (!listadoFresco()) return;
     for (const p of pedidos) {
       if (p.anulado) continue;
       if (!p.punto?.id || !idsPuntos.has(String(p.punto.id))) continue;
@@ -1060,7 +1074,14 @@ export default function DespachoPage() {
         // ya no está en el mapa, solo desasignamos si el pedido tenía un
         // domiciliario de Drivin (así no tocamos pedidos que nunca subieron).
         const desasignar = enMapaBase ? (teniaDomi || enRuta) : teniaDomi;
-        if (desasignar) {
+        // Una comanda también SALE de los escenarios cuando la ruta TERMINA
+        // (entregada). Si Drivin ya reportó POD (en camino/entregada/rechazada)
+        // o el pedido iba "En tránsito" y simplemente desapareció del mapa, NO
+        // es una desasignación: lo resuelve la sincronización de entregas.
+        const pod = (podRef.current[p.comanda] ?? "").toLowerCase();
+        const podActivo = ["in-transit", "approved", "rejected", "partial"].includes(pod);
+        const rutaTerminada = !enMapaBase && (est === "en tránsito" || est === "en transito");
+        if (desasignar && !podActivo && !rutaTerminada) {
           setMeta((prev) => {
             const nuevo = { ...prev[p.id], domiciliario: "", domiciliarioCodigo: "" };
             actualizarMetaApi(p.id, { domiciliario: "", domiciliarioCodigo: "" }).catch(() => { /* ignore */ });

@@ -1273,6 +1273,21 @@ export class PedidosService implements OnModuleInit {
       const entraAFacturadoODespachado =
         (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado' || (prevData?.canal === 'club' && nuevoEstadoNorm === 'entregado')) &&
         nuevoEstadoNorm !== normEstado(estadoAnterior);
+      // Un pedido ENTREGADO (POD aprobado en Drivin) es final: no puede volver
+      // a Facturado/Despachado/En tránsito. Pasaba por la sincronización del
+      // navegador: al terminar la ruta la comanda sale de los escenarios de
+      // Drivin y el cliente lo interpretaba como "desasignado" (o actuaba con
+      // datos viejos tras dormir el equipo), regresando a Facturado un pedido
+      // ya entregado, que luego quedaba atascado.
+      if (
+        normEstado(estadoAnterior) === 'entregado' &&
+        !anulado &&
+        ['facturado', 'despachado', 'en tránsito', 'en transito'].includes(nuevoEstadoNorm)
+      ) {
+        throw new ForbiddenException(
+          'El pedido ya fue entregado; no puede regresar a un estado anterior.',
+        );
+      }
       const replicasActuales = Array.isArray(
         (metaActual as { replicas?: unknown }).replicas,
       )
