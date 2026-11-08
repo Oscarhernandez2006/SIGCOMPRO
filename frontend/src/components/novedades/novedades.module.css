@@ -1,0 +1,146 @@
+/* Animaciones del recorrido de Novedades (solo se cargan con el modal). */
+
+.cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 40;
+  pointer-events: none;
+  transition: transform 750ms cubic-bezier(0.45, 0.05, 0.25, 1);
+  will-change: transform;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.35));
+}
+
+.presion {
+  animation: presion 320ms ease-out;
+}
+
+@keyframes presion {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.78); }
+  100% { transform: scale(1); }
+}
+
+.onda {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 39;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0;
+  background: color-mix(in srgb, var(--color-brand-amber) 45%, transparent);
+  border: 2px solid var(--color-brand-amber);
+}
+
+.ondaActiva {
+  animation: onda 600ms ease-out;
+}
+
+@keyframes onda {
+  0% { transform: scale(0.2); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.aparecer {
+  animation: aparecer 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pop {
+  animation: pop 480ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.7); }
+  70% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.deslizarDerecha {
+  animation: deslizarDerecha 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes deslizarDerecha {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.entradaDiapositiva {
+  animation: entradaDiapositiva 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes entradaDiapositiva {
+  from { opacity: 0; transform: translateX(36px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.caret {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: caret 900ms steps(1) infinite;
+}
+
+@keyframes caret {
+  50% { opacity: 0; }
+}
+
+.barraProgreso {
+  animation: barraProgreso 1300ms ease-in-out both;
+}
+
+@keyframes barraProgreso {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.destello {
+  animation: destello 1200ms ease-out;
+}
+
+@keyframes destello {
+  0% { background-color: rgb(254 240 138); }
+  100% { background-color: transparent; }
+}
+
+.pulso {
+  animation: pulso 1600ms ease-out infinite;
+}
+
+@keyframes pulso {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-amber) 55%, transparent); }
+  70% { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.brillo {
+  background: linear-gradient(110deg, var(--color-brand-wine) 0%, var(--color-brand-amber) 55%, var(--color-brand-gold) 100%);
+}
+
+.chispa {
+  animation: chispa 2.4s ease-in-out infinite;
+}
+
+@keyframes chispa {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(18deg) scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor { transition-duration: 1ms; }
+  .aparecer, .pop, .deslizarDerecha, .entradaDiapositiva, .ondaActiva, .pulso, .chispa, .destello {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
+}

@@ -25,6 +25,7 @@ import { ExtensionesModule } from './extensiones/extensiones.module';
 import { DireccionesModule } from './direcciones/direcciones.module';
 import { PlanesModule } from './planes/planes.module';
 import { AlmuerzosModule } from './almuerzos/almuerzos.module';
+import { NovedadesModule } from './novedades/novedades.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { AlmuerzosModule } from './almuerzos/almuerzos.module';
     DireccionesModule,
     PlanesModule,
     AlmuerzosModule,
+    NovedadesModule,
   ],
   controllers: [AppController],
 })

@@ -10,6 +10,7 @@ import { cargarResumenPedidos } from "@/lib/pedidos";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import AprobacionesDespacho from "./AprobacionesDespacho";
+import NovedadesGate from "./novedades/NovedadesGate";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
@@ -447,6 +448,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-3">
             {pathname.startsWith("/despacho") && <AprobacionesDespacho usuario={usuario} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
+            <NovedadesGate usuario={usuario} />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}

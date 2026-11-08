@@ -19,6 +19,7 @@ import { resumenPendientesExtension } from "@/lib/extensiones";
 import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import ClaveDinamica from "./ClaveDinamica";
 import AprobacionesDespacho from "./AprobacionesDespacho";
+import NovedadesGate from "./novedades/NovedadesGate";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
@@ -611,6 +612,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {pathname.startsWith("/admin/despacho") && <AprobacionesDespacho usuario={usuario} />}
             {puedeVerClaveDinamica(usuario?.rol) && <ClaveDinamica />}
+            <NovedadesGate usuario={usuario} />
             <div className="hidden max-w-[160px] text-right md:block">
               <p className="truncate text-sm font-semibold text-brand-black">
                 {usuario?.nombre ?? "Usuario"}
