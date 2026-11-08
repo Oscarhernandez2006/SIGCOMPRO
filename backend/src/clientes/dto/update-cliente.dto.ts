@@ -72,6 +72,10 @@ export class UpdateClienteDto {
 
   @IsOptional()
   @IsBoolean()
+  fundacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   direccion_incorrecta?: boolean;
 
   @IsOptional()

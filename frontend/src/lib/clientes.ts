@@ -18,10 +18,14 @@ export interface Cliente {
   lng: number | null;
   activo: boolean;
   horeca: boolean;
+  /** Fundación: se marca en el código original y se aplica a sus alternas ("<nit>-N"). */
+  fundacion?: boolean;
   direccion_incorrecta: boolean;
   dias_despacho?: string[];
   vendedor_asignado: string | null;
   creado_en: string;
+  /** Respuesta de crear/actualizar: alternas a las que se aplicó la fundación. */
+  alternas_actualizadas?: number;
 }
 
 export interface ListarClientesResp {
@@ -44,6 +48,7 @@ export interface ClienteInput {
   lng?: number | null;
   activo?: boolean;
   horeca?: boolean;
+  fundacion?: boolean;
   direccion_incorrecta?: boolean;
   dias_despacho?: string[];
   vendedor_asignado?: string;

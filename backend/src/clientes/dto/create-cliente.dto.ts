@@ -69,6 +69,11 @@ export class CreateClienteDto {
   @IsBoolean()
   horeca?: boolean;
 
+  /** Fundación (excluyente con HORECA); se propaga a las direcciones alternas. */
+  @IsOptional()
+  @IsBoolean()
+  fundacion?: boolean;
+
   @IsOptional()
   @IsBoolean()
   direccion_incorrecta?: boolean;

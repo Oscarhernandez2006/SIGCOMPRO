@@ -4230,7 +4230,11 @@ export class PedidosService implements OnModuleInit {
            ON c.nit_cedula LIKE n.base || '-%'
           AND c.nit_cedula ~ '-[0-9]+$'
           AND c.nit_cedula <> n.nit
-          AND COALESCE(c.activo, true)`,
+          AND COALESCE(c.activo, true)
+        -- Solo clientes clasificados como Fundación.
+        WHERE EXISTS (
+          SELECT 1 FROM clientes f WHERE f.nit_cedula = n.nit AND f.fundacion
+        )`,
       [limpios],
     );
     return res.rows.map((r) => r.nit);

@@ -44,9 +44,12 @@ const FORM_VACIO: FormState = {
   lng: null,
   activo: true,
   horeca: false,
+  fundacion: false,
   direccion_incorrecta: false,
   dias_despacho: [],
 };
+
+type TipoCliente = "hogar" | "horeca" | "fundacion";
 
 /** Días de la semana para el despacho de clientes HORECA. */
 const DIAS_SEMANA = [
@@ -75,8 +78,10 @@ export default function ClientesPage() {
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [nombres, setNombres] = useState("");
   const [apellidos, setApellidos] = useState("");
-  // Tipo de cliente: excluyente y obligatorio (hogar / HORECA).
-  const [tipoCliente, setTipoCliente] = useState<"hogar" | "horeca" | null>(null);
+  // Tipo de cliente: excluyente y obligatorio (hogar / HORECA / fundación).
+  const [tipoCliente, setTipoCliente] = useState<TipoCliente | null>(null);
+  // Aviso tras guardar una fundación con direcciones alternas.
+  const [avisoFundacion, setAvisoFundacion] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
@@ -121,6 +126,7 @@ export default function ClientesPage() {
         "Punto Venta": c.punto_venta ?? "",
         Activo: c.activo ? "Sí" : "No",
         HORECA: c.horeca ? "Sí" : "No",
+        Fundación: c.fundacion ? "Sí" : "No",
         "Días Despacho": (c.dias_despacho ?? []).join("/"),
         Lat: c.lat ?? "",
         Lng: c.lng ?? "",
@@ -211,6 +217,7 @@ export default function ClientesPage() {
       lng: c.lng,
       activo: c.activo,
       horeca: c.horeca,
+      fundacion: c.fundacion ?? false,
       direccion_incorrecta: c.direccion_incorrecta ?? false,
       dias_despacho: c.dias_despacho ?? [],
       vendedor_asignado: c.vendedor_asignado ?? "",
@@ -231,7 +238,7 @@ export default function ClientesPage() {
       setNombres(palabras.slice(0, corte).join(" "));
       setApellidos(palabras.slice(corte).join(" "));
     }
-    setTipoCliente(c.horeca ? "horeca" : "hogar");
+    setTipoCliente(c.fundacion ? "fundacion" : c.horeca ? "horeca" : "hogar");
     setErrorForm(null);
     setModalAbierto(true);
   }
@@ -269,7 +276,7 @@ export default function ClientesPage() {
       return;
     }
     if (!tipoCliente) {
-      setErrorForm("Selecciona el tipo de cliente: hogar o HORECA.");
+      setErrorForm("Selecciona el tipo de cliente: hogar, HORECA o fundación.");
       return;
     }
     setGuardando(true);
@@ -280,15 +287,22 @@ export default function ClientesPage() {
         nombre: nombreCompleto,
         apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
+        fundacion: tipoCliente === "fundacion",
         // Los días de despacho solo aplican a HORECA.
         dias_despacho: tipoCliente === "horeca" ? (form.dias_despacho ?? []) : [],
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       };
-      if (editandoId) {
-        await actualizarCliente(editandoId, datos);
-      } else {
-        await crearCliente(datos);
-      }
+      const guardado = editandoId
+        ? await actualizarCliente(editandoId, datos)
+        : await crearCliente(datos);
+      const n = guardado?.alternas_actualizadas ?? 0;
+      setAvisoFundacion(
+        n > 0
+          ? `${guardado.nit_cedula}: ${n} dirección${n === 1 ? "" : "es"} alterna${n === 1 ? "" : "s"} ${
+              guardado.fundacion ? "marcada" : "desmarcada"
+            }${n === 1 ? "" : "s"} como fundación automáticamente.`
+          : null,
+      );
       setModalAbierto(false);
       await cargar();
     } catch (e) {
@@ -570,6 +584,15 @@ export default function ClientesPage() {
         </div>
       )}
 
+      {avisoFundacion && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          <span>{avisoFundacion}</span>
+          <button type="button" onClick={() => setAvisoFundacion(null)} className="font-semibold hover:underline">
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {/* Tabla */}
       <div className="overflow-hidden rounded-2xl border border-brand-brown/10 bg-white">
         <div className="max-h-[calc(100vh-300px)] overflow-auto">
@@ -606,6 +629,11 @@ export default function ClientesPage() {
                       <span className="font-medium text-brand-black">
                         {c.nombre || "—"}
                       </span>
+                      {c.fundacion && (
+                        <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
+                          Fundación
+                        </span>
+                      )}
                       {c.direccion && (
                         <span className="block text-xs text-brand-black">
                           {c.direccion}
@@ -873,7 +901,28 @@ export default function ClientesPage() {
                       />
                       Cliente HORECA (hotel, restaurante o café)
                     </label>
+
+                    <label className="flex items-center gap-2 text-sm text-brand-black">
+                      <input
+                        type="radio"
+                        name="tipo-cliente"
+                        checked={tipoCliente === "fundacion"}
+                        onChange={() => setTipoCliente("fundacion")}
+                        className="h-4 w-4 accent-brand-amber"
+                      />
+                      Fundación
+                    </label>
                   </div>
+
+                  {tipoCliente === "fundacion" && (
+                    <p className="mt-2 text-xs text-brand-black/70">
+                      {/-\d+$/.test(form.nit_cedula.trim())
+                        ? "Es una dirección alterna: normalmente hereda la clasificación de su código original."
+                        : "Al guardar, todas las direcciones alternas de este código (" +
+                          (form.nit_cedula.trim() || "NIT") +
+                          "-1, -2, …) quedan también como fundación. En Despacho se habilita «Puntos de envío»."}
+                    </p>
+                  )}
 
                   {form.vendedor_asignado && (
                     <p className="mt-2 text-xs text-brand-black">

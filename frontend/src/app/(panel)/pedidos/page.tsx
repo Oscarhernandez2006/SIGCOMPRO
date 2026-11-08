@@ -2546,12 +2546,14 @@ function PasoCliente({
                   <span className="ml-2 hidden w-48 shrink-0 flex-col items-end gap-1 pr-5 text-right text-xs sm:flex">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                        c.horeca
+                        c.fundacion
+                          ? "bg-sky-100 text-sky-700"
+                          : c.horeca
                           ? "bg-violet-100 text-violet-700"
                           : "bg-emerald-100 text-emerald-700"
                       }`}
                     >
-                      {c.horeca ? "HORECA" : "Hogar"}
+                      {c.fundacion ? "Fundación" : c.horeca ? "HORECA" : "Hogar"}
                     </span>
                     {c.punto_venta && (
                       <span className="text-brand-black">

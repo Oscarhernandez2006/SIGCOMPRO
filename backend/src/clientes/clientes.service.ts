@@ -28,10 +28,13 @@ export interface ClienteRow {
   lng: number | null;
   activo: boolean;
   horeca: boolean;
+  fundacion: boolean;
   direccion_incorrecta: boolean;
   dias_despacho: string[];
   vendedor_asignado: string | null;
   creado_en: string;
+  /** Solo en la respuesta de actualizar: alternas marcadas/desmarcadas como fundación. */
+  alternas_actualizadas?: number;
 }
 
 export interface ListarResultado {
@@ -53,7 +56,13 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, fundacion, direccion_incorrecta, dias_despacho, vendedor_asignado, creado_en';
+
+/** "901727043-3" -> "901727043"; si no es una dirección alterna devuelve null. */
+function nitBaseDeAlterna(nit: string): string | null {
+  const m = nit.trim().match(/^(.+)-\d+$/);
+  return m ? m[1] : null;
+}
 
 /** Solo guarda el teléfono si tiene exactamente 10 dígitos (celular colombiano). */
 function soloMovil(tel: string | null | undefined): string | null {
@@ -68,6 +77,11 @@ export class ClientesService implements OnModuleInit {
   async onModuleInit() {
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS horeca boolean NOT NULL DEFAULT false`,
+    );
+    // Fundación: clientes con direcciones alternas ("<nit>-N") a las que se
+    // envían pedidos desde "Puntos de envío" en Despacho.
+    await this.pool.query(
+      `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS fundacion boolean NOT NULL DEFAULT false`,
     );
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS correo text`,
@@ -277,10 +291,19 @@ export class ClientesService implements OnModuleInit {
       throw new ConflictException('Ya existe un cliente con ese NIT/cédula');
     }
 
+    // Una dirección alterna nueva hereda la clasificación Fundación de su código original.
+    const base = nitBaseDeAlterna(nit);
+    let fundacion = dto.fundacion ?? false;
+    if (dto.fundacion === undefined && base) {
+      const orig = await this.findByNit(base);
+      fundacion = !!orig?.fundacion;
+    }
+    const horeca = fundacion ? false : (dto.horeca ?? false);
+
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado, fundacion)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18)
        RETURNING ${COLUMNS}`,
       [
         nit,
@@ -296,17 +319,40 @@ export class ClientesService implements OnModuleInit {
         dto.lat ?? null,
         dto.lng ?? null,
         dto.activo ?? true,
-        dto.horeca ?? false,
+        horeca,
         dto.direccion_incorrecta ?? false,
         JSON.stringify(Array.isArray(dto.dias_despacho) ? dto.dias_despacho : []),
         dto.vendedor_asignado?.trim() ?? null,
+        fundacion,
       ],
     );
-    return res.rows[0];
+    const creado = res.rows[0];
+    if (!base && fundacion) {
+      creado.alternas_actualizadas = await this.propagarFundacion(nit, true);
+    }
+    return creado;
+  }
+
+  /**
+   * Marca (o desmarca) como fundación todas las direcciones alternas
+   * ("<nit>-1", "<nit>-2", …) de un código original. Devuelve cuántas cambiaron.
+   */
+  private async propagarFundacion(nitBase: string, valor: boolean): Promise<number> {
+    const res = await this.pool.query(
+      `UPDATE clientes
+          SET fundacion = $2,
+              horeca = CASE WHEN $2 THEN false ELSE horeca END,
+              dias_despacho = CASE WHEN $2 THEN '[]'::jsonb ELSE dias_despacho END
+        WHERE left(nit_cedula, length($1) + 1) = $1 || '-'
+          AND substr(nit_cedula, length($1) + 2) ~ '^[0-9]+$'
+          AND fundacion IS DISTINCT FROM $2`,
+      [nitBase.trim(), valor],
+    );
+    return res.rowCount ?? 0;
   }
 
   async actualizar(id: string, dto: UpdateClienteDto): Promise<ClienteRow> {
-    await this.obtener(id);
+    const anterior = await this.obtener(id);
 
     if (dto.nit_cedula !== undefined) {
       const otro = await this.findByNit(dto.nit_cedula.trim());
@@ -351,9 +397,17 @@ export class ClientesService implements OnModuleInit {
       valores.push(dto.activo);
     }
 
-    if (dto.horeca !== undefined) {
+    // Hogar / HORECA / Fundación son excluyentes.
+    let horeca = dto.horeca;
+    const fundacion = dto.fundacion;
+    if (fundacion === true) horeca = false;
+    if (horeca !== undefined) {
       sets.push(`horeca = $${i++}`);
-      valores.push(dto.horeca);
+      valores.push(horeca);
+    }
+    if (fundacion !== undefined || horeca === true) {
+      sets.push(`fundacion = $${i++}`);
+      valores.push(horeca === true ? false : fundacion);
     }
 
     if (dto.direccion_incorrecta !== undefined) {
@@ -377,7 +431,15 @@ export class ClientesService implements OnModuleInit {
        RETURNING ${COLUMNS}`,
       valores,
     );
-    return res.rows[0];
+    const actualizado = res.rows[0];
+    // Al cambiar la fundación del código original, se aplica a todas sus alternas.
+    if (!nitBaseDeAlterna(actualizado.nit_cedula) && actualizado.fundacion !== anterior.fundacion) {
+      actualizado.alternas_actualizadas = await this.propagarFundacion(
+        actualizado.nit_cedula,
+        actualizado.fundacion,
+      );
+    }
+    return actualizado;
   }
 
   async eliminar(id: string): Promise<{ id: string }> {
@@ -391,9 +453,12 @@ export class ClientesService implements OnModuleInit {
   }
 
   /**
-   * Importa/actualiza clientes desde un archivo Excel (BD Clientes).
-   * Compara por NIT/cédula: crea los nuevos y actualiza los que cambiaron,
-   * sin tocar los campos que el Excel no trae (correo, horeca, lat, lng).
+   * Importa/actualiza clientes desde un archivo Excel (el que se descarga en
+   * «Descargar Excel» o la BD Clientes externa). Compara por NIT/cédula: crea
+   * los nuevos y aplica a los existentes lo que cambió en las columnas que trae
+   * el archivo (las que no trae se conservan). El punto de venta de un cliente
+   * existente no se cambia. Si la dirección cambia de fondo se borran las
+   * coordenadas (queda «sin verificar»), salvo que el archivo traiga Lat/Lng nuevas.
    */
   async importarDesdeExcel(buffer: Buffer): Promise<ImportacionResumen> {
     let libro: XLSX.WorkBook;
@@ -443,14 +508,22 @@ export class ClientesService implements OnModuleInit {
       encabezados.findIndex((h) => alias.includes(h));
 
     const col = {
-      nit: idxDe('nit_cedula', 'nit', 'cedula', 'nit/cedula'),
+      nit: idxDe('nit_cedula', 'nit', 'cedula', 'nit/cedula', 'nit cedula'),
       nombre: idxDe('nombre', 'nombres'),
+      apellidos: idxDe('apellidos', 'apellido'),
       direccion: idxDe('direccion'),
       referencia: idxDe('referencia'),
       barrio: idxDe('barrio'),
       ciudad: idxDe('ciudad'),
       telefono: idxDe('telefono', 'celular'),
-      puntoVenta: idxDe('punto_venta', 'punto de venta', 'puntoventa', 'punto'),
+      correo: idxDe('correo', 'email', 'e-mail'),
+      puntoVenta: idxDe('punto_venta', 'punto venta', 'punto de venta', 'puntoventa', 'punto'),
+      activo: idxDe('activo'),
+      horeca: idxDe('horeca'),
+      fundacion: idxDe('fundacion'),
+      dias: idxDe('dias despacho', 'dias_despacho', 'dias de despacho'),
+      lat: idxDe('lat', 'latitud'),
+      lng: idxDe('lng', 'lon', 'longitud'),
     };
     if (col.nit < 0) {
       throw new BadRequestException(
@@ -458,28 +531,59 @@ export class ClientesService implements OnModuleInit {
       );
     }
 
+    /** Texto limpio: sin espacios sobrantes; vacío = null. */
     const limpiar = (valor: unknown): string | null => {
       if (valor === null || valor === undefined) return null;
-      const texto = String(valor).trim();
+      const texto = String(valor).replace(/\s+/g, ' ').trim();
       return texto === '' ? null : texto;
     };
     const valorCol = (fila: unknown[], indice: number): string | null =>
       indice >= 0 ? limpiar(fila[indice]) : null;
+    const leerBool = (v: string | null): boolean | undefined => {
+      const t = normEnc(v);
+      if (['si', 's', 'true', '1', 'x', 'yes'].includes(t)) return true;
+      if (['no', 'n', 'false', '0'].includes(t)) return false;
+      return undefined;
+    };
+    const DIAS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
+    const leerDias = (v: string | null): string[] =>
+      DIAS.filter((d) =>
+        normEnc(v)
+          .split(/[\/,;\s-]+/)
+          .some((p) => p.slice(0, 3) === d),
+      );
+    /** Número de coordenada; `undefined` si la celda trae algo que no es número. */
+    const leerCoord = (v: string | null): number | null | undefined => {
+      if (v === null) return null;
+      const n = Number(v.replace(',', '.'));
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    // Solo se tocan las columnas que trae el archivo (el resto se conserva).
+    type Fila = {
+      nit: string;
+      nombre?: string | null;
+      apellidos?: string | null;
+      direccion?: string | null;
+      referencia?: string | null;
+      barrio?: string | null;
+      ciudad?: string | null;
+      telefono?: string | null;
+      /** Teléfono escrito pero no es un celular de 10 dígitos (se ignora). */
+      telefonoInvalido?: boolean;
+      correo?: string | null;
+      puntoVenta?: string | null;
+      activo?: boolean;
+      horeca?: boolean;
+      fundacion?: boolean;
+      dias?: string[];
+      lat?: number | null;
+      lng?: number | null;
+    };
+    const tiene = (i: number) => i >= 0;
 
     // Deduplica por NIT (gana la última fila del archivo).
-    const porNit = new Map<
-      string,
-      {
-        nit: string;
-        nombre: string | null;
-        direccion: string | null;
-        referencia: string | null;
-        barrio: string | null;
-        ciudad: string | null;
-        telefono: string | null;
-        puntoVenta: string | null;
-      }
-    >();
+    const porNit = new Map<string, Fila>();
     let descartadas = 0;
     for (let i = 1; i < filas.length; i++) {
       const fila = filas[i] as unknown[];
@@ -488,45 +592,72 @@ export class ClientesService implements OnModuleInit {
         descartadas++;
         continue;
       }
-      porNit.set(nit, {
-        nit,
-        nombre: valorCol(fila, col.nombre),
-        direccion: valorCol(fila, col.direccion),
-        referencia: valorCol(fila, col.referencia),
-        barrio: valorCol(fila, col.barrio),
-        ciudad: valorCol(fila, col.ciudad),
-        telefono: soloMovil(valorCol(fila, col.telefono)),
-        puntoVenta: valorCol(fila, col.puntoVenta),
-      });
+      const reg: Fila = { nit };
+      if (tiene(col.nombre)) reg.nombre = valorCol(fila, col.nombre);
+      if (tiene(col.apellidos)) reg.apellidos = valorCol(fila, col.apellidos);
+      if (tiene(col.direccion)) reg.direccion = valorCol(fila, col.direccion);
+      if (tiene(col.referencia)) reg.referencia = valorCol(fila, col.referencia);
+      if (tiene(col.barrio)) reg.barrio = valorCol(fila, col.barrio);
+      if (tiene(col.ciudad)) reg.ciudad = valorCol(fila, col.ciudad);
+      if (tiene(col.telefono)) {
+        const crudo = valorCol(fila, col.telefono);
+        reg.telefono = soloMovil(crudo);
+        reg.telefonoInvalido = !!crudo && !reg.telefono;
+      }
+      if (tiene(col.correo)) reg.correo = valorCol(fila, col.correo);
+      if (tiene(col.puntoVenta)) reg.puntoVenta = valorCol(fila, col.puntoVenta);
+      if (tiene(col.activo)) reg.activo = leerBool(valorCol(fila, col.activo));
+      if (tiene(col.horeca)) reg.horeca = leerBool(valorCol(fila, col.horeca));
+      if (tiene(col.fundacion)) reg.fundacion = leerBool(valorCol(fila, col.fundacion));
+      if (reg.fundacion) reg.horeca = false;
+      if (tiene(col.dias)) reg.dias = leerDias(valorCol(fila, col.dias));
+      if (tiene(col.lat) && tiene(col.lng)) {
+        const lat = leerCoord(valorCol(fila, col.lat));
+        const lng = leerCoord(valorCol(fila, col.lng));
+        if (lat !== undefined && lng !== undefined) {
+          reg.lat = lat;
+          reg.lng = lng;
+        }
+      }
+      porNit.set(nit, reg);
     }
 
-    // Carga los clientes existentes (campos comparables) en memoria.
-    const existentesRes = await this.pool.query<{
+    // Carga los clientes existentes en memoria para comparar.
+    type Existente = {
       nit_cedula: string;
       nombre: string | null;
+      apellidos: string | null;
       direccion: string | null;
       referencia: string | null;
       barrio: string | null;
       ciudad: string | null;
       telefono: string | null;
+      correo: string | null;
       punto_venta: string | null;
-    }>(
-      `SELECT nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta
+      lat: number | null;
+      lng: number | null;
+      activo: boolean;
+      horeca: boolean;
+      fundacion: boolean;
+      direccion_incorrecta: boolean;
+      dias_despacho: string[] | null;
+    };
+    const existentesRes = await this.pool.query<Existente>(
+      `SELECT nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad,
+              telefono, correo, punto_venta, lat, lng, activo, horeca, fundacion,
+              direccion_incorrecta, dias_despacho
        FROM clientes`,
     );
     const existentes = new Map(
       existentesRes.rows.map((r) => [r.nit_cedula, r]),
     );
 
-    const nuevos: Array<ReturnType<typeof porNit.get>> = [];
-    const cambiados: Array<NonNullable<ReturnType<typeof porNit.get>>> = [];
-    // Cambió SOLO el punto de venta (no la dirección): se actualiza sin tocar
-    // las coordenadas verificadas del cliente.
-    const soloPunto: Array<NonNullable<ReturnType<typeof porNit.get>>> = [];
-    // Normaliza para COMPARAR: ignora mayúsculas/minúsculas, tildes y espacios
-    // repetidos. Así un cliente cuya única "diferencia" es de formato (p. ej. el
-    // Excel viene en MAYÚSCULAS o sin tildes) NO se marca como cambiado y
-    // conserva su ubicación verificada.
+    // Igualdad EXACTA (respeta mayúsculas y tildes) para que se apliquen las
+    // correcciones de formato hechas en el Excel.
+    const igual = (a: string | null | undefined, b: string | null | undefined) =>
+      limpiar(a) === limpiar(b);
+    // Igualdad "de fondo" (sin mayúsculas/tildes): si la dirección solo cambió
+    // de formato, se conservan las coordenadas verificadas.
     const comparable = (v: string | null | undefined): string =>
       (v ?? '')
         .normalize('NFD')
@@ -534,23 +665,73 @@ export class ClientesService implements OnModuleInit {
         .replace(/\s+/g, ' ')
         .trim()
         .toUpperCase();
+    const mismaCoord = (a: number | null | undefined, b: number | null | undefined) =>
+      a == null || b == null ? a == null && b == null : Math.abs(Number(a) - Number(b)) < 1e-7;
+
+    const nuevos: Fila[] = [];
+    // Fila final (existente + correcciones del archivo) de los que cambiaron.
+    const cambiados: Existente[] = [];
+    // Códigos originales cuya fundación cambió: se propaga a sus alternas.
+    const fundacionCambiada = new Map<string, boolean>();
     for (const reg of porNit.values()) {
       const actual = existentes.get(reg.nit);
       if (!actual) {
         nuevos.push(reg);
         continue;
       }
-      const difiere =
-        comparable(actual.nombre) !== comparable(reg.nombre) ||
-        comparable(actual.direccion) !== comparable(reg.direccion) ||
-        comparable(actual.referencia) !== comparable(reg.referencia) ||
-        comparable(actual.barrio) !== comparable(reg.barrio) ||
-        comparable(actual.ciudad) !== comparable(reg.ciudad) ||
-        comparable(actual.telefono) !== comparable(reg.telefono);
-      const difierePunto =
-        comparable(actual.punto_venta) !== comparable(reg.puntoVenta);
-      if (difiere) cambiados.push(reg);
-      else if (difierePunto) soloPunto.push(reg);
+      const final: Existente = { ...actual, dias_despacho: actual.dias_despacho ?? [] };
+      let cambio = false;
+      const textos = ['nombre', 'apellidos', 'direccion', 'referencia', 'barrio', 'ciudad', 'correo'] as const;
+      for (const k of textos) {
+        if (reg[k] !== undefined && !igual(actual[k], reg[k])) {
+          final[k] = reg[k] ?? null;
+          cambio = true;
+        }
+      }
+      if (reg.telefono !== undefined && !reg.telefonoInvalido && !igual(actual.telefono, reg.telefono)) {
+        final.telefono = reg.telefono;
+        cambio = true;
+      }
+      if (reg.activo !== undefined && reg.activo !== actual.activo) {
+        final.activo = reg.activo;
+        cambio = true;
+      }
+      if (reg.horeca !== undefined && reg.horeca !== actual.horeca) {
+        final.horeca = reg.horeca;
+        if (reg.horeca) final.fundacion = false;
+        cambio = true;
+      }
+      if (reg.fundacion !== undefined && reg.fundacion !== final.fundacion) {
+        final.fundacion = reg.fundacion;
+        cambio = true;
+      }
+      if (final.fundacion !== actual.fundacion && !nitBaseDeAlterna(reg.nit)) {
+        fundacionCambiada.set(reg.nit, final.fundacion);
+      }
+      const diasActuales = DIAS.filter((d) => (actual.dias_despacho ?? []).includes(d));
+      if (reg.dias !== undefined && reg.dias.join('/') !== diasActuales.join('/')) {
+        final.dias_despacho = reg.dias;
+        cambio = true;
+      }
+      const coordsEditadas =
+        reg.lat !== undefined && (!mismaCoord(actual.lat, reg.lat) || !mismaCoord(actual.lng, reg.lng));
+      const ubicacionCambio = (['direccion', 'barrio', 'ciudad'] as const).some(
+        (k) => reg[k] !== undefined && comparable(actual[k]) !== comparable(reg[k]),
+      );
+      if (coordsEditadas) {
+        final.lat = reg.lat ?? null;
+        final.lng = reg.lng ?? null;
+        final.direccion_incorrecta = false;
+        cambio = true;
+      } else if (ubicacionCambio) {
+        // Dirección distinta: las coordenadas anteriores ya no sirven; el
+        // cliente queda "sin verificar".
+        final.lat = null;
+        final.lng = null;
+        final.direccion_incorrecta = false;
+      }
+      // El punto de venta NO cambia en la importación (se conserva el asignado).
+      if (cambio) cambiados.push(final);
     }
 
     let creados = 0;
@@ -559,100 +740,89 @@ export class ClientesService implements OnModuleInit {
     try {
       await cliente.query('BEGIN');
 
-      // Inserta en lotes de 500 filas.
       const LOTE = 500;
       for (let i = 0; i < nuevos.length; i += LOTE) {
-        const grupo = nuevos.slice(i, i + LOTE).filter(Boolean) as NonNullable<
-          ReturnType<typeof porNit.get>
-        >[];
-        if (grupo.length === 0) continue;
+        const grupo = nuevos.slice(i, i + LOTE);
         const valores: unknown[] = [];
         const tuplas = grupo.map((r, j) => {
-          const base = j * 8;
+          const b = j * 16;
           valores.push(
             r.nit,
-            r.nombre,
-            r.direccion,
-            r.referencia,
-            r.barrio,
-            r.ciudad,
-            r.telefono,
-            r.puntoVenta,
+            r.nombre ?? null,
+            r.apellidos ?? null,
+            r.direccion ?? null,
+            r.referencia ?? null,
+            r.barrio ?? null,
+            r.ciudad ?? null,
+            r.telefono ?? null,
+            r.correo ?? null,
+            r.puntoVenta ?? null,
+            r.lat ?? null,
+            r.lng ?? null,
+            r.activo ?? true,
+            r.horeca ?? false,
+            JSON.stringify(r.dias ?? []),
+            r.fundacion ?? false,
           );
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
+          const p = (n: number) => `$${b + n}`;
+          return `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)}::float8, ${p(12)}::float8, ${p(13)}::boolean, ${p(14)}::boolean, ${p(15)}::jsonb, ${p(16)}::boolean)`;
         });
         const res = await cliente.query(
           `INSERT INTO clientes
-             (nit_cedula, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta)
+             (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono,
+              correo, punto_venta, lat, lng, activo, horeca, dias_despacho, fundacion)
            VALUES ${tuplas.join(', ')}`,
           valores,
         );
         creados += res.rowCount ?? 0;
       }
 
-      // Actualiza en LOTES los clientes cuya dirección cambió. Al cambiar los
-      // datos se limpian las coordenadas (lat/lng = NULL) para que el cliente
-      // quede "sin verificar". Se usa UPDATE ... FROM (VALUES ...) para hacer
-      // muchas filas en una sola consulta (mucho más rápido que una por una).
+      // Actualiza en LOTES con UPDATE ... FROM (VALUES ...): cada fila lleva
+      // su versión final (lo existente + lo corregido en el archivo).
       for (let i = 0; i < cambiados.length; i += LOTE) {
         const grupo = cambiados.slice(i, i + LOTE);
-        if (grupo.length === 0) continue;
         const valores: unknown[] = [];
         const tuplas = grupo.map((r, j) => {
-          const b = j * 8;
+          const b = j * 16;
           valores.push(
-            r.nit,
+            r.nit_cedula,
             r.nombre,
+            r.apellidos,
             r.direccion,
             r.referencia,
             r.barrio,
             r.ciudad,
             r.telefono,
-            r.puntoVenta,
+            r.correo,
+            r.lat,
+            r.lng,
+            r.activo,
+            r.horeca,
+            r.direccion_incorrecta,
+            JSON.stringify(r.dias_despacho ?? []),
+            r.fundacion,
           );
-          // La primera fila lleva casts ::text para fijar el tipo de cada
-          // columna del VALUES (si toda una columna viniera NULL, sin cast
-          // Postgres no podría inferir el tipo).
-          const c = j === 0 ? '::text' : '';
-          return `($${b + 1}${c}, $${b + 2}${c}, $${b + 3}${c}, $${b + 4}${c}, $${b + 5}${c}, $${b + 6}${c}, $${b + 7}${c}, $${b + 8}${c})`;
+          const p = (n: number) => `$${b + n}`;
+          // Casts en todas las filas: si una columna viene toda NULL, Postgres
+          // no podría inferir su tipo.
+          return `(${p(1)}::text, ${p(2)}::text, ${p(3)}::text, ${p(4)}::text, ${p(5)}::text, ${p(6)}::text, ${p(7)}::text, ${p(8)}::text, ${p(9)}::text, ${p(10)}::float8, ${p(11)}::float8, ${p(12)}::boolean, ${p(13)}::boolean, ${p(14)}::boolean, ${p(15)}::jsonb, ${p(16)}::boolean)`;
         });
         const res = await cliente.query(
           `UPDATE clientes c SET
-             nombre = v.nombre, direccion = v.direccion, referencia = v.referencia,
-             barrio = v.barrio, ciudad = v.ciudad, telefono = v.telefono,
-             punto_venta = v.punto_venta, lat = NULL, lng = NULL
+             nombre = v.nombre, apellidos = v.apellidos, direccion = v.direccion,
+             referencia = v.referencia, barrio = v.barrio, ciudad = v.ciudad,
+             telefono = v.telefono, correo = v.correo, lat = v.lat, lng = v.lng,
+             activo = v.activo, horeca = v.horeca,
+             direccion_incorrecta = v.direccion_incorrecta, dias_despacho = v.dias,
+             fundacion = v.fundacion
            FROM (VALUES ${tuplas.join(', ')})
-             AS v(nit, nombre, direccion, referencia, barrio, ciudad, telefono, punto_venta)
+             AS v(nit, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono,
+                  correo, lat, lng, activo, horeca, direccion_incorrecta, dias, fundacion)
            WHERE c.nit_cedula = v.nit`,
           valores,
         );
         actualizados += res.rowCount ?? 0;
       }
-
-      // Cambió solo el punto de venta: se actualiza en LOTES SIN tocar la
-      // ubicación (conserva las coordenadas verificadas).
-      // COMENTADO: El punto de venta NO debe cambiar durante la importación.
-      // Se mantiene el punto actual asignado al cliente.
-      /*
-      for (let i = 0; i < soloPunto.length; i += LOTE) {
-        const grupo = soloPunto.slice(i, i + LOTE);
-        if (grupo.length === 0) continue;
-        const valores: unknown[] = [];
-        const tuplas = grupo.map((r, j) => {
-          const b = j * 2;
-          valores.push(r.nit, r.puntoVenta);
-          const c = j === 0 ? '::text' : '';
-          return `($${b + 1}${c}, $${b + 2}${c})`;
-        });
-        const res = await cliente.query(
-          `UPDATE clientes c SET punto_venta = v.punto_venta
-           FROM (VALUES ${tuplas.join(', ')}) AS v(nit, punto_venta)
-           WHERE c.nit_cedula = v.nit`,
-          valores,
-        );
-        actualizados += res.rowCount ?? 0;
-      }
-      */
 
       await cliente.query('COMMIT');
     } catch (e) {
@@ -662,6 +832,30 @@ export class ClientesService implements OnModuleInit {
       );
     } finally {
       cliente.release();
+    }
+
+    // Fundación: los códigos originales que cambiaron (o llegaron nuevos como
+    // fundación) la aplican a sus alternas; las alternas nuevas sin la columna
+    // heredan la de su código original.
+    for (const r of nuevos) {
+      if (r.fundacion && !nitBaseDeAlterna(r.nit)) fundacionCambiada.set(r.nit, true);
+    }
+    for (const [nit, valor] of fundacionCambiada) {
+      await this.propagarFundacion(nit, valor);
+    }
+    const alternasNuevas = nuevos
+      .filter((r) => r.fundacion === undefined && nitBaseDeAlterna(r.nit))
+      .map((r) => r.nit);
+    if (alternasNuevas.length > 0) {
+      await this.pool.query(
+        `UPDATE clientes a
+            SET fundacion = true, horeca = false, dias_despacho = '[]'::jsonb
+           FROM clientes b
+          WHERE a.nit_cedula = ANY($1::text[])
+            AND b.nit_cedula = regexp_replace(a.nit_cedula, '-[0-9]+$', '')
+            AND b.fundacion AND NOT a.fundacion`,
+        [alternasNuevas],
+      );
     }
 
     return {

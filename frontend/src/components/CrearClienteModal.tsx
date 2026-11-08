@@ -71,7 +71,7 @@ export default function CrearClienteModal({
   const [nombres, setNombres] = useState(esNit ? "" : aNombrePropio(initTrim));
   const [apellidos, setApellidos] = useState("");
   // Tipo de cliente: excluyente, empieza sin seleccionar.
-  const [tipoCliente, setTipoCliente] = useState<"hogar" | "horeca" | null>(null);
+  const [tipoCliente, setTipoCliente] = useState<"hogar" | "horeca" | "fundacion" | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
@@ -95,6 +95,7 @@ export default function CrearClienteModal({
           ciudad: c.ciudad ?? "",
           punto_venta: c.punto_venta ?? "",
           horeca: c.horeca ?? false,
+          fundacion: c.fundacion ?? false,
           dias_despacho: c.dias_despacho ?? [],
         }));
         // `nombre` guarda el nombre COMPLETO y `apellidos` solo el apellido: se
@@ -107,7 +108,7 @@ export default function CrearClienteModal({
             : full;
         if (nom) setNombres(nom);
         if (ape) setApellidos(ape);
-        setTipoCliente(c.horeca ? "horeca" : "hogar");
+        setTipoCliente(c.fundacion ? "fundacion" : c.horeca ? "horeca" : "hogar");
       })
       .catch(() => {
         /* si falla, se crea desde cero */
@@ -148,7 +149,7 @@ export default function CrearClienteModal({
       return;
     }
     if (!tipoCliente) {
-      setErrorForm("Selecciona el tipo de cliente: hogar o HORECA.");
+      setErrorForm("Selecciona el tipo de cliente: hogar, HORECA o fundación.");
       return;
     }
     setGuardando(true);
@@ -159,6 +160,7 @@ export default function CrearClienteModal({
         nombre: nombreCompleto,
         apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
         horeca: tipoCliente === "horeca",
+        fundacion: tipoCliente === "fundacion",
         dias_despacho: tipoCliente === "horeca" ? (form.dias_despacho ?? []) : [],
         correo: form.correo?.trim() ? form.correo.trim() : undefined,
       });
@@ -301,6 +303,16 @@ export default function CrearClienteModal({
                     className="h-4 w-4 accent-brand-amber"
                   />
                   Cliente HORECA (hotel, restaurante o café)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-brand-black">
+                  <input
+                    type="radio"
+                    name="tipo-cliente"
+                    checked={tipoCliente === "fundacion"}
+                    onChange={() => setTipoCliente("fundacion")}
+                    className="h-4 w-4 accent-brand-amber"
+                  />
+                  Fundación
                 </label>
               </div>
 
