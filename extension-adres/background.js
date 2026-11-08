@@ -326,7 +326,10 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         }
       }
       responder({ ok: true });
-      if (msg.tipo === "error" && p.windowId != null) {
+      // La cédula no existe en ADRES: consulta terminada (no hay nada que
+      // resolver en la ventana); se cierra igual que con un resultado.
+      const terminada = msg.tipo === "resultado" || msg.motivo === "noExiste";
+      if (msg.tipo === "error" && !terminada && p.windowId != null) {
         // Algo falló o ADRES pide un reto: se muestra la ventana para resolverlo.
         await chrome.storage.session.set({ pendiente: { ...p, mostrar: true } });
         try {
@@ -335,7 +338,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
           /* ventana cerrada */
         }
       }
-      if (msg.tipo === "resultado" && p.modo === "offscreen") {
+      if (terminada && p.modo === "offscreen") {
         await chrome.storage.session.remove("pendiente");
         if (sender.tab?.id != null) {
           try {
@@ -348,7 +351,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         chrome.runtime.sendMessage({ destino: "offscreen", tipo: "cargar" }).catch(() => undefined);
         return;
       }
-      if (msg.tipo === "resultado") {
+      if (terminada) {
         await chrome.storage.session.remove("pendiente");
         if (sender.tab?.id != null && sender.tab.windowId !== p.windowId && sender.tab.id !== p.tabId) {
           try {

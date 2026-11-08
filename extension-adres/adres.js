@@ -134,10 +134,22 @@
     esperarRespuesta(boton, r?.clics ?? clics + 1);
   }
 
+  // Mensajes con los que ADRES indica que el documento no está en la BDUA.
+  const NO_EXISTE_RE =
+    /no\s+(?:se\s+)?(?:encontr|encuentr|exist|registr|hay\s+(?:informaci|registr|datos))|sin\s+(?:informaci|registr|resultados)|no\s+(?:est[aá])?\s*(?:afiliad|registrad)/i;
+
+  async function avisarNoExiste(mensaje) {
+    enviado = true;
+    if (temporizador) clearTimeout(temporizador);
+    aviso("ADRES no encontró la cédula. Se avisó a SIGCOMPRO.");
+    await chrome.runtime.sendMessage({ tipo: "error", motivo: "noExiste", mensaje });
+  }
+
   async function revisarResultado() {
     if (enviado) return;
     const texto = textoPagina();
-    if (/N[ÚU]MERO\s+DE\s+IDENTIFICACI/i.test(texto) && /APELLIDOS/i.test(texto)) {
+    const conTabla = /N[ÚU]MERO\s+DE\s+IDENTIFICACI/i.test(texto) && /APELLIDOS/i.test(texto);
+    if (conTabla) {
       const r = leerResultado(texto);
       if (r.nombres || r.apellidos) {
         enviado = true;
@@ -148,9 +160,18 @@
       }
     }
     const err = (document.getElementById("Error")?.innerText || "").trim();
+    if (err && NO_EXISTE_RE.test(err)) return avisarNoExiste(err);
     if (err && err !== errorEnviado) {
       errorEnviado = err;
       await chrome.runtime.sendMessage({ tipo: "error", motivo: "adres", mensaje: err });
+      return;
+    }
+    // Resultado sin nombres, o aviso de "no encontrado" fuera del campo Error.
+    if (conTabla) return avisarNoExiste("ADRES devolvió el resultado sin nombres ni apellidos.");
+    const m = texto.match(NO_EXISTE_RE);
+    if (m) {
+      const linea = texto.split("\n").find((l) => NO_EXISTE_RE.test(l)) || m[0];
+      return avisarNoExiste(linea.trim().slice(0, 200));
     }
   }
 

@@ -61,6 +61,8 @@ function ValidarCedulaActiva({
   const [aviso, setAviso] = useState<string | null>(null);
   // Modo automático (extensión): esperando el resultado de ADRES.
   const [esperando, setEsperando] = useState(false);
+  // ADRES no encontró la cédula (o no respondió): se corta la consulta y se avisa.
+  const [fallo, setFallo] = useState<{ tipo: "noExiste" | "sinRespuesta" | "error"; mensaje?: string } | null>(null);
   const [conExtension, setConExtension] = useState(false);
   const [manual, setManual] = useState(false);
 
@@ -90,25 +92,44 @@ function ValidarCedulaActiva({
     if (!abierto) return;
     const alMensaje = (e: MessageEvent) => {
       if (e.source !== window || !e.data || typeof e.data !== "object") return;
-      const d = e.data as { tipo?: string; numero?: string; nombres?: string; apellidos?: string; mensaje?: string };
+      const d = e.data as { tipo?: string; numero?: string; nombres?: string; apellidos?: string; mensaje?: string; motivo?: string };
       if (d.tipo === "SIGCOMPRO_ADRES_RESULTADO") {
         setEsperando(false);
+        setFallo(null);
         setNombres(formatear(d.nombres ?? ""));
         setApellidos(formatear(d.apellidos ?? ""));
         if (d.numero && numero && d.numero !== numero) {
           setAviso(`Ojo: la validación devolvió la cédula ${d.numero}, no ${numero}.`);
         } else if (!d.nombres && !d.apellidos) {
-          setAviso("La validación no devolvió nombres. Escríbelos abajo.");
+          setFallo({ tipo: "noExiste" });
         } else {
           setAviso(null);
         }
       } else if (d.tipo === "SIGCOMPRO_ADRES_ERROR") {
-        setAviso(`No se pudo validar: ${d.mensaje ?? "intenta de nuevo"}`);
+        setEsperando(false);
+        if (d.motivo === "noExiste") {
+          setAviso(null);
+          setFallo({ tipo: "noExiste", mensaje: d.mensaje });
+        } else {
+          setFallo({ tipo: "error", mensaje: d.mensaje });
+        }
       }
     };
     window.addEventListener("message", alMensaje);
     return () => window.removeEventListener("message", alMensaje);
   }, [abierto, numero]);
+
+  // Tope de espera del modal: si la extensión no responde (ni resultado ni
+  // error), se corta para que la persona no quede mirando el spinner.
+  useEffect(() => {
+    if (!esperando) return;
+    const t = setTimeout(() => {
+      setEsperando(false);
+      setFallo({ tipo: "sinRespuesta" });
+      window.postMessage({ tipo: "SIGCOMPRO_ADRES_CANCELAR" }, window.location.origin);
+    }, 30000);
+    return () => clearTimeout(t);
+  }, [esperando]);
 
   function abrirAdres() {
     window.open(URL_ADRES, "adres_consulta", "width=1100,height=800");
@@ -121,6 +142,7 @@ function ValidarCedulaActiva({
       return;
     }
     setAviso(null);
+    setFallo(null);
     setPegado("");
     setNombres("");
     setApellidos("");
@@ -147,6 +169,7 @@ function ValidarCedulaActiva({
   function cerrar() {
     if (esperando) window.postMessage({ tipo: "SIGCOMPRO_ADRES_CANCELAR" }, window.location.origin);
     setEsperando(false);
+    setFallo(null);
     setAbierto(false);
   }
 
@@ -229,6 +252,70 @@ function ValidarCedulaActiva({
                 </div>
               )}
 
+              {numero.length >= 5 && conExtension && !esperando && fallo && !manual && (
+                <div
+                  className={`flex flex-col items-center gap-3 rounded-xl border px-4 py-5 text-center ${
+                    fallo.tipo === "noExiste" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"
+                  }`}
+                >
+                  <span
+                    className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                      fallo.tipo === "noExiste" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
+                  </span>
+                  {fallo.tipo === "noExiste" ? (
+                    <>
+                      <p className="text-sm font-bold text-red-800">La cédula {numero} no existe en ADRES</p>
+                      <p className="text-xs text-red-900/80">
+                        No hay ninguna persona registrada con ese número. Puede ser un error al digitarla o una <b>posible estafa</b>.
+                        Confirma el número con el cliente antes de continuar.
+                      </p>
+                    </>
+                  ) : fallo.tipo === "sinRespuesta" ? (
+                    <>
+                      <p className="text-sm font-bold text-amber-900">ADRES no respondió</p>
+                      <p className="text-xs text-amber-900/80">
+                        La consulta se canceló porque pasó demasiado tiempo sin respuesta. Puedes intentarlo de nuevo o escribir los datos a mano.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-bold text-amber-900">No se pudo validar</p>
+                      <p className="text-xs text-amber-900/80">{fallo.mensaje || "Intenta de nuevo o escribe los datos a mano."}</p>
+                    </>
+                  )}
+                  <div className="flex flex-wrap justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={cerrar}
+                      className="rounded-xl bg-brand-wine px-4 py-2 text-xs font-semibold text-white hover:bg-brand-wine/90"
+                    >
+                      {fallo.tipo === "noExiste" ? "Corregir la cédula" : "Cerrar"}
+                    </button>
+                    {fallo.tipo !== "noExiste" && (
+                      <button
+                        type="button"
+                        onClick={validar}
+                        className="rounded-xl border border-brand-wine/30 px-4 py-2 text-xs font-semibold text-brand-wine hover:bg-brand-wine/10"
+                      >
+                        Validar de nuevo
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setManual(true)}
+                      className="rounded-xl border border-brand-brown/15 px-4 py-2 text-xs font-semibold text-brand-brown hover:bg-brand-cream-soft"
+                    >
+                      Escribir los datos a mano
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {numero.length >= 5 && !conExtension && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                   <p className="font-semibold">
@@ -269,7 +356,7 @@ function ValidarCedulaActiva({
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">{aviso}</p>
               )}
 
-              {numero.length >= 5 && !esperando && (
+              {numero.length >= 5 && !esperando && !(fallo && !manual) && (
                 <>
                   {(!conExtension || manual) && (
                   <div>
@@ -337,7 +424,7 @@ function ValidarCedulaActiva({
               >
                 Cancelar
               </button>
-              {numero.length >= 5 && !esperando && (
+              {numero.length >= 5 && !esperando && !(fallo && !manual) && (
                 <button
                   type="button"
                   disabled={!puedeConfirmar}

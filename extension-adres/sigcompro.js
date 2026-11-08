@@ -38,7 +38,10 @@
     } else if (msg?.tipo === "progreso") {
       window.postMessage({ tipo: "SIGCOMPRO_ADRES_PROGRESO", texto: msg.texto }, window.location.origin);
     } else if (msg?.tipo === "error") {
-      window.postMessage({ tipo: "SIGCOMPRO_ADRES_ERROR", mensaje: msg.mensaje }, window.location.origin);
+      window.postMessage(
+        { tipo: "SIGCOMPRO_ADRES_ERROR", motivo: msg.motivo, mensaje: msg.mensaje },
+        window.location.origin,
+      );
     }
   });
 })();
