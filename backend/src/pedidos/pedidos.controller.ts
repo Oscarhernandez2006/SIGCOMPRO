@@ -210,14 +210,21 @@ export class PedidosController {
     @Query('replica') replica: string | undefined,
     @Query('vehiculo') vehiculo: string | undefined,
     @Query('escenario') escenario: string | undefined,
+    @Req() req: Request & { user?: JwtPayload },
   ) {
     const n = replica ? Number(replica) : undefined;
+    const directoAEscenario = escenario === '1' || escenario === 'true';
+    // El reenvío manual a Drivin (directo al escenario) es solo para estos roles.
+    const rol = (req.user?.rol ?? '').trim().toLowerCase();
+    if (directoAEscenario && !['administrador app', 'desarrollador'].includes(rol)) {
+      throw new ForbiddenException('Solo Administrador App o Desarrollador pueden reenviar a Drivin.');
+    }
     return this.pedidos.enviarADrivin(
       id,
       Number.isFinite(n) ? n : undefined,
       vehiculo,
       undefined,
-      escenario === '1' || escenario === 'true',
+      directoAEscenario,
     );
   }
 

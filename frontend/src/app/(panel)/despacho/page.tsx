@@ -620,6 +620,10 @@ export default function DespachoPage() {
   // roles administrativos con selector (administrador app / desarrollador). Los
   // demás usuarios avanzan el flujo solo con los botones (según sus permisos).
   const puedeCambiarEstadoManual = puedeSeleccionarPuntoVenta(usuarioDesp?.rol);
+  // «Reenviar a Drivin» solo para Administrador App y Desarrollador.
+  const puedeReenviarDrivin = ["administrador app", "desarrollador"].includes(
+    (usuarioDesp?.rol ?? "").trim().toLowerCase(),
+  );
 
   // Alcance por punto: roles con selector (administrador app / desarrollador) o
   // usuarios con el permiso "pedidos.multipunto" eligen UN punto de sus
@@ -2205,6 +2209,7 @@ export default function DespachoPage() {
                 // aparece en ningún escenario (mapa con datos, para no dar falsos positivos).
                 // En Drivin toda orden entra obligatoriamente a un escenario: ausente = no existe.
                 const mostrarReenvioDrivin =
+                  puedeReenviarDrivin &&
                   facturado && !despachado && !anulado && idsDrivin.has(String(p.punto?.id ?? "")) &&
                   diaEntregaISO(p) <= hoyISO() &&
                   Object.keys(asignacionesDrivin).length > 0 && !(p.comanda in asignacionesDrivin) &&
