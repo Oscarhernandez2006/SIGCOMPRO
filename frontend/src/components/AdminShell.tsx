@@ -20,6 +20,7 @@ import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } fr
 import ClaveDinamica from "./ClaveDinamica";
 import AprobacionesDespacho from "./AprobacionesDespacho";
 import NovedadesGate from "./novedades/NovedadesGate";
+import MenuPerfil from "./novedades/MenuPerfil";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
@@ -621,12 +622,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                 {usuario?.rol ?? ""}
               </p>
             </div>
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-wine text-sm font-bold text-white"
-              title={`${usuario?.nombre ?? "Usuario"}${usuario?.rol ? ` · ${usuario.rol}` : ""}`}
-            >
-              {iniciales}
-            </div>
+            <MenuPerfil usuario={usuario} iniciales={iniciales} colorAvatar="bg-brand-wine" />
           </div>
         </header>
 

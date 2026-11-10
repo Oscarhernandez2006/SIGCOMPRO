@@ -11,6 +11,7 @@ import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import AprobacionesDespacho from "./AprobacionesDespacho";
 import NovedadesGate from "./novedades/NovedadesGate";
+import MenuPerfil from "./novedades/MenuPerfil";
 import ChatBubble from "./ChatBubble";
 import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
@@ -457,9 +458,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
                 {usuario?.rol ?? ""}
               </p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-amber text-sm font-bold text-white">
-              {iniciales}
-            </div>
+            <MenuPerfil usuario={usuario} iniciales={iniciales} colorAvatar="bg-brand-amber" />
           </div>
         </header>
 

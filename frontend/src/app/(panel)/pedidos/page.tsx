@@ -22,7 +22,7 @@ import { listarMotivos, type Motivo } from "@/lib/motivos";
 import { obtenerTiposCorteCache } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { yaDespachado, colorEstado, estadoReplicaVista } from "@/lib/despacho";
-import { gramosPorUnidad } from "@/lib/peso";
+import { gramosPorUnidad, pesoPedidoKg } from "@/lib/peso";
 import CrearClienteModal from "@/components/CrearClienteModal";
 import ZoomImagen from "@/components/ZoomImagen";
 
@@ -4784,6 +4784,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
   const subtotal = carrito.reduce((s, i) => s + i.producto.precio * i.cantidad, 0);
   const dom = entrega === "domicilio" ? (valorDomicilio ?? 0) : 0;
   const total = subtotal + dom;
+  const kilosTotal = Number(pesoPedidoKg({ carrito }).toFixed(2));
   const f = new Date(fechaIso);
   const fecha = f.toLocaleDateString("es-CO");
   const hora = f.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -4909,6 +4910,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     <hr>
     ${entrega === "domicilio" ? `<div class="row"><span class="label">Subtotal:</span> ${formatoCOP(subtotal)}</div><div class="row"><span class="label">Domicilio:</span> ${formatoCOP(dom)}</div>` : ""}
     <div class="tot">Total: ${formatoCOP(total)}</div>
+    ${kilosTotal > 0 ? `<div class="tot">Total kilos: ${kilosTotal} ${kilosTotal === 1 ? "kilo" : "kilos"} (${librasLabel(kilosTotal)})</div>` : ""}
     ${observacion ? `<hr><div class="sec">OBSERVACIÓN</div><div class="row">${observacion}</div>` : ""}
   </body></html>`;
   const w = window.open("", "_blank", "width=400,height=600");

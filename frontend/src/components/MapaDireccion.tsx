@@ -448,7 +448,8 @@ export default function MapaDireccion({
       )}
 
       {abierto && (
-        <div className="mt-2 overflow-hidden rounded-xl">
+        {/* isolate: los z-index de Leaflet (400-1000) no deben tapar los modales */}
+        <div className="relative isolate z-0 mt-2 overflow-hidden rounded-xl">
           <MapaLeaflet
             lat={centroLat}
             lng={centroLng}

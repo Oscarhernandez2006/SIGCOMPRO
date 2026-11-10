@@ -8,7 +8,14 @@
  * Los `pasos` de la animación resaltan los `puntos` por índice.
  */
 
-export type DemoNovedad = "fundacion" | "validar-cedula" | "importar-excel" | "replicas" | "reenviar-drivin";
+export type DemoNovedad =
+  | "fundacion"
+  | "validar-cedula"
+  | "importar-excel"
+  | "replicas"
+  | "reenviar-drivin"
+  | "menu-perfil"
+  | "kilos-comanda";
 
 export interface Novedad {
   id: string;
@@ -100,6 +107,37 @@ export const NOVEDADES: VersionNovedades[] = [
         ],
         nota: "Los envíos automáticos a Drivin y las réplicas no cambian: siguen funcionando para todos.",
         demo: "reenviar-drivin",
+      },
+    ],
+  },
+  {
+    version: "2026-11-09",
+    fecha: "9 de noviembre de 2026",
+    novedades: [
+      {
+        id: "menu-perfil",
+        modulo: "General",
+        titulo: "Vuelve a ver las novedades cuando quieras",
+        resumen: "El menú de perfil tiene la opción «Novedades» para repasar las funciones nuevas con sus animaciones.",
+        puntos: [
+          "Haz clic en tu avatar (las iniciales arriba a la derecha).",
+          "En el menú que se abre, elige «Novedades».",
+          "Se muestran todas las actualizaciones, de la más reciente a la más antigua, con su animación.",
+        ],
+        demo: "menu-perfil",
+      },
+      {
+        id: "kilos-comanda",
+        modulo: "Pedidos · Despacho",
+        titulo: "Total de kilos en la comanda",
+        resumen: "La comanda impresa ahora muestra cuántos kilos lleva el pedido en total, en kilos y en libras.",
+        puntos: [
+          "Imprime la comanda como siempre.",
+          "Debajo del Total en pesos sale la línea «Total kilos».",
+          "Suma los productos por kilo y el peso de los de unidad (según su descripción o el peso variable digitado).",
+        ],
+        nota: "Si el pedido no tiene productos con peso, la línea no se imprime.",
+        demo: "kilos-comanda",
       },
     ],
   },

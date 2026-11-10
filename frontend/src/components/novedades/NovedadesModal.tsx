@@ -11,6 +11,8 @@ import validarCedula from "./demos/validar-cedula";
 import importarExcel from "./demos/importar-excel";
 import replicas from "./demos/replicas";
 import reenviarDrivin from "./demos/reenviar-drivin";
+import menuPerfil from "./demos/menu-perfil";
+import kilosComanda from "./demos/kilos-comanda";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -18,6 +20,8 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "importar-excel": importarExcel,
   replicas,
   "reenviar-drivin": reenviarDrivin,
+  "menu-perfil": menuPerfil,
+  "kilos-comanda": kilosComanda,
 };
 
 type Item = Novedad & { version: string; fecha: string };
@@ -90,10 +94,13 @@ function Diapositiva({ item, onRepetir }: { item: Item; onRepetir: () => void })
 export default function NovedadesModal({
   versiones,
   nombre,
+  repaso = false,
   onCerrar,
 }: {
   versiones: VersionNovedades[];
   nombre?: string;
+  /** Abierto a pedido desde el menú de perfil (no es la presentación pendiente). */
+  repaso?: boolean;
   onCerrar: () => void;
 }) {
   const items: Item[] = versiones.flatMap((v) => v.novedades.map((n) => ({ ...n, version: v.version, fecha: v.fecha })));
@@ -180,9 +187,9 @@ export default function NovedadesModal({
             type="button"
             onClick={onCerrar}
             className="text-xs font-semibold text-brand-black/50 hover:text-brand-black"
-            title="Se volverá a mostrar la próxima vez que entres"
+            title={repaso ? "Cerrar novedades" : "Se volverá a mostrar la próxima vez que entres"}
           >
-            Ver más tarde
+            {repaso ? "Cerrar" : "Ver más tarde"}
           </button>
           <div className="flex items-center gap-2">
             {i > 0 && (
