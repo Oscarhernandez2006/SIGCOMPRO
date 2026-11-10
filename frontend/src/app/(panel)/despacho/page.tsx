@@ -36,6 +36,15 @@ import {
 import { obtenerPersonalDespachoTodos, type PersonalDespacho } from "@/lib/configuracion";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { pesoPedidoKg } from "@/lib/peso";
+import { useCerrarFueraDeVista } from "@/lib/useCerrarFueraDeVista";
+import dynamic from "next/dynamic";
+import {
+  HORA_HABILITA_INCUMPLIMIENTO,
+  horaBogota,
+  marcadosHoy,
+  puedeGestionarIncumplimientos,
+} from "@/lib/incumplimientos";
+import type { PedidoAMarcar } from "@/components/incumplimientos/MarcarNoGestionadoModal";
 import {
   ALERTA_DESPACHO_MS,
   ALERTA_ALISTADO_PEQUENO_MS,
@@ -54,6 +63,22 @@ import {
 } from "@/lib/despacho";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+
+const MarcarNoGestionadoModal = dynamic(() => import("@/components/incumplimientos/MarcarNoGestionadoModal"), {
+  ssr: false,
+});
+
+/** Estados que cuentan como "sin gestionar" al cierre del turno. */
+const ESTADOS_NO_GESTIONADOS = new Set([
+  "en proceso",
+  "atrasado",
+  "liberación",
+  "en producción",
+  "alistado",
+  "facturado",
+  "despachado",
+  "en tránsito",
+]);
 /** Día (YYYY-MM-DD) en Bogotá de una fecha ISO (o de ahora). */
 const diaBogota = (iso?: string | null) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(
@@ -430,6 +455,7 @@ export default function DespachoPage() {
   // Id del pedido cuya ficha completa del cliente está desplegada (al hacer
   // click en el nombre): muestra referencia, correo, ciudad, NIT, etc.
   const [clienteAbierto, setClienteAbierto] = useState<string | null>(null);
+  const refFichaCliente = useCerrarFueraDeVista(() => setClienteAbierto(null));
   // Vista activa de la tabla: "activos" oculta despachados y cancelados;
   // "despachados"/"cancelados" muestran solo esos al pulsar su card.
   const [vista, setVista] = useState<string | null>(null);
@@ -624,6 +650,16 @@ export default function DespachoPage() {
   const puedeReenviarDrivin = ["administrador app", "desarrollador"].includes(
     (usuarioDesp?.rol ?? "").trim().toLowerCase(),
   );
+  // «Marcar no gestionado» (incumplimientos): solo Administrador App y Desarrollador.
+  const puedeMarcarNG = puedeGestionarIncumplimientos(usuarioDesp?.rol);
+  const [marcarNG, setMarcarNG] = useState<PedidoAMarcar | null>(null);
+  const [marcadosNG, setMarcadosNG] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!puedeMarcarNG) return;
+    marcadosHoy()
+      .then((ids) => setMarcadosNG(new Set(ids)))
+      .catch(() => {});
+  }, [puedeMarcarNG]);
 
   // Alcance por punto: roles con selector (administrador app / desarrollador) o
   // usuarios con el permiso "pedidos.multipunto" eligen UN punto de sus
@@ -2263,8 +2299,10 @@ export default function DespachoPage() {
                 // a producción y la confirmación de pago, el resto queda bloqueado
                 // en cascada (facturar exige alistado, despachar exige facturado).
                 const impreso = impresos.has(p.id);
+                const noGestionable =
+                  puedeMarcarNG && !anulado && !esPosteriorFuturo(p) && ESTADOS_NO_GESTIONADOS.has(norm(estado));
                 return (
-                  <tr key={p.id} className={anulado ? "opacity-60" : ""}>
+                  <tr key={p.id} data-fila-pedido={p.id} className={anulado ? "opacity-60" : ""}>
                     {/* Cliente: agrupa televentas, comanda y medio de pago. La celda
                         ocupa toda la altura de la fila (h-px + h-full) para que la
                         línea divisora llegue hasta abajo. */}
@@ -2294,7 +2332,7 @@ export default function DespachoPage() {
                             <p className="text-xs text-brand-black">Tel: {p.cliente.telefono}</p>
                           )}
                           {clienteAbierto === p.id && (
-                            <div className="absolute left-0 top-6 z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
+                            <div ref={refFichaCliente} className="absolute left-0 top-6 z-30 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
                               <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-brand-brown/10 pb-1.5">
                                 <p className="truncate font-bold text-brand-black">
                                   {p.cliente.nombre || p.cliente.nit_cedula}
@@ -3097,6 +3135,48 @@ export default function DespachoPage() {
                       >
                         {numeroDelDiaPorId.get(p.id) ?? "—"}
                       </span>
+                      {puedeMarcarNG && marcadosNG.has(p.id) ? (
+                        <span
+                          data-no-captura
+                          title="No gestionado: registrado hoy como incumplimiento"
+                          aria-label="No gestionado"
+                          className="absolute bottom-2 right-11 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white shadow-sm"
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                            <path d="M4 3a1 1 0 0 1 1 1v.3l1.6-.4a8 8 0 0 1 5.3.6 6 6 0 0 0 4 .4l2.9-.7A1 1 0 0 1 20 5v9a1 1 0 0 1-.8 1l-3.1.8a8 8 0 0 1-5.3-.6 6 6 0 0 0-4-.4L5 15.3V21a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Z" />
+                          </svg>
+                        </span>
+                      ) : (
+                        noGestionable && (
+                          <button
+                            type="button"
+                            data-no-captura
+                            disabled={horaBogota(ahora) < HORA_HABILITA_INCUMPLIMIENTO}
+                            onClick={() =>
+                              setMarcarNG({
+                                id: p.id,
+                                comanda: p.comanda,
+                                cliente: p.cliente.nombre || p.cliente.nit_cedula,
+                                estado,
+                                puntoId: String(p.punto?.id ?? ""),
+                                puntoNombre: p.punto?.nombre ?? "",
+                                numeroDia: numeroDelDiaPorId.get(p.id) ?? null,
+                              })
+                            }
+                            title={
+                              horaBogota(ahora) < HORA_HABILITA_INCUMPLIMIENTO
+                                ? "Marcar no gestionado: disponible desde las 8:00 p. m."
+                                : "Marcar no gestionado (registrar incumplimiento del responsable)"
+                            }
+                            aria-label="Marcar no gestionado"
+                            className="absolute bottom-2 right-11 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-red-600"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V4m0 0 2-.5a8 8 0 0 1 5.5.6 6 6 0 0 0 4.2.4L19 4v10l-3.3.8a6 6 0 0 1-4.2-.4 8 8 0 0 0-5.5-.6L4 14.3" />
+                            </svg>
+                          </button>
+                        )
+                      )}
                       {!anulado &&
                         (() => {
                           // Posterior (programado para otro día): no corre el
@@ -3412,6 +3492,17 @@ export default function DespachoPage() {
             </div>
           </div>
         </div>
+      )}
+      {marcarNG && (
+        <MarcarNoGestionadoModal
+          pedido={marcarNG}
+          fila={document.querySelector<HTMLElement>(`tr[data-fila-pedido="${CSS.escape(marcarNG.id)}"]`)}
+          onCerrar={() => setMarcarNG(null)}
+          onGuardado={(id) => {
+            setMarcadosNG((prev) => new Set(prev).add(id));
+            setMarcarNG(null);
+          }}
+        />
       )}
       {modalPuntosEnvio && (
         <PuntosEnvioFundacion

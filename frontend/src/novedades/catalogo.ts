@@ -16,7 +16,10 @@ export type DemoNovedad =
   | "reenviar-drivin"
   | "menu-perfil"
   | "kilos-comanda"
-  | "orden-alternas";
+  | "orden-alternas"
+  | "no-gestionado"
+  | "sync-direcciones"
+  | "cerrar-scroll";
 
 export interface Novedad {
   id: string;
@@ -152,6 +155,49 @@ export const NOVEDADES: VersionNovedades[] = [
         ],
         nota: "Si buscas por nombre se sigue ordenando por nombre, y dentro del mismo nombre las alternas también van en orden.",
         demo: "orden-alternas",
+      },
+      {
+        id: "no-gestionado",
+        modulo: "Despacho · Administración",
+        titulo: "Marcar pedidos no gestionados e informe de incumplimientos",
+        resumen:
+          "Al cierre del turno puedes registrar los pedidos que quedaron sin gestionar, asignarlos al responsable y generar un informe PDF con la evidencia.",
+        puntos: [
+          "Desde las 8:00 p. m., los pedidos sin finalizar (pendientes, atrasados, retenidos, en producción, alistados, facturados, despachados o en tránsito) muestran la bandera «Marcar no gestionado» en la esquina de la fila.",
+          "Eliges a la persona responsable del punto, el motivo y describes lo ocurrido. Se guarda una foto de la fila y una copia fija del pedido.",
+          "El pedido queda sellado con la bandera roja «No gestionado» ese día (no se puede marcar dos veces).",
+          "En el avatar → «Incumplimientos del personal» eliges a la persona, filtras el periodo y generas el informe PDF para gerencia.",
+        ],
+        nota: "Solo Administrador App y Desarrollador pueden marcar pedidos y ver los informes.",
+        demo: "no-gestionado",
+      },
+      {
+        id: "sync-direcciones",
+        modulo: "Direcciones",
+        titulo: "Direcciones sincronizadas con Drivin",
+        resumen:
+          "Importa el Excel exportado de Drivin, corrige en SIGCOMPRO y exporta para volver a cargarlo a Drivin.",
+        puntos: [
+          "«Importar Excel» con el archivo exportado de Drivin.",
+          "Los códigos nuevos entran sin amarillo; los existentes sin corregir se actualizan con lo de Drivin y los corregidos (amarillos) se respetan.",
+          "Las direcciones que ya no vienen en Drivin se eliminan, previa confirmación con el conteo.",
+          "Al terminar de corregir, «Exportar Excel» genera el archivo con las 66 columnas para cargarlo a Drivin.",
+        ],
+        nota: "Importa siempre el export COMPLETO de Drivin: si el archivo trae solo una parte, las demás se eliminarían.",
+        demo: "sync-direcciones",
+      },
+      {
+        id: "cerrar-scroll",
+        modulo: "Despacho · Cuadre de caja",
+        titulo: "Las fichas flotantes se cierran solas al hacer scroll",
+        resumen:
+          "La ficha del cliente en Despacho y el detalle del consecutivo en Cuadre de caja se cierran cuando salen de la pantalla.",
+        puntos: [
+          "Abre la ficha haciendo clic en el nombre del cliente (o en el consecutivo en Cuadre de caja).",
+          "Si haces scroll y la ficha sale por completo de la vista, se cierra automáticamente.",
+          "Al volver arriba ya no queda abierta tapando otros pedidos.",
+        ],
+        demo: "cerrar-scroll",
       },
     ],
   },

@@ -69,6 +69,12 @@ export class DireccionesController {
     return this.direcciones.importar(req.user, filas);
   }
 
+  @Post('importar/eliminar-ausentes')
+  @Permisos('direcciones.eliminar')
+  eliminarAusentes(@Body('codigos') codigos: unknown) {
+    return this.direcciones.eliminarAusentes(codigos);
+  }
+
   @Post()
   @Permisos('direcciones.editar')
   agregar(@Req() req: ReqUser, @Body('datos') datos?: Record<string, unknown>) {

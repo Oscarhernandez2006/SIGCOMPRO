@@ -13,6 +13,7 @@ import {
 } from "@/lib/pedidos";
 import { verificarClaveDinamica, mensajeClaveInvalida } from "@/lib/clave-dinamica";
 import { yaDespachado } from "@/lib/despacho";
+import { useCerrarFueraDeVista } from "@/lib/useCerrarFueraDeVista";
 import { cuadreCerrado as consultarCuadreCerrado, cerrarCuadre, reabrirCuadre } from "@/lib/configuracion";
 import { METODOS, type Pedido } from "@/app/(panel)/pedidos/page";
 import { DetalleDevolucionModal } from "@/components/DevolucionModal";
@@ -113,6 +114,7 @@ export default function CuadreCajaPage() {
   const [filtroLiquidacion, setFiltroLiquidacion] = useState<string>("todos");
   // Id del pedido cuya ventanita de detalle (creó/alistó/domiciliario) está abierta.
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const refDetalle = useCerrarFueraDeVista(() => setDetalleId(null));
   const [devolucionDe, setDevolucionDe] = useState<Pedido | null>(null);
   // Orden de "completados" (autoguardados con valor): van al final para facilitar
   // el llenado (el que se acaba de liquidar baja y sube el siguiente).
@@ -1016,7 +1018,7 @@ export default function CuadreCajaPage() {
                           </svg>
                         </button>
                         {detalleId === p.id && (
-                          <div className="absolute left-3 top-11 z-30 w-60 rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
+                          <div ref={refDetalle} className="absolute left-3 top-11 z-30 w-60 rounded-xl border border-brand-brown/20 bg-white p-3 text-xs shadow-xl">
                             <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-brand-brown/10 pb-1.5">
                               <p className="truncate font-bold text-brand-black">#{p.comanda || p.consecutivo}</p>
                               <button

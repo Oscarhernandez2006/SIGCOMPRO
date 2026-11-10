@@ -6,6 +6,7 @@ import type { Usuario } from "@/lib/auth";
 import { NOVEDADES, ROLES_NOVEDADES, type VersionNovedades } from "@/novedades/catalogo";
 
 const NovedadesModal = dynamic(() => import("./NovedadesModal"), { ssr: false });
+const IncumplimientosModal = dynamic(() => import("../incumplimientos/IncumplimientosModal"), { ssr: false });
 
 /** Avatar del topbar con menú de perfil (opción «Novedades» para repasar las funciones nuevas). */
 export default function MenuPerfil({
@@ -20,6 +21,7 @@ export default function MenuPerfil({
   const [abierto, setAbierto] = useState(false);
   const [listaAbierta, setListaAbierta] = useState(false);
   const [version, setVersion] = useState<VersionNovedades | null>(null);
+  const [verIncumplimientos, setVerIncumplimientos] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const rol = (usuario?.rol ?? "").trim().toLowerCase();
   const aplica = !!usuario && ROLES_NOVEDADES.includes(rol) && NOVEDADES.length > 0;
@@ -120,7 +122,31 @@ export default function MenuPerfil({
               ))}
             </div>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAbierto(false);
+              setListaAbierta(false);
+              setVerIncumplimientos(true);
+            }}
+            className="flex w-full items-center gap-3 border-t border-brand-brown/10 px-4 py-2.5 text-left text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-100 text-red-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 21V4m0 0 2-.5a8 8 0 0 1 5.5.6 6 6 0 0 0 4.2.4L19 4v10l-3.3.8a6 6 0 0 1-4.2-.4 8 8 0 0 0-5.5-.6L4 14.3" />
+              </svg>
+            </span>
+            <span className="flex-1">
+              Incumplimientos del personal
+              <span className="block text-[11px] font-normal text-brand-black/55">Pedidos no gestionados e informes</span>
+            </span>
+          </button>
         </div>
+      )}
+
+      {verIncumplimientos && (
+        <IncumplimientosModal emitidoPor={usuario?.nombre} onCerrar={() => setVerIncumplimientos(false)} />
       )}
 
       {version && (

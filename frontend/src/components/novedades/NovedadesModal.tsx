@@ -14,6 +14,9 @@ import reenviarDrivin from "./demos/reenviar-drivin";
 import menuPerfil from "./demos/menu-perfil";
 import kilosComanda from "./demos/kilos-comanda";
 import ordenAlternas from "./demos/orden-alternas";
+import noGestionado from "./demos/no-gestionado";
+import syncDirecciones from "./demos/sync-direcciones";
+import cerrarScroll from "./demos/cerrar-scroll";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -24,6 +27,9 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "menu-perfil": menuPerfil,
   "kilos-comanda": kilosComanda,
   "orden-alternas": ordenAlternas,
+  "no-gestionado": noGestionado,
+  "sync-direcciones": syncDirecciones,
+  "cerrar-scroll": cerrarScroll,
 };
 
 type Item = Novedad & { version: string; fecha: string };

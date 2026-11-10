@@ -11,6 +11,7 @@ import {
   actualizarCeldaDireccion,
   agregarDireccion,
   eliminarDirecciones,
+  eliminarDireccionesAusentes,
   exportarDirecciones,
   importarDirecciones,
   obtenerCodigosDirecciones,
@@ -41,12 +42,18 @@ const MAX_CELDAS_PEGAR = 500;
 type Celda = { r: number; c: number };
 type Edicion = Celda & { valor: string };
 type Importacion = {
-  fase: "leyendo" | "comparando" | "subiendo" | "listo" | "error";
+  fase: "leyendo" | "comparando" | "confirmar" | "subiendo" | "eliminando" | "listo" | "error";
   archivo: string;
   enArchivo?: number;
   nuevas?: number;
   subidas?: number;
+  aSubir?: number;
   agregadas?: number;
+  actualizadas?: number;
+  respetadas?: number;
+  sinCambios?: number;
+  ausentes?: number;
+  eliminadas?: number;
   sinCodigo?: number;
   msg?: string;
 };
@@ -133,6 +140,7 @@ export default function DireccionesPage() {
   const [procesando, setProcesando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [importacion, setImportacion] = useState<Importacion | null>(null);
+  const confirmarImportacion = useRef<((seguir: boolean) => void) | null>(null);
   const archivoRef = useRef<HTMLInputElement>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; msg: string } | null>(null);
   const [irPagina, setIrPagina] = useState("");
@@ -512,8 +520,9 @@ export default function DireccionesPage() {
   }
 
   /**
-   * Importa el Excel de direcciones: agrega SOLO las filas cuyo código (columna
-   * A) no exista todavía. Entran al final y sin amarillo para corregirlas.
+   * Importa el Excel exportado de Drivin: agrega los códigos nuevos (sin
+   * amarillo), actualiza con lo de Drivin los existentes SIN corregir (las
+   * amarillas se respetan) y elimina los que ya no vienen en el archivo.
    */
   async function importar(archivo: File) {
     if (!permite.importar) return sinPermiso.mostrar();
@@ -570,27 +579,73 @@ export default function DireccionesPage() {
       const existentes = new Set(await obtenerCodigosDirecciones());
       const vistos = new Set<string>();
       let sinCodigo = 0;
-      const nuevas = filasArchivo.filter((d) => {
+      const filasConCodigo = filasArchivo.filter((d) => {
         const codigo = texto(d.A).trim().toLowerCase();
         if (!codigo) {
           sinCodigo++;
           return false;
         }
-        if (existentes.has(codigo) || vistos.has(codigo)) return false;
+        if (vistos.has(codigo)) return false;
         vistos.add(codigo);
         return true;
       });
+      if (filasConCodigo.length === 0) {
+        throw new Error("El archivo no trae ningún código de dirección.");
+      }
+      const nuevas = filasConCodigo.filter((d) => !existentes.has(texto(d.A).trim().toLowerCase())).length;
+      // Sin permiso de eliminar, las ausentes se informan pero no se borran.
+      const ausentes = permite.eliminar ? [...existentes].filter((c) => !vistos.has(c)).length : 0;
+      const resumen = {
+        ...base,
+        enArchivo: filasArchivo.length,
+        nuevas,
+        aSubir: filasConCodigo.length,
+        ausentes,
+        sinCodigo,
+      };
+
+      // Antes de borrar algo se pide confirmación con los números a la vista.
+      if (ausentes > 0) {
+        const seguir = await new Promise<boolean>((resolve) => {
+          confirmarImportacion.current = resolve;
+          setImportacion({ ...resumen, fase: "confirmar" });
+        });
+        confirmarImportacion.current = null;
+        if (!seguir) {
+          setImportacion(null);
+          return;
+        }
+      }
 
       let agregadas = 0;
-      const progreso = { ...base, enArchivo: filasArchivo.length, nuevas: nuevas.length, sinCodigo };
-      setImportacion({ ...progreso, fase: "subiendo", subidas: 0 });
-      for (let i = 0; i < nuevas.length; i += LOTE_IMPORTAR) {
-        const r = await importarDirecciones(nuevas.slice(i, i + LOTE_IMPORTAR));
+      let actualizadas = 0;
+      let respetadas = 0;
+      let sinCambios = 0;
+      setImportacion({ ...resumen, fase: "subiendo", subidas: 0 });
+      for (let i = 0; i < filasConCodigo.length; i += LOTE_IMPORTAR) {
+        const r = await importarDirecciones(filasConCodigo.slice(i, i + LOTE_IMPORTAR));
         agregadas += r.agregadas;
-        setImportacion({ ...progreso, fase: "subiendo", subidas: Math.min(nuevas.length, i + LOTE_IMPORTAR) });
+        actualizadas += r.actualizadas;
+        respetadas += r.respetadas;
+        sinCambios += r.sinCambios;
+        setImportacion({ ...resumen, fase: "subiendo", subidas: Math.min(filasConCodigo.length, i + LOTE_IMPORTAR) });
       }
-      setImportacion({ ...progreso, fase: "listo", subidas: nuevas.length, agregadas });
-      if (agregadas > 0) {
+      let eliminadas = 0;
+      if (ausentes > 0) {
+        setImportacion({ ...resumen, fase: "eliminando", subidas: filasConCodigo.length });
+        eliminadas = (await eliminarDireccionesAusentes([...vistos])).eliminadas;
+      }
+      setImportacion({
+        ...resumen,
+        fase: "listo",
+        subidas: filasConCodigo.length,
+        agregadas,
+        actualizadas,
+        respetadas,
+        sinCambios,
+        eliminadas,
+      });
+      if (agregadas > 0 || actualizadas > 0) {
         // Muestra las filas nuevas (sin corregir) para empezar a corregirlas.
         setBusqueda("");
         setQ("");
@@ -1049,24 +1104,60 @@ export default function DireccionesPage() {
             </p>
             {importacion.fase === "error" ? (
               <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{importacion.msg}</p>
+            ) : importacion.fase === "confirmar" ? (
+              <div className="mt-4 space-y-2 text-sm text-brand-black">
+                <p>
+                  Códigos en el archivo: <b>{(importacion.aSubir ?? 0).toLocaleString("es-CO")}</b> (nuevos:{" "}
+                  {(importacion.nuevas ?? 0).toLocaleString("es-CO")})
+                </p>
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-red-700">
+                  <b>{(importacion.ausentes ?? 0).toLocaleString("es-CO")}</b> dirección
+                  {importacion.ausentes === 1 ? "" : "es"} de SIGCOMPRO ya no viene
+                  {importacion.ausentes === 1 ? "" : "n"} en el archivo de Drivin y se{" "}
+                  <b>eliminará{importacion.ausentes === 1 ? "" : "n"}</b>, aunque estén corregidas.
+                </p>
+                <p className="text-xs text-brand-black/60">
+                  Si el archivo no es el export completo de Drivin, cancela para no borrar direcciones por error.
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => confirmarImportacion.current?.(false)}
+                    className="flex-1 rounded-xl border border-brand-brown/20 px-4 py-2.5 text-sm font-semibold text-brand-black hover:bg-brand-cream-soft"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => confirmarImportacion.current?.(true)}
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                  >
+                    Importar y eliminar
+                  </button>
+                </div>
+              </div>
             ) : importacion.fase === "listo" ? (
               <div className="mt-4 space-y-1.5 text-sm text-brand-black">
-                <p className="text-base font-semibold text-emerald-700">
-                  {importacion.agregadas
-                    ? `Se agregaron ${importacion.agregadas.toLocaleString("es-CO")} fila${importacion.agregadas === 1 ? "" : "s"} nueva${importacion.agregadas === 1 ? "" : "s"} sin amarillo.`
-                    : "No había filas nuevas: todos los códigos ya existen."}
-                </p>
+                <p className="text-base font-semibold text-emerald-700">Sincronización con Drivin terminada.</p>
                 <p>Filas en el archivo: {(importacion.enArchivo ?? 0).toLocaleString("es-CO")}</p>
-                <p>
-                  Ya existían (no se tocaron):{" "}
-                  {Math.max(0, (importacion.enArchivo ?? 0) - (importacion.agregadas ?? 0) - (importacion.sinCodigo ?? 0)).toLocaleString("es-CO")}
-                </p>
+                <p>Nuevas agregadas (sin amarillo): {(importacion.agregadas ?? 0).toLocaleString("es-CO")}</p>
+                <p>Actualizadas con lo de Drivin (sin corregir): {(importacion.actualizadas ?? 0).toLocaleString("es-CO")}</p>
+                <p>Corregidas respetadas (amarillas, no se tocaron): {(importacion.respetadas ?? 0).toLocaleString("es-CO")}</p>
+                <p>Sin cambios: {(importacion.sinCambios ?? 0).toLocaleString("es-CO")}</p>
+                {!!importacion.eliminadas && (
+                  <p className="text-red-700">
+                    Eliminadas (ya no están en Drivin): {importacion.eliminadas.toLocaleString("es-CO")}
+                  </p>
+                )}
                 {!!importacion.sinCodigo && (
                   <p className="text-amber-700">
                     Sin código de dirección (omitidas): {importacion.sinCodigo.toLocaleString("es-CO")}
                   </p>
                 )}
-                {!!importacion.agregadas && (
+                {!permite.eliminar && (
+                  <p className="pt-1 text-xs text-amber-700">
+                    No tienes permiso para eliminar: las direcciones que ya no están en Drivin se conservaron.
+                  </p>
+                )}
+                {!!(importacion.agregadas || importacion.actualizadas) && (
                   <p className="pt-1 text-xs text-brand-black/60">Se muestran en el filtro «Sin corregir».</p>
                 )}
               </div>
@@ -1077,14 +1168,16 @@ export default function DireccionesPage() {
                     ? "Leyendo el archivo…"
                     : importacion.fase === "comparando"
                       ? `Comparando ${(importacion.enArchivo ?? 0).toLocaleString("es-CO")} filas con las existentes…`
-                      : `Agregando filas nuevas: ${(importacion.subidas ?? 0).toLocaleString("es-CO")} de ${(importacion.nuevas ?? 0).toLocaleString("es-CO")}`}
+                      : importacion.fase === "eliminando"
+                        ? `Eliminando ${(importacion.ausentes ?? 0).toLocaleString("es-CO")} direcciones que ya no están en Drivin…`
+                        : `Sincronizando con Drivin: ${(importacion.subidas ?? 0).toLocaleString("es-CO")} de ${(importacion.aSubir ?? 0).toLocaleString("es-CO")}`}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-brand-cream-soft">
                   <div
                     className={`h-full rounded-full bg-brand-amber transition-all ${importacion.fase === "subiendo" ? "" : "w-1/3 animate-pulse"}`}
                     style={
                       importacion.fase === "subiendo"
-                        ? { width: `${importacion.nuevas ? Math.round(((importacion.subidas ?? 0) / importacion.nuevas) * 100) : 100}%` }
+                        ? { width: `${importacion.aSubir ? Math.round(((importacion.subidas ?? 0) / importacion.aSubir) * 100) : 100}%` }
                         : undefined
                     }
                   />

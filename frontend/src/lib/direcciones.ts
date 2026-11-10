@@ -107,13 +107,24 @@ export function obtenerCodigosDirecciones(): Promise<string[]> {
   return apiFetch<string[]>("/direcciones/codigos");
 }
 
-/** Agrega SOLO las filas cuyo código no exista (llegan sin amarillo). */
+/**
+ * Agrega los códigos nuevos (sin amarillo) y actualiza con lo de Drivin los
+ * existentes SIN corregir; las corregidas (amarillas) no se tocan.
+ */
 export function importarDirecciones(
   filas: Record<string, ValorCelda>[],
-): Promise<{ agregadas: number; existentes: number; sinCodigo: number }> {
+): Promise<{ agregadas: number; actualizadas: number; respetadas: number; sinCambios: number; sinCodigo: number }> {
   return apiFetch("/direcciones/importar", {
     method: "POST",
     body: JSON.stringify({ filas }),
+  });
+}
+
+/** Elimina las direcciones cuyo código ya no viene en el Excel de Drivin. */
+export function eliminarDireccionesAusentes(codigos: string[]): Promise<{ eliminadas: number }> {
+  return apiFetch("/direcciones/importar/eliminar-ausentes", {
+    method: "POST",
+    body: JSON.stringify({ codigos }),
   });
 }
 

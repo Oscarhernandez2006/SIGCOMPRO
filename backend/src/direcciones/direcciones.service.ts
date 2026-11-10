@@ -351,9 +351,9 @@ export class DireccionesService implements OnModuleInit {
   }
 
   /**
-   * Importa filas del Excel: SOLO agrega las que tengan un código (columna A)
-   * que aún no exista; quedan al final, sin marcar (sin amarillo) para que las
-   * corrijan. Las existentes no se tocan para no pisar lo ya corregido.
+   * Importa filas del Excel de Drivin: agrega los códigos nuevos (al final, sin
+   * amarillo) y actualiza con lo de Drivin los existentes SIN corregir. Las
+   * corregidas (amarillas) no se tocan.
    */
   async importar(user: JwtPayload, filas: unknown) {
     if (!Array.isArray(filas)) throw new BadRequestException('Formato inválido');
@@ -387,7 +387,7 @@ export class DireccionesService implements OnModuleInit {
       vistos.add(k);
       nuevas.push({ codigo, datos });
     }
-    if (nuevas.length === 0) return { agregadas: 0, existentes: 0, sinCodigo };
+    if (nuevas.length === 0) return { agregadas: 0, actualizadas: 0, respetadas: 0, sinCambios: 0, sinCodigo };
 
     const nombre = await this.nombreUsuario(user);
     const cliente = await this.pool.connect();
@@ -395,32 +395,74 @@ export class DireccionesService implements OnModuleInit {
       await cliente.query('BEGIN');
       // Serializa importaciones simultáneas para que el orden de filas sea estable.
       await cliente.query(`SELECT pg_advisory_xact_lock(hashtext('direcciones_importar'))`);
-      const r = await cliente.query<{ id: string }>(
+      const r = await cliente.query<{ agregadas: number; actualizadas: number; respetadas: number; existentes: number }>(
         `WITH base AS (SELECT COALESCE(MAX(fila), 0) AS b FROM direcciones),
          entrada AS (
            SELECT e.value->>'codigo' AS codigo, e.value->'datos' AS datos, e.ord
            FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS e(value, ord)
-           WHERE NOT EXISTS (
-             SELECT 1 FROM direcciones d WHERE lower(d.codigo) = lower(e.value->>'codigo')
-           )
+         ),
+         nuevas AS (
+           SELECT * FROM entrada e
+           WHERE NOT EXISTS (SELECT 1 FROM direcciones d WHERE lower(d.codigo) = lower(e.codigo))
+         ),
+         ins AS (
+           INSERT INTO direcciones (fila, codigo, datos, creado_por, actualizado_por)
+           SELECT base.b + ROW_NUMBER() OVER (ORDER BY nuevas.ord), nuevas.codigo, nuevas.datos, $2, $2
+           FROM nuevas, base
+           ON CONFLICT DO NOTHING
+           RETURNING id
+         ),
+         upd AS (
+           UPDATE direcciones d
+              SET datos = e.datos, actualizado_por = $2, actualizado_en = now()
+             FROM entrada e
+            WHERE lower(d.codigo) = lower(e.codigo) AND d.codigo <> ''
+              AND NOT d.corregida AND d.datos IS DISTINCT FROM e.datos
+           RETURNING d.id
          )
-         INSERT INTO direcciones (fila, codigo, datos, creado_por, actualizado_por)
-         SELECT base.b + ROW_NUMBER() OVER (ORDER BY entrada.ord), entrada.codigo,
-                entrada.datos, $2, $2
-         FROM entrada, base
-         ON CONFLICT DO NOTHING
-         RETURNING id`,
+         SELECT (SELECT COUNT(*) FROM ins)::int AS agregadas,
+                (SELECT COUNT(*) FROM upd)::int AS actualizadas,
+                (SELECT COUNT(*) FROM entrada e JOIN direcciones d
+                   ON lower(d.codigo) = lower(e.codigo) AND d.codigo <> '' WHERE d.corregida)::int AS respetadas,
+                (SELECT COUNT(*) FROM entrada e JOIN direcciones d
+                   ON lower(d.codigo) = lower(e.codigo) AND d.codigo <> '')::int AS existentes`,
         [JSON.stringify(nuevas), nombre],
       );
       await cliente.query('COMMIT');
-      const agregadas = r.rowCount ?? 0;
-      return { agregadas, existentes: nuevas.length - agregadas, sinCodigo };
+      const x = r.rows[0];
+      return {
+        agregadas: x.agregadas,
+        actualizadas: x.actualizadas,
+        respetadas: x.respetadas,
+        sinCambios: Math.max(0, x.existentes - x.actualizadas - x.respetadas),
+        sinCodigo,
+      };
     } catch (e) {
       await cliente.query('ROLLBACK').catch(() => undefined);
       throw e;
     } finally {
       cliente.release();
     }
+  }
+
+  /**
+   * Elimina las direcciones con código que ya no vienen en el Excel de Drivin
+   * (`codigos` = todos los códigos del archivo importado).
+   */
+  async eliminarAusentes(codigos: unknown) {
+    if (!Array.isArray(codigos) || codigos.length === 0) {
+      throw new BadRequestException('La lista de códigos del archivo está vacía');
+    }
+    if (codigos.length > 200_000) throw new BadRequestException('Demasiados códigos');
+    const lista = [
+      ...new Set(codigos.map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean)),
+    ];
+    if (lista.length === 0) throw new BadRequestException('La lista de códigos del archivo está vacía');
+    const r = await this.pool.query(
+      `DELETE FROM direcciones WHERE codigo <> '' AND NOT (lower(codigo) = ANY($1::text[]))`,
+      [lista],
+    );
+    return { eliminadas: r.rowCount ?? 0 };
   }
 
   /**
