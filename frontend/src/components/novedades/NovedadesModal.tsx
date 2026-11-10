@@ -13,6 +13,7 @@ import replicas from "./demos/replicas";
 import reenviarDrivin from "./demos/reenviar-drivin";
 import menuPerfil from "./demos/menu-perfil";
 import kilosComanda from "./demos/kilos-comanda";
+import ordenAlternas from "./demos/orden-alternas";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -22,6 +23,7 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "reenviar-drivin": reenviarDrivin,
   "menu-perfil": menuPerfil,
   "kilos-comanda": kilosComanda,
+  "orden-alternas": ordenAlternas,
 };
 
 type Item = Novedad & { version: string; fecha: string };

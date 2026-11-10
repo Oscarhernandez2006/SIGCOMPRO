@@ -181,10 +181,14 @@ export class ClientesService implements OnModuleInit {
       valores,
     );
 
+    // Alternas "<nit>-N" en orden natural (original, -1, -2, … -10), no de texto.
+    const ordenNit = `regexp_replace(nit_cedula, '-\\d+$', '') ASC,
+       COALESCE(substring(nit_cedula from '-(\\d+)$')::numeric, 0) ASC`;
+    const buscaNit = !!q && /^[\d\s.-]+$/.test(q.trim());
     const itemsRes = await this.pool.query<ClienteRow>(
       `SELECT ${COLUMNS} FROM clientes
        ${where}
-       ORDER BY nombre ASC NULLS LAST
+       ORDER BY ${buscaNit ? `${ordenNit}, nombre ASC NULLS LAST` : `nombre ASC NULLS LAST, ${ordenNit}`}
        LIMIT ${lim} OFFSET ${off}`,
       valores,
     );

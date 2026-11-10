@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import type { Usuario } from "@/lib/auth";
-import { NOVEDADES, ROLES_NOVEDADES } from "@/novedades/catalogo";
+import { NOVEDADES, ROLES_NOVEDADES, type VersionNovedades } from "@/novedades/catalogo";
 
 const NovedadesModal = dynamic(() => import("./NovedadesModal"), { ssr: false });
 
@@ -18,7 +18,8 @@ export default function MenuPerfil({
   colorAvatar: string;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [verNovedades, setVerNovedades] = useState(false);
+  const [listaAbierta, setListaAbierta] = useState(false);
+  const [version, setVersion] = useState<VersionNovedades | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const rol = (usuario?.rol ?? "").trim().toLowerCase();
   const aplica = !!usuario && ROLES_NOVEDADES.includes(rol) && NOVEDADES.length > 0;
@@ -54,7 +55,10 @@ export default function MenuPerfil({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setAbierto((v) => !v)}
+        onClick={() => {
+          setAbierto((v) => !v);
+          setListaAbierta(false);
+        }}
         className={`${claseAvatar} transition hover:ring-2 hover:ring-brand-amber/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-amber`}
         title={titulo}
         aria-haspopup="menu"
@@ -75,27 +79,56 @@ export default function MenuPerfil({
           <button
             type="button"
             role="menuitem"
-            onClick={() => {
-              setAbierto(false);
-              setVerNovedades(true);
-            }}
+            aria-expanded={listaAbierta}
+            onClick={() => setListaAbierta((v) => !v)}
             className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-brand-black transition hover:bg-brand-cream-soft"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-amber/15 text-base">✨</span>
-            <span>
+            <span className="flex-1">
               Novedades
-              <span className="block text-[11px] font-normal text-brand-black/55">Ver de nuevo las funciones nuevas</span>
+              <span className="block text-[11px] font-normal text-brand-black/55">Elige la actualización que quieres ver</span>
             </span>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`h-4 w-4 text-brand-black/50 transition-transform ${listaAbierta ? "rotate-180" : ""}`}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+            </svg>
           </button>
+          {listaAbierta && (
+            <div className="max-h-64 overflow-y-auto border-t border-brand-brown/10 bg-brand-cream-soft/40 py-1">
+              {[...NOVEDADES].reverse().map((v) => (
+                <button
+                  key={v.version}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setAbierto(false);
+                    setListaAbierta(false);
+                    setVersion(v);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-4 py-2 pl-14 text-left text-xs text-brand-black transition hover:bg-brand-cream-soft"
+                >
+                  <span className="font-semibold">{v.fecha}</span>
+                  <span className="shrink-0 rounded-full bg-brand-wine/10 px-2 py-0.5 text-[10px] font-bold text-brand-wine">
+                    {v.novedades.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {verNovedades && (
+      {version && (
         <NovedadesModal
-          versiones={[...NOVEDADES].reverse()}
+          versiones={[version]}
           nombre={usuario?.nombre}
           repaso
-          onCerrar={() => setVerNovedades(false)}
+          onCerrar={() => setVersion(null)}
         />
       )}
     </div>

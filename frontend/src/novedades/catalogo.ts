@@ -15,7 +15,8 @@ export type DemoNovedad =
   | "replicas"
   | "reenviar-drivin"
   | "menu-perfil"
-  | "kilos-comanda";
+  | "kilos-comanda"
+  | "orden-alternas";
 
 export interface Novedad {
   id: string;
@@ -118,11 +119,11 @@ export const NOVEDADES: VersionNovedades[] = [
         id: "menu-perfil",
         modulo: "General",
         titulo: "Vuelve a ver las novedades cuando quieras",
-        resumen: "El menú de perfil tiene la opción «Novedades» para repasar las funciones nuevas con sus animaciones.",
+        resumen: "El menú de perfil tiene la opción «Novedades» para repasar, por fecha, las funciones nuevas con sus animaciones.",
         puntos: [
           "Haz clic en tu avatar (las iniciales arriba a la derecha).",
-          "En el menú que se abre, elige «Novedades».",
-          "Se muestran todas las actualizaciones, de la más reciente a la más antigua, con su animación.",
+          "En el menú que se abre, elige «Novedades»: aparece la lista de actualizaciones por fecha.",
+          "Selecciona la fecha que quieres repasar y se muestran solo las novedades de ese día, con su animación.",
         ],
         demo: "menu-perfil",
       },
@@ -138,6 +139,19 @@ export const NOVEDADES: VersionNovedades[] = [
         ],
         nota: "Si el pedido no tiene productos con peso, la línea no se imprime.",
         demo: "kilos-comanda",
+      },
+      {
+        id: "orden-alternas",
+        modulo: "Pedidos · Clientes",
+        titulo: "Direcciones alternas en orden",
+        resumen: "Al buscar por cédula o NIT, el código original y sus direcciones alternas salen en orden numérico.",
+        puntos: [
+          "Digita la cédula o el NIT en Nuevo pedido o en el menú Clientes.",
+          "Primero sale el código original y después sus alternas: -1, -2, -3…",
+          "La -10 ya no aparece pegada a la -1: va después de la -9, como debe ser.",
+        ],
+        nota: "Si buscas por nombre se sigue ordenando por nombre, y dentro del mismo nombre las alternas también van en orden.",
+        demo: "orden-alternas",
       },
     ],
   },
