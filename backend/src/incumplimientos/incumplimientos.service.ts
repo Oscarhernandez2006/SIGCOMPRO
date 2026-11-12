@@ -30,6 +30,19 @@ const ESTADOS_NO_FINALIZADOS = [
 
 const MAX_IMAGEN = 8 * 1024 * 1024;
 
+/** Roles administrativos: nunca se les asigna un incumplimiento automáticamente. */
+const ROLES_ADMIN = ['administrador', 'administrador app', 'desarrollador', 'gerencia', 'gerente'];
+
+export interface SugerenciaResponsable {
+  usuarioId: string;
+  nombre: string;
+  cedula: string;
+  regla: 'porcionador' | 'facturador' | 'ultimo_turno';
+  criterio: string;
+}
+
+const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+
 export interface Incumplimiento {
   id: string;
   pedidoId: string;
@@ -41,6 +54,7 @@ export interface Incumplimiento {
   usuarioCedula: string;
   motivo: string;
   descripcion: string;
+  criterio: string;
   estadoPedido: string;
   pedido: Record<string, unknown>;
   imagen: string | null;
@@ -60,6 +74,7 @@ interface Fila {
   usuario_cedula: string;
   motivo: string;
   descripcion: string;
+  criterio: string | null;
   estado_pedido: string;
   pedido: Record<string, unknown>;
   imagen: string | null;
@@ -79,6 +94,7 @@ const aIncumplimiento = (r: Fila): Incumplimiento => ({
   usuarioCedula: r.usuario_cedula,
   motivo: r.motivo,
   descripcion: r.descripcion,
+  criterio: r.criterio ?? '',
   estadoPedido: r.estado_pedido,
   pedido: r.pedido ?? {},
   imagen: r.imagen,
@@ -125,6 +141,104 @@ export class IncumplimientosService implements OnModuleInit {
       `CREATE INDEX IF NOT EXISTS idx_incumplimientos_usuario
          ON incumplimientos_personal (usuario_id, creado_en DESC)`,
     );
+    await this.pool.query(
+      `ALTER TABLE incumplimientos_personal ADD COLUMN IF NOT EXISTS criterio text NOT NULL DEFAULT ''`,
+    );
+  }
+
+  /**
+   * Responsable automático del pedido no gestionado:
+   *  1. En producción/Alistado: quien asignó el porcionador.
+   *  2. Facturado (sin asignar en Drivin): quien facturó.
+   *  3. Si no aplica: el operario del punto con la última actividad del turno
+   *     (último cambio de estado en pedidos del punto o última conexión).
+   */
+  async sugerirResponsable(pedidoId: string): Promise<SugerenciaResponsable | null> {
+    const ped = await this.pool.query<{
+      punto_id: string | null;
+      estado: string | null;
+      data: Record<string, any>;
+      meta: Record<string, any>;
+    }>(`SELECT punto_id, estado, data, meta FROM pedidos WHERE id = $1`, [pedidoId]);
+    const p = ped.rows[0];
+    if (!p) throw new NotFoundException('Pedido no encontrado.');
+    const puntoId = String(p.punto_id ?? p.data?.punto?.id ?? '');
+    const estado = norm(p.estado || p.data?.estado || 'en proceso');
+    const meta = p.meta ?? {};
+    const traza: { estadoNuevo?: string; usuarioId?: string; fecha?: string }[] = Array.isArray(p.data?.trazabilidad)
+      ? p.data.trazabilidad
+      : [];
+
+    const usuarios = await this.pool.query<{ id: string; nombre: string; cedula: string; rol: string }>(
+      `SELECT u.id::text AS id, u.nombre, u.cedula, u.rol
+         FROM usuarios u
+         JOIN usuario_punto_venta upv ON upv.usuario_id = u.id
+        WHERE upv.punto_venta_id::text = $1`,
+      [puntoId],
+    );
+    const delPunto = new Map(
+      usuarios.rows.filter((u) => !ROLES_ADMIN.includes(norm(u.rol))).map((u) => [u.id, u]),
+    );
+    const ultimoActor = (estadoNuevo: string) =>
+      [...traza].reverse().find((e) => norm(e.estadoNuevo) === estadoNuevo && e.usuarioId)?.usuarioId;
+    const elegir = (ids: (string | undefined)[]) => {
+      for (const id of ids) if (id && delPunto.has(String(id))) return delPunto.get(String(id))!;
+      return null;
+    };
+
+    const porNombre = (nombre: unknown) => {
+      const n = norm(nombre);
+      return n ? [...delPunto.values()].find((u) => norm(u.nombre) === n)?.id : undefined;
+    };
+    const facturador = () =>
+      elegir([meta.facturadoPorId, ultimoActor('facturado'), porNombre(meta.facturadoPor)]);
+    const porcionador = () => elegir([meta.porcionadorAsignadoPorId, ultimoActor('en producción')]);
+
+    if (estado === 'facturado') {
+      const u = facturador();
+      if (u) {
+        return { usuarioId: u.id, nombre: u.nombre, cedula: u.cedula, regla: 'facturador',
+          criterio: 'Facturó el pedido y no lo asignó en Drivin.' };
+      }
+    }
+    if (estado === 'facturado' || estado === 'en producción' || estado === 'alistado') {
+      const u = porcionador();
+      if (u) {
+        return { usuarioId: u.id, nombre: u.nombre, cedula: u.cedula, regla: 'porcionador',
+          criterio: 'Asignó el porcionador y no continuó la gestión del pedido.' };
+      }
+    }
+
+    // Regla 3: última actividad del turno en el punto (cambios de estado o conexión).
+    const act = await this.pool.query<{ uid: string; f: Date }>(
+      `SELECT x.uid, MAX(x.f) AS f FROM (
+         SELECT ev->>'usuarioId' AS uid, (ev->>'fecha')::timestamptz AS f
+           FROM pedidos p, jsonb_array_elements(COALESCE(p.data->'trazabilidad', '[]'::jsonb)) ev
+          WHERE p.punto_id = $1 AND p.actualizado_en > now() - interval '36 hours'
+            AND ev->>'usuarioId' IS NOT NULL AND ev->>'fecha' ~ '^\\d{4}-\\d{2}-\\d{2}'
+         UNION ALL
+         SELECT u.id::text, (to_jsonb(u)->>'ultimo_acceso')::timestamptz
+           FROM usuarios u JOIN usuario_punto_venta upv ON upv.usuario_id = u.id
+          WHERE upv.punto_venta_id::text = $1 AND to_jsonb(u)->>'ultimo_acceso' IS NOT NULL
+       ) x
+       WHERE x.f > now() - interval '36 hours'
+       GROUP BY x.uid ORDER BY MAX(x.f) DESC`,
+      [puntoId],
+    );
+    // Prioriza al personal de Despacho; si no hay, cualquier operario del punto.
+    const candidatos = act.rows.filter((r) => delPunto.has(r.uid));
+    const ganador =
+      candidatos.find((r) => norm(delPunto.get(r.uid)!.rol) === 'despacho') ?? candidatos[0];
+    if (!ganador) return null;
+    const u = delPunto.get(ganador.uid)!;
+    const hora = new Date(ganador.f).toLocaleString('es-CO', {
+      timeZone: 'America/Bogota',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return { usuarioId: u.id, nombre: u.nombre, cedula: u.cedula, regla: 'ultimo_turno',
+      criterio: `Última persona activa del turno en el punto (${hora}) y dejó el pedido sin gestionar.` };
   }
 
   private horaBogota(): number {
@@ -160,7 +274,7 @@ export class IncumplimientosService implements OnModuleInit {
 
   async crear(
     autor: JwtPayload,
-    body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string },
+    body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string },
   ): Promise<Incumplimiento> {
     if (this.horaBogota() < HORA_HABILITA_INCUMPLIMIENTO) {
       throw new BadRequestException('Solo se puede marcar un pedido como no gestionado después de las 8:00 p. m.');
@@ -169,6 +283,7 @@ export class IncumplimientosService implements OnModuleInit {
     const usuarioId = String(body.usuarioId ?? '').trim();
     const motivo = String(body.motivo ?? '').trim().slice(0, 200);
     const descripcion = String(body.descripcion ?? '').trim().slice(0, 4000);
+    const criterio = String(body.criterio ?? '').trim().slice(0, 300);
     const imagen = typeof body.imagen === 'string' ? body.imagen : null;
     if (!pedidoId || !usuarioId) throw new BadRequestException('Falta el pedido o el responsable.');
     if (!motivo) throw new BadRequestException('Indica el motivo del incumplimiento.');
@@ -256,8 +371,8 @@ export class IncumplimientosService implements OnModuleInit {
       const ins = await this.pool.query<Fila>(
         `INSERT INTO incumplimientos_personal
            (pedido_id, comanda, punto_id, punto_nombre, usuario_id, usuario_nombre, usuario_cedula,
-            motivo, descripcion, estado_pedido, pedido, imagen, registrado_por_id, registrado_por_nombre)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)
+            motivo, descripcion, estado_pedido, pedido, imagen, registrado_por_id, registrado_por_nombre, criterio)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15)
          RETURNING *`,
         [
           p.id,
@@ -274,6 +389,7 @@ export class IncumplimientosService implements OnModuleInit {
           imagen,
           String(autor.sub ?? ''),
           aut.rows[0]?.nombre ?? autor.cedula ?? '',
+          criterio,
         ],
       );
       return aIncumplimiento(ins.rows[0]);

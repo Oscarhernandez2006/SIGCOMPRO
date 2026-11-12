@@ -19,7 +19,11 @@ export type DemoNovedad =
   | "orden-alternas"
   | "no-gestionado"
   | "sync-direcciones"
-  | "cerrar-scroll";
+  | "cerrar-scroll"
+  | "filtro-posteriores"
+  | "tipo-factura"
+  | "aviso-riesgo"
+  | "responsable-auto";
 
 export interface Novedad {
   id: string;
@@ -198,6 +202,62 @@ export const NOVEDADES: VersionNovedades[] = [
           "Al volver arriba ya no queda abierta tapando otros pedidos.",
         ],
         demo: "cerrar-scroll",
+      },
+    ],
+  },
+  {
+    version: "2026-11-11",
+    fecha: "11 de noviembre de 2026",
+    novedades: [
+      {
+        id: "responsable-auto",
+        modulo: "Despacho · Incumplimientos",
+        titulo: "Responsable automático y anular desde el registro",
+        resumen:
+          "Al marcar un pedido no gestionado, SIGCOMPRO elige solo a la persona responsable y puedes anular el pedido desde la misma ventana.",
+        puntos: [
+          "Al abrir «Marcar no gestionado» el responsable ya viene seleccionado, con la explicación de por qué.",
+          "Reglas: quien asignó el porcionador (en producción/alistado); quien facturó y no asignó en Drivin; si no, la persona del punto con la última actividad del turno.",
+          "«Anular pedido» (abajo a la izquierda) pide el motivo y anula el pedido ahí mismo.",
+        ],
+        nota: "Puedes cambiar la persona si hace falta; el informe indica si fue asignación automática o manual.",
+        demo: "responsable-auto",
+      },
+      {
+        id: "filtro-posteriores",
+        modulo: "Pedidos",
+        titulo: "Filtro de pedidos posteriores",
+        resumen: "Un botón junto a «Hoy» muestra solo los pedidos programados para días siguientes.",
+        puntos: [
+          "El botón «Posteriores» indica cuántos pedidos programados hay en el punto.",
+          "Al activarlo la lista muestra solo esos pedidos (la búsqueda sigue funcionando).",
+          "Tócalo de nuevo, elige un día o «Limpiar» para volver a la lista normal.",
+        ],
+        demo: "filtro-posteriores",
+      },
+      {
+        id: "tipo-factura",
+        modulo: "Pedidos",
+        titulo: "Tipo de factura en la comanda",
+        resumen: "En Entrega y pago puedes marcar Factura Electrónica o Consumidor Final y sale impreso en la comanda.",
+        puntos: [
+          "Debajo de Domicilio / Recoge elige «Factura Electrónica» o «Consumidor Final» (opcional; clic de nuevo para quitarlo).",
+          "Los botones del método de pago ahora son más compactos.",
+          "La comanda impresa muestra el tipo de factura en OBSERVACIÓN; si no se marca, no sale nada.",
+        ],
+        demo: "tipo-factura",
+      },
+      {
+        id: "aviso-riesgo",
+        modulo: "Despacho",
+        titulo: "Puedes ocultar el aviso de pedidos en riesgo",
+        resumen: "El aviso flotante de pedidos en riesgo tiene nuevo diseño y una X para ocultarlo.",
+        puntos: [
+          "El aviso muestra el número de pedidos en riesgo; al tocarlo abre el detalle.",
+          "La X lo oculta.",
+          "Solo vuelve a aparecer si entra un pedido nuevo en riesgo.",
+        ],
+        demo: "aviso-riesgo",
       },
     ],
   },

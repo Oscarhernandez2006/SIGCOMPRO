@@ -463,6 +463,7 @@ export default function DespachoPage() {
   const [ahora, setAhora] = useState(() => Date.now());
   // Alerta de pedidos por vencer / vencidos (modal).
   const [alertaCerrada, setAlertaCerrada] = useState(false);
+  const [avisoRiesgoOculto, setAvisoRiesgoOculto] = useState(false);
   // Modal de réplica: crear (elegir domiciliario) o ver detalle (solo lectura).
   const [modalReplica, setModalReplica] = useState<{
     pedido: Pedido;
@@ -1968,6 +1969,7 @@ export default function DespachoPage() {
     if (firma && firma !== firmaAlertaRef.current) {
       firmaAlertaRef.current = firma;
       setAlertaCerrada(false);
+      setAvisoRiesgoOculto(false);
     } else if (!firma) {
       firmaAlertaRef.current = "";
     }
@@ -3380,19 +3382,40 @@ export default function DespachoPage() {
         )}
       </div>
 
-      {/* Botón flotante para reabrir la alerta si fue cerrada */}
-      {alertaCerrada && totalAlertas > 0 && (
-        <button
-          type="button"
-          onClick={() => setAlertaCerrada(false)}
-          title="Ver los pedidos en riesgo de vencerse"
-          className="fixed right-6 top-6 z-40 flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-red-700"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-          </svg>
-          {totalAlertas} {totalAlertas === 1 ? "pedido en riesgo" : "pedidos en riesgo"}
-        </button>
+      {/* Aviso flotante para reabrir la alerta si fue cerrada (la X lo oculta hasta que entren nuevos pedidos en riesgo) */}
+      {alertaCerrada && !avisoRiesgoOculto && totalAlertas > 0 && (
+        <div className="fixed right-6 top-6 z-40 flex items-center overflow-hidden rounded-full bg-red-600 text-white shadow-lg shadow-red-900/25 ring-2 ring-white/70">
+          <button
+            type="button"
+            onClick={() => setAlertaCerrada(false)}
+            title="Ver los pedidos en riesgo de vencerse"
+            className="flex items-center gap-2 py-2 pl-2 pr-3 text-sm font-bold transition hover:bg-red-700"
+          >
+            <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+              <span className="absolute inset-0 animate-ping rounded-full bg-white/25" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="relative h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </span>
+            <span className="leading-tight">
+              <span className="block text-base">{totalAlertas}</span>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-white/85">
+                {totalAlertas === 1 ? "pedido en riesgo" : "pedidos en riesgo"}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAvisoRiesgoOculto(true)}
+            title="Ocultar aviso (vuelve si entran nuevos pedidos en riesgo)"
+            aria-label="Ocultar aviso de pedidos en riesgo"
+            className="flex h-full items-center self-stretch border-l border-white/25 px-2.5 text-white/85 transition hover:bg-red-700 hover:text-white"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
       )}
 
       {/* Alerta modal de pedidos por vencer / vencidos */}
@@ -3500,6 +3523,17 @@ export default function DespachoPage() {
           onCerrar={() => setMarcarNG(null)}
           onGuardado={(id) => {
             setMarcadosNG((prev) => new Set(prev).add(id));
+            setMarcarNG(null);
+          }}
+          onAnular={async (motivo) => {
+            const ped = pedidos.find((x) => x.id === marcarNG.id);
+            if (!ped) throw new Error("No se encontró el pedido.");
+            if ((meta[ped.id]?.replicas ?? []).length > 0) {
+              throw new Error("Este pedido tiene réplicas. Primero quítalas para poder anular.");
+            }
+            const anulado: Pedido = { ...ped, anulado: true, estado: "Anulado", motivo };
+            const guardado = await guardarPedidoApi(anulado);
+            setPedidos((prev) => prev.map((x) => (x.id === ped.id ? { ...x, ...(guardado ?? anulado) } : x)));
             setMarcarNG(null);
           }}
         />

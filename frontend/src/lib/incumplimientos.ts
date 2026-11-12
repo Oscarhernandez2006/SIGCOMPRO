@@ -23,6 +23,14 @@ export interface Responsable {
   rol: string;
 }
 
+export interface SugerenciaResponsable {
+  usuarioId: string;
+  nombre: string;
+  cedula: string;
+  regla: "porcionador" | "facturador" | "ultimo_turno";
+  criterio: string;
+}
+
 export interface ResumenPedidoIncumplimiento {
   comanda: string;
   numeroDia: number | null;
@@ -61,6 +69,7 @@ export interface Incumplimiento {
   usuarioCedula: string;
   motivo: string;
   descripcion: string;
+  criterio?: string;
   estadoPedido: string;
   pedido: Partial<ResumenPedidoIncumplimiento>;
   imagen: string | null;
@@ -110,12 +119,16 @@ export const responsablesPunto = (puntoId: string) =>
 
 export const marcadosHoy = () => apiFetch<string[]>("/incumplimientos/marcados-hoy");
 
+export const sugerirResponsable = (pedidoId: string) =>
+  apiFetch<SugerenciaResponsable | null>(`/incumplimientos/sugerencia/${encodeURIComponent(pedidoId)}`);
+
 export const crearIncumplimiento = (body: {
   pedidoId: string;
   usuarioId: string;
   motivo: string;
   descripcion: string;
   imagen: string | null;
+  criterio?: string;
 }) => apiFetch<Incumplimiento>("/incumplimientos", { method: "POST", body: JSON.stringify(body) });
 
 export const personasIncumplimientos = () => apiFetch<PersonaResumen[]>("/incumplimientos/personas");

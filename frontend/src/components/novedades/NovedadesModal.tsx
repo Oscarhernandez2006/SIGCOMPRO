@@ -17,6 +17,10 @@ import ordenAlternas from "./demos/orden-alternas";
 import noGestionado from "./demos/no-gestionado";
 import syncDirecciones from "./demos/sync-direcciones";
 import cerrarScroll from "./demos/cerrar-scroll";
+import filtroPosteriores from "./demos/filtro-posteriores";
+import tipoFactura from "./demos/tipo-factura";
+import avisoRiesgo from "./demos/aviso-riesgo";
+import responsableAuto from "./demos/responsable-auto";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -30,6 +34,10 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "no-gestionado": noGestionado,
   "sync-direcciones": syncDirecciones,
   "cerrar-scroll": cerrarScroll,
+  "filtro-posteriores": filtroPosteriores,
+  "tipo-factura": tipoFactura,
+  "aviso-riesgo": avisoRiesgo,
+  "responsable-auto": responsableAuto,
 };
 
 type Item = Novedad & { version: string; fecha: string };

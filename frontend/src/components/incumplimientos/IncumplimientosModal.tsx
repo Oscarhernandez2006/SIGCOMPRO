@@ -255,6 +255,7 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
                       <div className="mt-2 rounded-xl border-l-4 border-red-600 bg-red-50/60 px-3 py-2">
                         <p className="text-xs font-bold text-red-700">{r.motivo}</p>
                         <p className="mt-0.5 whitespace-pre-line text-xs text-brand-black">{r.descripcion}</p>
+                        {r.criterio && <p className="mt-1 text-[11px] italic text-brand-black/60">Asignación: {r.criterio}</p>}
                       </div>
                       {r.imagen && (
                         <button type="button" onClick={() => setAmpliada(r.imagen)} className="mt-2 block w-full" title="Ampliar evidencia">

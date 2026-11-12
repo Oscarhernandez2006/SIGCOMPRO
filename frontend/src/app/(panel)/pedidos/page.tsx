@@ -55,6 +55,7 @@ interface PedidoCongelado {
   fechaProgramada: string;
   horaDespacho: string;
   observacion: string;
+  tipoFactura?: string;
   clienteNombre: string;
   numItems: number;
   totalParcial: number;
@@ -62,6 +63,13 @@ interface PedidoCongelado {
   congeladoPor: string;
   /** Cédula del creador del congelado (para control de acceso). */
   congeladoPorCedula?: string;
+}
+
+/** ¿El pedido está programado para un día posterior a hoy? */
+function esPosterior(p: Pedido): boolean {
+  const d = new Date();
+  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return Boolean(p.entregaProgramada && p.fechaProgramada && p.fechaProgramada > hoy);
 }
 
 export default function PedidosPage() {
@@ -208,7 +216,13 @@ export default function PedidosPage() {
 
   // Búsqueda (consecutivo, comanda, nombre o NIT) y filtro por día.
   const [busqueda, setBusqueda] = useState("");
-  const [fechaFiltro, setFechaFiltro] = useState("");
+  const [fechaFiltro, setFechaFiltroBase] = useState("");
+  // Solo pedidos programados para un día futuro (ignora el filtro de día).
+  const [soloPosteriores, setSoloPosteriores] = useState(false);
+  const setFechaFiltro = (v: string) => {
+    setFechaFiltroBase(v);
+    if (v) setSoloPosteriores(false);
+  };
 
   // Filtro que llega por URL (?comanda=, p. ej. desde Cotizaciones). Se aplica
   // como búsqueda y se quita de la URL en cuanto el usuario cambia los filtros.
@@ -252,7 +266,9 @@ export default function PedidosPage() {
     return ordenados.filter((p) => {
       // Alcance por punto de venta.
       if (!idsPuntos.has(String(p.punto?.id))) return false;
-      if (fechaFiltro) {
+      if (soloPosteriores) {
+        if (p.anulado || !esPosterior(p)) return false;
+      } else if (fechaFiltro) {
         const d = new Date(p.fecha);
         const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         if (dia !== fechaFiltro) return false;
@@ -269,7 +285,12 @@ export default function PedidosPage() {
         nit.includes(q)
       );
     });
-  }, [pedidos, busqueda, fechaFiltro, idsPuntos]);
+  }, [pedidos, busqueda, fechaFiltro, soloPosteriores, idsPuntos]);
+
+  const totalPosteriores = useMemo(
+    () => pedidos.filter((p) => idsPuntos.has(String(p.punto?.id)) && !p.anulado && esPosterior(p)).length,
+    [pedidos, idsPuntos],
+  );
 
   // Número del día (turno) por pedido, para que la comanda impresa desde aquí
   // muestre el mismo número que en Despacho.
@@ -625,9 +646,34 @@ export default function PedidosPage() {
         >
           Hoy
         </button>
-        {(fechaFiltro || busqueda) && (
+        <button
+          onClick={() => {
+            setSoloPosteriores((v) => !v);
+            setFechaFiltroBase("");
+          }}
+          title="Ver solo los pedidos programados para días posteriores"
+          aria-pressed={soloPosteriores}
+          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+            soloPosteriores
+              ? "border-indigo-600 bg-indigo-600 text-white"
+              : "border-brand-brown/15 bg-white text-indigo-600 hover:bg-indigo-50"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+          </svg>
+          Posteriores
+          <span
+            className={`rounded-full px-1.5 text-[11px] font-bold ${
+              soloPosteriores ? "bg-white/25 text-white" : "bg-indigo-100 text-indigo-700"
+            }`}
+          >
+            {totalPosteriores}
+          </span>
+        </button>
+        {(fechaFiltro || busqueda || soloPosteriores) && (
           <button
-            onClick={() => { setFechaFiltro(""); setBusqueda(""); }}
+            onClick={() => { setFechaFiltro(""); setBusqueda(""); setSoloPosteriores(false); }}
             title="Limpiar búsqueda y filtros"
             className="rounded-xl border border-brand-brown/15 bg-white px-3 py-2.5 text-sm font-semibold text-brand-wine transition hover:bg-brand-cream-soft"
           >
@@ -1380,6 +1426,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
   const [horaDespacho, setHoraDespacho] = useState<string>(borrador ? borrador.horaDespacho ?? "" : base?.horaDespacho ?? "");
   // Observación general del pedido (indicaciones para despacho/cocina).
   const [observacion, setObservacion] = useState<string>(borrador ? borrador.observacion : base?.observacion ?? "");
+  const [tipoFactura, setTipoFactura] = useState<string>(borrador ? borrador.tipoFactura ?? "" : base?.tipoFactura ?? "");
   const [pedidoCreado, setPedidoCreado] = useState<Pedido | null>(null);
   // Confirmación al cerrar un pedido nuevo con información: ¿congelar o descartar?
   const [confirmarCierre, setConfirmarCierre] = useState(false);
@@ -1490,6 +1537,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
     setPago(base.pago ?? null);
     setValorDomicilio(base.valorDomicilio ?? 0);
     setObservacion(base.observacion ?? "");
+    setTipoFactura(base.tipoFactura ?? "");
   }
 
   // Punto de venta MÁS CERCANO al cliente (según su dirección). Se conserva la
@@ -1568,6 +1616,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
       fechaProgramada,
       horaDespacho,
       observacion,
+      tipoFactura,
       clienteNombre: cliente?.nombre || cliente?.nit_cedula || "Sin cliente",
       numItems: carrito.length,
       totalParcial,
@@ -1669,6 +1718,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
       total,
       valorDomicilio: dom,
       observacion: observacion.trim() || undefined,
+      tipoFactura: tipoFactura || undefined,
       entregaProgramada: programado,
       fechaProgramada: programado ? fechaProgramada : undefined,
       horaDespacho: horaDespacho || undefined,
@@ -2014,7 +2064,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
                 </span>
               </div>
               <div className="space-y-6">
-                <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} />
+                <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} factura={tipoFactura} onFactura={setTipoFactura} />
                 <PasoPago valor={pago} onCambiar={setPago} />
                 <PasoFechaEntrega
                   programado={programado}
@@ -2087,7 +2137,7 @@ export function WizardPedido({ onCerrar, onCrear, onCongelar, pedidos, meta, ini
                 )}
                 {paso === 2 && (
                   <div className="space-y-6">
-                    <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} />
+                    <PasoEntrega cliente={cliente} punto={punto} valor={entrega} onCambiar={setEntrega} domicilio={valorDomicilio} onDomicilio={setValorDomicilio} sugerido={domicilioSugerido} distancia={distanciaClientePunto} gratis={domicilioGratis} factura={tipoFactura} onFactura={setTipoFactura} />
                     <PasoPago valor={pago} onCambiar={setPago} />
                     <PasoFechaEntrega
                       programado={programado}
@@ -3858,6 +3908,8 @@ function PasoEntrega({
   sugerido,
   distancia,
   gratis,
+  factura,
+  onFactura,
 }: {
   cliente: Cliente | null;
   punto: PuntoVenta | null;
@@ -3868,6 +3920,8 @@ function PasoEntrega({
   sugerido: number | null;
   distancia: number | null;
   gratis: boolean;
+  factura: string;
+  onFactura: (v: string) => void;
 }) {
   const ops = [
     {
@@ -3916,6 +3970,27 @@ function PasoEntrega({
               <span className="block font-semibold text-brand-black">{o.titulo}</span>
               <span className="block text-xs text-brand-black">{o.desc}</span>
             </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tipo de factura (opcional): clic de nuevo para quitarlo. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-brand-black">Factura:</span>
+        {TIPOS_FACTURA.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onFactura(factura === t ? "" : t)}
+            aria-pressed={factura === t}
+            title={factura === t ? "Quitar selección" : `Marcar ${t}`}
+            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+              factura === t
+                ? "border-brand-amber bg-brand-amber/10 text-brand-wine ring-1 ring-brand-amber"
+                : "border-brand-brown/15 bg-white text-brand-black hover:border-brand-amber/50"
+            }`}
+          >
+            {t}
           </button>
         ))}
       </div>
@@ -3986,6 +4061,8 @@ function PasoEntrega({
 
 export const METODOS = ["Efectivo", "QR", "Tarjeta", "Transferencia", "Crédito", "Mixto"];
 
+const TIPOS_FACTURA = ["Factura Electrónica", "Consumidor Final"];
+
 function PasoPago({
   valor,
   onCambiar,
@@ -3995,14 +4072,14 @@ function PasoPago({
 }) {
   return (
     <div>
-      <p className="mb-4 text-sm font-medium text-brand-black">Método de pago</p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <p className="mb-3 text-sm font-medium text-brand-black">Método de pago</p>
+      <div className="grid gap-2 sm:grid-cols-2">
         {METODOS.map((m) => (
           <button
             key={m}
             onClick={() => onCambiar(m)}
             title={`Pagar con ${m}`}
-            className={`rounded-2xl border p-4 text-left font-semibold transition ${
+            className={`rounded-xl border px-4 py-2.5 text-left font-semibold transition ${
               valor === m
                 ? "border-brand-amber bg-brand-amber/5 text-brand-wine ring-1 ring-brand-amber"
                 : "border-brand-brown/10 bg-white text-brand-black hover:border-brand-amber/50"
@@ -4239,6 +4316,8 @@ interface DatosComanda {
   valorDomicilio?: number;
   /** Observación general del pedido (indicaciones para despacho/cocina). */
   observacion?: string;
+  /** Tipo de factura elegido (opcional); se imprime en la observación de la comanda. */
+  tipoFactura?: string;
 }
 
 export interface Pedido extends DatosComanda {
@@ -4777,7 +4856,8 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
   );
 }
 
-export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, horaDespacho, id, entregaProgramada, fechaProgramada, numeroDia: numeroDiaGuardado }: Pedido, numeroDia?: number) {
+export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, comanda, fecha: fechaIso, valorDomicilio, vendedorNombre, observacion, tipoFactura: tipoFacturaGuardado, horaDespacho, id, entregaProgramada, fechaProgramada, numeroDia: numeroDiaGuardado }: Pedido, numeroDia?: number) {
+  const tipoFactura = TIPOS_FACTURA.includes(tipoFacturaGuardado ?? "") ? tipoFacturaGuardado : "";
   // Usa el número del día GUARDADO en el pedido (congelado al crear); si no lo
   // tiene (pedido antiguo), cae al calculado que se le pasa.
   const numeroDiaFinal = numeroDiaGuardado ?? numeroDia;
@@ -4911,7 +4991,7 @@ export async function imprimirComanda({ punto, cliente, carrito, entrega, pago, 
     ${entrega === "domicilio" ? `<div class="row"><span class="label">Subtotal:</span> ${formatoCOP(subtotal)}</div><div class="row"><span class="label">Domicilio:</span> ${formatoCOP(dom)}</div>` : ""}
     <div class="tot">Total: ${formatoCOP(total)}</div>
     ${kilosTotal > 0 ? `<div class="tot">Total kilos: ${kilosTotal} ${kilosTotal === 1 ? "kilo" : "kilos"} (${librasLabel(kilosTotal)})</div>` : ""}
-    ${observacion ? `<hr><div class="sec">OBSERVACIÓN</div><div class="row">${observacion}</div>` : ""}
+    ${observacion || tipoFactura ? `<hr><div class="sec">OBSERVACIÓN</div>${tipoFactura ? `<div class="row" style="font-size:15px">${tipoFactura.toUpperCase()}</div>` : ""}${observacion ? `<div class="row">${observacion}</div>` : ""}` : ""}
   </body></html>`;
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;

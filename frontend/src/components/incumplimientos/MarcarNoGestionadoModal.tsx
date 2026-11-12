@@ -6,8 +6,11 @@ import {
   MOTIVOS_INCUMPLIMIENTO,
   crearIncumplimiento,
   responsablesPunto,
+  sugerirResponsable,
   type Responsable,
+  type SugerenciaResponsable,
 } from "@/lib/incumplimientos";
+import { listarMotivos } from "@/lib/motivos";
 
 export interface PedidoAMarcar {
   id: string;
@@ -40,13 +43,17 @@ export default function MarcarNoGestionadoModal({
   fila,
   onCerrar,
   onGuardado,
+  onAnular,
 }: {
   pedido: PedidoAMarcar;
   fila: HTMLElement | null;
   onCerrar: () => void;
   onGuardado: (pedidoId: string) => void;
+  /** Anula el pedido con el motivo elegido (si no se pasa, no se muestra el botón). */
+  onAnular?: (motivo: string) => Promise<void>;
 }) {
   const [responsables, setResponsables] = useState<Responsable[] | null>(null);
+  const [sugerencia, setSugerencia] = useState<SugerenciaResponsable | null | undefined>(undefined);
   const [usuarioId, setUsuarioId] = useState("");
   const [motivo, setMotivo] = useState(MOTIVOS_INCUMPLIMIENTO[0]);
   const [otroMotivo, setOtroMotivo] = useState("");
@@ -55,14 +62,24 @@ export default function MarcarNoGestionadoModal({
   const [capturando, setCapturando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [anulando, setAnulando] = useState(false);
+  const [motivosAnular, setMotivosAnular] = useState<string[]>([]);
+  const [motivoAnular, setMotivoAnular] = useState("");
+  const [procesandoAnular, setProcesandoAnular] = useState(false);
 
   useEffect(() => {
     let vigente = true;
-    responsablesPunto(pedido.puntoId)
-      .then((r) => {
+    Promise.all([responsablesPunto(pedido.puntoId), sugerirResponsable(pedido.id).catch(() => null)])
+      .then(([r, s]) => {
         if (!vigente) return;
-        setResponsables(r);
-        if (r.length === 1) setUsuarioId(r[0].id);
+        // El responsable automático siempre debe poder elegirse aunque no salga en la lista.
+        const lista = s && !r.some((x) => x.id === s.usuarioId)
+          ? [{ id: s.usuarioId, nombre: s.nombre, cedula: s.cedula, rol: "despacho" }, ...r]
+          : r;
+        setResponsables(lista);
+        setSugerencia(s);
+        if (s) setUsuarioId(s.usuarioId);
+        else if (lista.length === 1) setUsuarioId(lista[0].id);
       })
       .catch((e) => vigente && setError(e instanceof Error ? e.message : "No se pudo cargar el personal del punto"));
     capturarFilaPedido(fila).then((img) => {
@@ -73,10 +90,34 @@ export default function MarcarNoGestionadoModal({
     return () => {
       vigente = false;
     };
-  }, [pedido.puntoId, fila]);
+  }, [pedido.puntoId, pedido.id, fila]);
 
   const motivoFinal = motivo === "Otro" ? otroMotivo.trim() : motivo;
   const valido = !!usuarioId && !!motivoFinal && descripcion.trim().length >= 10 && !capturando;
+  const esAutomatico = !!sugerencia && usuarioId === sugerencia.usuarioId;
+
+  async function abrirAnular() {
+    setAnulando(true);
+    if (motivosAnular.length) return;
+    const lista = await listarMotivos({ tipo: "anular", soloActivos: true })
+      .then((m) => m.map((x) => x.nombre))
+      .catch(() => [] as string[]);
+    const final = lista.length ? lista : ["Pedido no gestionado al cierre del turno"];
+    setMotivosAnular(final);
+    setMotivoAnular(final[0]);
+  }
+
+  async function anular() {
+    if (!onAnular || !motivoAnular || procesandoAnular) return;
+    setProcesandoAnular(true);
+    setError(null);
+    try {
+      await onAnular(motivoAnular);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo anular el pedido");
+      setProcesandoAnular(false);
+    }
+  }
 
   async function guardar() {
     if (!valido || guardando) return;
@@ -89,6 +130,7 @@ export default function MarcarNoGestionadoModal({
         motivo: motivoFinal,
         descripcion: descripcion.trim(),
         imagen,
+        criterio: esAutomatico ? sugerencia!.criterio : "Responsable elegido manualmente por la administración.",
       });
       onGuardado(pedido.id);
     } catch (e) {
@@ -148,6 +190,34 @@ export default function MarcarNoGestionadoModal({
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-brand-black">Responsable del pedido *</label>
+            {sugerencia !== undefined && (
+              <div
+                className={`mb-2 rounded-xl border px-3 py-2 text-xs ${
+                  sugerencia
+                    ? esAutomatico
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+              >
+                {sugerencia ? (
+                  <>
+                    <b>Asignado automáticamente:</b> {sugerencia.nombre} · {sugerencia.criterio}
+                    {!esAutomatico && (
+                      <button
+                        type="button"
+                        onClick={() => setUsuarioId(sugerencia.usuarioId)}
+                        className="ml-1 font-semibold underline"
+                      >
+                        Volver a la asignación automática
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  "No se pudo determinar automáticamente el responsable: selecciónalo en la lista."
+                )}
+              </div>
+            )}
             {responsables === null ? (
               <p className="text-xs text-brand-black/60">Cargando personal del punto…</p>
             ) : responsables.length === 0 ? (
@@ -212,7 +282,58 @@ export default function MarcarNoGestionadoModal({
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-3">
+        {anulando && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-red-100 bg-red-50/70 px-5 py-3 text-xs">
+            <span className="font-semibold text-red-800">Motivo de anulación:</span>
+            <select
+              value={motivoAnular}
+              onChange={(e) => setMotivoAnular(e.target.value)}
+              disabled={!motivosAnular.length}
+              className="min-w-0 flex-1 rounded-lg border border-red-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-red-400"
+            >
+              {!motivosAnular.length && <option>Cargando motivos…</option>}
+              {motivosAnular.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setAnulando(false)}
+              className="rounded-lg px-2 py-1.5 font-semibold text-brand-black/70 hover:bg-white"
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              onClick={anular}
+              disabled={!motivoAnular || procesandoAnular}
+              className="rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {procesandoAnular ? "Anulando…" : "Confirmar anulación"}
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t border-brand-brown/10 px-5 py-3">
+          <div>
+            {onAnular && (
+              <button
+                type="button"
+                onClick={abrirAnular}
+                disabled={anulando}
+                title="Anular este pedido"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Anular pedido
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
           <button
             type="button"
             onClick={onCerrar}
@@ -228,6 +349,7 @@ export default function MarcarNoGestionadoModal({
           >
             {guardando ? "Registrando…" : "Registrar incumplimiento"}
           </button>
+          </div>
         </div>
       </div>
     </div>,

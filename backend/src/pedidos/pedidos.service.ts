@@ -1887,12 +1887,20 @@ export class PedidosService implements OnModuleInit {
           )
         ).rows[0]
       : undefined;
+    // Sello del usuario (del JWT) que asigna el porcionador o factura: lo usa
+    // Incumplimientos para saber a quién corresponde un pedido no gestionado.
+    const c = (cambios ?? {}) as Record<string, unknown>;
+    const sello: Record<string, string> = {};
+    if (user?.sub) {
+      if (typeof c.porcionador === 'string' && c.porcionador.trim()) sello.porcionadorAsignadoPorId = String(user.sub);
+      if (c.facturaNumero != null && String(c.facturaNumero).trim()) sello.facturadoPorId = String(user.sub);
+    }
     await this.pool.query(
       `UPDATE pedidos
          SET meta = COALESCE(meta, '{}'::jsonb) || $2::jsonb,
              actualizado_en = now()
        WHERE id = $1`,
-      [id, JSON.stringify(cambios ?? {})],
+      [id, JSON.stringify({ ...c, ...sello })],
     );
     if (previo) {
       // No bloquea ni rompe el guardado de la metadata si falla.

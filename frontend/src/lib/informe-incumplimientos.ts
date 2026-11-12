@@ -69,6 +69,7 @@ function bloqueRegistro(r: Incumplimiento, n: number): string {
       <div class="motivo-v">${esc(r.motivo)}</div>
       <div class="motivo-t">Descripción del incumplimiento</div>
       <div class="desc">${esc(r.descripcion).replace(/\n/g, "<br>")}</div>
+      ${r.criterio ? `<div class="motivo-t">Criterio de asignación del responsable</div><div class="desc">${esc(r.criterio)}</div>` : ""}
     </div>
     <div class="cols">
       <div>

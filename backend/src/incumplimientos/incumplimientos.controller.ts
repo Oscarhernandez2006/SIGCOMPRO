@@ -43,6 +43,11 @@ export class IncumplimientosController {
     return this.inc.marcadosHoy();
   }
 
+  @Get('sugerencia/:pedidoId')
+  sugerencia(@Param('pedidoId') pedidoId: string) {
+    return this.inc.sugerirResponsable(pedidoId);
+  }
+
   @Get('personas')
   personas() {
     return this.inc.personas();
@@ -56,7 +61,7 @@ export class IncumplimientosController {
   @Post()
   crear(
     @Req() req: ReqUsuario,
-    @Body() body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string },
+    @Body() body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string },
   ) {
     return this.inc.crear(req.user!, body ?? {});
   }
