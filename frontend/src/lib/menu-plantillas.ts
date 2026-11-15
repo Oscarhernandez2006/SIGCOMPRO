@@ -112,8 +112,9 @@ export function plantillaDeCategoria(categoria: string): Plantilla {
   if (s.includes("pollo") || s.includes("ave")) return POLLO;
   if (s.includes("embutido")) return EMBUTIDOS;
   if (s.includes("asader")) return ASADERO;
-  if (s.includes("extra")) return EXTRAS;
-  if (s.includes("res") || s.includes("bovin") || s.includes("vacun"))
+  if (s.includes("extra") || s.includes("viver")) return EXTRAS;
+  // "res" como palabra completa: "viveres" también contiene "res".
+  if (/(^|-)res(-|$)/.test(s) || s.includes("bovin") || s.includes("vacun"))
     return RES;
   return EXTRAS;
 }

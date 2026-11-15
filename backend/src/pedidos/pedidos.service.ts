@@ -838,6 +838,7 @@ export class PedidosService implements OnModuleInit {
       n_pedidos: number;
       monto: number;
       ultima_compra: string | null;
+      facturas: string;
     }>;
     resumen: { clientes: number; cantidad: number; monto: number; filas: number };
   }> {
@@ -887,6 +888,7 @@ export class PedidosService implements OnModuleInit {
       n_pedidos: string;
       monto: string;
       ultima_compra: string | null;
+      facturas: string | null;
     }>(
       `SELECT
          COALESCE(NULLIF(p.data->'cliente'->>'nit_cedula', ''), '—') AS nit,
@@ -897,7 +899,8 @@ export class PedidosService implements OnModuleInit {
          SUM(COALESCE((it->>'cantidad')::numeric, 0)) AS cantidad,
          COUNT(DISTINCT p.id) AS n_pedidos,
          SUM(COALESCE((it->>'cantidad')::numeric, 0) * COALESCE((it->'producto'->>'precio')::numeric, 0)) AS monto,
-         to_char(MAX(p.fecha) AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS ultima_compra
+         to_char(MAX(p.fecha) AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS ultima_compra,
+         string_agg(DISTINCT NULLIF(btrim(p.meta->>'facturaNumero'), ''), ', ') AS facturas
        FROM pedidos p,
             jsonb_array_elements(COALESCE(p.data->'carrito', '[]'::jsonb)) AS it
        WHERE ${where}
@@ -917,6 +920,7 @@ export class PedidosService implements OnModuleInit {
       n_pedidos: Number(r.n_pedidos) || 0,
       monto: Number(r.monto) || 0,
       ultima_compra: r.ultima_compra,
+      facturas: r.facturas ?? '',
     }));
 
     const clientesSet = new Set(filas.map((f) => f.nit));

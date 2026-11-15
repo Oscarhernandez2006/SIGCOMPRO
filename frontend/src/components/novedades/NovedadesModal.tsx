@@ -21,6 +21,9 @@ import filtroPosteriores from "./demos/filtro-posteriores";
 import tipoFactura from "./demos/tipo-factura";
 import avisoRiesgo from "./demos/aviso-riesgo";
 import responsableAuto from "./demos/responsable-auto";
+import pedidoVsFacturado from "./demos/pedido-vs-facturado";
+import detallePedido from "./demos/detalle-pedido";
+import viveresExtras from "./demos/viveres-extras";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -38,6 +41,9 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "tipo-factura": tipoFactura,
   "aviso-riesgo": avisoRiesgo,
   "responsable-auto": responsableAuto,
+  "pedido-vs-facturado": pedidoVsFacturado,
+  "detalle-pedido": detallePedido,
+  "viveres-extras": viveresExtras,
 };
 
 type Item = Novedad & { version: string; fecha: string };

@@ -23,7 +23,10 @@ export type DemoNovedad =
   | "filtro-posteriores"
   | "tipo-factura"
   | "aviso-riesgo"
-  | "responsable-auto";
+  | "responsable-auto"
+  | "pedido-vs-facturado"
+  | "detalle-pedido"
+  | "viveres-extras";
 
 export interface Novedad {
   id: string;
@@ -258,6 +261,49 @@ export const NOVEDADES: VersionNovedades[] = [
           "Solo vuelve a aparecer si entra un pedido nuevo en riesgo.",
         ],
         demo: "aviso-riesgo",
+      },
+    ],
+  },
+  {
+    version: "2026-11-15",
+    fecha: "15 de noviembre de 2026",
+    novedades: [
+      {
+        id: "pedido-vs-facturado",
+        modulo: "Informes",
+        titulo: "Pedido vs facturado (Siesa)",
+        resumen:
+          "Nueva pestaña en el reporte de productos: cada pedido con su factura de Siesa, el valor del pedido y el valor facturado.",
+        puntos: [
+          "En el reporte de productos elige la pestaña «Pedido vs facturado».",
+          "Una fila por pedido: comanda, cliente, factura de Siesa, valor del pedido, valor facturado, diferencia y resultado (coincide, con diferencia, no encontrada…).",
+          "Haz clic en un pedido para ver producto por producto lo pedido contra lo facturado. El Excel trae las dos vistas.",
+        ],
+        nota: "Las facturas se traen solas de Siesa cada 5 minutos. El reporte de productos por cliente ahora carga el último mes y solo se genera al pulsar «Generar» (más rápido).",
+        demo: "pedido-vs-facturado",
+      },
+      {
+        id: "detalle-pedido",
+        modulo: "Pedidos · Despacho",
+        titulo: "Detalle del pedido más completo",
+        resumen: "Al ver un pedido (ojito) salen el vendedor en un solo dato, la nota del pedido y el total de kilos.",
+        puntos: [
+          "Vendedor: cédula y nombre en un solo dato.",
+          "Nota del pedido: la observación y el tipo de factura elegido.",
+          "Total de kilos (y libras) junto al total del pedido. En Despacho, la alerta de pedidos vencidos es más ancha y muestra solo el número de comanda.",
+        ],
+        demo: "detalle-pedido",
+      },
+      {
+        id: "viveres-extras",
+        modulo: "Lista de precios",
+        titulo: "Víveres ya no salen en Cortes de Res",
+        resumen: "En el listado de precios, los productos de Víveres ahora van en la hoja Extras.",
+        puntos: [
+          "Antes masas, arepas, miel o bollos aparecían en la hoja «Cortes de Res».",
+          "Ahora la hoja de Res solo trae cortes de res y los víveres salen en «Extras».",
+        ],
+        demo: "viveres-extras",
       },
     ],
   },

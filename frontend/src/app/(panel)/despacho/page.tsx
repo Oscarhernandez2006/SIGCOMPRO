@@ -3421,7 +3421,7 @@ export default function DespachoPage() {
       {/* Alerta modal de pedidos por vencer / vencidos */}
       {mostrarAlerta && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/50 p-4">
-          <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start gap-3 border-b border-brand-brown/10 bg-red-50 px-5 py-4">
               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -3459,7 +3459,7 @@ export default function DespachoPage() {
                         className="flex items-center justify-between gap-2 rounded-lg border border-brand-amber/30 bg-brand-amber/5 px-3 py-2 text-sm"
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
-                          Comanda # {p.comanda}
+                          {p.comanda}
                           <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
@@ -3485,7 +3485,7 @@ export default function DespachoPage() {
                         className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm"
                       >
                         <span className="min-w-0 truncate font-semibold text-brand-black">
-                          Comanda # {p.comanda}
+                          {p.comanda}
                           <span className="ml-1 font-normal text-brand-black">
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>

@@ -4,17 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { listarPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { reporteProductos, type ReporteProductos } from "@/lib/reportes";
+import PedidoVsFacturado from "@/components/reportes/PedidoVsFacturado";
 
 const fmtCop = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 const money = (v: number) => fmtCop.format(Number.isFinite(v) ? v : 0);
 const fmtNum = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+/** Filas que se pintan de a poco (pintar miles de golpe congelaba la página). */
+const POR_PAGINA = 300;
+const diaISO = (offset = 0) =>
+  new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
 export default function ReporteProductosPage() {
+  const [vista, setVista] = useState<"productos" | "facturacion">("productos");
   const [puntos, setPuntos] = useState<PuntoVenta[]>([]);
   const [codigo, setCodigo] = useState("");
   const [puntoId, setPuntoId] = useState("");
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  // Por defecto el último mes: sin rango se recorrían todos los pedidos.
+  const [desde, setDesde] = useState(() => diaISO(-29));
+  const [hasta, setHasta] = useState(() => diaISO());
+  const [visibles, setVisibles] = useState(POR_PAGINA);
 
   const [data, setData] = useState<ReporteProductos | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -30,6 +38,7 @@ export default function ReporteProductosPage() {
     setError(null);
     try {
       setData(await reporteProductos({ codigo, punto_id: puntoId, desde, hasta }));
+      setVisibles(POR_PAGINA);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo generar el reporte.");
       setData(null);
@@ -38,14 +47,16 @@ export default function ReporteProductosPage() {
     }
   }, [codigo, puntoId, desde, hasta]);
 
-  useEffect(() => { void generar(); }, [generar]);
+  // Solo la carga inicial: antes se regeneraba con cada tecla de los filtros.
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => { void generar(); }, []);
 
   const filas = useMemo(() => {
     const q = busq.trim().toLowerCase();
     const base = data?.filas ?? [];
     if (!q) return base;
     return base.filter((f) =>
-      `${f.cliente} ${f.nit} ${f.producto} ${f.codigo} ${f.punto}`.toLowerCase().includes(q),
+      `${f.cliente} ${f.nit} ${f.producto} ${f.codigo} ${f.punto} ${f.facturas ?? ""}`.toLowerCase().includes(q),
     );
   }, [data, busq]);
 
@@ -70,6 +81,7 @@ export default function ReporteProductosPage() {
       { header: "N° pedidos", key: "n_pedidos", width: 12 },
       { header: "Monto", key: "monto", width: 16 },
       { header: "Última compra", key: "ultima", width: 15 },
+      { header: "N° factura", key: "facturas", width: 22 },
     ];
     const nCols = columnas.length;
 
@@ -119,6 +131,7 @@ export default function ReporteProductosPage() {
         f.cliente, f.nit, f.punto, f.codigo, f.producto,
         f.cantidad, f.n_pedidos, f.monto,
         f.ultima_compra ? new Date(`${f.ultima_compra}T00:00:00`) : null,
+        f.facturas || "",
       ]);
       r.height = 18;
       r.eachCell((cell, col) => {
@@ -137,7 +150,7 @@ export default function ReporteProductosPage() {
     // Fila de totales
     const totalRow = ws.addRow([
       "TOTAL", "", "", "", "",
-      data.resumen.cantidad, "", data.resumen.monto, "",
+      data.resumen.cantidad, "", data.resumen.monto, "", "",
     ]);
     totalRow.height = 22;
     totalRow.eachCell((cell, col) => {
@@ -166,19 +179,41 @@ export default function ReporteProductosPage() {
   return (
     <div className="flex h-full flex-col gap-4">
       {/* Encabezado */}
-      <div>
-        <h1 className="font-serif text-2xl font-bold text-brand-wine">Reporte de productos por cliente</h1>
-        <p className="mt-0.5 text-sm text-brand-black">
-          Consulta qué clientes han comprado un producto. Filtra por punto de venta, por código específico o consúltalo general.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-2xl font-bold text-brand-wine">
+            {vista === "productos" ? "Reporte de productos por cliente" : "Pedido vs facturado"}
+          </h1>
+          <p className="mt-0.5 text-sm text-brand-black">
+            {vista === "productos"
+              ? "Consulta qué clientes han comprado un producto. Filtra por punto de venta, por código específico o consúltalo general."
+              : "Cada pedido con su factura de Siesa: comanda, número de factura, valor del pedido y valor facturado."}
+          </p>
+        </div>
+        <div className="flex rounded-xl border border-brand-brown/15 bg-white p-1 text-sm font-semibold">
+          {([
+            ["productos", "Productos por cliente"],
+            ["facturacion", "Pedido vs facturado"],
+          ] as const).map(([k, label]) => (
+            <button key={k} type="button" onClick={() => setVista(k)}
+              className={`rounded-lg px-3 py-1.5 transition ${vista === k ? "bg-brand-wine text-white" : "text-brand-black hover:bg-brand-cream-soft"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {vista === "facturacion" ? (
+        <PedidoVsFacturado puntos={puntos} />
+      ) : (
+      <>
       {/* Filtros */}
       <div className="rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-end gap-2 px-4 py-3">
           <div className="min-w-[150px]">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-black">Código del producto</label>
             <input value={codigo} onChange={(e) => setCodigo(e.target.value.trim())}
+              onKeyDown={(e) => { if (e.key === "Enter") void generar(); }}
               placeholder="Ej: 9016 (vacío = todos)"
               className="h-9 w-full rounded-lg border border-brand-brown/20 px-2.5 text-sm outline-none transition focus:border-brand-wine" />
           </div>
@@ -238,7 +273,7 @@ export default function ReporteProductosPage() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-black">
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.34-4.34M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />
             </svg>
-            <input value={busq} onChange={(e) => setBusq(e.target.value)}
+            <input value={busq} onChange={(e) => { setBusq(e.target.value); setVisibles(POR_PAGINA); }}
               placeholder="Buscar en resultados (cliente, producto…)"
               className="h-9 w-full rounded-lg border border-brand-brown/20 pl-8 pr-2.5 text-sm outline-none transition focus:border-brand-wine" />
           </div>
@@ -263,6 +298,7 @@ export default function ReporteProductosPage() {
                 <th className="px-4 py-3">Producto</th>
                 <th className="px-4 py-3 text-right">Cantidad</th>
                 <th className="px-4 py-3 text-right">Pedidos</th>
+                <th className="whitespace-nowrap px-4 py-3">N° factura</th>
                 <th className="px-4 py-3 text-right">Monto</th>
                 <th className="whitespace-nowrap px-4 py-3">Última compra</th>
               </tr>
@@ -270,19 +306,19 @@ export default function ReporteProductosPage() {
             <tbody>
               {cargando ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-brand-black">
+                  <td colSpan={9} className="px-4 py-12 text-center text-brand-black">
                     <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-wine border-t-transparent align-middle" />
                     <span className="ml-2 align-middle">Generando…</span>
                   </td>
                 </tr>
               ) : filas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center text-sm text-brand-black">
+                  <td colSpan={9} className="px-4 py-14 text-center text-sm text-brand-black">
                     No hay compras para los filtros aplicados.
                   </td>
                 </tr>
               ) : (
-                filas.map((f, idx) => (
+                filas.slice(0, visibles).map((f, idx) => (
                   <tr key={`${f.nit}-${f.codigo}-${f.punto}-${idx}`} className="border-b border-brand-brown/8 transition hover:bg-neutral-50/60">
                     <td className="px-4 py-3">
                       <p className="font-medium leading-tight text-brand-black">{f.cliente}</p>
@@ -293,6 +329,7 @@ export default function ReporteProductosPage() {
                     <td className="px-4 py-3 text-brand-black">{f.producto || "—"}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-brand-black">{fmtNum.format(f.cantidad)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-brand-black">{f.n_pedidos}</td>
+                    <td className="max-w-[10rem] px-4 py-3 font-mono text-xs text-brand-black">{f.facturas || "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-brand-black">{money(f.monto)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-black">
                       {f.ultima_compra
@@ -305,7 +342,17 @@ export default function ReporteProductosPage() {
             </tbody>
           </table>
         </div>
+        {filas.length > visibles && (
+          <div className="border-t border-brand-brown/8 px-4 py-3 text-center">
+            <button type="button" onClick={() => setVisibles((v) => v + POR_PAGINA)}
+              className="rounded-lg border border-brand-brown/20 px-4 py-1.5 text-sm font-semibold text-brand-wine hover:bg-brand-cream-soft">
+              Mostrar más ({(filas.length - visibles).toLocaleString("es-CO")} restantes · el Excel incluye todo)
+            </button>
+          </div>
+        )}
       </div>
+      </>
+      )}
     </div>
   );
 }

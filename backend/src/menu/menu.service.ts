@@ -83,7 +83,9 @@ const ORDEN_CATEGORIAS = [
 function rangoCategoria(categoria: string): number {
   const s = slugify(categoria);
   for (let i = 0; i < ORDEN_CATEGORIAS.length; i++) {
-    if (s.includes(ORDEN_CATEGORIAS[i])) return i;
+    const c = ORDEN_CATEGORIAS[i];
+    // "res" como palabra completa: "viveres" también contiene "res".
+    if (c === 'res' ? /(^|-)res(-|$)/.test(s) : s.includes(c)) return i;
   }
   return ORDEN_CATEGORIAS.length;
 }

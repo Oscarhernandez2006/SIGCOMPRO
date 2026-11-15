@@ -27,6 +27,7 @@ import { PlanesModule } from './planes/planes.module';
 import { AlmuerzosModule } from './almuerzos/almuerzos.module';
 import { NovedadesModule } from './novedades/novedades.module';
 import { IncumplimientosModule } from './incumplimientos/incumplimientos.module';
+import { SiesaModule } from './siesa/siesa.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { IncumplimientosModule } from './incumplimientos/incumplimientos.module'
     AlmuerzosModule,
     NovedadesModule,
     IncumplimientosModule,
+    SiesaModule,
   ],
   controllers: [AppController],
 })

@@ -4474,6 +4474,7 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
   // Comprobante de pago (solo transferencia o mixto): al pulsar el ícono de foto
   // se consulta la imagen cargada desde despacho y se muestra (o un aviso si no hay).
   const pagoTransfMixto = ["transferencia", "mixto"].includes((pedido.pago ?? "").trim().toLowerCase());
+  const kilosPedido = Number(pesoPedidoKg(pedido).toFixed(2));
   const [compImg, setCompImg] = useState<string[]>([]);
   const [compMsg, setCompMsg] = useState<string | null>(null);
   const [compAbierto, setCompAbierto] = useState(false);
@@ -4575,7 +4576,6 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             <Dato label="Estado">{pedido.anulado ? "Anulado" : pedido.estado || "En proceso"}</Dato>
             <Dato label="Secuencia de entrada">{pedido.numeroDia ?? numeroDia ?? "—"}</Dato>
             <Dato label="Entrega">{dest}</Dato>
-            <Dato label="Punto de venta">{pedido.punto.nombre}</Dato>
             <Dato label="Método de pago">
               <span className="inline-flex items-center gap-1.5">
                 {pedido.pago || "—"}
@@ -4600,9 +4600,20 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
             {pedido.entregaProgramada && pedido.fechaProgramada && (
               <Dato label="Entrega programada">{pedido.fechaProgramada}</Dato>
             )}
-            <Dato label="Vendedor">{pedido.vendedorNombre || "—"}</Dato>
-            <Dato label="Cédula vendedor">{pedido.vendedorCedula || "—"}</Dato>
+            <Dato label="Vendedor">
+              {[pedido.vendedorCedula, pedido.vendedorNombre].filter(Boolean).join(" - ") || "—"}
+            </Dato>
           </Seccion>
+
+          {(pedido.observacion || pedido.tipoFactura) && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-black">Nota del pedido</p>
+              <div className="rounded-xl border border-brand-amber/30 bg-brand-amber/5 px-3 py-2 text-sm text-brand-black">
+                {pedido.tipoFactura && <p className="font-semibold text-brand-wine">{pedido.tipoFactura}</p>}
+                {pedido.observacion && <p className="whitespace-pre-line">{pedido.observacion}</p>}
+              </div>
+            </div>
+          )}
 
           {/* Productos */}
           <div>
@@ -4623,6 +4634,11 @@ export function DetallePedido({ pedido, onCerrar, numeroDia, meta, clones }: { p
               ))}
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
+              {kilosPedido > 0 && (
+                <span className="mr-auto text-sm font-semibold text-brand-black">
+                  Total kilos: {kilosPedido} {kilosPedido === 1 ? "kilo" : "kilos"} ({librasLabel(kilosPedido)})
+                </span>
+              )}
               {pedido.entrega === "domicilio" && (
                 <span className="text-sm text-brand-black">Domicilio: {formatoCOP(pedido.valorDomicilio ?? 0)}</span>
               )}
