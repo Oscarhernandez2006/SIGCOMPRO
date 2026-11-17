@@ -38,6 +38,7 @@ export interface ResumenPedidoIncumplimiento {
   fechaProgramada: string | null;
   horaDespacho: string | null;
   estado: string;
+  anulacion?: { motivo: string };
   pago: string;
   entrega: string;
   vendedor: string;
@@ -87,6 +88,13 @@ export interface PersonaResumen {
   puntos: string[];
 }
 
+export interface ResumenIncumplimientos {
+  total: number;
+  puntos: number;
+  personas: { usuarioId: string; nombre: string; total: number }[];
+  motivos: { motivo: string; total: number }[];
+}
+
 export interface FichaPersona {
   persona: {
     id: string;
@@ -129,9 +137,18 @@ export const crearIncumplimiento = (body: {
   descripcion: string;
   imagen: string | null;
   criterio?: string;
+  anularPedido?: boolean;
+  motivoAnulacion?: string;
 }) => apiFetch<Incumplimiento>("/incumplimientos", { method: "POST", body: JSON.stringify(body) });
 
 export const personasIncumplimientos = () => apiFetch<PersonaResumen[]>("/incumplimientos/personas");
+
+export function resumenIncumplimientos(desde?: string, hasta?: string) {
+  const parametros = new URLSearchParams();
+  if (desde) parametros.set("desde", desde);
+  if (hasta) parametros.set("hasta", hasta);
+  return apiFetch<ResumenIncumplimientos>(`/incumplimientos/resumen?${parametros.toString()}`);
+}
 
 export const fichaPersona = (usuarioId: string) =>
   apiFetch<FichaPersona>(`/incumplimientos/personas/${encodeURIComponent(usuarioId)}`);

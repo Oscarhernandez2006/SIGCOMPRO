@@ -358,8 +358,14 @@ export class PedidosController {
 
   /** Devuelve el comprobante de pago (imagen) de un pedido, si existe. */
   @Get(':id/comprobante')
-  obtenerComprobante(@Param('id') id: string) {
-    return this.pedidos.obtenerComprobante(id);
+  @Permisos('pedidos', 'despacho', 'cuadre_caja')
+  obtenerComprobante(@Param('id') id: string, @Req() req: Request & { user: JwtPayload }) {
+    return this.pedidos.obtenerComprobante(id, req.user);
+  }
+
+  @Post(':id/comprobante/analizar')
+  analizarComprobante(@Param('id') id: string, @Req() req: Request & { user: JwtPayload }) {
+    return this.pedidos.analizarComprobante(id, req.user);
   }
 
   /** Sube (AGREGA) una imagen al comprobante de pago de un pedido. Sin confirmar. */
@@ -380,9 +386,9 @@ export class PedidosController {
   @Patch(':id/comprobante/confirmar')
   confirmarComprobante(
     @Param('id') id: string,
-    @Body() body: { confirmadoPor?: string },
+    @Body() body: { confirmadoPor?: string; referencia?: string },
   ) {
-    return this.pedidos.confirmarComprobante(id, body?.confirmadoPor ?? null);
+    return this.pedidos.confirmarComprobante(id, body?.confirmadoPor ?? null, body?.referencia);
   }
 
   /** Elimina el comprobante: una imagen (?indice=N) o todas. */

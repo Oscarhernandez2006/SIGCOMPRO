@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { BarChart3, ClipboardList, List, MapPin, Users } from "lucide-react";
 import {
   eliminarIncumplimiento,
   fichaPersona,
   personasIncumplimientos,
+  resumenIncumplimientos,
   type FichaPersona,
   type PersonaResumen,
+  type ResumenIncumplimientos,
 } from "@/lib/incumplimientos";
 import { generarInformeIncumplimientos } from "@/lib/informe-incumplimientos";
 
@@ -34,6 +37,9 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
   const [hasta, setHasta] = useState("");
   const [ampliada, setAmpliada] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [vista, setVista] = useState<"registros" | "resumen">("registros");
+  const [resumen, setResumen] = useState<ResumenIncumplimientos | null>(null);
+  const [cargandoResumen, setCargandoResumen] = useState(true);
 
   const cargarPersonas = () =>
     personasIncumplimientos()
@@ -60,6 +66,16 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
       vigente = false;
     };
   }, [sel]);
+
+  useEffect(() => {
+    if (vista !== "resumen") return;
+    let vigente = true;
+    resumenIncumplimientos(desde || undefined, hasta || undefined)
+      .then((datos) => { if (vigente) { setResumen(datos); setError(null); } })
+      .catch((e) => { if (vigente) setError(e instanceof Error ? e.message : "No se pudo cargar el resumen."); })
+      .finally(() => { if (vigente) setCargandoResumen(false); });
+    return () => { vigente = false; };
+  }, [vista, desde, hasta]);
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -120,7 +136,36 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
           </p>
         )}
 
-        <div className="grid min-h-0 flex-1 md:grid-cols-[300px_1fr]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-brown/10 px-5 py-3">
+          <div role="group" aria-label="Vista de incumplimientos" className="inline-flex rounded-lg bg-brand-cream-soft p-1">
+            <button type="button" aria-pressed={vista === "registros"} onClick={() => setVista("registros")} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${vista === "registros" ? "bg-white text-brand-wine shadow-sm" : "text-brand-black/60"}`}><List className="h-4 w-4" aria-hidden="true" />Registros</button>
+            <button type="button" aria-pressed={vista === "resumen"} onClick={() => { if (vista !== "resumen") { setCargandoResumen(true); setVista("resumen"); } }} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${vista === "resumen" ? "bg-white text-brand-wine shadow-sm" : "text-brand-black/60"}`}><BarChart3 className="h-4 w-4" aria-hidden="true" />Resumen</button>
+          </div>
+          {vista === "resumen" && <div className="flex flex-wrap gap-2">
+            <label className="text-[11px] font-semibold text-brand-black">Desde<input aria-label="Resumen desde" type="date" value={desde} max={hasta || undefined} onChange={(e) => { setCargandoResumen(true); setResumen(null); setDesde(e.target.value); }} className="ml-2 rounded-lg border border-brand-brown/20 bg-white px-2 py-1.5 text-xs" /></label>
+            <label className="text-[11px] font-semibold text-brand-black">Hasta<input aria-label="Resumen hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => { setCargandoResumen(true); setResumen(null); setHasta(e.target.value); }} className="ml-2 rounded-lg border border-brand-brown/20 bg-white px-2 py-1.5 text-xs" /></label>
+          </div>}
+        </div>
+
+        {vista === "resumen" ? <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          {cargandoResumen ? <p role="status" className="py-12 text-center text-sm text-brand-black/60">Cargando resumen...</p> : resumen ? <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: "Incumplimientos", valor: resumen.total, icon: <ClipboardList className="h-5 w-5" />, color: "bg-red-50 text-red-700" },
+                { label: "Personas registradas", valor: resumen.personas.length, icon: <Users className="h-5 w-5" />, color: "bg-sky-50 text-sky-700" },
+                { label: "Puntos de venta", valor: resumen.puntos, icon: <MapPin className="h-5 w-5" />, color: "bg-emerald-50 text-emerald-700" },
+              ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-lg border border-brand-brown/10 bg-white p-4"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.color}`}>{item.icon}</span><div><p className="text-xs text-brand-black/60">{item.label}</p><p className="text-2xl font-bold tabular-nums text-brand-black">{item.valor.toLocaleString("es-CO")}</p></div></div>)}
+            </div>
+            {resumen.total === 0 ? <p className="py-12 text-center text-sm text-brand-black/60">No hay incumplimientos en este periodo.</p> : <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <section className="min-w-0 border-t border-brand-brown/10 pt-4"><h3 className="mb-4 text-sm font-bold text-brand-wine">Personas con más incumplimientos</h3><div className="divide-y divide-brand-brown/10">
+                {resumen.personas.slice(0, 10).map((persona, indice) => <button key={persona.usuarioId} type="button" onClick={() => { if (sel !== persona.usuarioId) { setFicha(null); setCargandoFicha(true); setSel(persona.usuarioId); } setVista("registros"); }} className="flex w-full items-center gap-3 rounded-md px-2 py-3 text-left transition hover:bg-brand-cream-soft"><span className="w-6 shrink-0 text-xs tabular-nums text-brand-black/40">{indice + 1}</span><span className="min-w-0 flex-1 break-words text-sm font-medium text-brand-black">{persona.nombre}</span><span className="rounded-md bg-red-50 px-2.5 py-1 text-sm font-bold tabular-nums text-red-700">{persona.total}</span></button>)}
+              </div></section>
+              <section className="min-w-0 border-t border-brand-brown/10 pt-4"><h3 className="mb-4 text-sm font-bold text-brand-wine">Motivos más frecuentes</h3><div className="space-y-4">
+                {resumen.motivos.slice(0, 10).map((item) => <div key={item.motivo}><div className="mb-1.5 flex items-start justify-between gap-3 text-xs"><span className="min-w-0 break-words text-brand-black">{item.motivo}</span><span className="shrink-0 font-bold tabular-nums text-brand-wine">{item.total}<span className="ml-2 font-normal text-brand-black/50">{Math.round(item.total / resumen.total * 100)}%</span></span></div><div className="h-2 overflow-hidden rounded-sm bg-brand-cream-soft"><div className="h-full rounded-sm bg-brand-wine/70" style={{ width: `${item.total / resumen.total * 100}%` }} /></div></div>)}
+              </div></section>
+            </div>}
+          </> : <p className="py-12 text-center text-sm text-brand-black/60">No se pudo cargar el resumen.</p>}
+        </div> : <div className="grid min-h-0 flex-1 md:grid-cols-[300px_1fr]">
           <aside className="flex min-h-0 flex-col border-b border-brand-brown/10 md:border-b-0 md:border-r">
             <div className="p-3">
               <input
@@ -256,6 +301,7 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
                         <p className="text-xs font-bold text-red-700">{r.motivo}</p>
                         <p className="mt-0.5 whitespace-pre-line text-xs text-brand-black">{r.descripcion}</p>
                         {r.criterio && <p className="mt-1 text-[11px] italic text-brand-black/60">Asignación: {r.criterio}</p>}
+                        {r.pedido?.anulacion && <p className="mt-2 text-[11px] font-semibold text-red-800">Pedido anulado al registrar: {r.pedido.anulacion.motivo}</p>}
                       </div>
                       {r.imagen && (
                         <button type="button" onClick={() => setAmpliada(r.imagen)} className="mt-2 block w-full" title="Ampliar evidencia">
@@ -270,7 +316,7 @@ export default function IncumplimientosModal({ emitidoPor, onCerrar }: { emitido
               </>
             )}
           </section>
-        </div>
+        </div>}
       </div>
 
       {ampliada && (

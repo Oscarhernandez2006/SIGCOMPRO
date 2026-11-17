@@ -18,6 +18,9 @@ import {
   descargarExcelDespacho,
   enviarADrivinApi,
   obtenerComprobanteApi,
+  analizarComprobanteApi,
+  requiereComprobantePago,
+  type LecturaComprobante,
   obtenerEvidenciaEntregaClubApi,
   subirComprobanteApi,
   subirEvidenciaEntregaClubApi,
@@ -525,6 +528,11 @@ export default function DespachoPage() {
   // Imágenes del comprobante por pedido (varias) y modal con la imagen actual.
   const [compImg, setCompImg] = useState<Record<string, string[]>>({});
   const [compModal, setCompModal] = useState<{ id: string; indice: number } | null>(null);
+  const [compReferencia, setCompReferencia] = useState<Record<string, string>>({});
+  const [compLectura, setCompLectura] = useState<Record<string, LecturaComprobante | null>>({});
+  const [compLeyendo, setCompLeyendo] = useState<Record<string, boolean>>({});
+  const [compConfirmando, setCompConfirmando] = useState<Record<string, boolean>>({});
+  const compRevision = useRef<Record<string, number>>({});
   // Pedidos cuyo comprobante YA confirmado se desbloqueó (con clave dinámica)
   // para poder reemplazarlo o eliminarlo en esta sesión.
   const [compDesbloqueo, setCompDesbloqueo] = useState<Set<string>>(new Set());
@@ -1267,10 +1275,9 @@ export default function DespachoPage() {
       alert("Adjunta la foto de la factura junto a la cédula antes de marcar la compra como entregada.");
       return;
     }
-    // Comprobante SUBIDO pero SIN confirmar: no se puede FACTURAR (sí puede pasar
-    // sin comprobante o con el comprobante confirmado, pero no sin confirmar).
-    if (n === "facturado" && mm.comprobante?.tiene && !mm.comprobante?.confirmado) {
-      alert("Debes confirmar el comprobante de pago para poder facturar.");
+    if ((n === "facturado" || n === "despachado") && requiereComprobantePago(pedidos.find((pedido) => pedido.id === id)?.pago) &&
+      (!mm.comprobante?.tiene || !mm.comprobante.confirmado || !mm.comprobante.referencia?.trim())) {
+      alert("Adjunta y confirma el comprobante con su número de transacción o referencia antes de facturar o despachar.");
       return;
     }
     if (n === "despachado" && !mm.domiciliario?.trim()) {
@@ -1521,6 +1528,25 @@ export default function DespachoPage() {
   };
 
   /* --- Comprobante de pago (imagen) por pedido --- */
+  const analizarCaptura = async (id: string) => {
+    const revision = (compRevision.current[id] ?? 0) + 1;
+    compRevision.current[id] = revision;
+    setCompLeyendo((prev) => ({ ...prev, [id]: true }));
+    try {
+      const resultado = await analizarComprobanteApi(id);
+      if (compRevision.current[id] !== revision) return;
+      setCompLectura((prev) => ({ ...prev, [id]: resultado.ocr }));
+      setCompReferencia((prev) => ({ ...prev, [id]: prev[id]?.trim() ? prev[id] : resultado.referencia ?? resultado.ocr.referencia ?? "" }));
+      if (resultado.referencia) setMeta((prev) => ({ ...prev, [id]: { ...prev[id], comprobante: {
+        tiene: true, confirmado: prev[id]?.comprobante?.confirmado ?? false, referencia: resultado.referencia,
+      } } }));
+    } catch {
+      if (compRevision.current[id] === revision) setCompLectura((prev) => ({ ...prev, [id]: { estado: "no_disponible", referencia: null, entidad: null } }));
+    } finally {
+      if (compRevision.current[id] === revision) setCompLeyendo((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   // Abre el selector de archivo para subir/reemplazar el comprobante del pedido.
   const abrirSelectorComprobante = (id: string) => {
     setCompSubirId(id);
@@ -1558,8 +1584,11 @@ export default function DespachoPage() {
       });
       setMeta((prev) => ({
         ...prev,
-        [id]: { ...prev[id], comprobante: { tiene: true, confirmado: false } },
+        [id]: { ...prev[id], comprobante: { tiene: true, confirmado: false, referencia: prev[id]?.comprobante?.referencia ?? null } },
       }));
+      setCompModal({ id, indice: 0 });
+      setCompLectura((prev) => ({ ...prev, [id]: null }));
+      void analizarCaptura(id);
     } catch {
       alert("No se pudo subir el comprobante. Inténtalo de nuevo.");
     } finally {
@@ -1570,11 +1599,6 @@ export default function DespachoPage() {
 
   // Abre la galería del comprobante (lo consulta si no está en caché).
   const verComprobante = async (id: string) => {
-    const cache = compImg[id];
-    if (cache && cache.length) {
-      setCompModal({ id, indice: 0 });
-      return;
-    }
     try {
       const c = await obtenerComprobanteApi(id);
       const imgs = (c?.imagenes ?? []).map((x) => x.imagen).filter(Boolean);
@@ -1583,7 +1607,11 @@ export default function DespachoPage() {
         return;
       }
       setCompImg((prev) => ({ ...prev, [id]: imgs }));
+      setCompReferencia((prev) => ({ ...prev, [id]: prev[id] ?? c?.referencia ?? "" }));
+      setCompLectura((prev) => ({ ...prev, [id]: c?.ocr ?? null }));
+      setMeta((prev) => ({ ...prev, [id]: { ...prev[id], comprobante: { tiene: true, confirmado: c?.confirmado ?? false, referencia: c?.referencia ?? null } } }));
       setCompModal({ id, indice: 0 });
+      if (!c?.ocr) void analizarCaptura(id);
     } catch {
       alert("No se pudo cargar el comprobante.");
     }
@@ -1591,8 +1619,14 @@ export default function DespachoPage() {
 
   // Confirma el comprobante: queda solo de lectura.
   const confirmarComprobante = async (id: string) => {
+    if (compConfirmando[id]) return;
+    const referencia = (compReferencia[id] ?? meta[id]?.comprobante?.referencia ?? "").trim();
+    if (!referencia) { alert("Ingresa el número de transacción o referencia del comprobante."); return; }
+    setCompConfirmando((prev) => ({ ...prev, [id]: true }));
     try {
-      await confirmarComprobanteApi(id, usuarioDesp?.nombre ?? null);
+      const confirmado = await confirmarComprobanteApi(id, usuarioDesp?.nombre ?? null, referencia);
+      compRevision.current[id] = (compRevision.current[id] ?? 0) + 1;
+      setCompLeyendo((prev) => ({ ...prev, [id]: false }));
       setCompDesbloqueo((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -1600,13 +1634,13 @@ export default function DespachoPage() {
       });
       setMeta((prev) => ({
         ...prev,
-        [id]: { ...prev[id], comprobante: { tiene: true, confirmado: true } },
+        [id]: { ...prev[id], comprobante: { tiene: true, confirmado: true, referencia: confirmado.referencia } },
       }));
       // Al confirmar, cierra la ventana del comprobante.
       setCompModal((prev) => (prev && prev.id === id ? null : prev));
-    } catch {
-      alert("No se pudo confirmar el comprobante.");
-    }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo confirmar el comprobante.");
+    } finally { setCompConfirmando((prev) => ({ ...prev, [id]: false })); }
   };
 
   // Elimina el comprobante del pedido (con confirmación).
@@ -1620,11 +1654,15 @@ export default function DespachoPage() {
     if (!window.confirm(msg)) return;
     try {
       await eliminarComprobanteApi(id, indice);
+      compRevision.current[id] = (compRevision.current[id] ?? 0) + 1;
+      setCompLeyendo((prev) => ({ ...prev, [id]: false }));
+      setCompLectura((prev) => ({ ...prev, [id]: null }));
       // Actualiza la caché local de imágenes.
       const restantes =
         typeof indice === "number"
           ? (compImg[id] ?? []).filter((_, i) => i !== indice)
           : [];
+          if (!restantes.length) setCompReferencia((prev) => ({ ...prev, [id]: "" }));
       setCompImg((prev) => {
         const next = { ...prev };
         if (restantes.length) next[id] = restantes;
@@ -1645,7 +1683,7 @@ export default function DespachoPage() {
         ...prev,
         [id]: {
           ...prev[id],
-          comprobante: restantes.length ? { tiene: true, confirmado: false } : null,
+          comprobante: restantes.length ? { tiene: true, confirmado: false, referencia: prev[id]?.comprobante?.referencia ?? null } : null,
         },
       }));
     } catch {
@@ -2268,7 +2306,7 @@ export default function DespachoPage() {
                 const comp = m.comprobante ?? null;
                 const compConfirmado = Boolean(comp?.confirmado);
                 // Comprobante SUBIDO pero SIN confirmar: bloquea el despacho.
-                const comprobantePendiente = Boolean(comp?.tiene) && !compConfirmado;
+                const comprobantePendiente = requiereComprobante && (!comp?.tiene || !compConfirmado || !comp.referencia?.trim());
                 // El cliente recoge en el punto de venta (no lleva domiciliario).
                 const esRecoge = p.entrega === "recoge";
                 // ¿El punto del pedido está integrado con Drivin? Si no, el
@@ -2822,7 +2860,7 @@ export default function DespachoPage() {
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-3.5 w-3.5">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                                 </svg>
-                                {compSubiendo[p.id] ? "Subiendo…" : "Subir comprobante de pago"}
+                                {compSubiendo[p.id] ? "Subiendo…" : "Adjuntar comprobante obligatorio"}
                               </button>
                             ) : (
                               <button
@@ -2843,7 +2881,7 @@ export default function DespachoPage() {
                                   Comprobante
                                 </span>
                                 <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
-                                  {compConfirmado ? "Confirmado" : "Sin confirmar"}
+                                  {compConfirmado && comp?.referencia ? "Confirmado" : "Completar"}
                                 </span>
                               </button>
                             )}
@@ -2869,8 +2907,8 @@ export default function DespachoPage() {
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
                             }
-                            disabled={anulado || !impreso || !puedeEstado("Facturado")}
-                            title={!impreso ? "Imprime la comanda primero" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
+                            disabled={anulado || !impreso || comprobantePendiente || !puedeEstado("Facturado")}
+                            title={!impreso ? "Imprime la comanda primero" : comprobantePendiente ? "Adjunta el comprobante, ingresa su referencia y confírmalo" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
                             className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
                             Confirmar transferencia
@@ -3521,19 +3559,13 @@ export default function DespachoPage() {
           pedido={marcarNG}
           fila={document.querySelector<HTMLElement>(`tr[data-fila-pedido="${CSS.escape(marcarNG.id)}"]`)}
           onCerrar={() => setMarcarNG(null)}
-          onGuardado={(id) => {
+          puedeAnular
+          onGuardado={(id, anulacion) => {
             setMarcadosNG((prev) => new Set(prev).add(id));
-            setMarcarNG(null);
-          }}
-          onAnular={async (motivo) => {
-            const ped = pedidos.find((x) => x.id === marcarNG.id);
-            if (!ped) throw new Error("No se encontró el pedido.");
-            if ((meta[ped.id]?.replicas ?? []).length > 0) {
-              throw new Error("Este pedido tiene réplicas. Primero quítalas para poder anular.");
+            if (anulacion) {
+              setPedidos((prev) => prev.map((pedido) => pedido.id === id ? { ...pedido, anulado: true, estado: "Anulado", motivo: anulacion.motivo } : pedido));
+              setMeta((prev) => ({ ...prev, [id]: {} }));
             }
-            const anulado: Pedido = { ...ped, anulado: true, estado: "Anulado", motivo };
-            const guardado = await guardarPedidoApi(anulado);
-            setPedidos((prev) => prev.map((x) => (x.id === ped.id ? { ...x, ...(guardado ?? anulado) } : x)));
             setMarcarNG(null);
           }}
         />
@@ -3865,13 +3897,18 @@ export default function DespachoPage() {
         const total = imgs.length;
         const idx = Math.min(compModal.indice, Math.max(0, total - 1));
         const imgActual = imgs[idx];
+        const referencia = compReferencia[cid] ?? meta[cid]?.comprobante?.referencia ?? "";
+        const lectura = compLectura[cid];
+        const confirmando = Boolean(compConfirmando[cid]);
         const puedeEditar = !cConf || cDesb;
+        const puedeCompletarReferencia = puedeEditar || !meta[cid]?.comprobante?.referencia;
         return (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-brand-black/70 p-4"
             onClick={() => setCompModal(null)}
           >
             <div
+              role="dialog" aria-modal="true" aria-label="Comprobante de pago"
               className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -3901,7 +3938,16 @@ export default function DespachoPage() {
                   </svg>
                 </button>
               </div>
-              <div className="relative bg-brand-cream-soft/40 p-3">
+              <div className="border-b border-brand-brown/10 px-4 py-3">
+                <label className="block text-xs font-semibold text-brand-black">Número de transacción / referencia / aprobación *
+                  <input value={referencia} maxLength={80} disabled={!puedeCompletarReferencia || confirmando} onChange={(e) => setCompReferencia((prev) => ({ ...prev, [cid]: e.target.value }))} placeholder="Referencia Nequi, aprobación Bancolombia, registro..." className="mt-1.5 w-full rounded-lg border border-brand-brown/20 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-brand-wine disabled:bg-brand-cream-soft" />
+                </label>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  {compLeyendo[cid] ? <span className="text-brand-black/55">Leyendo referencia...</span> : lectura && <span title="Lectura orientativa: no verifica la autenticidad del comprobante ni la recepción del dinero." className={`rounded-md px-2 py-1 font-medium ${lectura.estado === "positivo" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{lectura.estado === "positivo" ? "Compatible con transferencia" : lectura.estado === "dudoso" ? "Posible no transferencia" : "Lectura no disponible"}{lectura.entidad ? ` · ${lectura.entidad}` : ""}</span>}
+                  <span className="text-brand-black/50">Verifica la captura y la referencia.</span>
+                </div>
+              </div>
+              <div className="relative min-h-0 overflow-y-auto bg-brand-cream-soft/40 p-3">
                 {imgActual && (
                   <ZoomImagen key={`${cid}-${idx}`} src={imgActual} alt={`Comprobante ${idx + 1}`} alto="64vh" />
                 )}
@@ -3953,7 +3999,7 @@ export default function DespachoPage() {
                     <button
                       type="button"
                       onClick={() => abrirSelectorComprobante(cid)}
-                      disabled={subiendo}
+                      disabled={subiendo || confirmando}
                       className="flex-1 rounded-xl border border-brand-brown/20 bg-white px-3 py-2 text-sm font-semibold text-brand-brown transition hover:bg-brand-cream-soft disabled:opacity-50"
                     >
                       {subiendo ? "Subiendo…" : "Agregar imagen"}
@@ -3961,21 +4007,25 @@ export default function DespachoPage() {
                     <button
                       type="button"
                       onClick={() => eliminarComprobante(cid, total > 1 ? idx : undefined)}
+                      disabled={subiendo || confirmando || !total}
                       className="flex-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
                     >
                       {total > 1 ? "Eliminar esta" : "Eliminar"}
                     </button>
-                    {!cConf && (
+                    {(!cConf || puedeEditar) && (
                       <button
                         type="button"
                         onClick={() => confirmarComprobante(cid)}
-                        className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        disabled={!total || !referencia.trim() || subiendo || confirmando}
+                        className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                       >
-                        Confirmar
+                        {confirmando ? "Confirmando..." : "Confirmar"}
                       </button>
                     )}
                   </div>
                 ) : (
+                  <div className="space-y-2">
+                  {puedeCompletarReferencia && <button type="button" disabled={!referencia.trim() || confirmando} onClick={() => confirmarComprobante(cid)} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{confirmando ? "Confirmando..." : "Guardar referencia"}</button>}
                   <button
                     type="button"
                     onClick={() => {
@@ -3991,6 +4041,7 @@ export default function DespachoPage() {
                     </svg>
                     Modificar (clave dinámica)
                   </button>
+                  </div>
                 )}
               </div>
             </div>

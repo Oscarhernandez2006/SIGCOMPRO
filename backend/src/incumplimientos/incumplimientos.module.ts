@@ -3,9 +3,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { IncumplimientosService } from './incumplimientos.service';
 import { IncumplimientosController } from './incumplimientos.controller';
+import { PedidosModule } from '../pedidos/pedidos.module';
 
 @Module({
   imports: [
+    PedidosModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

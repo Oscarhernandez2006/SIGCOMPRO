@@ -15,6 +15,7 @@ import { Resolver as DnsResolver } from 'dns/promises';
 import { Pool, PoolClient } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { PG_POOL } from '../database/database.module';
+import { leerComprobante, type LecturaComprobante } from './comprobantes-ocr';
 import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { ExtensionesService } from '../extensiones/extensiones.service';
 import { pesoCarritoKg } from '../common/peso';
@@ -260,6 +261,7 @@ export interface EstadoPedidos {
 @Injectable()
 export class PedidosService implements OnModuleInit {
   private readonly logger = new Logger(PedidosService.name);
+  private lecturasComprobantes = 0;
   /** Pedidos recientes en RAM para el dashboard (ver `dashboard.cache.ts`). */
   private dashboardCache!: DashboardCache;
   /** Caché en memoria de scenarios de Drivin por fecha (TTL corto). */
@@ -426,6 +428,8 @@ export class PedidosService implements OnModuleInit {
     await this.pool.query(
       `ALTER TABLE comprobantes_pago ALTER COLUMN imagen DROP NOT NULL`,
     );
+    await this.pool.query(`ALTER TABLE comprobantes_pago ADD COLUMN IF NOT EXISTS referencia text`);
+    await this.pool.query(`ALTER TABLE comprobantes_pago ADD COLUMN IF NOT EXISTS ocr jsonb`);
   }
 
   /** Construye el WHERE (scope) + params según rango/fecha/hasta. Compartido por
@@ -1321,6 +1325,7 @@ export class PedidosService implements OnModuleInit {
         );
       }
       if (!anulado && entraAFacturadoODespachado) {
+        await this.validarComprobantePago(id, finalPedido.pago, client);
         const numFactura = String(metaActual.facturaNumero ?? '').trim();
         const valFactura = Number(metaActual.facturaValor);
         if (!numFactura || !Number.isFinite(valFactura) || valFactura <= 0) {
@@ -1463,29 +1468,6 @@ export class PedidosService implements OnModuleInit {
         );
       }
 
-      // SINCRONIZACIÓN AUTOMÁTICA CON DRIVIN: Si se cancela el pedido,
-      // notificar a Drivin para que actualice el estado allá también.
-      // Se ejecuta de forma asíncrona (no-bloqueante) después de guardar.
-      if (
-        anulado &&
-        !anuladoAnterior &&
-        (nuevoEstadoNorm === 'cancelado' || nuevoEstadoNorm === 'anulado') &&
-        finalPedido.comanda &&
-        puntoId
-      ) {
-        const puntoNombre = finalPedido.punto?.nombre
-          ? String(finalPedido.punto.nombre)
-          : '';
-        // Ejecutar en background, sin esperar respuesta
-        this.cancelarEnDrivin(id, finalPedido.comanda, puntoId, puntoNombre).catch(
-          (e) => {
-            this.logger.error(
-              `Error no controlado en cancelación async: ${String(e)}`,
-            );
-          },
-        );
-      }
-
       // SINCRONIZACIÓN AUTOMÁTICA CON DRIVIN: si el pedido YA fue enviado a
       // Drivin (facturado) y esta edición cambia si es "Entrega programada"
       // (Posterior) o su fecha elegida, Drivin se queda con la fecha del
@@ -1524,6 +1506,15 @@ export class PedidosService implements OnModuleInit {
       }
 
       await client.query('COMMIT');
+      if (
+        anulado && !anuladoAnterior &&
+        (nuevoEstadoNorm === 'cancelado' || nuevoEstadoNorm === 'anulado') &&
+        finalPedido.comanda && puntoId
+      ) {
+        this.cancelarEnDrivin(id, finalPedido.comanda, puntoId, String(finalPedido.punto?.nombre ?? '')).catch(
+          (error) => this.logger.error(`Error no controlado en cancelación async: ${String(error)}`),
+        );
+      }
       return finalPedido;
     } catch (e) {
       await client.query('ROLLBACK');
@@ -1894,6 +1885,10 @@ export class PedidosService implements OnModuleInit {
     // Sello del usuario (del JWT) que asigna el porcionador o factura: lo usa
     // Incumplimientos para saber a quién corresponde un pedido no gestionado.
     const c = (cambios ?? {}) as Record<string, unknown>;
+    if (c.pagoConfirmado) {
+      const pedido = await this.pool.query<{ pago: string }>(`SELECT data->>'pago' AS pago FROM pedidos WHERE id = $1`, [id]);
+      await this.validarComprobantePago(id, pedido.rows[0]?.pago);
+    }
     const sello: Record<string, string> = {};
     if (user?.sub) {
       if (typeof c.porcionador === 'string' && c.porcionador.trim()) sello.porcionadorAsignadoPorId = String(user.sub);
@@ -1917,13 +1912,68 @@ export class PedidosService implements OnModuleInit {
     return { id };
   }
 
+  private async validarComprobantePago(id: string, pago: unknown, conexion: Pick<PoolClient, 'query'> = this.pool) {
+    if (!['transferencia', 'mixto'].includes(String(pago ?? '').trim().toLowerCase())) return;
+    const resultado = await conexion.query<{ tiene: boolean; referencia: string | null; confirmado: boolean }>(
+      `SELECT (jsonb_array_length(COALESCE(imagenes, '[]'::jsonb)) > 0 OR imagen IS NOT NULL) AS tiene,
+              referencia, confirmado FROM comprobantes_pago WHERE pedido_id = $1`, [id],
+    );
+    const comprobante = resultado.rows[0];
+    if (!comprobante?.tiene || !comprobante.referencia?.trim() || !comprobante.confirmado) {
+      throw new BadRequestException('Adjunta y confirma el comprobante con su número de transacción o referencia antes de facturar o despachar.');
+    }
+  }
+
+  private async verificarAccesoComprobante(id: string, user?: JwtPayload) {
+    if (!user || tieneAccesoTotal(user.rol)) return;
+    const { rowCount } = await this.pool.query(
+      `SELECT 1 FROM pedidos p JOIN usuario_punto_venta upv ON upv.punto_venta_id::text = p.punto_id
+        WHERE p.id = $1 AND upv.usuario_id = $2 LIMIT 1`, [id, user.sub],
+    );
+    if (!rowCount) throw new ForbiddenException('No tiene acceso a este punto de venta.');
+  }
+
+  async analizarComprobante(id: string, user?: JwtPayload): Promise<{ ocr: LecturaComprobante; referencia: string | null }> {
+    await this.verificarAccesoComprobante(id, user);
+    const noDisponible: LecturaComprobante = { estado: 'no_disponible', referencia: null, entidad: null };
+    if (this.lecturasComprobantes >= 2) return { ocr: noDisponible, referencia: null };
+    this.lecturasComprobantes++;
+    try {
+      const resultado = await this.pool.query<{ imagen: string | null; revision: string }>(
+        `SELECT COALESCE(imagenes->-1->>'imagen', imagen) AS imagen,
+                md5(COALESCE(imagenes, '[]'::jsonb)::text || COALESCE(imagen, '')) AS revision
+           FROM comprobantes_pago WHERE pedido_id = $1`, [id],
+      );
+      const foto = resultado.rows[0];
+      if (!foto?.imagen) return { ocr: noDisponible, referencia: null };
+      const ocr = await leerComprobante(foto.imagen).catch(() => noDisponible);
+      const guardado = await this.pool.query<{ referencia: string | null }>(
+        `WITH lectura AS (
+           UPDATE comprobantes_pago SET ocr = $2::jsonb,
+                  referencia = CASE WHEN confirmado = false THEN COALESCE(NULLIF(referencia, ''), $3) ELSE referencia END,
+                  actualizado_en = now()
+            WHERE pedido_id = $1 AND md5(COALESCE(imagenes, '[]'::jsonb)::text || COALESCE(imagen, '')) = $4
+            RETURNING pedido_id, referencia, confirmado
+         ) UPDATE pedidos p SET meta = jsonb_set(COALESCE(p.meta, '{}'::jsonb), '{comprobante}',
+                jsonb_build_object('tiene', true, 'confirmado', lectura.confirmado, 'referencia', lectura.referencia)),
+                actualizado_en = now() FROM lectura WHERE p.id = lectura.pedido_id
+           RETURNING lectura.referencia`,
+        [id, JSON.stringify(ocr), ocr.referencia, foto.revision],
+      );
+      return guardado.rows[0] ? { ocr, referencia: guardado.rows[0].referencia } : { ocr: noDisponible, referencia: null };
+    } finally { this.lecturasComprobantes--; }
+  }
+
   /** Devuelve el comprobante de pago (una o varias imágenes) de un pedido. */
-  async obtenerComprobante(id: string): Promise<{
+  async obtenerComprobante(id: string, user?: JwtPayload): Promise<{
     imagenes: { imagen: string; mime: string | null }[];
     confirmado: boolean;
     subidoPor: string | null;
     confirmadoPor: string | null;
+    referencia: string | null;
+    ocr: LecturaComprobante | null;
   } | null> {
+    await this.verificarAccesoComprobante(id, user);
     const res = await this.pool.query<{
       imagen: string | null;
       mime: string | null;
@@ -1931,8 +1981,10 @@ export class PedidosService implements OnModuleInit {
       confirmado: boolean;
       subido_por: string | null;
       confirmado_por: string | null;
+      referencia: string | null;
+      ocr: LecturaComprobante | null;
     }>(
-      `SELECT imagen, mime, imagenes, confirmado, subido_por, confirmado_por
+      `SELECT imagen, mime, imagenes, confirmado, subido_por, confirmado_por, referencia, ocr
          FROM comprobantes_pago WHERE pedido_id = $1`,
       [id],
     );
@@ -1950,6 +2002,8 @@ export class PedidosService implements OnModuleInit {
       confirmado: row.confirmado,
       subidoPor: row.subido_por,
       confirmadoPor: row.confirmado_por,
+      referencia: row.referencia,
+      ocr: row.ocr,
     };
   }
 
@@ -2000,11 +2054,11 @@ export class PedidosService implements OnModuleInit {
     mime: string | null,
     subidoPor?: string | null,
   ): Promise<{ id: string }> {
-    if (!imagen || typeof imagen !== 'string') {
-      throw new Error('Imagen de comprobante inválida');
+    if (!imagen || typeof imagen !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(imagen) || imagen.length > 8 * 1024 * 1024) {
+      throw new BadRequestException('Adjunta una imagen válida del comprobante de hasta 6 MB.');
     }
     await this.pool.query(
-      `INSERT INTO comprobantes_pago (pedido_id, imagenes, confirmado, subido_por, actualizado_en)
+      `WITH comprobante AS (INSERT INTO comprobantes_pago (pedido_id, imagenes, confirmado, subido_por, actualizado_en)
        VALUES ($1, jsonb_build_array(jsonb_build_object('imagen', $2::text, 'mime', $3::text)), false, $4, now())
        ON CONFLICT (pedido_id) DO UPDATE SET
          imagenes = (
@@ -2016,14 +2070,16 @@ export class PedidosService implements OnModuleInit {
            END
          ) || jsonb_build_array(jsonb_build_object('imagen', $2::text, 'mime', $3::text)),
          confirmado = false,
+         ocr = NULL,
          confirmado_por = NULL,
          subido_por = COALESCE(comprobantes_pago.subido_por, EXCLUDED.subido_por),
-         actualizado_en = now()`,
+         actualizado_en = now()
+       RETURNING pedido_id, referencia)
+       UPDATE pedidos p SET meta = jsonb_set(COALESCE(p.meta, '{}'::jsonb), '{comprobante}',
+         jsonb_build_object('tiene', true, 'confirmado', false, 'referencia', comprobante.referencia)), actualizado_en = now()
+         FROM comprobante WHERE p.id = comprobante.pedido_id`,
       [id, imagen, mime ?? null, subidoPor ?? null],
     );
-    await this.actualizarMeta(id, {
-      comprobante: { tiene: true, confirmado: false },
-    });
     return { id };
   }
 
@@ -2031,17 +2087,24 @@ export class PedidosService implements OnModuleInit {
   async confirmarComprobante(
     id: string,
     confirmadoPor?: string | null,
-  ): Promise<{ id: string }> {
-    await this.pool.query(
-      `UPDATE comprobantes_pago
-         SET confirmado = true, confirmado_por = $2, actualizado_en = now()
-       WHERE pedido_id = $1`,
-      [id, confirmadoPor ?? null],
+    referencia?: string | null,
+  ): Promise<{ id: string; referencia: string }> {
+    const numero = referencia == null ? null : String(referencia).trim();
+    if (numero !== null && (!numero || numero.length > 80)) throw new BadRequestException('Ingresa un número de transacción o referencia válido (máximo 80 caracteres).');
+    const resultado = await this.pool.query<{ referencia: string }>(
+      `WITH comprobante AS (
+         UPDATE comprobantes_pago SET confirmado = true, confirmado_por = $2,
+                referencia = COALESCE($3, NULLIF(referencia, '')), actualizado_en = now()
+          WHERE pedido_id = $1 AND COALESCE($3, NULLIF(referencia, '')) IS NOT NULL
+            AND (jsonb_array_length(COALESCE(imagenes, '[]'::jsonb)) > 0 OR imagen IS NOT NULL)
+          RETURNING pedido_id, referencia
+       ) UPDATE pedidos p SET meta = jsonb_set(COALESCE(p.meta, '{}'::jsonb), '{comprobante}',
+           jsonb_build_object('tiene', true, 'confirmado', true, 'referencia', comprobante.referencia)), actualizado_en = now()
+         FROM comprobante WHERE p.id = comprobante.pedido_id RETURNING comprobante.referencia`,
+      [id, confirmadoPor ?? null, numero],
     );
-    await this.actualizarMeta(id, {
-      comprobante: { tiene: true, confirmado: true },
-    });
-    return { id };
+    if (!resultado.rows[0]) throw new BadRequestException('Adjunta una imagen e ingresa el número de transacción o referencia.');
+    return { id, referencia: resultado.rows[0].referencia };
   }
 
   /**
@@ -2055,7 +2118,7 @@ export class PedidosService implements OnModuleInit {
   ): Promise<{ id: string }> {
     if (typeof indice === 'number' && Number.isInteger(indice) && indice >= 0) {
       // Migra el legado a `imagenes` y quita el elemento en la posición dada.
-      const res = await this.pool.query<{ n: number }>(
+      const res = await this.pool.query<{ n: number; referencia: string | null }>(
         `UPDATE comprobantes_pago SET
            imagenes = (
              CASE
@@ -2065,9 +2128,10 @@ export class PedidosService implements OnModuleInit {
              END
            ) - $2::int,
            imagen = NULL,
+           confirmado = false, confirmado_por = NULL, ocr = NULL,
            actualizado_en = now()
          WHERE pedido_id = $1
-         RETURNING jsonb_array_length(imagenes) AS n`,
+         RETURNING jsonb_array_length(imagenes) AS n, referencia`,
         [id, indice],
       );
       const quedan = res.rows[0]?.n ?? 0;
@@ -2079,7 +2143,7 @@ export class PedidosService implements OnModuleInit {
         await this.actualizarMeta(id, { comprobante: null });
       } else {
         await this.actualizarMeta(id, {
-          comprobante: { tiene: true, confirmado: false },
+          comprobante: { tiene: true, confirmado: false, referencia: res.rows[0]?.referencia ?? null },
         });
       }
       return { id };
@@ -2950,7 +3014,7 @@ export class PedidosService implements OnModuleInit {
           const meta = (ped.meta ?? {}) as DespachoMeta & {
             domiciliario?: string | null;
             domiciliarioCodigo?: string | null;
-            comprobante?: { tiene?: boolean; confirmado?: boolean } | null;
+            comprobante?: { tiene?: boolean; confirmado?: boolean; referencia?: string | null } | null;
             replicas?: ReplicaMeta[];
           };
           const comanda = String(data.comanda ?? '').trim();
@@ -3002,7 +3066,8 @@ export class PedidosService implements OnModuleInit {
               }
               // También reintenta completar el estado si el guardado previo
               // falló después de sincronizar la metadata.
-              const comprobantePendiente = !!meta.comprobante?.tiene && !meta.comprobante.confirmado;
+              const requiereComprobante = ['transferencia', 'mixto'].includes(String(data.pago ?? '').trim().toLowerCase());
+              const comprobantePendiente = requiereComprobante && (!meta.comprobante?.tiene || !meta.comprobante.confirmado || !meta.comprobante.referencia?.trim());
               if (est === 'facturado' && !comprobantePendiente) {
                 const guardado = await this.guardar(
                   { ...data, id: ped.id, estado: 'Despachado' },

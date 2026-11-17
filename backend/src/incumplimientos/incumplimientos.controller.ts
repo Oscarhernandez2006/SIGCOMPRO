@@ -9,6 +9,7 @@ import {
   Injectable,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -53,6 +54,11 @@ export class IncumplimientosController {
     return this.inc.personas();
   }
 
+  @Get('resumen')
+  resumen(@Query('desde') desde?: string, @Query('hasta') hasta?: string) {
+    return this.inc.resumen(desde, hasta);
+  }
+
   @Get('personas/:usuarioId')
   persona(@Param('usuarioId') usuarioId: string) {
     return this.inc.persona(usuarioId);
@@ -61,7 +67,7 @@ export class IncumplimientosController {
   @Post()
   crear(
     @Req() req: ReqUsuario,
-    @Body() body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string },
+    @Body() body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string; anularPedido?: boolean; motivoAnulacion?: string },
   ) {
     return this.inc.crear(req.user!, body ?? {});
   }

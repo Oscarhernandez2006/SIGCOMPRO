@@ -43,14 +43,13 @@ export default function MarcarNoGestionadoModal({
   fila,
   onCerrar,
   onGuardado,
-  onAnular,
+  puedeAnular = false,
 }: {
   pedido: PedidoAMarcar;
   fila: HTMLElement | null;
   onCerrar: () => void;
-  onGuardado: (pedidoId: string) => void;
-  /** Anula el pedido con el motivo elegido (si no se pasa, no se muestra el botón). */
-  onAnular?: (motivo: string) => Promise<void>;
+  onGuardado: (pedidoId: string, anulacion?: { motivo: string }) => void;
+  puedeAnular?: boolean;
 }) {
   const [responsables, setResponsables] = useState<Responsable[] | null>(null);
   const [sugerencia, setSugerencia] = useState<SugerenciaResponsable | null | undefined>(undefined);
@@ -65,7 +64,6 @@ export default function MarcarNoGestionadoModal({
   const [anulando, setAnulando] = useState(false);
   const [motivosAnular, setMotivosAnular] = useState<string[]>([]);
   const [motivoAnular, setMotivoAnular] = useState("");
-  const [procesandoAnular, setProcesandoAnular] = useState(false);
 
   useEffect(() => {
     let vigente = true;
@@ -93,7 +91,8 @@ export default function MarcarNoGestionadoModal({
   }, [pedido.puntoId, pedido.id, fila]);
 
   const motivoFinal = motivo === "Otro" ? otroMotivo.trim() : motivo;
-  const valido = !!usuarioId && !!motivoFinal && descripcion.trim().length >= 10 && !capturando;
+  const valido = !!usuarioId && !!motivoFinal && descripcion.trim().length >= 10 && !capturando &&
+    (!anulando || !!motivoAnular.trim());
   const esAutomatico = !!sugerencia && usuarioId === sugerencia.usuarioId;
 
   async function abrirAnular() {
@@ -105,18 +104,6 @@ export default function MarcarNoGestionadoModal({
     const final = lista.length ? lista : ["Pedido no gestionado al cierre del turno"];
     setMotivosAnular(final);
     setMotivoAnular(final[0]);
-  }
-
-  async function anular() {
-    if (!onAnular || !motivoAnular || procesandoAnular) return;
-    setProcesandoAnular(true);
-    setError(null);
-    try {
-      await onAnular(motivoAnular);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo anular el pedido");
-      setProcesandoAnular(false);
-    }
   }
 
   async function guardar() {
@@ -131,8 +118,10 @@ export default function MarcarNoGestionadoModal({
         descripcion: descripcion.trim(),
         imagen,
         criterio: esAutomatico ? sugerencia!.criterio : "Responsable elegido manualmente por la administración.",
+        anularPedido: anulando,
+        motivoAnulacion: anulando ? motivoAnular.trim() : undefined,
       });
-      onGuardado(pedido.id);
+      onGuardado(pedido.id, anulando ? { motivo: motivoAnular.trim() } : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo registrar");
       setGuardando(false);
@@ -154,6 +143,7 @@ export default function MarcarNoGestionadoModal({
           <button
             type="button"
             onClick={onCerrar}
+            disabled={guardando}
             className="rounded-lg p-1.5 text-brand-black hover:bg-white"
             aria-label="Cerrar"
             title="Cerrar"
@@ -284,70 +274,44 @@ export default function MarcarNoGestionadoModal({
 
         {anulando && (
           <div className="flex flex-wrap items-center gap-2 border-t border-red-100 bg-red-50/70 px-5 py-3 text-xs">
-            <span className="font-semibold text-red-800">Motivo de anulación:</span>
-            <select
+            <label htmlFor="motivo-anulacion-incumplimiento" className="font-semibold text-red-800">Motivo de anulación:</label>
+            <input
+              id="motivo-anulacion-incumplimiento"
               value={motivoAnular}
               onChange={(e) => setMotivoAnular(e.target.value)}
-              disabled={!motivosAnular.length}
+              list="motivos-anulacion-incumplimiento"
+              maxLength={300}
+              disabled={guardando || !motivosAnular.length}
+              placeholder="Motivo de anulación"
               className="min-w-0 flex-1 rounded-lg border border-red-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-red-400"
-            >
-              {!motivosAnular.length && <option>Cargando motivos…</option>}
-              {motivosAnular.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setAnulando(false)}
-              className="rounded-lg px-2 py-1.5 font-semibold text-brand-black/70 hover:bg-white"
-            >
-              Volver
-            </button>
-            <button
-              type="button"
-              onClick={anular}
-              disabled={!motivoAnular || procesandoAnular}
-              className="rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800 disabled:opacity-50"
-            >
-              {procesandoAnular ? "Anulando…" : "Confirmar anulación"}
-            </button>
+            />
+            <datalist id="motivos-anulacion-incumplimiento">{motivosAnular.map((m) => <option key={m} value={m} />)}</datalist>
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-brand-brown/10 px-5 py-3">
-          <div>
-            {onAnular && (
-              <button
-                type="button"
-                onClick={abrirAnular}
-                disabled={anulando}
-                title="Anular este pedido"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-                Anular pedido
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-brand-brown/10 px-5 py-3">
           <button
             type="button"
             onClick={onCerrar}
+            disabled={guardando}
             className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft"
           >
             Cancelar
           </button>
+          <div className="ml-auto flex items-center justify-end gap-3">
+          {puedeAnular && <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-brand-black">
+            <input type="checkbox" role="switch" aria-label="Anular pedido" checked={anulando} disabled={guardando}
+              onChange={(event) => { if (event.target.checked) void abrirAnular(); else setAnulando(false); }} className="peer sr-only" />
+            <span aria-hidden="true" className="relative h-6 w-11 shrink-0 rounded-full bg-neutral-300 transition-colors after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-emerald-500 peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-700 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50" />
+            Anular pedido
+          </label>}
           <button
             type="button"
             onClick={guardar}
             disabled={!valido || guardando}
             className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 disabled:opacity-50"
           >
-            {guardando ? "Registrando…" : "Registrar incumplimiento"}
+            {guardando ? "Guardando…" : "Confirmar"}
           </button>
           </div>
         </div>

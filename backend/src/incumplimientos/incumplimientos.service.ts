@@ -6,9 +6,10 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { PG_POOL } from '../database/database.module';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
+import { PedidosService } from '../pedidos/pedidos.service';
 
 /** Hora (0-23) desde la que se puede marcar un pedido como no gestionado (Bogotá). */
 export const HORA_HABILITA_INCUMPLIMIENTO = 20;
@@ -109,7 +110,10 @@ const aIncumplimiento = (r: Fila): Incumplimiento => ({
  */
 @Injectable()
 export class IncumplimientosService implements OnModuleInit {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    private readonly pedidos: PedidosService,
+  ) {}
 
   async onModuleInit() {
     await this.pool.query(
@@ -274,7 +278,7 @@ export class IncumplimientosService implements OnModuleInit {
 
   async crear(
     autor: JwtPayload,
-    body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string },
+    body: { pedidoId?: string; usuarioId?: string; motivo?: string; descripcion?: string; imagen?: string; criterio?: string; anularPedido?: boolean; motivoAnulacion?: string },
   ): Promise<Incumplimiento> {
     if (this.horaBogota() < HORA_HABILITA_INCUMPLIMIENTO) {
       throw new BadRequestException('Solo se puede marcar un pedido como no gestionado después de las 8:00 p. m.');
@@ -285,6 +289,12 @@ export class IncumplimientosService implements OnModuleInit {
     const descripcion = String(body.descripcion ?? '').trim().slice(0, 4000);
     const criterio = String(body.criterio ?? '').trim().slice(0, 300);
     const imagen = typeof body.imagen === 'string' ? body.imagen : null;
+    if (body.anularPedido !== undefined && typeof body.anularPedido !== 'boolean') {
+      throw new BadRequestException('La opción de anulación no es válida.');
+    }
+    const anularPedido = body.anularPedido === true;
+    const motivoAnulacion = anularPedido ? String(body.motivoAnulacion ?? '').trim().slice(0, 300) : '';
+    if (anularPedido && !motivoAnulacion) throw new BadRequestException('Indica el motivo de anulación.');
     if (!pedidoId || !usuarioId) throw new BadRequestException('Falta el pedido o el responsable.');
     if (!motivo) throw new BadRequestException('Indica el motivo del incumplimiento.');
     if (descripcion.length < 10) throw new BadRequestException('Describe lo ocurrido (mínimo 10 caracteres).');
@@ -334,6 +344,7 @@ export class IncumplimientosService implements OnModuleInit {
       fechaProgramada: d.entregaProgramada ? d.fechaProgramada ?? null : null,
       horaDespacho: d.horaDespacho ?? null,
       estado,
+      ...(anularPedido ? { anulacion: { motivo: motivoAnulacion } } : {}),
       pago: d.pago ?? '',
       entrega: d.entrega ?? '',
       vendedor: d.vendedorNombre ?? '',
@@ -367,8 +378,8 @@ export class IncumplimientosService implements OnModuleInit {
       },
     };
 
-    try {
-      const ins = await this.pool.query<Fila>(
+    const insertar = async (conexion: Pick<PoolClient, 'query'>): Promise<Incumplimiento> => {
+      const ins = await conexion.query<Fila>(
         `INSERT INTO incumplimientos_personal
            (pedido_id, comanda, punto_id, punto_nombre, usuario_id, usuario_nombre, usuario_cedula,
             motivo, descripcion, estado_pedido, pedido, imagen, registrado_por_id, registrado_por_nombre, criterio)
@@ -393,12 +404,60 @@ export class IncumplimientosService implements OnModuleInit {
         ],
       );
       return aIncumplimiento(ins.rows[0]);
+    };
+    try {
+      if (!anularPedido) return await insertar(this.pool);
+      let registro: Incumplimiento | undefined;
+      await this.pedidos.guardar(
+        { ...d, id: p.id, anulado: true, estado: 'Anulado', motivo: motivoAnulacion },
+        autor,
+        { antesDeConfirmar: async (conexion, _pedido, esNuevo) => {
+          if (esNuevo) throw new NotFoundException('El pedido ya no existe.');
+          registro = await insertar(conexion);
+        } },
+      );
+      if (!registro) throw new Error('No se confirmó el registro del incumplimiento.');
+      return registro;
     } catch (e) {
       if ((e as { code?: string }).code === '23505') {
         throw new ConflictException('Este pedido ya fue marcado como no gestionado hoy.');
       }
       throw e;
     }
+  }
+
+  async resumen(desde?: string, hasta?: string) {
+    for (const fecha of [desde, hasta]) {
+      if (fecha && (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(Date.parse(fecha)) || new Date(fecha).toISOString().slice(0, 10) !== fecha)) {
+        throw new BadRequestException('Selecciona fechas válidas para el resumen.');
+      }
+    }
+    if (desde && hasta && desde > hasta) throw new BadRequestException('La fecha inicial no puede ser posterior a la final.');
+    const resultado = await this.pool.query<{
+      total: number;
+      puntos: number;
+      personas: { usuarioId: string; nombre: string; total: number }[];
+      motivos: { motivo: string; total: number }[];
+    }>(
+      `WITH base AS (
+         SELECT usuario_id, usuario_nombre, motivo, punto_id, creado_en
+           FROM incumplimientos_personal
+          WHERE ($1::date IS NULL OR creado_en >= ($1::date::timestamp AT TIME ZONE 'America/Bogota'))
+            AND ($2::date IS NULL OR creado_en < (($2::date + 1)::timestamp AT TIME ZONE 'America/Bogota'))
+       ), personas AS (
+         SELECT usuario_id AS "usuarioId", (array_agg(usuario_nombre ORDER BY creado_en DESC))[1] AS nombre,
+                COUNT(*)::int AS total
+           FROM base GROUP BY usuario_id
+       ), motivos AS (
+         SELECT motivo, COUNT(*)::int AS total FROM base GROUP BY motivo
+       )
+       SELECT COUNT(*)::int AS total, COUNT(DISTINCT NULLIF(punto_id, ''))::int AS puntos,
+              COALESCE((SELECT jsonb_agg(personas ORDER BY total DESC, nombre ASC) FROM personas), '[]'::jsonb) AS personas,
+              COALESCE((SELECT jsonb_agg(motivos ORDER BY total DESC, motivo ASC) FROM motivos), '[]'::jsonb) AS motivos
+         FROM base`,
+      [desde || null, hasta || null],
+    );
+    return resultado.rows[0] ?? { total: 0, puntos: 0, personas: [], motivos: [] };
   }
 
   /** Personas con incumplimientos registrados (resumen). */

@@ -92,7 +92,7 @@ export interface DespachoMeta {
    * Bandera liviana del comprobante de pago (la imagen se guarda aparte y se
    * consulta por separado). Solo aplica a pedidos de transferencia o mixto.
    */
-  comprobante?: { tiene: boolean; confirmado: boolean } | null;
+  comprobante?: { tiene: boolean; confirmado: boolean; referencia?: string | null } | null;
   /** Devolución registrada en Despacho (ya descontada de facturaValor). */
   devolucion?: DevolucionPedido;
   /** Envíos a FUNDACIÓN: órdenes "comanda-NF" subidas a Drivin hacia direcciones alternas del cliente. */
@@ -312,6 +312,21 @@ export interface ComprobantePago {
   confirmado: boolean;
   subidoPor: string | null;
   confirmadoPor: string | null;
+  referencia: string | null;
+  ocr: LecturaComprobante | null;
+}
+
+export interface LecturaComprobante {
+  estado: "positivo" | "dudoso" | "no_disponible";
+  referencia: string | null;
+  entidad: string | null;
+}
+
+export const requiereComprobantePago = (pago?: string | null) =>
+  ["transferencia", "mixto"].includes((pago ?? "").trim().toLowerCase());
+
+export function analizarComprobanteApi(id: string): Promise<{ ocr: LecturaComprobante; referencia: string | null }> {
+  return apiFetch(`/pedidos/${id}/comprobante/analizar`, { method: "POST" });
 }
 
 /** Consulta el comprobante de pago de un pedido (o null si no existe). */
@@ -353,10 +368,11 @@ export function subirComprobanteApi(
 export function confirmarComprobanteApi(
   id: string,
   confirmadoPor?: string | null,
-): Promise<{ id: string }> {
-  return apiFetch<{ id: string }>(`/pedidos/${id}/comprobante/confirmar`, {
+  referencia?: string,
+): Promise<{ id: string; referencia: string }> {
+  return apiFetch<{ id: string; referencia: string }>(`/pedidos/${id}/comprobante/confirmar`, {
     method: "PATCH",
-    body: JSON.stringify({ confirmadoPor }),
+    body: JSON.stringify({ confirmadoPor, referencia }),
   });
 }
 
