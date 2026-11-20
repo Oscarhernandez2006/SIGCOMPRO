@@ -1275,11 +1275,6 @@ export default function DespachoPage() {
       alert("Adjunta la foto de la factura junto a la cédula antes de marcar la compra como entregada.");
       return;
     }
-    if ((n === "facturado" || n === "despachado") && requiereComprobantePago(pedidos.find((pedido) => pedido.id === id)?.pago) &&
-      (!mm.comprobante?.tiene || !mm.comprobante.confirmado || !mm.comprobante.referencia?.trim())) {
-      alert("Adjunta y confirma el comprobante con su número de transacción o referencia antes de facturar o despachar.");
-      return;
-    }
     if (n === "despachado" && !mm.domiciliario?.trim()) {
       // Solo ADMIN puede asignar un domiciliario MANUAL para cerrar el ciclo
       // (p. ej. si Drivin rebotó el pedido por consecutivo cruzado y no lo
@@ -2305,8 +2300,8 @@ export default function DespachoPage() {
                 const evidenciaEntregaClub = Boolean(m.evidenciaEntregaClub);
                 const comp = m.comprobante ?? null;
                 const compConfirmado = Boolean(comp?.confirmado);
-                // Comprobante SUBIDO pero SIN confirmar: bloquea el despacho.
-                const comprobantePendiente = requiereComprobante && (!comp?.tiene || !compConfirmado || !comp.referencia?.trim());
+                // Comprobante opcional: puede adjuntarse y confirmarse después sin bloquear el despacho.
+                const comprobantePendiente = false;
                 // El cliente recoge en el punto de venta (no lleva domiciliario).
                 const esRecoge = p.entrega === "recoge";
                 // ¿El punto del pedido está integrado con Drivin? Si no, el
@@ -2907,8 +2902,8 @@ export default function DespachoPage() {
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
                             }
-                            disabled={anulado || !impreso || comprobantePendiente || !puedeEstado("Facturado")}
-                            title={!impreso ? "Imprime la comanda primero" : comprobantePendiente ? "Adjunta el comprobante, ingresa su referencia y confírmalo" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
+                            disabled={anulado || !impreso || !puedeEstado("Facturado")}
+                            title={!impreso ? "Imprime la comanda primero" : "Confirma la transferencia e inicia el cronómetro de 1 hora para despachar"}
                             className={`w-full whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
                           >
                             Confirmar transferencia
@@ -2916,15 +2911,13 @@ export default function DespachoPage() {
                         ) : (
                           <button
                             onClick={() => cambiarEstado(p.id, "Facturado")}
-                            disabled={anulado || facturado || !alistado || !hayPorcionador || comprobantePendiente || !puedeEstado("Facturado")}
+                            disabled={anulado || facturado || !alistado || !hayPorcionador || !puedeEstado("Facturado")}
                             title={
                               !hayPorcionador
                                 ? "Asigna un porcionador en el alistamiento antes de facturar"
                                 : !alistado && !facturado
                                   ? "Debes terminar el alistamiento antes de facturar"
-                                  : comprobantePendiente
-                                    ? "Debes confirmar el comprobante de pago para facturar"
-                                    : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
+                                  : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
                                       ? "Ingresa el número y el valor de la factura para facturar"
                                       : "Marcar el pedido como facturado"
                             }

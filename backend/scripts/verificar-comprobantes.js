@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 require('ts-node').register({ project: path.join(__dirname, '../tsconfig.json'), transpileOnly: true });
@@ -40,31 +41,24 @@ function servicio(query) {
   return instancia;
 }
 
-test('transferencia y mixto requieren imagen, referencia y confirmación', async () => {
-  for (const pago of ['Transferencia', ' Mixto ']) {
-    for (const fila of [undefined, { tiene: false, referencia: '123456', confirmado: true },
-      { tiene: true, referencia: ' ', confirmado: true }, { tiene: true, referencia: '123456', confirmado: false }]) {
-      const instancia = servicio(async (sql, params) => {
-        assert.ok(sql.includes('FROM comprobantes_pago'));
-        assert.deepEqual(params, ['pedido-prueba']);
-        return { rows: fila ? [fila] : [] };
-      });
-      await assert.rejects(() => instancia.validarComprobantePago('pedido-prueba', pago), /Adjunta y confirma/);
-    }
-  }
+test('transferencia y mixto pueden avanzar sin comprobante', () => {
+  const backend = fs.readFileSync(path.join(__dirname, '../src/pedidos/pedidos.service.ts'), 'utf8');
+  const frontend = fs.readFileSync(path.join(__dirname, '../../frontend/src/app/(panel)/despacho/page.tsx'), 'utf8');
+  assert.doesNotMatch(backend, /validarComprobantePago/);
+  assert.doesNotMatch(frontend, /comprobantePendiente\s*\|\|/);
+  assert.doesNotMatch(frontend, /Adjunta y confirma el comprobante/);
 });
 
-test('efectivo, tarjeta y crédito no requieren comprobante', async () => {
-  const instancia = servicio(async () => { throw new Error('No debe consultar comprobantes'); });
-  for (const pago of ['Efectivo', 'Tarjeta', 'Crédito', 'QR', undefined]) await instancia.validarComprobantePago('pedido-prueba', pago);
+test('todos los métodos pueden guardar pedidos sin consultar comprobantes', () => {
+  const backend = fs.readFileSync(path.join(__dirname, '../src/pedidos/pedidos.service.ts'), 'utf8');
+  assert.doesNotMatch(backend, /validarComprobantePago/);
+  assert.doesNotMatch(backend, /Adjunta y confirma el comprobante/);
 });
 
-test('el resultado OCR nunca condiciona la validación del pago', async () => {
-  for (const estado of ['positivo', 'dudoso', 'no_disponible']) {
-    const instancia = servicio(async () => ({ rows: [{ tiene: true, referencia: 'MANUAL-1234', confirmado: true, ocr: { estado } }] }));
-    await instancia.validarComprobantePago('pedido-prueba', 'Transferencia');
-    await instancia.validarComprobantePago('pedido-prueba', 'Mixto');
-  }
+test('el resultado OCR nunca condiciona facturación ni despacho', () => {
+  const backend = fs.readFileSync(path.join(__dirname, '../src/pedidos/pedidos.service.ts'), 'utf8');
+  assert.doesNotMatch(backend, /comprobantePendiente/);
+  assert.doesNotMatch(backend, /validarComprobantePago/);
 });
 
 test('confirmar guarda referencia manual sin consultar ni esperar al OCR', async () => {
@@ -81,16 +75,15 @@ test('confirmar guarda referencia manual sin consultar ni esperar al OCR', async
   await assert.rejects(() => sinImagen.confirmarComprobante('pedido-prueba', null, '123456'), /Adjunta una imagen/);
 });
 
-test('confirmar transferencia valida el comprobante antes de actualizar metadata', async () => {
+test('confirmar transferencia actualiza metadata sin exigir comprobante', async () => {
   let actualizaciones = 0;
   const instancia = servicio(async (sql) => {
-    if (sql.includes("data->>'pago'")) return { rows: [{ pago: 'Transferencia' }] };
-    if (sql.includes('FROM comprobantes_pago')) return { rows: [] };
+    if (sql.includes('FROM comprobantes_pago')) throw new Error('No debe consultar comprobantes');
     actualizaciones++;
     return { rows: [] };
   });
-  await assert.rejects(() => instancia.actualizarMeta('pedido-prueba', { pagoConfirmado: '2026-11-17T12:00:00Z' }), /Adjunta y confirma/);
-  assert.equal(actualizaciones, 0);
+  await instancia.actualizarMeta('pedido-prueba', { pagoConfirmado: '2026-11-17T12:00:00Z' });
+  assert.equal(actualizaciones, 1);
 });
 
 test('límite de OCR no encola ni bloquea confirmaciones manuales', async () => {

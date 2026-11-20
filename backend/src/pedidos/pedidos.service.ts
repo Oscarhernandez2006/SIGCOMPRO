@@ -1325,7 +1325,6 @@ export class PedidosService implements OnModuleInit {
         );
       }
       if (!anulado && entraAFacturadoODespachado) {
-        await this.validarComprobantePago(id, finalPedido.pago, client);
         const numFactura = String(metaActual.facturaNumero ?? '').trim();
         const valFactura = Number(metaActual.facturaValor);
         if (!numFactura || !Number.isFinite(valFactura) || valFactura <= 0) {
@@ -1885,10 +1884,6 @@ export class PedidosService implements OnModuleInit {
     // Sello del usuario (del JWT) que asigna el porcionador o factura: lo usa
     // Incumplimientos para saber a quién corresponde un pedido no gestionado.
     const c = (cambios ?? {}) as Record<string, unknown>;
-    if (c.pagoConfirmado) {
-      const pedido = await this.pool.query<{ pago: string }>(`SELECT data->>'pago' AS pago FROM pedidos WHERE id = $1`, [id]);
-      await this.validarComprobantePago(id, pedido.rows[0]?.pago);
-    }
     const sello: Record<string, string> = {};
     if (user?.sub) {
       if (typeof c.porcionador === 'string' && c.porcionador.trim()) sello.porcionadorAsignadoPorId = String(user.sub);
@@ -1910,18 +1905,6 @@ export class PedidosService implements OnModuleInit {
         );
     }
     return { id };
-  }
-
-  private async validarComprobantePago(id: string, pago: unknown, conexion: Pick<PoolClient, 'query'> = this.pool) {
-    if (!['transferencia', 'mixto'].includes(String(pago ?? '').trim().toLowerCase())) return;
-    const resultado = await conexion.query<{ tiene: boolean; referencia: string | null; confirmado: boolean }>(
-      `SELECT (jsonb_array_length(COALESCE(imagenes, '[]'::jsonb)) > 0 OR imagen IS NOT NULL) AS tiene,
-              referencia, confirmado FROM comprobantes_pago WHERE pedido_id = $1`, [id],
-    );
-    const comprobante = resultado.rows[0];
-    if (!comprobante?.tiene || !comprobante.referencia?.trim() || !comprobante.confirmado) {
-      throw new BadRequestException('Adjunta y confirma el comprobante con su número de transacción o referencia antes de facturar o despachar.');
-    }
   }
 
   private async verificarAccesoComprobante(id: string, user?: JwtPayload) {
@@ -3066,9 +3049,7 @@ export class PedidosService implements OnModuleInit {
               }
               // También reintenta completar el estado si el guardado previo
               // falló después de sincronizar la metadata.
-              const requiereComprobante = ['transferencia', 'mixto'].includes(String(data.pago ?? '').trim().toLowerCase());
-              const comprobantePendiente = requiereComprobante && (!meta.comprobante?.tiene || !meta.comprobante.confirmado || !meta.comprobante.referencia?.trim());
-              if (est === 'facturado' && !comprobantePendiente) {
+              if (est === 'facturado') {
                 const guardado = await this.guardar(
                   { ...data, id: ped.id, estado: 'Despachado' },
                   undefined,
