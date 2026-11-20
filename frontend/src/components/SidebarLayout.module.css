@@ -42,95 +42,6 @@
   min-width: 0;
 }
 
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.layout [data-sidebar-actions]:has(.editButton) {
-  grid-template-columns: minmax(0, 1fr) 76px;
-}
-
-.layout [data-sidebar-actions]:has([data-editing="true"]) {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.layout [data-sidebar-actions]:has(.editButton) > button {
-  padding-inline: 8px;
-  gap: 8px;
-}
-
-.editButton {
-  border-color: rgb(255 255 255 / 25%);
-}
-
-.orderRow {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
-  align-items: start;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 4%);
-}
-
-.orderContent {
-  min-width: 0;
-}
-
-.layout nav .dragHandle {
-  display: flex;
-  min-height: 44px;
-  width: 36px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: rgb(255 255 255 / 65%);
-  cursor: grab;
-  touch-action: none;
-}
-
-.dragHandle:hover,
-.dragHandle:focus-visible {
-  background: rgb(255 255 255 / 15%);
-  color: #fff;
-}
-
-.dragHandle:active {
-  cursor: grabbing;
-}
-
-.dragHandle:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: -2px;
-}
-
-.dragHandle:disabled {
-  cursor: default;
-  opacity: 0.3;
-}
-
-.dragHandle svg {
-  width: 18px;
-  height: 18px;
-}
-
-.orderRow[data-dragging="true"] {
-  z-index: 10;
-  background: var(--sidebar-background, var(--color-brand-wine));
-  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
-  outline: 1px solid rgb(255 255 255 / 30%);
-}
-
-.orderError {
-  flex-basis: 100%;
-  font-size: 11px;
-  color: #fecaca;
-  overflow-wrap: anywhere;
-}
-
 .toggle {
   display: flex;
   width: 36px;
@@ -261,14 +172,6 @@
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: 4px;
-  }
-
-  .layout[data-collapsed="true"] [data-sidebar-actions]:has(.editButton) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .layout[data-collapsed="true"] .controls {
-    flex-direction: column;
   }
 
   .layout[data-collapsed="true"] [data-sidebar-actions] > .toggle {

@@ -7,13 +7,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { tieneAccesoAdministrativo, puedeVerClaveDinamica, getToken, getUsuario, limpiarSesion, refrescarUsuario, type Usuario } from "@/lib/auth";
 import { panelesAccesibles, puedeVerModulo } from "@/lib/permisos";
 import { cargarResumenPedidos } from "@/lib/pedidos";
+import { misPuntosVenta } from "@/lib/puntos-venta";
 import { yaDespachado } from "@/lib/despacho";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
-import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
-import PendientesCreditoBadge from "./PendientesCreditoBadge";
-import { ShoppingBag, UtensilsCrossed } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -30,8 +29,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/almuerzos", modulo: "almuerzos", roles: ["despacho", "supervisor general", "supervisor_general", "administrador pdv"], icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
-  { label: "Club Yo Soy Santacruz", href: "/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -81,6 +78,16 @@ const navItems: NavItem[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Almuerzos",
+    href: "/almuerzos",
+    modulo: "despacho",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75-1.5.75a3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0L3 16.5m15-3.379a48.474 48.474 0 0 0-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 0 1 3 20.625v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 0 1 6 13.12M12.265 3.11a.375.375 0 1 1-.53 0L12 2.845l.265.265Z" />
       </svg>
     ),
   },
@@ -224,9 +231,17 @@ export default function PanelShell({ children }: { children: ReactNode }) {
     const rol = (usuario?.rol ?? "").trim().toLowerCase();
     if (rol === "facturador" || rol === "despacho") {
       try {
-        const { pedidos } = await cargarResumenPedidos({ rango: "hoy" });
+        const [{ pedidos }, puntos] = await Promise.all([
+          cargarResumenPedidos({ rango: "hoy" }),
+          misPuntosVenta(),
+        ]);
+        const misPuntos = new Set(puntos.map((p) => String(p.id)));
         const pendientes = pedidos.filter(
-          (p) => !p.anulado && !yaDespachado(p.estado) && (p.estado ?? "").trim().toLowerCase() !== "anulado",
+          (p) =>
+            misPuntos.has(String(p.punto?.id ?? "")) &&
+            !p.anulado &&
+            !yaDespachado(p.estado) &&
+            (p.estado ?? "").trim().toLowerCase() !== "anulado",
         );
         if (pendientes.length > 0) {
           setAvisoPendientes(pendientes.length);
@@ -262,7 +277,6 @@ export default function PanelShell({ children }: { children: ReactNode }) {
   const esAdmin = tieneAccesoAdministrativo(usuario?.rol);
   const rolUsuario = (usuario?.rol ?? "").trim().toLowerCase();
   const itemsVisibles = navItems.filter((item) =>
-    (!item.roles || tieneAccesoAdministrativo(usuario?.rol) || item.roles.includes((usuario?.rol ?? "").trim().toLowerCase())) &&
     item.roles
       ? esAdmin || item.roles.includes(rolUsuario)
       : item.soloAdmin
@@ -272,7 +286,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
 
   function NavList({ onNavigate }: { onNavigate?: () => void }) {
     return (
-      <SidebarNav className="flex flex-1 flex-col gap-1 px-3">
+      <nav className="flex flex-1 flex-col gap-1 px-3">
         {itemsVisibles.map((item) => {
           const active = pathname === item.href;
           return (
@@ -289,17 +303,17 @@ export default function PanelShell({ children }: { children: ReactNode }) {
                   : "text-brand-cream/80 hover:bg-brand-cream/10 hover:text-brand-cream"
               }`}
             >
-              {item.href === "/pedidos-credito" ? <div className="relative shrink-0">{item.icon}<PendientesCreditoBadge /></div> : item.icon}
+              {item.icon}
               <span>{item.label}</span>
             </Link>
           );
         })}
-      </SidebarNav>
+      </nav>
     );
   }
 
   return (
-    <SidebarLayout panel="operativo">
+    <SidebarLayout>
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine text-brand-cream lg:flex">
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
@@ -396,7 +410,6 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             </div>
             <div className="mx-3 mb-2 border-t border-brand-cream/10" />
             <NavList onNavigate={() => setMobileOpen(false)} />
-            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-1 border-t border-brand-cream/10 p-3">
               {puedeCambiarPanel && (
                 <Link
@@ -480,7 +493,7 @@ export default function PanelShell({ children }: { children: ReactNode }) {
             </div>
             <h3 className="mt-3 font-serif text-lg font-bold text-brand-wine">Tienes pedidos pendientes</h3>
             <p className="mt-1.5 text-sm text-brand-black">
-              Hay {avisoPendientes} pedido{avisoPendientes === 1 ? "" : "s"} sin terminar en Despacho. ¿Seguro que quieres cerrar sesión?
+              Hay {avisoPendientes} pedido{avisoPendientes === 1 ? "" : "s"} sin terminar en Despacho en tu punto de venta. ¿Seguro que quieres cerrar sesión?
             </p>
             <div className="mt-5 flex justify-center gap-2">
               <button

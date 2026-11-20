@@ -30,9 +30,7 @@ export interface ActualizarUsuarioInput {
 
 /** Roles disponibles para asignar a los usuarios. */
 export const ROLES_SUGERIDOS = [
-  "Administrador",
   "Gerente",
-  "Supervisor general",
   "Administrador pdv",
   "Administrador app",
   "Supervisor",
@@ -65,7 +63,6 @@ export interface ApartadoCatalogo {
 }
 
 export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
-  { key: "administracion", label: "Administración", modulos: [{ key: "sidebar", label: "Menús de paneles", acciones: [{ key: "sidebar.organizar", label: "Organizar menús (solo administradores)" }] }] },
   {
     key: "operativo",
     label: "Módulos operativos",
@@ -102,7 +99,6 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: "historicos",
         label: "Históricos",
       },
-      { key: "almuerzos", label: "Aprobación almuerzo" },
       {
         key: "monitoreo",
         label: "Monitoreo",
@@ -173,11 +169,11 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
   },
   {
     key: "credito_empleados",
-    label: "Club Yo Soy Santacruz",
+    label: "Panel crédito empleados",
     modulos: [
       {
         key: "credito_empleados",
-        label: "Club Yo Soy Santacruz",
+        label: "Crédito empleados",
         acciones: [
           {
             key: "credito_empleados.cupos",

@@ -19,10 +19,8 @@ import { resumenPendientesExtension } from "@/lib/extensiones";
 import { notificarSistema, pedirPermisoNotificaciones, sonidoNuevaExtension } from "@/lib/notificaciones";
 import ClaveDinamica from "./ClaveDinamica";
 import ChatBubble from "./ChatBubble";
-import SidebarLayout, { SidebarNav, SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
+import SidebarLayout, { SidebarToggle, useSidebarDrawer } from "./SidebarLayout";
 import AvisoProcesoPlanes from "./AvisoProcesoPlanes";
-import PendientesCreditoBadge from "./PendientesCreditoBadge";
-import { ShoppingBag, UtensilsCrossed } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -39,8 +37,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Aprobación almuerzo", href: "/admin/almuerzos", modulo: "almuerzos", icon: <UtensilsCrossed className="h-5 w-5" aria-hidden="true" /> },
-  { label: "Club Yo Soy Santacruz", href: "/admin/pedidos-credito", modulo: "credito_empleados", icon: <ShoppingBag className="h-5 w-5" aria-hidden="true" /> },
   {
     label: "Dashboard",
     href: "/admin/dashboard",
@@ -99,6 +95,15 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Almuerzos",
+    href: "/admin/almuerzos",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75-1.5.75a3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0L3 16.5m15-3.379a48.474 48.474 0 0 0-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 0 1 3 20.625v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 0 1 6 13.12M12.265 3.11a.375.375 0 1 1-.53 0L12 2.845l.265.265Z" />
+      </svg>
+    ),
+  },
+  {
     label: "Cuadre de caja",
     href: "/admin/cuadre-caja",
     icon: (
@@ -118,7 +123,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Aprobación extensión",
+    label: "Aprobación de extensiones",
     href: "/admin/solicitudes-extension",
     soloDashboard: true,
     burbujaExtensiones: true,
@@ -384,14 +389,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     );
     const esActivo = (href: string) => pathname.startsWith(href);
     return (
-      <SidebarNav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
         {items.map((item) => {
           // Grupo con sub-opciones (ej. Configuración).
           if (item.children && item.children.length > 0) {
             const algunHijoActivo = item.children.some((h) => esActivo(h.href));
             const abierto = gruposAbiertos[item.label] ?? algunHijoActivo;
             return (
-              <div key={item.label} data-sidebar-id={`grupo:${item.href}`} title={item.label}>
+              <div key={item.label}>
                 <button
                   type="button"
                   title={item.label}
@@ -422,7 +427,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   </svg>
                 </button>
                 {abierto && (
-                  <div data-sidebar-children className="mt-1 space-y-1 border-l border-brand-cream/10 pl-3">
+                  <div className="mt-1 space-y-1 border-l border-brand-cream/10 pl-3">
                     {item.children.map((hijo) => {
                       const active = esActivo(hijo.href);
                       return (
@@ -452,7 +457,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           const active =
             item.href === "/admin"
               ? pathname === "/admin"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
@@ -478,18 +483,18 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   </span>
                 </span>
               ) : (
-                item.href === "/admin/pedidos-credito" ? <div className="relative shrink-0">{item.icon}<PendientesCreditoBadge /></div> : item.icon
+                item.icon
               )}
-              <span className="min-w-0 whitespace-normal break-words">{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
             </Link>
           );
         })}
-      </SidebarNav>
+      </nav>
     );
   }
 
   return (
-    <SidebarLayout panel="administrativo">
+    <SidebarLayout>
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside data-sidebar id="panel-sidebar-navigation" className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-brand-wine-dark text-brand-cream lg:flex">
         <div data-sidebar-brand className="flex items-center gap-3 px-5 py-5">
@@ -571,7 +576,6 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             </div>
             <div className="mx-3 mb-2 border-t border-brand-cream/10" />
             <NavList onNavigate={() => setMobileOpen(false)} />
-            <div className="px-3 py-2"><SidebarToggle allowCollapse={false} /></div>
             <div className="space-y-1 border-t border-brand-cream/10 p-3">
               {puedeCambiarPanel && (
                 <Link

@@ -1,71 +1,10 @@
 "use client";
 
-import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, GripVertical, Pencil, RefreshCw, X } from "lucide-react";
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { apiFetch } from "@/lib/api";
-import { getUsuario } from "@/lib/auth";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import styles from "./SidebarLayout.module.css";
 
-type PanelSidebar = "administrativo" | "operativo" | "club" | "run-errands";
-const SidebarContext = createContext({
-  collapsed: false, toggle: () => {}, editing: false, saving: false, canEdit: false, loaded: false,
-  error: "", orden: [] as string[], edit: () => {}, cancel: () => {}, save: async () => {},
-  move: (_id: string, _overId: string, _siblings: string[]) => {},
-});
-
-type MenuElementProps = {
-  href?: string; title?: string; children?: ReactNode;
-  "aria-label"?: string; "data-sidebar-id"?: string; "data-sidebar-children"?: boolean;
-};
-
-function menuKey(node: ReactNode) {
-  return isValidElement<MenuElementProps>(node) ? node.props["data-sidebar-id"] || node.props.href || "" : "";
-}
-
-function SortableMenuItem({ node }: { node: ReactElement<MenuElementProps> }) {
-  const { editing, saving } = useContext(SidebarContext);
-  const id = menuKey(node);
-  const group = !!node.props["data-sidebar-id"];
-  const title = node.props.title || node.props["aria-label"] || id;
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !editing || saving });
-  const content = group ? cloneElement(node, {}, Children.map(node.props.children, (child) => {
-    if (!isValidElement<MenuElementProps>(child) || !child.props["data-sidebar-children"]) return child;
-    return cloneElement(child, {}, <SortableMenuList>{child.props.children}</SortableMenuList>);
-  })) : node;
-
-  return <div ref={setNodeRef} data-sidebar-entry data-dragging={isDragging || undefined} className={editing ? styles.orderRow : undefined} style={{ transform: CSS.Transform.toString(transform), transition }}>
-    <div className={styles.orderContent} onClickCapture={(event) => { if (editing && !group) { event.preventDefault(); event.stopPropagation(); } }}>{content}</div>
-    {editing && <button ref={setActivatorNodeRef} type="button" {...attributes} {...listeners} className={styles.dragHandle} aria-label={`Arrastrar ${title}`} title={`Arrastrar ${title}`} disabled={saving}><GripVertical aria-hidden="true" /></button>}
-  </div>;
-}
-
-function SortableMenuList({ children }: { children: ReactNode }) {
-  const { editing, saving, orden, move } = useContext(SidebarContext);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  const elements = Children.toArray(children);
-  const ranks = new Map(orden.map((id, index) => [id, index]));
-  const sorted = elements.filter(menuKey).sort((first, second) => (ranks.get(menuKey(first)) ?? orden.length + elements.indexOf(first)) - (ranks.get(menuKey(second)) ?? orden.length + elements.indexOf(second)));
-  const siblings = sorted.map(menuKey);
-  return <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ screenReaderInstructions: { draggable: "Para mover esta opcion, pulsa espacio, usa las flechas y confirma con espacio. Escape cancela el arrastre." } }} onDragEnd={({ active, over }) => {
-    if (editing && !saving && over && active.id !== over.id) move(String(active.id), String(over.id), siblings);
-  }}>
-    {elements.filter((node) => !menuKey(node))}
-    <SortableContext items={siblings} strategy={verticalListSortingStrategy}>
-      {sorted.map((node) => isValidElement<MenuElementProps>(node) ? <SortableMenuItem key={menuKey(node)} node={node} /> : null)}
-    </SortableContext>
-  </DndContext>;
-}
-
-export function SidebarNav({ children, className }: { children: ReactNode; className?: string }) {
-  const { editing } = useContext(SidebarContext);
-  return <nav className={className} data-sidebar-editing={editing}><SortableMenuList>{children}</SortableMenuList></nav>;
-}
+const SidebarContext = createContext({ collapsed: false, toggle: () => {} });
 
 export function useSidebarDrawer() {
   const [open, setOpen] = useState(false);
@@ -111,12 +50,11 @@ export function useSidebarDrawer() {
   return [open, setOpen] as const;
 }
 
-export function SidebarToggle({ allowCollapse = true }: { allowCollapse?: boolean }) {
-  const { collapsed, toggle, editing, saving, canEdit, loaded, error, edit, cancel, save } = useContext(SidebarContext);
+export function SidebarToggle() {
+  const { collapsed, toggle } = useContext(SidebarContext);
   const label = collapsed ? "Expandir men\u00fa lateral" : "Contraer men\u00fa lateral";
   return (
-    <div className={styles.controls} data-sidebar-controls data-editing={editing}>
-    {allowCollapse && <button
+    <button
       type="button"
       onClick={toggle}
       aria-label={label}
@@ -124,76 +62,16 @@ export function SidebarToggle({ allowCollapse = true }: { allowCollapse?: boolea
       aria-controls="panel-sidebar-navigation"
       title={label}
       className={styles.toggle}
-      disabled={editing}
     >
       {collapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}
-    </button>}
-    {canEdit && !editing && <button type="button" className={`${styles.toggle} ${styles.editButton}`} aria-label={error && !loaded ? "Reintentar cargar orden del menú" : "Organizar menú"} title={error && !loaded ? error : "Organizar menú"} onClick={edit}>
-      {error && !loaded ? <RefreshCw aria-hidden="true" /> : <Pencil aria-hidden="true" />}
-    </button>}
-    {editing && <>
-      <button type="button" className={`${styles.toggle} ${styles.editButton}`} title="Guardar orden" aria-label="Guardar orden" disabled={saving} onClick={() => void save()}><Check aria-hidden="true" /></button>
-      <button type="button" className={styles.toggle} title="Cancelar organización" aria-label="Cancelar organización" disabled={saving} onClick={cancel}><X aria-hidden="true" /></button>
-    </>}
-    {error && (editing || !loaded) && <div role="alert" className={styles.orderError}>{error}</div>}
-    </div>
+    </button>
   );
 }
 
-export default function SidebarLayout({ children, panel = "operativo" }: { children: ReactNode; panel?: PanelSidebar }) {
+export default function SidebarLayout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [canEdit, setCanEdit] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
-  const [orden, setOrden] = useState<string[]>([]);
-  const [guardado, setGuardado] = useState<string[]>([]);
-  const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    setCanEdit(["administrador", "administrador app", "desarrollador"].includes((getUsuario()?.rol || "").trim().toLowerCase()));
-  }, []);
-
-  useEffect(() => {
-    if (editing) return;
-    let active = true;
-    const load = async () => {
-      try {
-        const data = await apiFetch<{ orden: string[] }>(`/configuracion/sidebar/${panel}`);
-        if (active) { setOrden(data.orden); setGuardado(data.orden); setLoaded(true); setError(""); }
-      } catch (failure) { if (active) setError(failure instanceof Error ? failure.message : "No se pudo cargar el orden."); }
-    };
-    void load();
-    const interval = setInterval(load, 30000);
-    return () => { active = false; clearInterval(interval); };
-  }, [panel, editing, reload]);
-
-  const move = (id: string, overId: string, siblings: string[]) => {
-    const index = siblings.indexOf(id);
-    const target = siblings.indexOf(overId);
-    if (index < 0 || target < 0 || target >= siblings.length || saving) return;
-    const reordered = arrayMove(siblings, index, target);
-    setOrden((previous) => {
-      let position = 0;
-      const members = new Set(siblings);
-      return [...new Set([...previous, ...siblings])].map((key) => members.has(key) ? reordered[position++] : key);
-    });
-  };
-  const save = async () => {
-    if (!canEdit || saving) return;
-    setSaving(true); setError("");
-    try {
-      const data = await apiFetch<{ orden: string[] }>(`/configuracion/sidebar/${panel}`, { method: "PUT", body: JSON.stringify({ orden }) });
-      setOrden(data.orden); setGuardado(data.orden); setEditing(false);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "No se pudo guardar el orden."); }
-    finally { setSaving(false); }
-  };
   return (
-    <SidebarContext.Provider value={{ collapsed, toggle: () => setCollapsed((previous) => !previous), editing, saving, canEdit, loaded, error, orden, move, save,
-      edit: () => { if (!loaded) { setReload((previous) => previous + 1); return; } setCollapsed(false); setError(""); setEditing(true); },
-      cancel: () => { setOrden(guardado); setError(""); setEditing(false); },
-    }}>
+    <SidebarContext.Provider value={{ collapsed, toggle: () => setCollapsed((previous) => !previous) }}>
       <div className={`${styles.layout} min-h-screen bg-brand-cream-soft text-brand-black`} data-collapsed={collapsed}>
         {children}
       </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
 import { imprimirComanda, METODOS, numerosDelDia, type Pedido } from "@/app/(panel)/pedidos/page";
 import { misPuntosVenta, type PuntoVenta } from "@/lib/puntos-venta";
 import { getUsuario, puedeMultiPunto, puedeSeleccionarPuntoVenta, tieneAccesoAdministrativo } from "@/lib/auth";
@@ -17,9 +16,7 @@ import {
   descargarExcelDespacho,
   enviarADrivinApi,
   obtenerComprobanteApi,
-  obtenerEvidenciaEntregaClubApi,
   subirComprobanteApi,
-  subirEvidenciaEntregaClubApi,
   confirmarComprobanteApi,
   eliminarComprobanteApi,
   cargarAsignacionesDrivin,
@@ -405,7 +402,6 @@ function tiempoEnEstado(iso: string): string {
 }
 
 export default function DespachoPage() {
-  const esClub = usePathname().includes("pedidos-credito");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [impresos, setImpresos] = useState<Set<string>>(new Set());
   // Metadata de despacho (porcionador, etapas, liberación) por id de pedido.
@@ -459,11 +455,6 @@ export default function DespachoPage() {
   // confirmación. La imagen se consulta bajo demanda (no viene en la carga
   // masiva). `compSubirId` = pedido que abrió el selector de archivo.
   const compFileRef = useRef<HTMLInputElement>(null);
-  const evidenciaClubFileRef = useRef<HTMLInputElement>(null);
-  const [evidenciaClubId, setEvidenciaClubId] = useState<string | null>(null);
-  const [evidenciaClubSubiendo, setEvidenciaClubSubiendo] = useState<Record<string, boolean>>({});
-  const [evidenciaClubImagen, setEvidenciaClubImagen] = useState<Record<string, string>>({});
-  const [evidenciaClubVista, setEvidenciaClubVista] = useState<string | null>(null);
   const [compSubirId, setCompSubirId] = useState<string | null>(null);
   const [compSubiendo, setCompSubiendo] = useState<Record<string, boolean>>({});
   // Imágenes del comprobante por pedido (varias) y modal con la imagen actual.
@@ -545,9 +536,6 @@ export default function DespachoPage() {
   // su permiso (despacho.estado.<estado>); el maestro despacho.estado y los
   // roles con acceso total habilitan todos.
   const puedeEstado = (estado?: string | null): boolean => {
-    if (esClub && puedeAccion(usuarioDesp, "credito_empleados.estado")) {
-      return ["en producción", "alistado", "facturado", "entregado"].includes(norm(estado));
-    }
     if (puedeAccion(usuarioDesp, "despacho.estado")) return true;
     const clave = PERMISO_POR_ESTADO[norm(estado)];
     return clave ? puedeAccion(usuarioDesp, clave) : false;
@@ -593,8 +581,8 @@ export default function DespachoPage() {
   // IDs de los puntos del usuario integrados con Drivin (config por punto). Los
   // que NO están aquí siguen el flujo MANUAL (no suben ni bajan de Drivin).
   const idsDrivin = useMemo(
-    () => new Set(esClub ? [] : puntosAsignados.filter((p) => p.drivin).map((p) => String(p.id))),
-    [puntosAsignados, esClub],
+    () => new Set(puntosAsignados.filter((p) => p.drivin).map((p) => String(p.id))),
+    [puntosAsignados],
   );
 
   // Carga inicial + auto-actualización (polling). Cada 7 s (y al volver a la
@@ -617,7 +605,7 @@ export default function DespachoPage() {
       // haciendo cada poll mucho más liviano (KB en vez de MB). Alcance 'hoy':
       // activos (cualquier fecha) + finalizados de hoy — Despacho nunca muestra
       // finalizados de días anteriores, así que no cambia lo que se ve.
-      cargarEstadoPedidos({ desde, rango: esClub ? "todo" : "hoy", canal: esClub ? "club" : undefined })
+      cargarEstadoPedidos({ desde, rango: "hoy" })
         .then((e) => {
           if (!activo) return;
           desde = e.ahora ?? desde;
@@ -688,7 +676,7 @@ export default function DespachoPage() {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
     };
-  }, [esClub]);
+  }, []);
 
   // Carga los selectores de porcionadores y domiciliarios por punto de venta.
   useEffect(() => {
@@ -1126,8 +1114,8 @@ export default function DespachoPage() {
       Boolean(mm.facturaNumero?.trim()) &&
       typeof mm.facturaValor === "number" &&
       mm.facturaValor > 0;
-    if (n === "facturado" || n === "despachado" || (esClub && n === "entregado")) {
-      const verbo = n === "facturado" ? "facturar" : n === "entregado" ? "entregar" : "despachar";
+    if (n === "facturado" || n === "despachado") {
+      const verbo = n === "facturado" ? "facturar" : "despachar";
       if (!mm.porcionador?.trim()) {
         alert(`No se puede ${verbo} sin un porcionador asignado.`);
         return;
@@ -1136,10 +1124,6 @@ export default function DespachoPage() {
         alert(`No se puede ${verbo} sin número y valor de factura.`);
         return;
       }
-    }
-    if (esClub && n === "entregado" && !mm.evidenciaEntregaClub) {
-      alert("Adjunta la foto de la factura junto a la cédula antes de marcar la compra como entregada.");
-      return;
     }
     // Comprobante SUBIDO pero SIN confirmar: no se puede FACTURAR (sí puede pasar
     // sin comprobante o con el comprobante confirmado, pero no sin confirmar).
@@ -1244,7 +1228,7 @@ export default function DespachoPage() {
     // Para facturar/despachar, garantiza que la factura ya quedó PERSISTIDA en
     // el backend antes de guardar el pedido (evita que la validación del backend
     // falle por una carrera si el último dato de factura seguía en vuelo).
-    if (n === "facturado" || n === "despachado" || (esClub && n === "entregado")) {
+    if (n === "facturado" || n === "despachado") {
       try {
         await actualizarMetaApi(id, {
           facturaNumero: mm.facturaNumero,
@@ -1257,15 +1241,13 @@ export default function DespachoPage() {
     // Al facturar/despachar, si el backend RECHAZA el guardado (p. ej. por falta
     // de número o valor de factura) se revierte el estado optimista para no
     // mostrarlo como hecho.
-    const revertible = n === "facturado" || n === "despachado" || (esClub && n === "entregado");
+    const revertible = n === "facturado" || n === "despachado";
     setPedidos((prev) => {
       const estadoAnterior = prev.find((p) => p.id === id)?.estado;
       const next = prev.map((p) => (p.id === id ? { ...p, estado } : p));
       const actualizado = next.find((p) => p.id === id);
-        if (actualizado)
-        guardarPedidoApi(actualizado).then(() => {
-          if (esClub) window.dispatchEvent(new Event("credito-actualizado"));
-        }).catch(() => {
+      if (actualizado)
+        guardarPedidoApi(actualizado).catch(() => {
           if (!revertible) return;
           setPedidos((cur) =>
             cur.map((p) =>
@@ -1527,47 +1509,6 @@ export default function DespachoPage() {
     }
   };
 
-  const abrirEvidenciaEntregaClub = (id: string) => {
-    setEvidenciaClubId(id);
-    if (evidenciaClubFileRef.current) {
-      evidenciaClubFileRef.current.value = "";
-      evidenciaClubFileRef.current.click();
-    }
-  };
-
-  const subirEvidenciaEntregaClub = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    const id = evidenciaClubId;
-    event.target.value = "";
-    if (!file || !id) return;
-    if (!file.type.startsWith("image/")) { alert("La evidencia debe ser una foto de la factura con la cédula."); return; }
-    setEvidenciaClubSubiendo((previous) => ({ ...previous, [id]: true }));
-    try {
-      const { dataUrl, mime } = await comprimirImagen(file);
-      await subirEvidenciaEntregaClubApi(id, dataUrl, mime, usuarioDesp?.nombre ?? null);
-      setEvidenciaClubImagen((previous) => ({ ...previous, [id]: dataUrl }));
-      setMeta((previous) => ({ ...previous, [id]: { ...previous[id], evidenciaEntregaClub: true } }));
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "No se pudo subir la foto de factura y cédula.");
-    } finally {
-      setEvidenciaClubSubiendo((previous) => ({ ...previous, [id]: false }));
-      setEvidenciaClubId(null);
-    }
-  };
-
-  const verEvidenciaEntregaClub = async (id: string) => {
-    const cached = evidenciaClubImagen[id];
-    if (cached) { setEvidenciaClubVista(cached); return; }
-    try {
-      const evidence = await obtenerEvidenciaEntregaClubApi(id);
-      if (!evidence?.imagen) { alert("La foto de factura y cédula no está disponible."); return; }
-      setEvidenciaClubImagen((previous) => ({ ...previous, [id]: evidence.imagen }));
-      setEvidenciaClubVista(evidence.imagen);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "No se pudo cargar la evidencia de entrega.");
-    }
-  };
-
   // Verifica la clave dinámica para desbloquear un comprobante ya confirmado.
   const confirmarClaveComprobante = async () => {
     if (verificandoComp || !compClaveId) return;
@@ -1683,13 +1624,12 @@ export default function DespachoPage() {
 
   // "De hoy": pedidos para hoy (programados con fecha de hoy o no programados
   // creados hoy). Los contadores y cronómetros del día se basan en estos.
-  const esDelPanel = (pedido: Pedido) => esClub || esDeHoy(pedido);
   const pedidosDeHoy = useMemo(
     () =>
       pedidosVisibles.filter(
-        (p) => esDelPanel(p) || tieneReplicaEnTransito(p, meta[p.id]),
+        (p) => esDeHoy(p) || tieneReplicaEnTransito(p, meta[p.id]),
       ),
-    [pedidosVisibles, meta, esClub],
+    [pedidosVisibles, meta],
   );
   // Posteriores: programados para un día futuro Y con la comanda YA IMPRESA.
   // Un posterior SIN imprimir se queda en la vista de hoy (para poder imprimir
@@ -1773,7 +1713,7 @@ export default function DespachoPage() {
     };
     // Con BÚSQUEDA activa: busca SOLO en los pedidos de HOY (cualquier estado),
     // sin importar la card seleccionada. Nunca trae pedidos de días anteriores.
-    if (q) return pedidosOrdenados.filter((p) => coincide(p) && esDelPanel(p));
+    if (q) return pedidosOrdenados.filter((p) => coincide(p) && esDeHoy(p));
 
     const esAnulado = (p: Pedido) => p.anulado || norm(p.estado) === "anulado";
     // Si hay una card de estado seleccionada, filtra por ese estado; si no,
@@ -1785,25 +1725,25 @@ export default function DespachoPage() {
       // La card "Total" trae TODOS los pedidos en cualquier estado: los de HOY
       // (incluidos despachados, anulados y atrasados) + los Posteriores impresos.
       if (vista === "total")
-        return esDelPanel(p) || (esPosteriorFuturo(p) && impresos.has(p.id));
+        return esDeHoy(p) || (esPosteriorFuturo(p) && impresos.has(p.id));
       // Un pedido atrasado sale de su card de proceso (alistado, producción…) y
       // solo aparece bajo "Atrasados", así el conteo coincide con la tabla.
       if (vista === "transito") {
         // Incluye pedidos con réplicas en camino aunque el pedido ya figure Entregado.
         const repEnTransito = tieneReplicaEnTransito(p, meta[p.id]);
-        return (esDelPanel(p) || repEnTransito) && (estadoSel?.match(p) || repEnTransito) && !atrasadosIds.has(p.id);
+        return (esDeHoy(p) || repEnTransito) && (estadoSel?.match(p) || repEnTransito) && !atrasadosIds.has(p.id);
       }
-      if (estadoSel) return esDelPanel(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
+      if (estadoSel) return esDeHoy(p) && estadoSel.match(p) && !atrasadosIds.has(p.id);
       // Vista por defecto: activos de HOY + posteriores aún no impresos (para
       // poder imprimir su comanda; al imprimirse salen de aquí y quedan solo en
       // la card de Posteriores). Oculta los ya despachados/en tránsito/entregados.
       const activo = !yaDespachado(p.estado) && !esAnulado(p);
       if (!activo) return false;
-      if (esDelPanel(p)) return true;
+      if (esDeHoy(p)) return true;
       if (esPosteriorFuturo(p) && !impresos.has(p.id)) return true;
       return false;
     });
-  }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos, meta, esClub]);
+  }, [pedidosOrdenados, busqueda, vista, atrasadosIds, impresos, meta]);
 
   // Pedidos visibles cuya comanda AÚN no se ha impreso (excluye anulados).
   const noImpresos = useMemo(
@@ -1855,7 +1795,7 @@ export default function DespachoPage() {
       {/* Encabezado + cards Total/Entregados alineadas al grid (misma columna/tamaño). */}
       <div className="mb-3 grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         <div className="col-span-2 flex flex-col justify-center sm:col-span-1 lg:col-span-2 xl:col-span-3">
-          <h1 className="font-serif text-3xl font-bold text-brand-wine">{esClub ? "Club Yo Soy Santacruz" : "Despacho"}</h1>
+          <h1 className="font-serif text-3xl font-bold text-brand-wine">Despacho</h1>
           <p className="mt-1 text-sm text-brand-black">
             Seguimiento de los pedidos del día en Carnes Santacruz.
           </p>
@@ -2116,7 +2056,6 @@ export default function DespachoPage() {
                 // Comprobante de pago: solo aplica a transferencia o mixto.
                 const mixto = norm(p.pago) === "mixto";
                 const requiereComprobante = transferencia || mixto;
-                const evidenciaEntregaClub = Boolean(m.evidenciaEntregaClub);
                 const comp = m.comprobante ?? null;
                 const compConfirmado = Boolean(comp?.confirmado);
                 // Comprobante SUBIDO pero SIN confirmar: bloquea el despacho.
@@ -2286,8 +2225,7 @@ export default function DespachoPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
                                 </svg>
                                 <select
-                                  value={esClub ? "Crédito" : p.pago ?? ""}
-                                  disabled={esClub}
+                                  value={p.pago ?? ""}
                                   onChange={(ev) => cambiarPago(p.id, ev.target.value)}
                                   className="cursor-pointer rounded bg-transparent py-0.5 pr-1 text-[11px] font-semibold text-brand-amber outline-none focus:ring-1 focus:ring-brand-amber"
                                 >
@@ -2672,19 +2610,6 @@ export default function DespachoPage() {
                             )}
                           </div>
                         )}
-                        {esClub && (
-                          <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
-                            <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-wide text-brand-wine">Factura + cédula</p>
-                            {!evidenciaEntregaClub ? (
-                              <button type="button" onClick={() => abrirEvidenciaEntregaClub(p.id)} disabled={anulado || evidenciaClubSubiendo[p.id]} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-brand-wine/40 bg-brand-wine/5 px-2.5 py-1.5 text-[11px] font-semibold text-brand-wine hover:bg-brand-wine/10 disabled:opacity-50">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
-                                {evidenciaClubSubiendo[p.id] ? "Subiendo…" : "Subir foto de factura + cédula"}
-                              </button>
-                            ) : (
-                              <button type="button" onClick={() => void verEvidenciaEntregaClub(p.id)} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100">Ver foto de factura + cédula · Adjunta</button>
-                            )}
-                          </div>
-                        )}
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
                         {transferencia && !pagoConfirmado && !facturado && !despachado ? (
@@ -2752,7 +2677,7 @@ export default function DespachoPage() {
                                 Entregado{m.entregadoEn ? ` · ${fmtHora(m.entregadoEn)}` : ""}
                               </p>
                             )}
-                            {!esClub && !pedidoEsDrivin && !despachado && (
+                            {!pedidoEsDrivin && !despachado && (
                               <button
                                 onClick={() => actualizarMeta(p.id, { domiciliario: "", domiciliarioCodigo: "" })}
                                 className="mt-1 text-[10px] font-semibold text-brand-black underline hover:text-brand-brown"
@@ -2802,7 +2727,7 @@ export default function DespachoPage() {
                         )}
 
                         {/* Réplicas del pedido: el mismo pedido enviado por partes */}
-                        {!esClub && <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
+                        <div className="mt-1 border-t border-brand-brown/10 pt-1.5">
                           <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-brand-black">
                             Réplicas (mismo pedido por partes)
                           </p>
@@ -2867,12 +2792,10 @@ export default function DespachoPage() {
                                 })}
                             </div>
                           )}
-                        </div>}
+                        </div>
                       </div>
                       <div className="absolute inset-x-3 bottom-3">
-                        {esClub && !despachado ? (
-                          <button type="button" onClick={() => cambiarEstado(p.id, "Entregado")} disabled={anulado || !facturado || !evidenciaEntregaClub || !puedeEstado("Entregado")} title={!evidenciaEntregaClub ? "Adjunta primero la foto de la factura junto a la cédula" : "Confirmar entrega en el punto de venta"} className="w-full rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Entregado en PDV</button>
-                        ) : !pedidoEsDrivin && norm(estado) === "entregado" ? (
+                        {!pedidoEsDrivin && norm(estado) === "entregado" ? (
                           <div className="flex w-full items-center justify-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-3.5 w-3.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
@@ -3542,13 +3465,6 @@ export default function DespachoPage() {
         onChange={onArchivoComprobante}
         className="hidden"
       />
-      <input ref={evidenciaClubFileRef} type="file" accept="image/*" capture="environment" onChange={subirEvidenciaEntregaClub} className="hidden" />
-      {evidenciaClubVista && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/75 p-4" onClick={() => setEvidenciaClubVista(null)}>
-        <div role="dialog" aria-modal="true" aria-label="Foto de factura y cédula" className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-3 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-          <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-bold text-brand-wine">Factura + cédula</p><button type="button" onClick={() => setEvidenciaClubVista(null)} className="rounded-lg border border-brand-brown/20 px-3 py-1.5 text-sm">Cerrar</button></div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}<img src={evidenciaClubVista} alt="Factura y cédula del colaborador" className="mx-auto max-h-[78vh] w-auto rounded-lg object-contain" />
-        </div>
-      </div>}
 
       {/* Modal del comprobante de pago: previsualización + acciones */}
       {compModal && (() => {

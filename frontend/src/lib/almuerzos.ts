@@ -25,8 +25,6 @@ export interface SolicitudAlmuerzo {
   resuelto_por_nombre: string | null;
   resuelto_en: string | null;
   motivo_rechazo: string | null;
-  motivo_reprogramacion: string | null;
-  disponible_en: string | null;
   terminado_en: string | null;
   actualizado_en: string;
 }
@@ -66,9 +64,9 @@ export function rechazarAlmuerzo(id: string, motivo?: string): Promise<Solicitud
   });
 }
 
-export function reprogramarAlmuerzo(id: string, hora: string, motivo: string): Promise<SolicitudAlmuerzo> {
+export function reprogramarAlmuerzo(id: string, hora: string): Promise<SolicitudAlmuerzo> {
   return apiFetch(`/almuerzos/${encodeURIComponent(id)}/reprogramar`, {
     method: "PATCH",
-    body: JSON.stringify({ hora, motivo }),
+    body: JSON.stringify({ hora }),
   });
 }

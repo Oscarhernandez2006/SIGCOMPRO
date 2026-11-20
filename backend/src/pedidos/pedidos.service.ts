@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -19,7 +18,6 @@ import { UbicacionesService } from '../ubicaciones/ubicaciones.service';
 import { ExtensionesService } from '../extensiones/extensiones.service';
 import { pesoCarritoKg } from '../common/peso';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
-import { tieneAccesoTotal } from '../users/permisos.catalog';
 
 /** Evento de trazabilidad del pedido (creación / cambio de estado / anulación). */
 export interface TrazaEvento {  tipo: 'creacion' | 'estado' | 'anulacion' | 'cancelacion' | 'edicion';
@@ -349,15 +347,6 @@ export class PedidosService implements OnModuleInit {
         actualizado_en timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS comprobantes_entrega_club (
-        pedido_id text PRIMARY KEY REFERENCES pedidos(id) ON DELETE CASCADE,
-        imagen text NOT NULL,
-        mime text,
-        subido_por text,
-        creado_en timestamptz NOT NULL DEFAULT now()
-      )
-    `);
     // Múltiples imágenes por comprobante (array jsonb de { imagen, mime }). La
     // columna `imagen` (única) queda como legado; se migra a `imagenes` al leer/
     // subir. `imagen` se hace opcional para no exigirla en filas nuevas.
@@ -376,7 +365,6 @@ export class PedidosService implements OnModuleInit {
     rango?: string,
     fecha?: string,
     hasta?: string,
-    canal?: string,
   ): { scope: string; params: unknown[] } {
     const dias =
       Number(this.config.get<string>('PEDIDOS_DIAS_RECIENTES', '3')) || 3;
@@ -423,42 +411,7 @@ export class PedidosService implements OnModuleInit {
     } else {
       scope = `(${activo} OR fecha >= (now() - make_interval(days => ${dias})))`;
     }
-    const filtroCanal = canal === 'club' ? `data->>'canal' = 'club'` : `COALESCE(data->>'canal', '') <> 'club'`;
-    return { scope: `(${scope}) AND (${filtroCanal})`, params };
-  }
-
-  async estadoClub(desde?: string, user?: JwtPayload, rango = 'todo', fecha?: string, hasta?: string) {
-    await this.pool.query(`
-      INSERT INTO pedidos (id, consecutivo, punto_id, estado, anulado, fecha, data, meta)
-      SELECT 'club:' || c.id, c.numero_comanda::int, c.punto_id,
-        CASE WHEN c.estado = 'facturado' THEN 'Facturado' WHEN c.estado = 'entregado' THEN 'Entregado' WHEN c.estado = 'anulado' THEN 'Anulado' ELSE 'En proceso' END, c.estado = 'anulado', c.creado_en,
-        jsonb_build_object(
-          'id', 'club:' || c.id, 'canal', 'club', 'creditoPedidoId', c.id,
-          'comanda', '1CSE' || c.numero_comanda, 'consecutivo', c.numero_comanda,
-          'numeroDia', c.numero_comanda, 'numeroDiaFecha', to_char(c.creado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD'),
-          'fecha', c.creado_en, 'total', c.total, 'estado', CASE WHEN c.estado = 'facturado' THEN 'Facturado' WHEN c.estado = 'entregado' THEN 'Entregado' WHEN c.estado = 'anulado' THEN 'Anulado' ELSE 'En proceso' END,
-          'anulado', c.estado = 'anulado',
-          'entrega', 'recoge', 'pago', 'Crédito', 'observacion', COALESCE(c.observacion, ''),
-          'punto', jsonb_build_object('id', c.punto_id, 'nombre', c.punto_nombre, 'codigo', p.codigo, 'direccion', p.direccion, 'drivin', false),
-          'cliente', jsonb_build_object('id', 'club-cliente:' || c.trabajador_cedula, 'nit_cedula', c.trabajador_cedula,
-            'nombre', c.trabajador_nombre, 'direccion', COALESCE(p.direccion, ''), 'telefono', COALESCE(c.telefono, ''),
-            'barrio', COALESCE(p.barrio, ''), 'ciudad', COALESCE(p.ciudad, ''), 'activo', true),
-          'carrito', COALESCE((SELECT jsonb_agg(jsonb_build_object(
-            'id', c.id || ':' || linea.numero, 'cantidad', COALESCE((linea.item->>'cantidad')::numeric, 1),
-            'observacion', COALESCE(linea.item->>'observacion', ''),
-            'producto', jsonb_build_object('referencia', COALESCE(linea.item->>'referencia', 'CLUB'),
-              'producto', COALESCE(linea.item->>'producto', 'Compra club'), 'um', COALESCE(linea.item->>'um', 'UN'),
-              'precio', COALESCE((linea.item->>'precio')::numeric, 0))))
-            FROM jsonb_array_elements(CASE WHEN jsonb_array_length(COALESCE(c.tienda_items, '[]'::jsonb)) > 0 THEN c.tienda_items
-              ELSE jsonb_build_array(jsonb_build_object('referencia', 'CLUB', 'producto', 'Compra club', 'um', 'UN', 'precio', c.total, 'cantidad', 1)) END)
-              WITH ORDINALITY AS linea(item, numero)), '[]'::jsonb),
-          'trazabilidad', jsonb_build_array(jsonb_build_object('tipo', 'creacion', 'estadoNuevo', 'En proceso', 'fecha', c.creado_en))),
-        jsonb_build_object('domiciliario', 'Recoge en PDV', 'facturaNumero', COALESCE(c.factura_numero, ''), 'facturaValor', c.total)
-      FROM credito_empleados_pedidos c JOIN puntos_venta p ON p.id::text = c.punto_id
-      WHERE c.estado IN ('pendiente', 'facturado', 'entregado', 'anulado')
-      ON CONFLICT (id) DO NOTHING
-    `);
-    return this.estado(desde, rango, fecha, hasta, 'club', user);
+    return { scope, params };
   }
 
   /** Devuelve todos los pedidos junto con su metadata e impresos. */
@@ -467,8 +420,6 @@ export class PedidosService implements OnModuleInit {
     rango?: string,
     fecha?: string,
     hasta?: string,
-    canal?: string,
-    user?: JwtPayload,
   ): Promise<EstadoPedidos> {
     // Conjunto de trabajo. Por DEFECTO (históricos, dashboard)
     // = activos (cualquier fecha) + finalizados de los últimos N días. Pedidos y
@@ -482,13 +433,7 @@ export class PedidosService implements OnModuleInit {
       desde && !Number.isNaN(Date.parse(desde)) ? desde : null;
     const ahora = new Date().toISOString();
 
-    const { scope, params } = this.construirScope(rango, fecha, hasta, canal);
-    let alcanceUsuario = 'true';
-    const supervisorGeneral = ['supervisor general', 'supervisor_general'].includes(String(user?.rol ?? '').trim().toLowerCase());
-    if (canal === 'club' && user && !tieneAccesoTotal(user.rol) && !supervisorGeneral) {
-      params.push(user.sub);
-      alcanceUsuario = `punto_id IN (SELECT punto_venta_id::text FROM usuario_punto_venta WHERE usuario_id = $${params.length})`;
-    }
+    const { scope, params } = this.construirScope(rango, fecha, hasta);
     params.push(desdeValido);
     const idxDesde = params.length;
 
@@ -504,7 +449,7 @@ export class PedidosService implements OnModuleInit {
       // trazabilidad se consulta aparte y bajo demanda (ver trazabilidad()).
       `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
        FROM pedidos
-      WHERE ${scope} AND ${alcanceUsuario}
+       WHERE ${scope}
          AND ($${idxDesde}::timestamptz IS NULL OR actualizado_en > $${idxDesde}::timestamptz)
        ORDER BY fecha DESC NULLS LAST, creado_en DESC`,
       params,
@@ -653,11 +598,11 @@ export class PedidosService implements OnModuleInit {
     }>(
       `SELECT id, impreso, (data - 'trazabilidad') AS data, meta
          FROM pedidos
-        WHERE COALESCE(data->>'canal', '') <> 'club' AND (lower(coalesce(data->>'comanda', '')) LIKE $1
+        WHERE lower(coalesce(data->>'comanda', '')) LIKE $1
            OR lower(coalesce(consecutivo::text, '')) LIKE $1
            OR lower(coalesce(data->>'consecutivo', '')) LIKE $1
            OR lower(coalesce(data->'cliente'->>'nombre', '')) LIKE $1
-           OR lower(coalesce(data->'cliente'->>'nit_cedula', '')) LIKE $1)
+           OR lower(coalesce(data->'cliente'->>'nit_cedula', '')) LIKE $1
         ORDER BY fecha DESC NULLS LAST, creado_en DESC
         LIMIT 300`,
       [like],
@@ -905,7 +850,6 @@ export class PedidosService implements OnModuleInit {
       `SELECT COALESCE(MAX((data->>'numeroDia')::int), 0) AS mx
          FROM pedidos
         WHERE punto_id = $1
-          AND COALESCE(data->>'canal', '') <> 'club'
           AND ( (data->>'numeroDiaFecha') = $2
                 OR ( COALESCE(data->>'numeroDiaFecha','') = ''
                      AND (${diaEntregaSql}) = $2 ) )`,
@@ -924,7 +868,6 @@ export class PedidosService implements OnModuleInit {
   private async refrescarClientes(pedidos: PedidoData[]): Promise<void> {
     const nits = new Set<string>();
     for (const p of pedidos) {
-      if (p.canal === 'club') continue;
       const nit = p.cliente?.nit_cedula
         ? String(p.cliente.nit_cedula).trim()
         : '';
@@ -958,7 +901,6 @@ export class PedidosService implements OnModuleInit {
     }
 
     for (const p of pedidos) {
-      if (p.canal === 'club') continue;
       const nit = p.cliente?.nit_cedula
         ? String(p.cliente.nit_cedula).trim()
         : '';
@@ -998,7 +940,6 @@ export class PedidosService implements OnModuleInit {
     pedido: PedidoData,
     user?: JwtPayload,
     opciones?: {
-      clubOnly?: boolean;
       /** Se ejecuta dentro de la misma transacción, justo antes del COMMIT. */
       antesDeConfirmar?: (client: PoolClient, pedido: PedidoData, esNuevo: boolean) => Promise<void>;
     },
@@ -1027,41 +968,6 @@ export class PedidosService implements OnModuleInit {
       const prevData: PedidoData | null = prev.rowCount
         ? (prev.rows[0].data ?? {})
         : null;
-
-      if (opciones?.clubOnly && (!prevData || prevData.canal !== 'club' || !id.startsWith('club:'))) {
-        throw new ForbiddenException('Solo puedes gestionar compras existentes de Club Yo Soy Santacruz.');
-      }
-
-      if (prevData?.canal === 'club') {
-        if (puntoId !== String(prevData.punto?.id)) throw new BadRequestException('No se puede cambiar el punto de una compra del club.');
-        finalPedido.canal = 'club';
-        finalPedido.creditoPedidoId = prevData.creditoPedidoId;
-        finalPedido.cliente = prevData.cliente;
-        finalPedido.carrito = prevData.carrito;
-        finalPedido.total = prevData.total;
-        finalPedido.entregaProgramada = prevData.entregaProgramada;
-        finalPedido.fechaProgramada = prevData.fechaProgramada;
-        finalPedido.entrega = 'recoge';
-        finalPedido.pago = 'Crédito';
-        if (user && !tieneAccesoTotal(user.rol)) {
-          const asignado = await client.query(`SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2`, [user.sub, String(prevData.punto?.id)]);
-          if (!asignado.rowCount) throw new ForbiddenException('No tiene asignado el punto de este pedido del club.');
-        }
-        if (opciones?.clubOnly) {
-          const anterior = String(prevData.estado ?? '').trim().toLowerCase();
-          const siguiente = String(pedido.estado ?? '').trim().toLowerCase();
-          const transiciones: Record<string, string[]> = {
-            'en proceso': ['en proceso', 'en producción', 'alistado'],
-            'en producción': ['en producción', 'alistado', 'en proceso'],
-            alistado: ['alistado', 'facturado', 'en producción'],
-            facturado: ['facturado', 'entregado'],
-            entregado: ['entregado'],
-          };
-          if (!(transiciones[anterior] ?? []).includes(siguiente)) throw new ForbiddenException('La transición del proceso no está permitida para tu rol.');
-        }
-      } else if (id.startsWith('club:') || pedido.canal === 'club') {
-        throw new BadRequestException('El pedido del club debe proceder de una compra registrada.');
-      }
 
       if (prev.rowCount) {
         // Edición: conserva el consecutivo, la comanda y la fecha originales
@@ -1111,7 +1017,7 @@ export class PedidosService implements OnModuleInit {
         ]);
         const max = await client.query<{ siguiente: number }>(
           `SELECT COALESCE(MAX(consecutivo), 0) + 1 AS siguiente
-             FROM pedidos WHERE punto_id = $1 AND COALESCE(data->>'canal', '') <> 'club'`,
+             FROM pedidos WHERE punto_id = $1`,
           [puntoId],
         );
         const consecutivo = Number(max.rows[0].siguiente) || 1;
@@ -1170,7 +1076,7 @@ export class PedidosService implements OnModuleInit {
       const normEstado = (s: unknown) => String(s ?? '').trim().toLowerCase();
       const nuevoEstadoNorm = normEstado(estado);
       const entraAFacturadoODespachado =
-        (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado' || (prevData?.canal === 'club' && nuevoEstadoNorm === 'entregado')) &&
+        (nuevoEstadoNorm === 'facturado' || nuevoEstadoNorm === 'despachado') &&
         nuevoEstadoNorm !== normEstado(estadoAnterior);
       const replicasActuales = Array.isArray(
         (metaActual as { replicas?: unknown }).replicas,
@@ -1204,16 +1110,6 @@ export class PedidosService implements OnModuleInit {
             'No se puede facturar o despachar sin número y valor de factura.',
           );
         }
-        if (prevData?.canal === 'club' && !String(metaActual.porcionador || '').trim()) {
-          throw new BadRequestException('Asigne el porcionador antes de facturar o entregar la compra del club.');
-        }
-      }
-      if (prevData?.canal === 'club' && ['en tránsito', 'en transito'].includes(nuevoEstadoNorm)) {
-        throw new BadRequestException('Las compras del club se recogen en el punto de venta.');
-      }
-      if (prevData?.canal === 'club' && nuevoEstadoNorm === 'entregado' && nuevoEstadoNorm !== normEstado(estadoAnterior)) {
-        const evidencia = await client.query(`SELECT 1 FROM comprobantes_entrega_club WHERE pedido_id = $1 LIMIT 1`, [id]);
-        if (!evidencia.rowCount) throw new BadRequestException('Adjunte la foto de la factura junto a la cedula antes de marcar la compra como entregada.');
       }
       const metaDestino: DespachoMeta = estaAnulandoAhora ? {} : metaActual;
       // Red de seguridad: `meta.fin`/`meta.despachoFin` normalmente los guarda
@@ -1383,18 +1279,6 @@ export class PedidosService implements OnModuleInit {
         });
       }
 
-      if (prevData?.canal === 'club' && prevData.creditoPedidoId) {
-        const terminado = ['despachado', 'entregado', 'en tránsito', 'en transito'].includes(nuevoEstadoNorm);
-        const estadoCredito = anulado ? 'anulado' : terminado ? 'entregado' : nuevoEstadoNorm === 'facturado' ? 'facturado' : 'pendiente';
-        await client.query(
-          `UPDATE credito_empleados_pedidos SET estado = $2,
-             cartera_estado = CASE WHEN $2 = 'anulado' THEN 'anulado' WHEN $2 IN ('facturado', 'entregado') THEN 'facturado' ELSE 'pendiente' END,
-             factura_numero = COALESCE(NULLIF($3, ''), factura_numero), actualizado_en = now()
-           WHERE id = $1`,
-          [String(prevData.creditoPedidoId), estadoCredito, String(metaDestino.facturaNumero || '')],
-        );
-      }
-
       if (opciones?.antesDeConfirmar) {
         await opciones.antesDeConfirmar(client, finalPedido, !prev.rowCount);
       }
@@ -1558,12 +1442,6 @@ export class PedidosService implements OnModuleInit {
           WHERE id = $1`,
         [id, JSON.stringify(nuevoData), JSON.stringify(cambiosMeta)],
       );
-      if (data.canal === 'club' && data.creditoPedidoId) {
-        await client.query(
-          `UPDATE credito_empleados_pedidos SET estado = 'entregado', total = $2, cartera_estado = 'facturado', actualizado_en = now() WHERE id = $1`,
-          [String(data.creditoPedidoId), valorNuevo],
-        );
-      }
       await client.query('COMMIT');
       const { trazabilidad: _traza, ...pedido } = nuevoData;
       return { pedido, meta: { ...meta, ...cambiosMeta } };
@@ -1721,23 +1599,7 @@ export class PedidosService implements OnModuleInit {
   async actualizarMeta(
     id: string,
     cambios: DespachoMeta,
-    user?: JwtPayload,
-    clubOnly = false,
   ): Promise<{ id: string }> {
-    const clubPedido = id.startsWith('club:') || clubOnly;
-    if (clubPedido) {
-      const pedido = await this.pool.query<{ punto_id: string; data: PedidoData }>(`SELECT punto_id, data FROM pedidos WHERE id = $1`, [id]);
-      if (!pedido.rows[0] || pedido.rows[0].data?.canal !== 'club') throw new ForbiddenException('La compra no pertenece al club.');
-      const supervisorGeneralMeta = ['supervisor general', 'supervisor_general'].includes(String(user?.rol ?? '').trim().toLowerCase());
-      if (user && !tieneAccesoTotal(user.rol) && !supervisorGeneralMeta) {
-        const asignado = await this.pool.query(`SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2 LIMIT 1`, [user.sub, pedido.rows[0].punto_id]);
-        if (!asignado.rowCount) throw new ForbiddenException('No tiene asignado el punto de esta compra.');
-      }
-      if (clubOnly) {
-        const permitidas = new Set(['porcionador', 'inicio', 'fin', 'segmentado', 'segmentos', 'facturaNumero', 'facturaValor', 'facturadoPor', 'despachoFin', 'entregado', 'entregadoEn', 'despachadoPor', 'evidenciaEntregaClub']);
-        if (Object.keys(cambios ?? {}).some((key) => !permitidas.has(key))) throw new ForbiddenException('Ese dato no se puede modificar desde el panel del club.');
-      }
-    }
     const tocaAsignacion =
       typeof cambios?.domiciliario === 'string' || Array.isArray(cambios?.replicas);
     const previo = tocaAsignacion
@@ -1800,43 +1662,6 @@ export class PedidosService implements OnModuleInit {
       subidoPor: row.subido_por,
       confirmadoPor: row.confirmado_por,
     };
-  }
-
-  async obtenerEvidenciaEntregaClub(id: string, user?: JwtPayload) {
-    await this.verificarAccesoEvidenciaClub(id, user);
-    const { rows } = await this.pool.query<{ imagen: string; mime: string | null; subido_por: string | null; creado_en: string }>(
-      `SELECT e.imagen, e.mime, e.subido_por, e.creado_en FROM comprobantes_entrega_club e JOIN pedidos p ON p.id = e.pedido_id WHERE e.pedido_id = $1 AND p.data->>'canal' = 'club' LIMIT 1`, [id],
-    );
-    return rows[0] ? { imagen: rows[0].imagen, mime: rows[0].mime, subidoPor: rows[0].subido_por, creadoEn: rows[0].creado_en } : null;
-  }
-
-  async guardarEvidenciaEntregaClub(id: string, imagen: string, mime: string | null, subidoPor: string | null, user?: JwtPayload) {
-    await this.verificarAccesoEvidenciaClub(id, user);
-    if (!imagen || typeof imagen !== 'string' || !imagen.startsWith('data:image/')) throw new BadRequestException('Adjunte una imagen valida de la factura y la cedula.');
-    const { rowCount } = await this.pool.query(
-      `WITH evidencia AS (
-         INSERT INTO comprobantes_entrega_club (pedido_id, imagen, mime, subido_por)
-         SELECT id, $2, $3, $4 FROM pedidos WHERE id = $1 AND data->>'canal' = 'club'
-         ON CONFLICT (pedido_id) DO UPDATE SET imagen = EXCLUDED.imagen, mime = EXCLUDED.mime, subido_por = EXCLUDED.subido_por, creado_en = now()
-         RETURNING pedido_id
-       ) UPDATE pedidos p SET meta = COALESCE(p.meta, '{}'::jsonb) || '{"evidenciaEntregaClub":true}'::jsonb, actualizado_en = now()
-         FROM evidencia e WHERE p.id = e.pedido_id`,
-      [id, imagen, mime, subidoPor],
-    );
-    if (!rowCount) throw new NotFoundException('Compra del club no encontrada.');
-    return { id };
-  }
-
-  private async verificarAccesoEvidenciaClub(id: string, user?: JwtPayload) {
-    const res = await this.pool.query<{ punto_id: string; data: PedidoData }>(`SELECT punto_id, data FROM pedidos WHERE id = $1`, [id]);
-    const row = res.rows[0];
-    if (!row || row.data?.canal !== 'club') throw new NotFoundException('Compra del club no encontrada.');
-    if (!user || tieneAccesoTotal(user.rol) || ['despacho', 'supervisor general', 'supervisor_general'].includes(String(user.rol ?? '').trim().toLowerCase())) {
-      if (!user) throw new ForbiddenException('Usuario requerido.');
-      if (tieneAccesoTotal(user.rol) || ['supervisor general', 'supervisor_general'].includes(String(user.rol ?? '').trim().toLowerCase())) return;
-    }
-    const { rowCount } = await this.pool.query(`SELECT 1 FROM usuario_punto_venta WHERE usuario_id = $1 AND punto_venta_id::text = $2 LIMIT 1`, [user.sub, row.punto_id]);
-    if (!rowCount) throw new ForbiddenException('No tiene acceso a este punto de venta.');
   }
 
   /**

@@ -20,7 +20,6 @@ export interface SegmentoAlistamiento {
 
 /** Metadata de despacho asociada a un pedido (se guarda junto al pedido). */
 export interface DespachoMeta {
-  evidenciaEntregaClub?: boolean;
   porcionador?: string;
   inicio?: string;
   fin?: string;
@@ -142,7 +141,6 @@ export interface EstadoPedidos {
  * - `fecha`: día concreto (YYYY-MM-DD) para 'fecha' o 'cuadre'.
  */
 export interface OpcionesCargaPedidos {
-  canal?: "club";
   desde?: string;
   rango?: "hoy" | "fecha" | "posteriores" | "todo" | "rango" | "cuadre";
   fecha?: string;
@@ -159,7 +157,7 @@ export function cargarEstadoPedidos(
   if (opts?.fecha) p.set("fecha", opts.fecha);
   if (opts?.hasta) p.set("hasta", opts.hasta);
   const qs = p.toString();
-  return apiFetch<EstadoPedidos>(`/pedidos${opts?.canal === "club" ? "/club" : ""}${qs ? `?${qs}` : ""}`);
+  return apiFetch<EstadoPedidos>(`/pedidos${qs ? `?${qs}` : ""}`);
 }
 
 /**
@@ -317,21 +315,6 @@ export function obtenerComprobanteApi(
   id: string,
 ): Promise<ComprobantePago | null> {
   return apiFetch<ComprobantePago | null>(`/pedidos/${id}/comprobante`);
-}
-
-export interface EvidenciaEntregaClub {
-  imagen: string;
-  mime: string | null;
-  subidoPor: string | null;
-  creadoEn: string;
-}
-
-export function obtenerEvidenciaEntregaClubApi(id: string): Promise<EvidenciaEntregaClub | null> {
-  return apiFetch(`/pedidos/${encodeURIComponent(id)}/evidencia-entrega-club`);
-}
-
-export function subirEvidenciaEntregaClubApi(id: string, imagen: string, mime: string | null, subidoPor?: string | null): Promise<{ id: string }> {
-  return apiFetch(`/pedidos/${encodeURIComponent(id)}/evidencia-entrega-club`, { method: "POST", body: JSON.stringify({ imagen, mime, subidoPor }) });
 }
 
 /** AGREGA una imagen al comprobante de pago de un pedido. Queda sin confirmar. */

@@ -20,7 +20,6 @@ export interface ApartadoCatalogo {
 }
 
 export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
-  { key: 'administracion', label: 'Administracion', modulos: [{ key: 'sidebar', label: 'Menus de paneles', acciones: [{ key: 'sidebar.organizar', label: 'Organizar menus (solo administradores)' }] }] },
   {
     key: 'operativo',
     label: 'Módulos operativos',
@@ -81,7 +80,6 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         key: 'historicos',
         label: 'Históricos',
       },
-      { key: 'almuerzos', label: 'Aprobación almuerzo' },
       {
         key: 'monitoreo',
         label: 'Monitoreo',
@@ -155,11 +153,11 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
   },
   {
     key: 'credito_empleados',
-    label: 'Club Yo Soy Santacruz',
+    label: 'Panel crédito empleados',
     modulos: [
       {
         key: 'credito_empleados',
-        label: 'Club Yo Soy Santacruz',
+        label: 'Crédito empleados',
         acciones: [
           {
             key: 'credito_empleados.cupos',
