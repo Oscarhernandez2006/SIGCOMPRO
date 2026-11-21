@@ -78,6 +78,16 @@ export class CreateClienteDto {
   @IsBoolean()
   direccion_incorrecta?: boolean;
 
+  /** El nombre registrado no corresponde a la cédula (validación ADRES). */
+  @IsOptional()
+  @IsBoolean()
+  no_confiable?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  no_confiable_motivo?: string;
+
   @IsOptional()
   @IsLatitude()
   lat?: number;

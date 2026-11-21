@@ -24,6 +24,10 @@ import responsableAuto from "./demos/responsable-auto";
 import pedidoVsFacturado from "./demos/pedido-vs-facturado";
 import detallePedido from "./demos/detalle-pedido";
 import viveresExtras from "./demos/viveres-extras";
+import validarGuardar from "./demos/validar-guardar";
+import clienteNoConfiable from "./demos/cliente-no-confiable";
+import facturaDespacho from "./demos/factura-despacho";
+import registroIncumplimiento from "./demos/registro-incumplimiento";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -44,6 +48,10 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "pedido-vs-facturado": pedidoVsFacturado,
   "detalle-pedido": detallePedido,
   "viveres-extras": viveresExtras,
+  "validar-guardar": validarGuardar,
+  "cliente-no-confiable": clienteNoConfiable,
+  "factura-despacho": facturaDespacho,
+  "registro-incumplimiento": registroIncumplimiento,
 };
 
 type Item = Novedad & { version: string; fecha: string };

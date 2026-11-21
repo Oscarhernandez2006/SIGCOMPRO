@@ -443,6 +443,9 @@ export default function DespachoPage() {
   const [meta, setMeta] = useState<Record<string, DespachoMeta>>({});
   // Borrador del porcionador antes de presionar "Guardar".
   const [porcBorrador, setPorcBorrador] = useState<Record<string, string>>({});
+  // Factura en edición: se guarda al salir del campo. Guardar por tecla hacía que
+  // el refresco (cada 7 s) trajera un valor a medio escribir y lo pisara.
+  const [facturaBorrador, setFacturaBorrador] = useState<Record<string, { numero?: string; valor?: string }>>({});
   // Personal de despacho (porcionadores/domiciliarios) por id de punto de venta.
   // Cada pedido usa el de su propio punto (configurable en /admin/configuracion).
   const [personalPorPunto, setPersonalPorPunto] = useState<
@@ -1189,6 +1192,26 @@ export default function DespachoPage() {
     actualizarMetaApi(id, cambios).catch(() => {
       /* ignore */
     });
+  };
+
+  /** Guarda el número o el valor de factura escrito (una sola vez, al salir del campo). */
+  const confirmarFactura = (id: string, campo: "numero" | "valor") => {
+    const b = facturaBorrador[id];
+    const texto = b?.[campo];
+    if (texto === undefined) return;
+    setFacturaBorrador((prev) => {
+      const { [campo]: _quitado, ...resto } = prev[id] ?? {};
+      void _quitado;
+      return { ...prev, [id]: resto };
+    });
+    const m = meta[id] ?? {};
+    if (campo === "numero") {
+      const numero = texto.trim();
+      if (numero !== (m.facturaNumero ?? "")) actualizarMeta(id, { facturaNumero: numero });
+    } else {
+      const valor = texto === "" ? undefined : Number(texto);
+      if (valor !== m.facturaValor) actualizarMeta(id, { facturaValor: valor });
+    }
   };
 
   /**
@@ -2768,22 +2791,28 @@ export default function DespachoPage() {
                       <div className="flex w-full flex-col gap-1.5 pb-12">
                         <input
                           type="text"
-                          value={m.facturaNumero ?? ""}
-                          onChange={(ev) => actualizarMeta(p.id, { facturaNumero: ev.target.value })}
+                          value={facturaBorrador[p.id]?.numero ?? m.facturaNumero ?? ""}
+                          onChange={(ev) => {
+                            const v = ev.target.value;
+                            setFacturaBorrador((prev) => ({ ...prev, [p.id]: { ...prev[p.id], numero: v } }));
+                          }}
+                          onBlur={() => confirmarFactura(p.id, "numero")}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
                           disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="N° factura"
                           title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}
                           className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
                         <input
-                          type="number"
-                          min={0}
-                          value={m.facturaValor ?? ""}
-                          onChange={(ev) =>
-                            actualizarMeta(p.id, {
-                              facturaValor: ev.target.value === "" ? undefined : Number(ev.target.value),
-                            })
-                          }
+                          type="text"
+                          inputMode="numeric"
+                          value={facturaBorrador[p.id]?.valor ?? (m.facturaValor != null ? String(m.facturaValor) : "")}
+                          onChange={(ev) => {
+                            const v = ev.target.value.replace(/\D/g, "");
+                            setFacturaBorrador((prev) => ({ ...prev, [p.id]: { ...prev[p.id], valor: v } }));
+                          }}
+                          onBlur={() => confirmarFactura(p.id, "valor")}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
                           disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
                           placeholder="Valor factura"
                           title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}

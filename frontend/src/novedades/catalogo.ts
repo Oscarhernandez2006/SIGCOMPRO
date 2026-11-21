@@ -26,7 +26,11 @@ export type DemoNovedad =
   | "responsable-auto"
   | "pedido-vs-facturado"
   | "detalle-pedido"
-  | "viveres-extras";
+  | "viveres-extras"
+  | "validar-guardar"
+  | "cliente-no-confiable"
+  | "factura-despacho"
+  | "registro-incumplimiento";
 
 export interface Novedad {
   id: string;
@@ -304,6 +308,61 @@ export const NOVEDADES: VersionNovedades[] = [
           "Ahora la hoja de Res solo trae cortes de res y los víveres salen en «Extras».",
         ],
         demo: "viveres-extras",
+      },
+    ],
+  },
+  {
+    version: "2026-11-21",
+    fecha: "21 de noviembre de 2026",
+    novedades: [
+      {
+        id: "validar-guardar",
+        modulo: "Clientes · Pedidos",
+        titulo: "La cédula se valida sola al guardar",
+        resumen: "Si no usaron «Validar», al pulsar Guardar se abre la validación de la cédula automáticamente.",
+        puntos: [
+          "Al guardar un cliente sin haber validado, se abre sola la ventana «Validar cédula».",
+          "«Confirmar» pone el nombre validado y guarda. Si es un NIT de empresa, «Cancelar y guardar» guarda sin validar.",
+          "Los clientes guardados en MAYÚSCULAS se muestran y guardan con mayúscula inicial al editarlos.",
+        ],
+        demo: "validar-guardar",
+      },
+      {
+        id: "cliente-no-confiable",
+        modulo: "Clientes · Pedidos",
+        titulo: "Marca de cliente no confiable",
+        resumen: "Si el nombre no corresponde a la cédula, se puede marcar al cliente como no confiable y se avisa al tomarle pedidos.",
+        puntos: [
+          "La validación avisa cuando el nombre registrado no corresponde a la cédula.",
+          "«Marcar cliente no confiable» conserva sus datos y guarda el motivo.",
+          "En Nuevo pedido, al digitar la cédula, el cliente sale con la etiqueta roja «No confiable» y el motivo.",
+        ],
+        nota: "La marca se puede quitar desde Editar cliente con «Quitar marca».",
+        demo: "cliente-no-confiable",
+      },
+      {
+        id: "factura-despacho",
+        modulo: "Despacho",
+        titulo: "Número y valor de factura sin cambios accidentales",
+        resumen: "El valor de la factura ya no tiene flechas y el número ya no se cambia solo al pasar al otro campo.",
+        puntos: [
+          "El N° de factura y el valor se guardan al salir del campo (clic afuera, Tab o Enter).",
+          "El valor ya no tiene flechas ni cambia con la rueda del mouse.",
+          "«Facturado» sigue funcionando igual: guarda lo escrito y valida.",
+        ],
+        demo: "factura-despacho",
+      },
+      {
+        id: "registro-incumplimiento",
+        modulo: "Despacho · Incumplimientos",
+        titulo: "Registro de incumplimiento más claro",
+        resumen: "Al anular desde el registro, el motivo se elige a mano y el botón indica qué falta para confirmar.",
+        puntos: [
+          "Al activar «Anular pedido», el motivo de anulación arranca vacío: hay que elegirlo.",
+          "Junto al botón aparece lo que falta (por ejemplo, la descripción de mínimo 10 caracteres).",
+          "Con la anulación activada el botón dice «Registrar y anular».",
+        ],
+        demo: "registro-incumplimiento",
       },
     ],
   },

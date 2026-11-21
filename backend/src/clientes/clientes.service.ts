@@ -30,6 +30,9 @@ export interface ClienteRow {
   horeca: boolean;
   fundacion: boolean;
   direccion_incorrecta: boolean;
+  no_confiable: boolean;
+  no_confiable_motivo: string | null;
+  no_confiable_en: string | null;
   dias_despacho: string[];
   vendedor_asignado: string | null;
   creado_en: string;
@@ -56,7 +59,7 @@ export interface ImportacionResumen {
 }
 
 const COLUMNS =
-  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, fundacion, direccion_incorrecta, dias_despacho, vendedor_asignado, creado_en';
+  'id, nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, fundacion, direccion_incorrecta, no_confiable, no_confiable_motivo, no_confiable_en, dias_despacho, vendedor_asignado, creado_en';
 
 /** "901727043-3" -> "901727043"; si no es una dirección alterna devuelve null. */
 function nitBaseDeAlterna(nit: string): string | null {
@@ -103,6 +106,13 @@ export class ClientesService implements OnModuleInit {
     // Vendedor de Siesa asignado al cliente (informativo, viene del ERP).
     await this.pool.query(
       `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS vendedor_asignado text`,
+    );
+    // Cliente no confiable: el nombre registrado no corresponde a la cédula (ADRES).
+    await this.pool.query(
+      `ALTER TABLE clientes
+         ADD COLUMN IF NOT EXISTS no_confiable boolean NOT NULL DEFAULT false,
+         ADD COLUMN IF NOT EXISTS no_confiable_motivo text,
+         ADD COLUMN IF NOT EXISTS no_confiable_en timestamptz`,
     );
   }
 
@@ -306,8 +316,8 @@ export class ClientesService implements OnModuleInit {
 
     const res = await this.pool.query<ClienteRow>(
       `INSERT INTO clientes
-         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado, fundacion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18)
+         (nit_cedula, nombre, apellidos, direccion, referencia, barrio, ciudad, telefono, correo, punto_venta, lat, lng, activo, horeca, direccion_incorrecta, dias_despacho, vendedor_asignado, fundacion, no_confiable, no_confiable_motivo, no_confiable_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20, CASE WHEN $19 THEN now() END)
        RETURNING ${COLUMNS}`,
       [
         nit,
@@ -328,6 +338,8 @@ export class ClientesService implements OnModuleInit {
         JSON.stringify(Array.isArray(dto.dias_despacho) ? dto.dias_despacho : []),
         dto.vendedor_asignado?.trim() ?? null,
         fundacion,
+        dto.no_confiable ?? false,
+        dto.no_confiable ? dto.no_confiable_motivo?.trim() || null : null,
       ],
     );
     const creado = res.rows[0];
@@ -417,6 +429,15 @@ export class ClientesService implements OnModuleInit {
     if (dto.direccion_incorrecta !== undefined) {
       sets.push(`direccion_incorrecta = $${i++}`);
       valores.push(dto.direccion_incorrecta);
+    }
+
+    if (dto.no_confiable !== undefined) {
+      const marcar = dto.no_confiable === true;
+      sets.push(`no_confiable = $${i}`, `no_confiable_en = CASE WHEN $${i} THEN COALESCE(no_confiable_en, now()) END`);
+      i++;
+      valores.push(marcar);
+      sets.push(`no_confiable_motivo = $${i++}`);
+      valores.push(marcar ? dto.no_confiable_motivo?.trim() || null : null);
     }
 
     if (dto.dias_despacho !== undefined) {

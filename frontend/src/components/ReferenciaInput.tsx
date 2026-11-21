@@ -113,6 +113,16 @@ function parsear(valor: string): Partes | null {
   return r;
 }
 
+/**
+ * Aplica a una referencia ya guardada el mismo formato que al escribirla
+ * (datos antiguos o importados pueden venir en MAYÚSCULAS).
+ */
+export function formatearReferencia(valor: string): string {
+  const p = parsear(valor ?? "");
+  if (p === null) return aMayusculaInicial(valor ?? "");
+  return componer({ ...p, nombre: aNombrePropio(p.nombre), unidad: p.unidad.toUpperCase() });
+}
+
 export default function ReferenciaInput({
   value,
   onChange,

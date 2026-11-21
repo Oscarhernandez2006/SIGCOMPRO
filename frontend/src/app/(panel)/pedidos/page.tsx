@@ -2575,7 +2575,17 @@ function PasoCliente({
                           Inactivo
                         </span>
                       )}
+                      {c.no_confiable && (
+                        <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          ⚠ No confiable
+                        </span>
+                      )}
                     </span>
+                    {c.no_confiable && (
+                      <span className="mt-1 block rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-800">
+                        {c.no_confiable_motivo || "El nombre registrado no corresponde a la cédula."} Verifica la identidad antes de tomar el pedido.
+                      </span>
+                    )}
 
                     <span className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-brand-black sm:grid-cols-2">
                       <DatoCliente icono="id" valor={c.nit_cedula} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   crearCliente,
   buscarBarrios,
@@ -11,6 +11,7 @@ import {
 import { buscarCiudades } from "@/lib/ubicaciones";
 import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
 import ValidarCedula from "./ValidarCedula";
+import { VALIDACION_ADRES_ACTIVA } from "@/lib/extension-adres";
 import DireccionInput from "@/components/DireccionInput";
 import ReferenciaInput from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
@@ -74,6 +75,10 @@ export default function CrearClienteModal({
   const [tipoCliente, setTipoCliente] = useState<"hogar" | "horeca" | "fundacion" | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  // Cédula ya validada en este formulario y apertura automática de la validación al guardar.
+  const [validadoNit, setValidadoNit] = useState<string | null>(null);
+  const [disparoValidar, setDisparoValidar] = useState(0);
+  const pendienteGuardar = useRef(false);
 
   // Cédula alterna ("1140833798-1"): trae los datos del cliente BASE
   // ("1140833798") —nombre, teléfono, correo, ciudad, tipo, punto de venta—
@@ -106,8 +111,8 @@ export default function CrearClienteModal({
           ape && full.toLowerCase().endsWith(ape.toLowerCase())
             ? full.slice(0, full.length - ape.length).trim()
             : full;
-        if (nom) setNombres(nom);
-        if (ape) setApellidos(ape);
+        if (nom) setNombres(aNombrePropio(nom));
+        if (ape) setApellidos(aNombrePropio(ape));
         setTipoCliente(c.fundacion ? "fundacion" : c.horeca ? "horeca" : "hogar");
       })
       .catch(() => {
@@ -122,20 +127,22 @@ export default function CrearClienteModal({
     setForm((prev) => ({ ...prev, [campo]: valor }));
   }
 
-  async function guardar() {
+  async function guardar(opc?: { nombres?: string; apellidos?: string; noConfiable?: string }) {
+    const nombresG = opc?.nombres ?? nombres;
+    const apellidosG = opc?.apellidos ?? apellidos;
     if (!form.nit_cedula.trim()) {
       setErrorForm("El NIT/cédula es obligatorio.");
       return;
     }
-    if (!nombres.trim()) {
+    if (!nombresG.trim()) {
       setErrorForm("Los nombres son obligatorios.");
       return;
     }
-    if (!apellidos.trim()) {
+    if (!apellidosG.trim()) {
       setErrorForm("Los apellidos son obligatorios.");
       return;
     }
-    const nombreCompleto = `${nombres} ${apellidos}`.trim().replace(/\s+/g, " ");
+    const nombreCompleto = `${nombresG} ${apellidosG}`.trim().replace(/\s+/g, " ");
     if (!form.direccion?.trim()) {
       setErrorForm("La dirección es obligatoria: completa tipo de vía, vía, cruce y placa.");
       return;
@@ -152,13 +159,21 @@ export default function CrearClienteModal({
       setErrorForm("Selecciona el tipo de cliente: hogar, HORECA o fundación.");
       return;
     }
+    if (VALIDACION_ADRES_ACTIVA && !opc && validadoNit !== form.nit_cedula.trim()) {
+      pendienteGuardar.current = true;
+      setDisparoValidar((d) => d + 1);
+      return;
+    }
     setGuardando(true);
     setErrorForm(null);
     try {
       const nuevo = await crearCliente({
         ...form,
         nombre: nombreCompleto,
-        apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
+        apellidos: apellidosG.trim().replace(/\s+/g, " ") || undefined,
+        ...(opc?.noConfiable !== undefined
+          ? { no_confiable: true, no_confiable_motivo: opc.noConfiable }
+          : {}),
         horeca: tipoCliente === "horeca",
         fundacion: tipoCliente === "fundacion",
         dias_despacho: tipoCliente === "horeca" ? (form.dias_despacho ?? []) : [],
@@ -194,6 +209,21 @@ export default function CrearClienteModal({
           </div>
         )}
 
+        {form.no_confiable && (
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+            <p>
+              <b>⚠ Cliente no confiable.</b> {form.no_confiable_motivo}
+            </p>
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, no_confiable: false, no_confiable_motivo: "" }))}
+              className="shrink-0 text-xs font-semibold underline"
+            >
+              Quitar marca
+            </button>
+          </div>
+        )}
+
         <div className="mt-1.5 grid items-start gap-2 lg:grid-cols-2">
           {/* Columna izquierda */}
           <div className="space-y-1.5">
@@ -209,9 +239,30 @@ export default function CrearClienteModal({
                     />
                     <ValidarCedula
                       cedula={form.nit_cedula ?? ""}
+                      disparo={disparoValidar}
+                      nombreActual={`${nombres} ${apellidos}`}
                       onConfirmar={(n, a) => {
                         setNombres(n);
                         setApellidos(a);
+                        setValidadoNit(form.nit_cedula.trim());
+                        if (pendienteGuardar.current) {
+                          pendienteGuardar.current = false;
+                          void guardar({ nombres: n, apellidos: a });
+                        }
+                      }}
+                      onCancelar={() => {
+                        if (!pendienteGuardar.current) return;
+                        pendienteGuardar.current = false;
+                        void guardar({});
+                      }}
+                      onNoConfiable={(nombreAdres) => {
+                        const motivo = `El nombre registrado (${`${nombres} ${apellidos}`.trim()}) no corresponde a la cédula: la validación indica ${nombreAdres}.`;
+                        setForm((prev) => ({ ...prev, no_confiable: true, no_confiable_motivo: motivo }));
+                        setValidadoNit(form.nit_cedula.trim());
+                        if (pendienteGuardar.current) {
+                          pendienteGuardar.current = false;
+                          void guardar({ noConfiable: motivo });
+                        }
                       }}
                     />
                   </div>
@@ -419,7 +470,7 @@ export default function CrearClienteModal({
             Cancelar
           </button>
           <button
-            onClick={guardar}
+            onClick={() => void guardar()}
             disabled={guardando}
             title="Crear el cliente y seleccionarlo"
             className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 disabled:opacity-50"

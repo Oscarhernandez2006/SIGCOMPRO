@@ -91,19 +91,24 @@ export default function MarcarNoGestionadoModal({
   }, [pedido.puntoId, pedido.id, fila]);
 
   const motivoFinal = motivo === "Otro" ? otroMotivo.trim() : motivo;
-  const valido = !!usuarioId && !!motivoFinal && descripcion.trim().length >= 10 && !capturando &&
-    (!anulando || !!motivoAnular.trim());
+  const faltantes = [
+    !usuarioId && "responsable",
+    !motivoFinal && "motivo del incumplimiento",
+    descripcion.trim().length < 10 && `descripción (${descripcion.trim().length}/10 caracteres)`,
+    anulando && !motivoAnular.trim() && "motivo de anulación",
+  ].filter(Boolean) as string[];
+  const valido = faltantes.length === 0 && !capturando;
   const esAutomatico = !!sugerencia && usuarioId === sugerencia.usuarioId;
 
   async function abrirAnular() {
     setAnulando(true);
+    // Sin preselección: el motivo de anulación lo debe elegir quien anula.
+    setMotivoAnular("");
     if (motivosAnular.length) return;
     const lista = await listarMotivos({ tipo: "anular", soloActivos: true })
       .then((m) => m.map((x) => x.nombre))
       .catch(() => [] as string[]);
-    const final = lista.length ? lista : ["Pedido no gestionado al cierre del turno"];
-    setMotivosAnular(final);
-    setMotivoAnular(final[0]);
+    setMotivosAnular(lista.length ? lista : ["Pedido no gestionado al cierre del turno"]);
   }
 
   async function guardar() {
@@ -274,18 +279,23 @@ export default function MarcarNoGestionadoModal({
 
         {anulando && (
           <div className="flex flex-wrap items-center gap-2 border-t border-red-100 bg-red-50/70 px-5 py-3 text-xs">
-            <label htmlFor="motivo-anulacion-incumplimiento" className="font-semibold text-red-800">Motivo de anulación:</label>
-            <input
+            <label htmlFor="motivo-anulacion-incumplimiento" className="font-semibold text-red-800">Motivo de anulación *</label>
+            <select
               id="motivo-anulacion-incumplimiento"
               value={motivoAnular}
               onChange={(e) => setMotivoAnular(e.target.value)}
-              list="motivos-anulacion-incumplimiento"
-              maxLength={300}
               disabled={guardando || !motivosAnular.length}
-              placeholder="Motivo de anulación"
-              className="min-w-0 flex-1 rounded-lg border border-red-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-red-400"
-            />
-            <datalist id="motivos-anulacion-incumplimiento">{motivosAnular.map((m) => <option key={m} value={m} />)}</datalist>
+              className={`min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-xs outline-none focus:border-red-400 ${
+                motivoAnular ? "border-red-200" : "border-red-400 ring-1 ring-red-300"
+              }`}
+            >
+              <option value="">{motivosAnular.length ? "Selecciona el motivo de anulación…" : "Cargando motivos…"}</option>
+              {motivosAnular.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -299,6 +309,11 @@ export default function MarcarNoGestionadoModal({
             Cancelar
           </button>
           <div className="ml-auto flex items-center justify-end gap-3">
+          {!guardando && !valido && (
+            <span className="max-w-[16rem] text-right text-[11px] leading-tight text-red-700">
+              {capturando ? "Capturando la evidencia…" : `Falta: ${faltantes.join(", ")}`}
+            </span>
+          )}
           {puedeAnular && <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-brand-black">
             <input type="checkbox" role="switch" aria-label="Anular pedido" checked={anulando} disabled={guardando}
               onChange={(event) => { if (event.target.checked) void abrirAnular(); else setAnulando(false); }} className="peer sr-only" />
@@ -311,7 +326,7 @@ export default function MarcarNoGestionadoModal({
             disabled={!valido || guardando}
             className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 disabled:opacity-50"
           >
-            {guardando ? "Guardando…" : "Confirmar"}
+            {guardando ? "Guardando…" : anulando ? "Registrar y anular" : "Confirmar"}
           </button>
           </div>
         </div>

@@ -35,23 +35,40 @@ function leerResultadoAdres(texto: string): { numero: string; nombres: string; a
  * cédula, se abre ADRES y se pega el resultado. Al final se confirma con el
  * cliente y se llenan Nombres y Apellidos con mayúscula inicial.
  */
-export default function ValidarCedula(props: {
-  cedula: string;
-  onConfirmar: (nombres: string, apellidos: string) => void;
-}) {
+export default function ValidarCedula(props: ValidarCedulaProps) {
   // Desactivada: no se muestra nada (ni se precarga ADRES).
   if (!VALIDACION_ADRES_ACTIVA) return null;
   return <ValidarCedulaActiva {...props} />;
 }
 
+interface ValidarCedulaProps {
+  cedula: string;
+  onConfirmar: (nombres: string, apellidos: string) => void;
+  /** Cada vez que cambia (>0) se abre la validación sola (p. ej. al Guardar sin validar). */
+  disparo?: number;
+  /** Validación automática cerrada con Cancelar/X: el formulario guarda igual (NIT, sin ADRES). */
+  onCancelar?: () => void;
+  /** Nombre que tiene el formulario, para avisar si no corresponde a la cédula. */
+  nombreActual?: string;
+  /** Conserva el nombre del formulario y marca al cliente como no confiable. */
+  onNoConfiable?: (nombreAdres: string) => void;
+}
+
+/** Palabras sin tildes ni mayúsculas para comparar nombres. */
+const palabras = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\s+/).filter(Boolean);
+
 function ValidarCedulaActiva({
   cedula,
   onConfirmar,
-}: {
-  cedula: string;
-  onConfirmar: (nombres: string, apellidos: string) => void;
-}) {
+  disparo,
+  onCancelar,
+  nombreActual,
+  onNoConfiable,
+}: ValidarCedulaProps) {
   const [abierto, setAbierto] = useState(false);
+  // Abierta automáticamente al guardar: Cancelar/X dejan guardar sin validar.
+  const [auto, setAuto] = useState(false);
   const [copiada, setCopiada] = useState(false);
   const [pegado, setPegado] = useState("");
   const [nombres, setNombres] = useState("");
@@ -166,12 +183,25 @@ function ValidarCedulaActiva({
     abrirAdres();
   }
 
-  function cerrar() {
+  function cerrar(guardarIgual = true) {
     if (esperando) window.postMessage({ tipo: "SIGCOMPRO_ADRES_CANCELAR" }, window.location.origin);
     setEsperando(false);
     setFallo(null);
     setAbierto(false);
+    if (auto) {
+      setAuto(false);
+      if (guardarIgual) onCancelar?.();
+    }
   }
+
+  // Apertura automática pedida por el formulario (al guardar sin haber validado).
+  useEffect(() => {
+    if (!disparo) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuto(true);
+    void validar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disparo]);
 
   function alPegar(texto: string) {
     setPegado(texto);
@@ -192,6 +222,12 @@ function ValidarCedulaActiva({
   const puedeConfirmar = !!nombresF && !!apellidosF;
   // Campos visibles: modo manual, al corregir o si ADRES no trajo los datos.
   const verCampos = !conExtension || manual || editando || !nombresF || !apellidosF;
+  // El nombre del formulario no corresponde a la cédula: alguna de sus palabras no está en ADRES.
+  const nombreAdres = [nombresF, apellidosF].filter(Boolean).join(" ");
+  const delAdres = new Set(palabras(nombreAdres));
+  const noCoincide =
+    !!onNoConfiable && !!nombreActual?.trim() && puedeConfirmar &&
+    palabras(nombreActual).some((p) => !delAdres.has(p));
 
   return (
     <>
@@ -220,7 +256,7 @@ function ValidarCedulaActiva({
               </div>
               <button
                 type="button"
-                onClick={cerrar}
+                onClick={() => cerrar()}
                 className="rounded-lg p-1.5 text-brand-black hover:bg-brand-cream-soft"
                 aria-label="Cerrar"
                 title="Cerrar"
@@ -274,6 +310,11 @@ function ValidarCedulaActiva({
                         No hay ninguna persona registrada con ese número. Puede ser un error al digitarla o una <b>posible estafa</b>.
                         Confirma el número con el cliente antes de continuar.
                       </p>
+                      {auto && (
+                        <p className="text-xs font-semibold text-brand-black">
+                          Si es un NIT de empresa, pulsa <b>Cancelar</b> para guardar sin validar.
+                        </p>
+                      )}
                     </>
                   ) : fallo.tipo === "sinRespuesta" ? (
                     <>
@@ -291,7 +332,7 @@ function ValidarCedulaActiva({
                   <div className="flex flex-wrap justify-center gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={cerrar}
+                      onClick={() => cerrar(fallo.tipo !== "noExiste")}
                       className="rounded-xl bg-brand-wine px-4 py-2 text-xs font-semibold text-white hover:bg-brand-wine/90"
                     >
                       {fallo.tipo === "noExiste" ? "Corregir la cédula" : "Cerrar"}
@@ -412,6 +453,28 @@ function ValidarCedulaActiva({
                       )}
                     </div>
                   )}
+                  {noCoincide && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                      <p>
+                        El nombre registrado <b>«{nombreActual?.trim()}»</b> no corresponde a esta cédula.
+                      </p>
+                      <p className="mt-1">
+                        <b>Confirmar</b> lo corrige con el nombre de la validación. Si el cliente insiste en sus datos,
+                        márcalo como no confiable: se avisará al tomarle pedidos.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onNoConfiable?.(nombreAdres);
+                          setAuto(false);
+                          setAbierto(false);
+                        }}
+                        className="mt-2 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                      >
+                        Marcar cliente no confiable
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -419,10 +482,11 @@ function ValidarCedulaActiva({
             <div className="flex justify-end gap-2 border-t border-brand-brown/10 px-5 py-4">
               <button
                 type="button"
-                onClick={cerrar}
+                onClick={() => cerrar()}
+                title={auto ? "Guardar el cliente sin validar" : "Cerrar"}
                 className="rounded-xl border border-brand-brown/15 px-4 py-2 text-sm font-semibold text-brand-brown hover:bg-brand-cream-soft"
               >
-                Cancelar
+                {auto ? "Cancelar y guardar" : "Cancelar"}
               </button>
               {numero.length >= 5 && !esperando && !(fallo && !manual) && (
                 <button
@@ -430,6 +494,7 @@ function ValidarCedulaActiva({
                   disabled={!puedeConfirmar}
                   onClick={() => {
                     onConfirmar(nombresF, apellidosF);
+                    setAuto(false);
                     setAbierto(false);
                   }}
                   title={puedeConfirmar ? "Llenar Nombres y Apellidos del cliente" : "Completa nombres y apellidos"}

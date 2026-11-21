@@ -21,6 +21,10 @@ export interface Cliente {
   /** Fundación: se marca en el código original y se aplica a sus alternas ("<nit>-N"). */
   fundacion?: boolean;
   direccion_incorrecta: boolean;
+  /** El nombre registrado no corresponde a la cédula (validación ADRES). */
+  no_confiable?: boolean;
+  no_confiable_motivo?: string | null;
+  no_confiable_en?: string | null;
   dias_despacho?: string[];
   vendedor_asignado: string | null;
   creado_en: string;
@@ -50,6 +54,8 @@ export interface ClienteInput {
   horeca?: boolean;
   fundacion?: boolean;
   direccion_incorrecta?: boolean;
+  no_confiable?: boolean;
+  no_confiable_motivo?: string;
   dias_despacho?: string[];
   vendedor_asignado?: string;
 }

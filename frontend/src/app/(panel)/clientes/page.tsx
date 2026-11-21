@@ -21,9 +21,10 @@ import { getUsuario } from "@/lib/auth";
 import { puedeAccion } from "@/lib/permisos";
 import { aNombrePropio, onChangeNombrePropio } from "@/lib/format";
 import ValidarCedula from "@/components/ValidarCedula";
+import { VALIDACION_ADRES_ACTIVA } from "@/lib/extension-adres";
 import { ModalSinPermiso, useSinPermiso } from "@/components/SinPermisoModal";
 import DireccionInput from "@/components/DireccionInput";
-import ReferenciaInput from "@/components/ReferenciaInput";
+import ReferenciaInput, { formatearReferencia } from "@/components/ReferenciaInput";
 import AutocompleteInput from "@/components/AutocompleteInput";
 import MapaDireccion from "@/components/MapaDireccion";
 
@@ -84,6 +85,10 @@ export default function ClientesPage() {
   const [avisoFundacion, setAvisoFundacion] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  // Cédula ya validada en este formulario y apertura automática de la validación al guardar.
+  const [validadoNit, setValidadoNit] = useState<string | null>(null);
+  const [disparoValidar, setDisparoValidar] = useState(0);
+  const pendienteGuardar = useRef(false);
 
   // Modal eliminar
   const [aEliminar, setAEliminar] = useState<Cliente | null>(null);
@@ -198,6 +203,7 @@ export default function ClientesPage() {
     setApellidos("");
     setTipoCliente(null);
     setErrorForm(null);
+    setValidadoNit(null);
     setModalAbierto(true);
   }
 
@@ -207,7 +213,7 @@ export default function ClientesPage() {
       nit_cedula: c.nit_cedula,
       nombre: c.nombre ?? "",
       direccion: c.direccion ?? "",
-      referencia: c.referencia ?? "",
+      referencia: formatearReferencia(c.referencia ?? ""),
       barrio: c.barrio ?? "",
       ciudad: c.ciudad ?? "",
       telefono: c.telefono ?? "",
@@ -219,12 +225,16 @@ export default function ClientesPage() {
       horeca: c.horeca,
       fundacion: c.fundacion ?? false,
       direccion_incorrecta: c.direccion_incorrecta ?? false,
+      no_confiable: c.no_confiable ?? false,
+      no_confiable_motivo: c.no_confiable_motivo ?? "",
       dias_despacho: c.dias_despacho ?? [],
       vendedor_asignado: c.vendedor_asignado ?? "",
     });
+    setValidadoNit(null);
     // Si el cliente ya tiene apellidos guardados, respetamos la división exacta.
-    const apel = (c.apellidos ?? "").trim();
-    const full = (c.nombre ?? "").trim();
+    // Datos antiguos o importados pueden venir en MAYÚSCULAS: se muestran (y guardan) en nombre propio.
+    const apel = aNombrePropio((c.apellidos ?? "").trim());
+    const full = aNombrePropio((c.nombre ?? "").trim());
     if (apel && full.endsWith(apel)) {
       setNombres(full.slice(0, full.length - apel.length).trim());
       setApellidos(apel);
@@ -247,20 +257,27 @@ export default function ClientesPage() {
     setForm((prev) => ({ ...prev, [campo]: valor }));
   }
 
-  async function guardar() {
+  /**
+   * Guarda el cliente. Si la cédula no se validó en este formulario, primero
+   * abre la validación; al confirmarla, cancelarla (NIT) o marcar al cliente
+   * como no confiable, vuelve a llamar con `opc` para guardar de una vez.
+   */
+  async function guardar(opc?: { nombres?: string; apellidos?: string; noConfiable?: string }) {
+    const nombresG = opc?.nombres ?? nombres;
+    const apellidosG = opc?.apellidos ?? apellidos;
     if (!form.nit_cedula.trim()) {
       setErrorForm("El NIT/cédula es obligatorio.");
       return;
     }
-    if (!nombres.trim()) {
+    if (!nombresG.trim()) {
       setErrorForm("Los nombres son obligatorios.");
       return;
     }
-    if (!apellidos.trim()) {
+    if (!apellidosG.trim()) {
       setErrorForm("Los apellidos son obligatorios.");
       return;
     }
-    const nombreCompleto = `${nombres} ${apellidos}`.trim().replace(/\s+/g, " ");
+    const nombreCompleto = `${nombresG} ${apellidosG}`.trim().replace(/\s+/g, " ");
     if (!form.direccion?.trim()) {
       setErrorForm(
         "La dirección es obligatoria: completa tipo de vía, vía, cruce y placa.",
@@ -279,13 +296,21 @@ export default function ClientesPage() {
       setErrorForm("Selecciona el tipo de cliente: hogar, HORECA o fundación.");
       return;
     }
+    if (VALIDACION_ADRES_ACTIVA && !opc && validadoNit !== form.nit_cedula.trim()) {
+      pendienteGuardar.current = true;
+      setDisparoValidar((d) => d + 1);
+      return;
+    }
     setGuardando(true);
     setErrorForm(null);
     try {
       const datos = {
         ...form,
         nombre: nombreCompleto,
-        apellidos: apellidos.trim().replace(/\s+/g, " ") || undefined,
+        apellidos: apellidosG.trim().replace(/\s+/g, " ") || undefined,
+        ...(opc?.noConfiable !== undefined
+          ? { no_confiable: true, no_confiable_motivo: opc.noConfiable }
+          : {}),
         horeca: tipoCliente === "horeca",
         fundacion: tipoCliente === "fundacion",
         // Los días de despacho solo aplican a HORECA.
@@ -782,6 +807,22 @@ export default function ClientesPage() {
               </div>
             )}
 
+            {form.no_confiable && (
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+                <p>
+                  <b>⚠ Cliente no confiable.</b> {form.no_confiable_motivo || "El nombre no corresponde a la cédula."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, no_confiable: false, no_confiable_motivo: "" }))}
+                  className="shrink-0 text-xs font-semibold underline"
+                  title="Quitar la marca (se aplica al guardar)"
+                >
+                  Quitar marca
+                </button>
+              </div>
+            )}
+
             {/* Layout horizontal: bloques a la izquierda, ubicación a la derecha */}
             <div className="mt-3 grid items-start gap-3 lg:grid-cols-[1fr_1fr]">
               {/* Columna izquierda: bloques 1 a 4 */}
@@ -798,9 +839,30 @@ export default function ClientesPage() {
                         />
                         <ValidarCedula
                           cedula={form.nit_cedula ?? ""}
+                          disparo={disparoValidar}
+                          nombreActual={`${nombres} ${apellidos}`}
                           onConfirmar={(n, a) => {
                             setNombres(n);
                             setApellidos(a);
+                            setValidadoNit(form.nit_cedula.trim());
+                            if (pendienteGuardar.current) {
+                              pendienteGuardar.current = false;
+                              void guardar({ nombres: n, apellidos: a });
+                            }
+                          }}
+                          onCancelar={() => {
+                            if (!pendienteGuardar.current) return;
+                            pendienteGuardar.current = false;
+                            void guardar({});
+                          }}
+                          onNoConfiable={(nombreAdres) => {
+                            const motivo = `El nombre registrado (${`${nombres} ${apellidos}`.trim()}) no corresponde a la cédula: la validación indica ${nombreAdres}.`;
+                            setForm((prev) => ({ ...prev, no_confiable: true, no_confiable_motivo: motivo }));
+                            setValidadoNit(form.nit_cedula.trim());
+                            if (pendienteGuardar.current) {
+                              pendienteGuardar.current = false;
+                              void guardar({ noConfiable: motivo });
+                            }
                           }}
                         />
                       </div>
@@ -1037,7 +1099,7 @@ export default function ClientesPage() {
                 Cancelar
               </button>
               <button
-                onClick={guardar}
+                onClick={() => void guardar()}
                 disabled={guardando}
                 title="Guardar los datos del cliente"
                 className="rounded-xl bg-brand-amber px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-amber/90 disabled:opacity-50"
