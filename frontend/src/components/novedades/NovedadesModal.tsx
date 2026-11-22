@@ -32,6 +32,7 @@ import numeroAprobacion from "./demos/numero-aprobacion";
 import pdvIncumplimientos from "./demos/pdv-incumplimientos";
 import validarSoloNuevos from "./demos/validar-solo-nuevos";
 import cedulaNoExiste from "./demos/cedula-no-existe";
+import permisoProductos from "./demos/permiso-productos";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -60,6 +61,7 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "pdv-incumplimientos": pdvIncumplimientos,
   "validar-solo-nuevos": validarSoloNuevos,
   "cedula-no-existe": cedulaNoExiste,
+  "permiso-productos": permisoProductos,
 };
 
 type Item = Novedad & { version: string; fecha: string };

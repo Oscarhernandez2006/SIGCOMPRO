@@ -123,6 +123,11 @@ export const CATALOGO_PERMISOS: ApartadoCatalogo[] = [
         label: 'Lista de precios',
       },
       {
+        key: 'productos',
+        label: 'Productos y precios',
+        acciones: [{ key: 'productos.agotado', label: 'Marcar productos agotados / disponibles' }],
+      },
+      {
         key: 'reporte_productos',
         label: 'Reporte de productos por cliente',
       },

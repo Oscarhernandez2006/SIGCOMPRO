@@ -34,7 +34,8 @@ export type DemoNovedad =
   | "numero-aprobacion"
   | "pdv-incumplimientos"
   | "validar-solo-nuevos"
-  | "cedula-no-existe";
+  | "cedula-no-existe"
+  | "permiso-productos";
 
 export interface Novedad {
   id: string;
@@ -427,6 +428,25 @@ export const NOVEDADES: VersionNovedades[] = [
         ],
         nota: "Actualiza la extensión con «Instalar extensión» para tener la detección nueva.",
         demo: "cedula-no-existe",
+      },
+    ],
+  },
+  {
+    version: "2026-11-21d",
+    fecha: "21 de noviembre de 2026",
+    novedades: [
+      {
+        id: "permiso-productos",
+        modulo: "Usuarios · Productos y precios",
+        titulo: "Permiso de Productos y precios",
+        resumen: "Ya se puede dar acceso a Productos y precios a supervisores y otros roles desde sus permisos.",
+        puntos: [
+          "En Permisos → Módulos operativos aparece «Productos y precios».",
+          "El sub-permiso «Marcar productos agotados / disponibles» habilita los botones Agotado/Disponible.",
+          "Quien lo tenga ve «Productos y precios» en su menú; «Sincronizar» solo sale con el permiso de sincronizar lista de precios.",
+        ],
+        nota: "También: si ADRES no encuentra una cédula se avisa que no aparece (puede ser real sin afiliación a salud), no que es falsa.",
+        demo: "permiso-productos",
       },
     ],
   },

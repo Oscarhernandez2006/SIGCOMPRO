@@ -14,8 +14,6 @@ import { ProductosService } from './productos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermisosGuard } from '../auth/guards/permisos.guard';
 import { Permisos } from '../auth/decorators/permisos.decorator';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtPayload } from '../auth/guards/jwt-auth.guard';
 
 @Controller('productos')
@@ -44,8 +42,8 @@ export class ProductosController {
   }
 
   @Patch('agotado')
-  @UseGuards(RolesGuard)
-  @Roles('administrador', 'administrador app', 'desarrollador')
+  @UseGuards(PermisosGuard)
+  @Permisos('productos.agotado')
   agotado(@Body() body: { lista_precio?: string; referencia?: string; agotado?: boolean }, @Req() req: { user: JwtPayload }) {
     return this.productos.actualizarAgotado(body?.lista_precio ?? '', body?.referencia ?? '', body?.agotado === true, req.user?.cedula ?? req.user?.sub ?? '');
   }

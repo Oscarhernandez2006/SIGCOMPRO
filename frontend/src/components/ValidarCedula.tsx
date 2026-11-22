@@ -306,10 +306,11 @@ function ValidarCedulaActiva({
                   </span>
                   {fallo.tipo === "noExiste" ? (
                     <>
-                      <p className="text-sm font-bold text-red-800">La cédula {numero} no existe en ADRES</p>
+                      <p className="text-sm font-bold text-red-800">La cédula {numero} no aparece en ADRES</p>
                       <p className="text-xs text-red-900/80">
-                        No hay ninguna persona registrada con ese número. Puede ser un error al digitarla o una <b>posible estafa</b>.
-                        Confirma el número con el cliente antes de continuar.
+                        ADRES solo muestra personas afiliadas a salud: alguien real puede no aparecer (sin afiliación o régimen especial
+                        como Fuerzas Militares, Policía, Magisterio o Ecopetrol). También puede ser un error al digitarla.
+                        Confirma el número con el cliente; si es correcto, escribe los datos a mano.
                       </p>
                       {auto && (
                         <p className="text-xs font-semibold text-brand-black">
@@ -361,7 +362,7 @@ function ValidarCedulaActiva({
                       onClick={() => {
                         onNoConfiable(
                           fallo.tipo === "noExiste"
-                            ? `La cédula ${numero} no existe en ADRES: posible error de digitación o estafa.`
+                            ? `La cédula ${numero} no aparece en ADRES.`
                             : `No se pudo validar la cédula ${numero} en ADRES.`,
                         );
                         setAuto(false);

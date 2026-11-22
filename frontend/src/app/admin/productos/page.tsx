@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ApiError } from "@/lib/api";
+import { getUsuario, type Usuario } from "@/lib/auth";
+import { puedeAccion } from "@/lib/permisos";
 import {
   listarListasPrecio,
   listarProductos,
@@ -25,7 +27,13 @@ function fmtFecha(valor: string | null): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("es-CO");
 }
 
+const sinSuscripcion = () => () => {};
+
 export default function AdminProductosPage() {
+  const usuarioJson = useSyncExternalStore(sinSuscripcion, () => JSON.stringify(getUsuario()), () => "null");
+  const usuario = useMemo(() => JSON.parse(usuarioJson) as Usuario | null, [usuarioJson]);
+  const puedeAgotado = puedeAccion(usuario, "productos.agotado");
+  const puedeSincronizar = puedeAccion(usuario, "pedidos.sincronizar");
   const [listas, setListas] = useState<ListaPrecio[]>([]);
   const [listaSel, setListaSel] = useState<string>("");
   const [productos, setProductos] = useState<ProductoPrecio[]>([]);
@@ -181,7 +189,7 @@ export default function AdminProductosPage() {
                           type="button"
                           title={agotado ? "Marcar disponible" : "Marcar agotado"}
                           aria-label={`${agotado ? "Marcar disponible" : "Marcar agotado"}: ${p.producto ?? p.referencia}`}
-                          disabled={ocupado}
+                          disabled={ocupado || !puedeAgotado}
                           onClick={() => void alternarAgotado(p)}
                           className={`inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border px-2.5 text-xs font-semibold transition disabled:opacity-50 ${agotado ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"}`}
                         >
@@ -228,6 +236,7 @@ export default function AdminProductosPage() {
             </p>
           )}
         </div>
+        {puedeSincronizar && (
         <button
           onClick={sincronizar}
           disabled={sincronizando}
@@ -243,6 +252,7 @@ export default function AdminProductosPage() {
           )}
           Sincronizar
         </button>
+        )}
       </div>
 
       {aviso && (

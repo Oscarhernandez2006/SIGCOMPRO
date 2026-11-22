@@ -97,6 +97,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Productos y precios",
+    href: "/productos",
+    modulo: "productos",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 4.27 9 5.15M21 8.25l-9 5.25-9-5.25 9-5.25 9 5.25Zm0 0v7.5L12 21m0 0L3 15.75v-7.5M12 21v-7.5" />
+      </svg>
+    ),
+  },
+  {
     label: "Clientes",
     href: "/clientes",
     modulo: "clientes",
