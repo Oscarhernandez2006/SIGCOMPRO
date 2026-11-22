@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { aNombrePropio, soloTexto } from "@/lib/format";
-import { VALIDACION_ADRES_ACTIVA, detectarExtension } from "@/lib/extension-adres";
+import {
+  VALIDACION_ADRES_ACTIVA,
+  detectarExtension,
+  esVersionMenor,
+  obtenerVersionDisponible,
+  type EstadoExtension,
+} from "@/lib/extension-adres";
+import InstalarExtensionAdres from "./InstalarExtensionAdres";
 
 const URL_ADRES = "https://www.adres.gov.co/consulte-su-eps";
 
@@ -82,6 +89,18 @@ function ValidarCedulaActiva({
   const [fallo, setFallo] = useState<{ tipo: "noExiste" | "sinRespuesta" | "error"; mensaje?: string } | null>(null);
   const [conExtension, setConExtension] = useState(false);
   const [manual, setManual] = useState(false);
+  const [estadoExt, setEstadoExt] = useState<EstadoExtension | null>(null);
+  const [versionDisponible, setVersionDisponible] = useState<string | null>(null);
+  const [verInstalar, setVerInstalar] = useState(false);
+  useEffect(() => {
+    let activo = true;
+    obtenerVersionDisponible().then((v) => activo && setVersionDisponible(v));
+    return () => {
+      activo = false;
+    };
+  }, []);
+  const requiereInstalar =
+    !!estadoExt && (!estadoExt.instalada || esVersionMenor(estadoExt.version, versionDisponible));
 
   // Se consulta la cédula base: "1044616409-1" (dirección alterna del mismo
   // cliente) -> "1044616409". El campo del formulario se deja tal cual.
@@ -94,7 +113,9 @@ function ValidarCedulaActiva({
     let activo = true;
     let pedida = false;
     detectarExtension().then((ext) => {
-      if (!activo || !ext.instalada) return;
+      if (!activo) return;
+      setEstadoExt(ext);
+      if (!ext.instalada) return;
       pedida = true;
       window.postMessage({ tipo: "SIGCOMPRO_ADRES_PRECARGAR" }, window.location.origin);
     });
@@ -243,6 +264,27 @@ function ValidarCedulaActiva({
         </svg>
         Validar
       </button>
+      {requiereInstalar && (
+        <button
+          type="button"
+          onClick={() => setVerInstalar(true)}
+          title={estadoExt?.instalada ? `Hay una versión nueva de la extensión (${versionDisponible})` : "Instalar la extensión para validar automáticamente"}
+          className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+        >
+          {estadoExt?.instalada ? "Actualizar extensión" : "Instalar extensión"}
+        </button>
+      )}
+      {verInstalar && estadoExt && (
+        <InstalarExtensionAdres
+          estado={estadoExt}
+          versionDisponible={versionDisponible}
+          onCerrar={() => setVerInstalar(false)}
+          onInstalada={(e) => {
+            setEstadoExt(e);
+            setVerInstalar(false);
+          }}
+        />
+      )}
 
       {abierto && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/50 p-4">

@@ -35,7 +35,8 @@ export type DemoNovedad =
   | "pdv-incumplimientos"
   | "validar-solo-nuevos"
   | "cedula-no-existe"
-  | "permiso-productos";
+  | "permiso-productos"
+  | "boton-extension";
 
 export interface Novedad {
   id: string;
@@ -447,6 +448,23 @@ export const NOVEDADES: VersionNovedades[] = [
         ],
         nota: "También: si ADRES no encuentra una cédula se avisa que no aparece (puede ser real sin afiliación a salud), no que es falsa.",
         demo: "permiso-productos",
+      },
+    ],
+  },
+  {
+    version: "2026-11-21e",
+    fecha: "21 de noviembre de 2026",
+    novedades: [
+      {
+        id: "boton-extension",
+        modulo: "Clientes · Validar cédula",
+        titulo: "Botón para instalar o actualizar la extensión",
+        resumen: "Junto a «Validar» aparece «Instalar extensión» o «Actualizar extensión» cuando hace falta.",
+        puntos: [
+          "Sale si el navegador no tiene la extensión o tiene una versión vieja.",
+          "Abre una ventana con la versión instalada y la nueva, la descarga del .zip y los pasos; se cierra sola al detectarla.",
+        ],
+        demo: "boton-extension",
       },
     ],
   },
