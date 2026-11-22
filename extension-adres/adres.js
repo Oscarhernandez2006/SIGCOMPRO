@@ -104,6 +104,7 @@
       procesando = false;
       return;
     }
+    document.documentElement.setAttribute("data-sigcompro-control", "1");
     progreso("ADRES cargado");
     // "Cédula de ciudadanía" ya viene elegida; cambiarla recarga el formulario.
     if (tipo && tipo.value !== "CC") {
@@ -136,7 +137,7 @@
 
   // Mensajes con los que ADRES indica que el documento no está en la BDUA.
   const NO_EXISTE_RE =
-    /no\s+(?:se\s+)?(?:encontr|encuentr|exist|registr|hay\s+(?:informaci|registr|datos))|sin\s+(?:informaci|registr|resultados)|no\s+(?:est[aá])?\s*(?:afiliad|registrad)/i;
+    /no\s+(?:se\s+)?(?:encontr|encuentr|exist|registr|figur|aparec|arroj|hay\s+(?:informaci|registr|datos))|sin\s+(?:informaci|registr|resultados)|no\s+(?:est[aá])?\s*(?:afiliad|registrad)/i;
 
   async function avisarNoExiste(mensaje) {
     enviado = true;
@@ -164,6 +165,15 @@
     if (err && err !== errorEnviado) {
       errorEnviado = err;
       await chrome.runtime.sendMessage({ tipo: "error", motivo: "adres", mensaje: err });
+      return;
+    }
+    // alert() de ADRES capturado por mismo-marco.js.
+    const alerta = (document.documentElement.getAttribute("data-sigcompro-alerta") || "").replace(/^\d+\|/, "").trim();
+    if (alerta && NO_EXISTE_RE.test(alerta)) return avisarNoExiste(alerta);
+    if (alerta && alerta !== errorEnviado) {
+      errorEnviado = alerta;
+      if (temporizador) clearTimeout(temporizador);
+      await chrome.runtime.sendMessage({ tipo: "error", motivo: "adres", mensaje: alerta });
       return;
     }
     // Resultado sin nombres, o aviso de "no encontrado" fuera del campo Error.
@@ -196,4 +206,5 @@
   revisarResultado();
   const obs = new MutationObserver(() => revisarResultado());
   if (document.body) obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sigcompro-alerta"] });
 })();

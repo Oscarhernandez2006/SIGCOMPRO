@@ -296,7 +296,7 @@ export default function ClientesPage() {
       setErrorForm("Selecciona el tipo de cliente: hogar, HORECA o fundación.");
       return;
     }
-    if (VALIDACION_ADRES_ACTIVA && !opc && validadoNit !== form.nit_cedula.trim()) {
+    if (VALIDACION_ADRES_ACTIVA && !editandoId && !opc && validadoNit !== form.nit_cedula.trim()) {
       pendienteGuardar.current = true;
       setDisparoValidar((d) => d + 1);
       return;
@@ -855,8 +855,7 @@ export default function ClientesPage() {
                             pendienteGuardar.current = false;
                             void guardar({});
                           }}
-                          onNoConfiable={(nombreAdres) => {
-                            const motivo = `El nombre registrado (${`${nombres} ${apellidos}`.trim()}) no corresponde a la cédula: la validación indica ${nombreAdres}.`;
+                          onNoConfiable={(motivo) => {
                             setForm((prev) => ({ ...prev, no_confiable: true, no_confiable_motivo: motivo }));
                             setValidadoNit(form.nit_cedula.trim());
                             if (pendienteGuardar.current) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { aNombrePropio, soloTexto } from "@/lib/format";
 import { VALIDACION_ADRES_ACTIVA, detectarExtension } from "@/lib/extension-adres";
 
@@ -50,8 +50,8 @@ interface ValidarCedulaProps {
   onCancelar?: () => void;
   /** Nombre que tiene el formulario, para avisar si no corresponde a la cédula. */
   nombreActual?: string;
-  /** Conserva el nombre del formulario y marca al cliente como no confiable. */
-  onNoConfiable?: (nombreAdres: string) => void;
+  /** Conserva el nombre del formulario y marca al cliente como no confiable con ese motivo. */
+  onNoConfiable?: (motivo: string) => void;
 }
 
 /** Palabras sin tildes ni mayúsculas para comparar nombres. */
@@ -195,8 +195,10 @@ function ValidarCedulaActiva({
   }
 
   // Apertura automática pedida por el formulario (al guardar sin haber validado).
+  // El valor con que se monta se ignora: el contador queda alto tras guardar otro cliente.
+  const disparoInicial = useRef(disparo);
   useEffect(() => {
-    if (!disparo) return;
+    if (!disparo || disparo === disparoInicial.current) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuto(true);
     void validar();
@@ -354,6 +356,24 @@ function ValidarCedulaActiva({
                       Escribir los datos a mano
                     </button>
                   </div>
+                  {onNoConfiable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onNoConfiable(
+                          fallo.tipo === "noExiste"
+                            ? `La cédula ${numero} no existe en ADRES: posible error de digitación o estafa.`
+                            : `No se pudo validar la cédula ${numero} en ADRES.`,
+                        );
+                        setAuto(false);
+                        setFallo(null);
+                        setAbierto(false);
+                      }}
+                      className="rounded-xl bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800"
+                    >
+                      Marcar cliente no confiable{auto ? " y guardar" : ""}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -465,7 +485,9 @@ function ValidarCedulaActiva({
                       <button
                         type="button"
                         onClick={() => {
-                          onNoConfiable?.(nombreAdres);
+                          onNoConfiable?.(
+                            `El nombre registrado (${nombreActual?.trim()}) no corresponde a la cédula: la validación indica ${nombreAdres}.`,
+                          );
                           setAuto(false);
                           setAbierto(false);
                         }}

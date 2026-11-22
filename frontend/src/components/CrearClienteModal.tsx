@@ -255,8 +255,7 @@ export default function CrearClienteModal({
                         pendienteGuardar.current = false;
                         void guardar({});
                       }}
-                      onNoConfiable={(nombreAdres) => {
-                        const motivo = `El nombre registrado (${`${nombres} ${apellidos}`.trim()}) no corresponde a la cédula: la validación indica ${nombreAdres}.`;
+                      onNoConfiable={(motivo) => {
                         setForm((prev) => ({ ...prev, no_confiable: true, no_confiable_motivo: motivo }));
                         setValidadoNit(form.nit_cedula.trim());
                         if (pendienteGuardar.current) {

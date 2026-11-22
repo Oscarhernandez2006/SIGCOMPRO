@@ -32,7 +32,9 @@ export type DemoNovedad =
   | "factura-despacho"
   | "registro-incumplimiento"
   | "numero-aprobacion"
-  | "pdv-incumplimientos";
+  | "pdv-incumplimientos"
+  | "validar-solo-nuevos"
+  | "cedula-no-existe";
 
 export interface Novedad {
   id: string;
@@ -394,6 +396,37 @@ export const NOVEDADES: VersionNovedades[] = [
           "Si fueron en varios puntos, se muestran todos (según el rango de fechas elegido).",
         ],
         demo: "pdv-incumplimientos",
+      },
+    ],
+  },
+  {
+    version: "2026-11-21c",
+    fecha: "21 de noviembre de 2026",
+    novedades: [
+      {
+        id: "validar-solo-nuevos",
+        modulo: "Clientes",
+        titulo: "Validación automática solo para clientes nuevos",
+        resumen: "Al editar un cliente ya no se abre sola la validación de cédula.",
+        puntos: [
+          "Al entrar a «Editar cliente» ya no arranca la validación.",
+          "Guardar un cliente existente guarda directo; la validación al guardar queda solo para clientes nuevos.",
+        ],
+        nota: "El botón «Validar» sigue disponible para validar a mano cuando se quiera.",
+        demo: "validar-solo-nuevos",
+      },
+      {
+        id: "cedula-no-existe",
+        modulo: "Clientes · Validar cédula",
+        titulo: "Cédula que no existe: aviso y cliente en riesgo",
+        resumen: "Si ADRES no encuentra la cédula o no responde, se puede marcar al cliente como no confiable desde la misma ventana.",
+        puntos: [
+          "La extensión (v1.10.0) detecta mejor cuando ADRES no encuentra la cédula y muestra el aviso rojo.",
+          "Nuevo botón «Marcar cliente no confiable» en el aviso, también cuando ADRES no responde.",
+          "El cliente queda con la etiqueta «No confiable» y el motivo, y se avisa al tomarle pedidos.",
+        ],
+        nota: "Actualiza la extensión con «Instalar extensión» para tener la detección nueva.",
+        demo: "cedula-no-existe",
       },
     ],
   },
