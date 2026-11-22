@@ -28,6 +28,8 @@ import validarGuardar from "./demos/validar-guardar";
 import clienteNoConfiable from "./demos/cliente-no-confiable";
 import facturaDespacho from "./demos/factura-despacho";
 import registroIncumplimiento from "./demos/registro-incumplimiento";
+import numeroAprobacion from "./demos/numero-aprobacion";
+import pdvIncumplimientos from "./demos/pdv-incumplimientos";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -52,6 +54,8 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "cliente-no-confiable": clienteNoConfiable,
   "factura-despacho": facturaDespacho,
   "registro-incumplimiento": registroIncumplimiento,
+  "numero-aprobacion": numeroAprobacion,
+  "pdv-incumplimientos": pdvIncumplimientos,
 };
 
 type Item = Novedad & { version: string; fecha: string };

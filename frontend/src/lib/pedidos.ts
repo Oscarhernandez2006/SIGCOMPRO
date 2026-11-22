@@ -39,6 +39,8 @@ export interface DespachoMeta {
   facturaValor?: number;
   /** Nombre del facturador (usuario con rol facturador) que hizo la factura. */
   facturadoPor?: string;
+  /** Número de aprobación de la transferencia (se digita en Cuadre de caja). */
+  numeroAprobacion?: string;
   /** Domiciliario asignado para el despacho. */
   domiciliario?: string;
   /** Code del vehículo (domiciliario) de Drivin correspondiente a `domiciliario`. */

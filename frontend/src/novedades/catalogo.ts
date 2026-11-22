@@ -30,7 +30,9 @@ export type DemoNovedad =
   | "validar-guardar"
   | "cliente-no-confiable"
   | "factura-despacho"
-  | "registro-incumplimiento";
+  | "registro-incumplimiento"
+  | "numero-aprobacion"
+  | "pdv-incumplimientos";
 
 export interface Novedad {
   id: string;
@@ -363,6 +365,35 @@ export const NOVEDADES: VersionNovedades[] = [
           "Con la anulación activada el botón dice «Registrar y anular».",
         ],
         demo: "registro-incumplimiento",
+      },
+    ],
+  },
+  {
+    version: "2026-11-21b",
+    fecha: "21 de noviembre de 2026",
+    novedades: [
+      {
+        id: "numero-aprobacion",
+        modulo: "Cuadre de caja",
+        titulo: "Nueva columna No. Aprob.",
+        resumen: "En el cuadre se digita el número con que se aprobó cada transferencia.",
+        puntos: [
+          "Junto a «Método de pago» está la columna «No. Aprob.»: se digita y se guarda al salir del campo.",
+          "Queda guardado en el pedido y sale también en el reporte impreso del cuadre.",
+          "Solo se digita en pagos por transferencia o mixtos; los demás muestran «—».",
+        ],
+        demo: "numero-aprobacion",
+      },
+      {
+        id: "pdv-incumplimientos",
+        modulo: "Incumplimientos",
+        titulo: "Punto de venta en el resumen",
+        resumen: "En «Personas con más incumplimientos» se ve el punto de venta de cada persona.",
+        puntos: [
+          "Al lado del nombre aparece el PDV donde ocurrieron sus incumplimientos.",
+          "Si fueron en varios puntos, se muestran todos (según el rango de fechas elegido).",
+        ],
+        demo: "pdv-incumplimientos",
       },
     ],
   },

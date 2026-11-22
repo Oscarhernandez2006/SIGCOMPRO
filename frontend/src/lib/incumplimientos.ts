@@ -91,7 +91,7 @@ export interface PersonaResumen {
 export interface ResumenIncumplimientos {
   total: number;
   puntos: number;
-  personas: { usuarioId: string; nombre: string; total: number }[];
+  personas: { usuarioId: string; nombre: string; total: number; puntos: string[] }[];
   motivos: { motivo: string; total: number }[];
 }
 

@@ -496,6 +496,23 @@ export default function CuadreCajaPage() {
     });
   }
 
+  // No. de aprobación de la transferencia: borrador local (el polling no lo pisa
+  // mientras se escribe) que se guarda en meta al salir del campo.
+  const [aprobBorrador, setAprobBorrador] = useState<Record<string, string>>({});
+  async function guardarAprobacion(id: string) {
+    const valor = aprobBorrador[id];
+    if (valor === undefined) return;
+    const quitar = () => setAprobBorrador((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    if (bloqueado || facturadoPorOtroId(id) || valor === (meta[id]?.numeroAprobacion ?? "")) { quitar(); return; }
+    try {
+      await actualizarMetaApi(id, { numeroAprobacion: valor });
+      setMeta((m) => ({ ...m, [id]: { ...m[id], numeroAprobacion: valor } }));
+      quitar();
+    } catch {
+      setError("No se pudo guardar el número de aprobación. Inténtalo de nuevo.");
+    }
+  }
+
   function cambiarLiq(id: string, campo: keyof Liq, valor: string) {
     if (bloqueado) return; // cuadre cerrado: requiere autorización para editar
     if (facturadoPorOtroId(id)) return; // solo quien facturó puede cuadrarlo
@@ -662,6 +679,7 @@ export default function CuadreCajaPage() {
           <td>${esc(p.cliente?.nombre || p.cliente?.nit_cedula || "—")}</td>
           <td>${esc(p.cliente?.nit_cedula || "—")}</td>
           <td>${esc(p.pago || "Sin definir")}</td>
+          <td>${esc(requiereComprobantePago(p.pago) ? meta[p.id]?.numeroAprobacion || "—" : "—")}</td>
           <td>${esc(requiereComprobantePago(p.pago) ? meta[p.id]?.comprobante?.referencia || "Sin referencia" : "—")}</td>
           <td class="r">${cop(valorFacturado(p))}</td>
           <td class="r">${cop(numero(l.efectivo))}</td>
@@ -714,12 +732,12 @@ export default function CuadreCajaPage() {
       </div>
       <table>
         <thead><tr>
-          <th>No. Factura</th><th>Consecutivo</th><th>Cliente</th><th>NIT / Cédula</th><th>Método de pago</th><th>Referencia</th>
+          <th>No. Factura</th><th>Consecutivo</th><th>Cliente</th><th>NIT / Cédula</th><th>Método de pago</th><th>No. Aprob.</th><th>Referencia</th>
           <th class="r">Valor facturado</th><th class="r">Liq. efectivo</th><th class="r">Liq. O.M.P.</th><th class="r">Diferencia</th>
         </tr></thead>
         <tbody>${filasHtml}</tbody>
         <tfoot><tr>
-          <td colspan="6">Total general</td>
+          <td colspan="7">Total general</td>
           <td class="r">${cop(tot.facturado)}</td>
           <td class="r">${cop(tot.efectivo)}</td>
           <td class="r">${cop(tot.omp)}</td>
@@ -955,17 +973,18 @@ export default function CuadreCajaPage() {
       ) : (
         <>
           <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-2xl border border-brand-brown/10 bg-white shadow-sm">
-            <table className="w-full min-w-[1200px] table-fixed text-xs">
+            <table className="w-full min-w-[1280px] table-fixed text-xs">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-brand-brown/10 bg-brand-cream-soft text-left text-[10px] font-bold uppercase tracking-wide text-brand-black shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                   <th className="w-[8%] px-2 py-2.5">No. Factura</th>
                   <th className="w-[8%] px-2 py-2.5">Consecutivo</th>
-                  <th className="w-[10%] px-2 py-2.5">Cliente</th>
+                  <th className="w-[9%] px-2 py-2.5">Cliente</th>
                   <th className="w-[7%] px-2 py-2.5">NIT / Cédula</th>
                   <th className="w-[9%] px-2 py-2.5">Método de pago</th>
-                  <th className="w-[11%] px-2 py-2.5">Referencia / comprobante</th>
-                  <th className="w-[9%] px-2 py-2.5">Despachado por</th>
-                  <th className="w-[9%] px-2 py-2.5 text-right">Facturado</th>
+                  <th className="w-[7%] px-2 py-2.5">No. Aprob.</th>
+                  <th className="w-[8%] px-2 py-2.5">Referencia / comprobante</th>
+                  <th className="w-[7%] px-2 py-2.5">Despachado por</th>
+                  <th className="w-[8%] px-2 py-2.5 text-right">Facturado</th>
                   <th className="w-[5%] px-2 py-2.5 text-center">Devolución</th>
                   <th className="w-[8%] px-2 py-2.5 text-right">Liq. efectivo</th>
                   <th className="w-[8%] px-2 py-2.5 text-right">Liq. O.M.P.</th>
@@ -1078,6 +1097,26 @@ export default function CuadreCajaPage() {
                             </option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-2 py-2">
+                        {requiereComprobantePago(p.pago) ? (
+                          <input
+                            inputMode="numeric"
+                            value={aprobBorrador[p.id] ?? meta[p.id]?.numeroAprobacion ?? ""}
+                            disabled={bloqueado || ajena}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/[^0-9A-Za-z-]/g, "").slice(0, 30);
+                              setAprobBorrador((prev) => ({ ...prev, [p.id]: v }));
+                            }}
+                            onBlur={() => guardarAprobacion(p.id)}
+                            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            placeholder="Número"
+                            title="Número con el que se aprobó la transferencia"
+                            className="w-full rounded-lg border border-brand-brown/20 px-1.5 py-1 text-xs tabular-nums outline-none focus:border-brand-wine disabled:cursor-not-allowed disabled:bg-brand-cream-soft/60"
+                          />
+                        ) : (
+                          <span className="text-brand-black/50">—</span>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         {requiereComprobantePago(p.pago) ? <div className="flex items-center justify-between gap-1"><span className="min-w-0 truncate text-[11px] font-medium text-brand-black" title={meta[p.id]?.comprobante?.referencia ?? undefined}>{meta[p.id]?.comprobante?.referencia || "Sin referencia"}</span><button type="button" title="Ver comprobante de transferencia" aria-label={`Ver comprobante ${p.comanda}`} onClick={() => setComprobanteDe(p)} disabled={!meta[p.id]?.comprobante?.tiene} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-brand-wine transition hover:bg-brand-wine/10 disabled:opacity-30"><Eye className="h-3.5 w-3.5" /></button></div> : <span className="text-brand-black/50">—</span>}
@@ -1193,7 +1232,7 @@ export default function CuadreCajaPage() {
               </tbody>
               <tfoot className="sticky bottom-0 z-20">
                 <tr className="border-t-2 border-brand-brown/15 bg-brand-cream-soft font-bold text-brand-black shadow-[0_-1px_0_0_rgba(0,0,0,0.06)]">
-                  <td className="truncate px-2 py-2.5" colSpan={7}>
+                  <td className="truncate px-2 py-2.5" colSpan={8}>
                     Total general · {filas.length} pedido{filas.length === 1 ? "" : "s"}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{cop(totales.facturado)}</td>

@@ -436,17 +436,18 @@ export class IncumplimientosService implements OnModuleInit {
     const resultado = await this.pool.query<{
       total: number;
       puntos: number;
-      personas: { usuarioId: string; nombre: string; total: number }[];
+      personas: { usuarioId: string; nombre: string; total: number; puntos: string[] }[];
       motivos: { motivo: string; total: number }[];
     }>(
       `WITH base AS (
-         SELECT usuario_id, usuario_nombre, motivo, punto_id, creado_en
+         SELECT usuario_id, usuario_nombre, motivo, punto_id, punto_nombre, creado_en
            FROM incumplimientos_personal
           WHERE ($1::date IS NULL OR creado_en >= ($1::date::timestamp AT TIME ZONE 'America/Bogota'))
             AND ($2::date IS NULL OR creado_en < (($2::date + 1)::timestamp AT TIME ZONE 'America/Bogota'))
        ), personas AS (
          SELECT usuario_id AS "usuarioId", (array_agg(usuario_nombre ORDER BY creado_en DESC))[1] AS nombre,
-                COUNT(*)::int AS total
+                COUNT(*)::int AS total,
+                COALESCE(array_agg(DISTINCT NULLIF(punto_nombre, '')) FILTER (WHERE NULLIF(punto_nombre, '') IS NOT NULL), '{}') AS puntos
            FROM base GROUP BY usuario_id
        ), motivos AS (
          SELECT motivo, COUNT(*)::int AS total FROM base GROUP BY motivo
