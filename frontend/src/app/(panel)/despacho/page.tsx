@@ -393,6 +393,18 @@ const ETIQUETA_ESTADO_FLUJO: Record<string, string> = {
   "En producción": "Preparado",
 };
 
+/** Píldora con el estado actual del pedido en la Alerta de despacho. */
+function EstadoAlerta({ estado }: { estado?: string | null }) {
+  const e = estado || "En proceso";
+  return (
+    <span
+      className={`ml-auto shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${colorEstado(e)}`}
+    >
+      {e.trim().toLowerCase() === "en proceso" ? "Pendiente" : e}
+    </span>
+  );
+}
+
 /**
  * Permiso granular requerido para COLOCAR un pedido en cada estado. Cada estado
  * tiene su propio permiso; además, el permiso "maestro" despacho.estado (o un
@@ -3524,7 +3536,8 @@ export default function DespachoPage() {
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
                         </span>
-                        <span className="shrink-0 font-bold tabular-nums text-brand-amber">
+                        <EstadoAlerta estado={p.estado} />
+                        <span className="min-w-[4.5rem] shrink-0 text-right font-bold tabular-nums text-brand-amber">
                           {fmtCronometro(msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado))}
                         </span>
                       </li>
@@ -3550,7 +3563,8 @@ export default function DespachoPage() {
                             · {p.cliente?.nombre || p.cliente?.nit_cedula}
                           </span>
                         </span>
-                        <span className="shrink-0 font-bold tabular-nums text-red-600">
+                        <EstadoAlerta estado={p.estado} />
+                        <span className="min-w-[4.5rem] shrink-0 text-right font-bold tabular-nums text-red-600">
                           -{fmtCronometro(msRestantesDespacho(p, ahora, meta[p.id]?.pagoConfirmado))}
                         </span>
                       </li>

@@ -54,11 +54,11 @@ export const PROYECCION_RESUMEN_SQL = `
   )`;
 
 /** Mismas expresiones que `construirScope` (día de entrega efectivo y "activo").
- *  Ambas están INDEXADAS (idx_pedidos_dia_efectivo / idx_pedidos_activos, ver
+ *  Ambas están INDEXADAS (idx_pedidos_dia_efectivo / idx_pedidos_activos_v2, ver
  *  PedidosService.onModuleInit): deben usarse textualmente para que el
  *  planificador aproveche los índices. */
 export const DIA_EFECTIVO_SQL = `pedidos_dia_efectivo(fecha, data)`;
-export const ACTIVO_SQL = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'devolución', 'devolucion'))`;
+export const ACTIVO_SQL = `(anulado = false AND lower(coalesce(estado, '')) NOT IN ('despachado', 'anulado', 'entregado', 'cancelado', 'en tránsito', 'en transito', 'rechazado', 'devolución', 'devolucion'))`;
 const NO_CLUB_SQL = `COALESCE(data->>'canal', '') <> 'club'`;
 
 /** Días que cubre la caché: 30 del periodo + 30 del anterior (deltas) + margen. */

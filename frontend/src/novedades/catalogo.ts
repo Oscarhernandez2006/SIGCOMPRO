@@ -36,7 +36,9 @@ export type DemoNovedad =
   | "validar-solo-nuevos"
   | "cedula-no-existe"
   | "permiso-productos"
-  | "boton-extension";
+  | "boton-extension"
+  | "rechazados-historicos"
+  | "estado-alerta-despacho";
 
 export interface Novedad {
   id: string;
@@ -465,6 +467,34 @@ export const NOVEDADES: VersionNovedades[] = [
           "Abre una ventana con la versión instalada y la nueva, la descarga del .zip y los pasos; se cierra sola al detectarla.",
         ],
         demo: "boton-extension",
+      },
+    ],
+  },
+  {
+    version: "2026-11-22",
+    fecha: "22 de noviembre de 2026",
+    novedades: [
+      {
+        id: "rechazados-historicos",
+        modulo: "Pedidos",
+        titulo: "Los rechazados de días anteriores pasan a Históricos",
+        resumen: "Pedidos ya no muestra rechazados viejos: solo los activos y los del día.",
+        puntos: [
+          "Un pedido «Rechazado» (por Drivin) se trata como finalizado, igual que Entregado o Devolución.",
+          "Los rechazados de días anteriores se consultan en Históricos.",
+        ],
+        demo: "rechazados-historicos",
+      },
+      {
+        id: "estado-alerta-despacho",
+        modulo: "Despacho",
+        titulo: "Estado del pedido en la Alerta de despacho",
+        resumen: "Cada pedido por vencer o vencido muestra en qué estado está.",
+        puntos: [
+          "Junto al cronómetro sale el estado (Pendiente, En producción, Alistado, Facturado…) con su color.",
+          "Así se ve de inmediato qué falta para despachar los pedidos vencidos.",
+        ],
+        demo: "estado-alerta-despacho",
       },
     ],
   },

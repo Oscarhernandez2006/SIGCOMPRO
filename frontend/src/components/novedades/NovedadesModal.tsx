@@ -34,6 +34,8 @@ import validarSoloNuevos from "./demos/validar-solo-nuevos";
 import cedulaNoExiste from "./demos/cedula-no-existe";
 import permisoProductos from "./demos/permiso-productos";
 import botonExtension from "./demos/boton-extension";
+import rechazadosHistoricos from "./demos/rechazados-historicos";
+import estadoAlertaDespacho from "./demos/estado-alerta-despacho";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -64,6 +66,8 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "cedula-no-existe": cedulaNoExiste,
   "permiso-productos": permisoProductos,
   "boton-extension": botonExtension,
+  "rechazados-historicos": rechazadosHistoricos,
+  "estado-alerta-despacho": estadoAlertaDespacho,
 };
 
 type Item = Novedad & { version: string; fecha: string };

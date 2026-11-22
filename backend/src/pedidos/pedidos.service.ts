@@ -380,8 +380,10 @@ export class PedidosService implements OnModuleInit {
       `CREATE INDEX IF NOT EXISTS idx_pedidos_dia_efectivo ON pedidos ((pedidos_dia_efectivo(fecha, data)))`,
     );
     // Índice parcial de pedidos ACTIVOS (predicado idéntico al de construirScope).
+    // Si cambia ACTIVO_SQL hay que subir el sufijo de versión para recrearlo.
+    await this.pool.query(`DROP INDEX IF EXISTS idx_pedidos_activos`);
     await this.pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_pedidos_activos ON pedidos (fecha DESC) WHERE ${ACTIVO_SQL}`,
+      `CREATE INDEX IF NOT EXISTS idx_pedidos_activos_v2 ON pedidos (fecha DESC) WHERE ${ACTIVO_SQL}`,
     );
     // Contador del "número del día" (turno) por punto y día (YYYY-MM-DD Bogotá).
     // Reinicia solo cada día (clave por día) y se incrementa de forma atómica
