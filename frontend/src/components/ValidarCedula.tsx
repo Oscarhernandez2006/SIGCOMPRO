@@ -199,7 +199,6 @@ function ValidarCedulaActiva({
   const disparoInicial = useRef(disparo);
   useEffect(() => {
     if (!disparo || disparo === disparoInicial.current) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuto(true);
     void validar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
