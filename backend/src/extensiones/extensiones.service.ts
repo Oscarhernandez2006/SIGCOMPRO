@@ -529,6 +529,51 @@ export class ExtensionesService implements OnModuleInit {
     };
   }
 
+  /**
+   * Extensiones de los últimos 31 días de un domiciliario (por documento), en
+   * cualquier estado, para que vea en Mi Variable Liquidación si Despacho la
+   * solicitó y si fue aprobada o rechazada.
+   */
+  async listarDomiciliario(documento: string) {
+    const doc = String(documento ?? '').replace(/\D/g, '');
+    if (doc.length < 5) throw new BadRequestException('Documento inválido.');
+    const nombres = new Set<string>();
+    const cedulas = await this.pool.query<{ nombre_norm: string }>(
+      `SELECT nombre_norm FROM domiciliarios_cedula WHERE regexp_replace(cedula, '\\D', '', 'g') = $1`,
+      [doc],
+    );
+    for (const c of cedulas.rows) nombres.add(c.nombre_norm);
+    const registro = await this.configuracion.obtenerRegistroConCedulas();
+    for (const d of registro.domiciliarios) {
+      if (String(d.cedula ?? '').replace(/\D/g, '') === doc) nombres.add(normalizarNombre(d.nombre));
+    }
+    if (nombres.size === 0) return [];
+    const r = await this.pool.query<SolicitudExtension>(
+      `SELECT ${COLUMNAS} FROM extensiones_solicitudes s
+        WHERE s.dia >= (now() AT TIME ZONE 'America/Bogota')::date - 31
+        ORDER BY s.dia DESC, s.solicitado_en DESC
+        LIMIT 2000`,
+    );
+    return r.rows
+      .filter((s) => nombres.has(normalizarNombre(s.domiciliario)))
+      .slice(0, 40)
+      .map((s) => ({
+        id: s.id,
+        dia: s.dia,
+        punto_venta: s.punto_nombre,
+        motivo: s.motivo,
+        estado: s.estado,
+        solicitado_por: s.solicitado_por_nombre,
+        solicitado_en: s.solicitado_en,
+        resuelto_por: s.resuelto_por_nombre,
+        resuelto_en: s.resuelto_en,
+        motivo_rechazo: s.motivo_rechazo,
+        cerrado_en: s.cerrado_en,
+        valor: ['aprobada', 'cerrada'].includes(s.estado) ? Number(s.valor) || 0 : 0,
+        pedidos: s.pedidos,
+      }));
+  }
+
   /** Filas de la extensión con estado/cliente actuales y si ya pasó a otro domiciliario. */
   private async filasVivas(s: SolicitudExtension) {
     const r = await this.pool.query<{

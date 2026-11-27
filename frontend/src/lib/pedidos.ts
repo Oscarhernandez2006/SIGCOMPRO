@@ -434,6 +434,24 @@ export async function descargarExcelDespacho(
  * lleva el sufijo "-N". `vehiculo` = code del domiciliario de Drivin a
  * preasignar. Devuelve la respuesta del API de Drivin.
  */
+/** Factura TPV de Siesa encontrada para un pedido (número completo y valor total). */
+export interface FacturaTpv {
+  numero: string;
+  valor: number;
+  estado: string;
+  co: string;
+  pdv: string;
+  nit: string;
+  cliente: string;
+  fechaHora: string | null;
+}
+
+/** Busca en Siesa la factura digitada (con la CIA y el C.O. del punto del pedido). */
+export function consultarFacturaTpvApi(pedidoId: string, numero: string): Promise<FacturaTpv> {
+  const qs = new URLSearchParams({ pedido_id: pedidoId, numero });
+  return apiFetch<FacturaTpv>(`/siesa/factura-tpv?${qs}`);
+}
+
 export function enviarADrivinApi(
   id: string,
   replica?: number,

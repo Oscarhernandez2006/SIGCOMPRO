@@ -5,7 +5,9 @@ import { ExtensionesService } from './extensiones.service';
 import { ExtensionesController } from './extensiones.controller';
 import { ExtensionesExternoController } from './extensiones-externo.controller';
 import { ExtensionesApiKeyGuard } from './extensiones-api-key.guard';
+import { ExtensionesDomiciliarioController } from './extensiones-domiciliario.controller';
 import { ConfiguracionModule } from '../configuracion/configuracion.module';
+import { SharedSecretGuard } from '../provisioning/guards/shared-secret.guard';
 
 @Module({
   imports: [
@@ -21,8 +23,8 @@ import { ConfiguracionModule } from '../configuracion/configuracion.module';
       }),
     }),
   ],
-  controllers: [ExtensionesController, ExtensionesExternoController],
-  providers: [ExtensionesService, ExtensionesApiKeyGuard],
+  controllers: [ExtensionesController, ExtensionesExternoController, ExtensionesDomiciliarioController],
+  providers: [ExtensionesService, ExtensionesApiKeyGuard, SharedSecretGuard],
   exports: [ExtensionesService],
 })
 export class ExtensionesModule {}

@@ -12,6 +12,16 @@ import {
 } from "@/lib/incumplimientos";
 import { listarMotivos } from "@/lib/motivos";
 
+/** Motivo de anulación que se preselecciona al anular un pedido no gestionado. */
+const MOTIVO_ANULAR_DEFECTO = "Sin Gestión del Dia";
+
+const normalizar = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+function motivoAnularPorDefecto(lista: string[]): string {
+  return lista.find((m) => normalizar(m) === normalizar(MOTIVO_ANULAR_DEFECTO)) ?? lista[0] ?? "";
+}
+
 export interface PedidoAMarcar {
   id: string;
   comanda: string;
@@ -102,13 +112,19 @@ export default function MarcarNoGestionadoModal({
 
   async function abrirAnular() {
     setAnulando(true);
-    // Sin preselección: el motivo de anulación lo debe elegir quien anula.
-    setMotivoAnular("");
-    if (motivosAnular.length) return;
+    if (motivosAnular.length) {
+      setMotivoAnular(motivoAnularPorDefecto(motivosAnular));
+      return;
+    }
     const lista = await listarMotivos({ tipo: "anular", soloActivos: true })
       .then((m) => m.map((x) => x.nombre))
       .catch(() => [] as string[]);
-    setMotivosAnular(lista.length ? lista : ["Pedido no gestionado al cierre del turno"]);
+    // "Sin Gestión del Dia" siempre está disponible y va de primero.
+    const conDefecto = lista.some((m) => normalizar(m) === normalizar(MOTIVO_ANULAR_DEFECTO))
+      ? lista
+      : [MOTIVO_ANULAR_DEFECTO, ...lista];
+    setMotivosAnular(conDefecto);
+    setMotivoAnular(motivoAnularPorDefecto(conDefecto));
   }
 
   async function guardar() {

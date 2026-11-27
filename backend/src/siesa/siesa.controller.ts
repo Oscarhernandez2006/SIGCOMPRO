@@ -26,6 +26,13 @@ export class SiesaController {
     return this.siesa.detalle(pedidoId);
   }
 
+  /** Busca en Siesa (TPV) la factura digitada en Despacho y devuelve su valor. */
+  @Get('factura-tpv')
+  @Permisos('despacho', 'credito_empleados')
+  facturaTpv(@Query('pedido_id') pedidoId: string, @Query('numero') numero: string) {
+    return this.siesa.consultarFacturaTpv(pedidoId, numero);
+  }
+
   /** Trae ya de Siesa los días del rango que faltan (máx. 3 por llamada). */
   @Post('sincronizar')
   sincronizar(@Query('desde') desde: string, @Query('hasta') hasta: string) {

@@ -17,6 +17,7 @@ import {
   guardarPedidoApi,
   descargarExcelDespacho,
   enviarADrivinApi,
+  consultarFacturaTpvApi,
   obtenerComprobanteApi,
   analizarComprobanteApi,
   requiereComprobantePago,
@@ -458,6 +459,8 @@ export default function DespachoPage() {
   // Factura en edición: se guarda al salir del campo. Guardar por tecla hacía que
   // el refresco (cada 7 s) trajera un valor a medio escribir y lo pisara.
   const [facturaBorrador, setFacturaBorrador] = useState<Record<string, { numero?: string; valor?: string }>>({});
+  const [facturaConsultando, setFacturaConsultando] = useState<Record<string, boolean>>({});
+  const [facturaError, setFacturaError] = useState<Record<string, string>>({});
   // Personal de despacho (porcionadores/domiciliarios) por id de punto de venta.
   // Cada pedido usa el de su propio punto (configurable en /admin/configuracion).
   const [personalPorPunto, setPersonalPorPunto] = useState<
@@ -1206,23 +1209,31 @@ export default function DespachoPage() {
     });
   };
 
-  /** Guarda el número o el valor de factura escrito (una sola vez, al salir del campo). */
-  const confirmarFactura = (id: string, campo: "numero" | "valor") => {
-    const b = facturaBorrador[id];
-    const texto = b?.[campo];
-    if (texto === undefined) return;
-    setFacturaBorrador((prev) => {
-      const { [campo]: _quitado, ...resto } = prev[id] ?? {};
-      void _quitado;
-      return { ...prev, [id]: resto };
-    });
-    const m = meta[id] ?? {};
-    if (campo === "numero") {
-      const numero = texto.trim();
-      if (numero !== (m.facturaNumero ?? "")) actualizarMeta(id, { facturaNumero: numero });
-    } else {
-      const valor = texto === "" ? undefined : Number(texto);
-      if (valor !== m.facturaValor) actualizarMeta(id, { facturaValor: valor });
+  /**
+   * Facturar con el número digitado: consulta la factura en Siesa (CIA + C.O.
+   * del punto), guarda número y valor reales y pasa el pedido a Facturado.
+   */
+  const facturarConNumero = async (id: string) => {
+    const numero = (facturaBorrador[id]?.numero ?? "").trim();
+    if (!numero || facturaConsultando[id]) return;
+    setFacturaError((prev) => ({ ...prev, [id]: "" }));
+    setFacturaConsultando((prev) => ({ ...prev, [id]: true }));
+    try {
+      const f = await consultarFacturaTpvApi(id, numero);
+      setFacturaBorrador((prev) => {
+        const { numero: _quitado, ...resto } = prev[id] ?? {};
+        void _quitado;
+        return { ...prev, [id]: resto };
+      });
+      actualizarMeta(id, { facturaNumero: f.numero, facturaValor: f.valor });
+      await cambiarEstado(id, "Facturado", { factura: { numero: f.numero, valor: f.valor } });
+    } catch (e) {
+      setFacturaError((prev) => ({
+        ...prev,
+        [id]: e instanceof Error && e.message ? e.message : "No se pudo consultar la factura.",
+      }));
+    } finally {
+      setFacturaConsultando((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -1278,7 +1289,7 @@ export default function DespachoPage() {
   const cambiarEstado = async (
     id: string,
     estado: Pedido["estado"],
-    opts?: { domiManual?: string },
+    opts?: { domiManual?: string; factura?: { numero: string; valor: number } },
   ) => {
     if (!puedeEstado(estado)) {
       sinPermiso.mostrar();
@@ -1289,7 +1300,13 @@ export default function DespachoPage() {
     // botones ya lo validan). Evita pedidos "facturados/despachados" sin
     // porcionador, factura o domiciliario. No aplica al REVERSAR a estados
     // anteriores (solo se exige al colocar Facturado/Despachado).
-    const mm = meta[id] ?? {};
+    // `opts.factura` trae la factura recién consultada (la meta aún no se re-renderizó).
+    const mm: DespachoMeta = {
+      ...(meta[id] ?? {}),
+      ...(opts?.factura
+        ? { facturaNumero: opts.factura.numero, facturaValor: opts.factura.valor }
+        : {}),
+    };
     const n = norm(estado);
     const tieneFactura =
       Boolean(mm.facturaNumero?.trim()) &&
@@ -2798,41 +2815,44 @@ export default function DespachoPage() {
                       )}
                     </td>
 
-                    {/* Factura: número y valor (puede diferir del pedido) */}
+                    {/* Factura: se digita el número y con Enter se consulta en Siesa
+                        (valor real) y el pedido pasa a Facturado. */}
                     <td className="relative h-full border-r border-brand-brown/10 px-3 py-3 align-top">
-                      <div className="flex w-full flex-col gap-1.5 pb-12">
+                      <div className={`flex w-full flex-col gap-1.5 ${transferencia && !pagoConfirmado && !facturado && !despachado ? "pb-12" : ""}`}>
                         <input
                           type="text"
                           value={facturaBorrador[p.id]?.numero ?? m.facturaNumero ?? ""}
                           onChange={(ev) => {
-                            const v = ev.target.value;
+                            const v = ev.target.value.toUpperCase();
                             setFacturaBorrador((prev) => ({ ...prev, [p.id]: { ...prev[p.id], numero: v } }));
+                            if (facturaError[p.id]) setFacturaError((prev) => ({ ...prev, [p.id]: "" }));
                           }}
-                          onBlur={() => confirmarFactura(p.id, "numero")}
-                          onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
-                          disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
-                          placeholder="N° factura"
-                          title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}
-                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
-                        />
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={facturaBorrador[p.id]?.valor ?? (m.facturaValor != null ? String(m.facturaValor) : "")}
-                          onChange={(ev) => {
-                            const v = ev.target.value.replace(/\D/g, "");
-                            setFacturaBorrador((prev) => ({ ...prev, [p.id]: { ...prev[p.id], valor: v } }));
+                          onKeyDown={(ev) => {
+                            if (ev.key === "Enter") {
+                              ev.preventDefault();
+                              void facturarConNumero(p.id);
+                            }
                           }}
-                          onBlur={() => confirmarFactura(p.id, "valor")}
-                          onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
-                          disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado")}
-                          placeholder="Valor factura"
-                          title={!hayPorcionador ? "Asigna un porcionador en el alistamiento antes de facturar" : undefined}
-                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
+                          disabled={anulado || facturado || !alistado || !hayPorcionador || (transferencia && !pagoConfirmado) || !puedeEstado("Facturado") || Boolean(facturaConsultando[p.id])}
+                          placeholder="N° factura + Enter"
+                          title={
+                            !hayPorcionador
+                              ? "Asigna un porcionador en el alistamiento antes de facturar"
+                              : !alistado && !facturado
+                                ? "Debes terminar el alistamiento antes de facturar"
+                                : "Digita el número de la factura y presiona Enter para facturar"
+                          }
+                          className="rounded-lg border border-brand-brown/15 bg-white px-2.5 py-1.5 font-mono text-xs font-medium text-brand-black outline-none focus:ring-1 focus:ring-brand-amber disabled:opacity-50"
                         />
+                        {facturaConsultando[p.id] && (
+                          <p className="text-[11px] font-medium text-brand-black/70">Consultando factura…</p>
+                        )}
+                        {facturaError[p.id] && (
+                          <p className="text-[11px] font-semibold leading-snug text-red-600">{facturaError[p.id]}</p>
+                        )}
                         {typeof m.facturaValor === "number" && m.facturaValor > 0 && (
                           <p className="text-[11px] font-semibold text-brand-wine">
-                            Valor factura: {fmtMoneda(m.facturaValor)}
+                            Total Factura: {fmtMoneda(m.facturaValor)}
                           </p>
                         )}
                         {m.facturadoPor && (
@@ -2937,8 +2957,8 @@ export default function DespachoPage() {
                           </div>
                         )}
                       </div>
-                      <div className="absolute inset-x-3 bottom-3">
-                        {transferencia && !pagoConfirmado && !facturado && !despachado ? (
+                      {transferencia && !pagoConfirmado && !facturado && !despachado && (
+                        <div className="absolute inset-x-3 bottom-3">
                           <button
                             onClick={() =>
                               actualizarMeta(p.id, { pagoConfirmado: new Date().toISOString() })
@@ -2949,25 +2969,8 @@ export default function DespachoPage() {
                           >
                             Confirmar transferencia
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => cambiarEstado(p.id, "Facturado")}
-                            disabled={anulado || facturado || !alistado || !hayPorcionador || !puedeEstado("Facturado")}
-                            title={
-                              !hayPorcionador
-                                ? "Asigna un porcionador en el alistamiento antes de facturar"
-                                : !alistado && !facturado
-                                  ? "Debes terminar el alistamiento antes de facturar"
-                                  : !m.facturaNumero?.trim() || !(typeof m.facturaValor === "number" && m.facturaValor > 0)
-                                      ? "Ingresa el número y el valor de la factura para facturar"
-                                      : "Marcar el pedido como facturado"
-                            }
-                            className={`w-full whitespace-nowrap rounded-lg bg-brand-amber px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-amber/90 disabled:opacity-40 ${puedeEstado("Facturado") ? "" : "opacity-50"}`}
-                          >
-                            Facturado
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </td>
 
                     {/* Domiciliario: al asignar pasa a Despachado */}

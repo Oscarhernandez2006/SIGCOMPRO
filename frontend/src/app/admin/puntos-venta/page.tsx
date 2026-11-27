@@ -39,6 +39,8 @@ interface FormState {
   drivin: boolean;
   drivin_schema_code: string;
   drivin_localidad: string;
+  centro_operacion: string;
+  compania: string;
   activo: boolean;
 }
 
@@ -55,6 +57,8 @@ const FORM_VACIO: FormState = {
   drivin: false,
   drivin_schema_code: "",
   drivin_localidad: "",
+  centro_operacion: "",
+  compania: "4",
   activo: true,
 };
 
@@ -133,6 +137,8 @@ export default function AdminPuntosVentaPage() {
       drivin: p.drivin ?? false,
       drivin_schema_code: p.drivin_schema_code ?? "",
       drivin_localidad: p.drivin_localidad ?? "",
+      centro_operacion: p.centro_operacion ?? "",
+      compania: p.compania ?? "",
       activo: p.activo,
     });
     setErrorForm(null);
@@ -166,6 +172,8 @@ export default function AdminPuntosVentaPage() {
         drivin: form.drivin,
         drivin_schema_code: form.drivin ? form.drivin_schema_code.trim() : "",
         drivin_localidad: form.drivin ? form.drivin_localidad.trim() : "",
+        centro_operacion: form.centro_operacion.trim(),
+        compania: form.compania.trim(),
         activo: form.activo,
       };
       if (editando) {
@@ -477,6 +485,28 @@ export default function AdminPuntosVentaPage() {
                       value={form.ciudad}
                       onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
                       className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Centro de operación (C.O.)</label>
+                    <input
+                      type="text"
+                      value={form.centro_operacion}
+                      onChange={(e) => setForm({ ...form, centro_operacion: e.target.value })}
+                      placeholder="Ej. 405"
+                      maxLength={20}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 font-mono text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-brand-brown">Compañía (CIA)</label>
+                    <input
+                      type="text"
+                      value={form.compania}
+                      onChange={(e) => setForm({ ...form, compania: e.target.value })}
+                      placeholder="Ej. 4"
+                      maxLength={20}
+                      className="w-full rounded-xl border border-brand-brown/15 bg-brand-cream-soft px-3 py-2.5 font-mono text-brand-black outline-none transition focus:border-brand-amber focus:ring-2 focus:ring-brand-amber/30"
                     />
                   </div>
                   <div className="col-span-2">

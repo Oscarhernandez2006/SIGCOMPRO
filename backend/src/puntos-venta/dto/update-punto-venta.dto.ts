@@ -99,6 +99,16 @@ export class UpdatePuntoVentaDto {
   drivin_localidad?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  centro_operacion?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  compania?: string;
+
+  @IsOptional()
   @IsBoolean()
   activo?: boolean;
 }

@@ -38,7 +38,10 @@ export type DemoNovedad =
   | "permiso-productos"
   | "boton-extension"
   | "rechazados-historicos"
-  | "estado-alerta-despacho";
+  | "estado-alerta-despacho"
+  | "factura-siesa"
+  | "co-cia-puntos"
+  | "motivo-sin-gestion";
 
 export interface Novedad {
   id: string;
@@ -495,6 +498,48 @@ export const NOVEDADES: VersionNovedades[] = [
           "Así se ve de inmediato qué falta para despachar los pedidos vencidos.",
         ],
         demo: "estado-alerta-despacho",
+      },
+    ],
+  },
+  {
+    version: "2026-11-27",
+    fecha: "27 de noviembre de 2026",
+    novedades: [
+      {
+        id: "factura-siesa",
+        modulo: "Despacho",
+        titulo: "Facturar con el número: el valor llega de Siesa",
+        resumen: "Se digita el número de la factura, Enter, y SIGCOMPRO trae el valor real y factura el pedido.",
+        puntos: [
+          "En Facturación escribe el número de la factura (933C10585 o solo el consecutivo 10585) y presiona Enter.",
+          "SIGCOMPRO la busca en Siesa con la CIA y el C.O. del punto y muestra debajo el «Total Factura».",
+          "El pedido pasa solo a Facturado: ya no se digita el valor ni hay botón «Facturado».",
+        ],
+        nota: "Si la factura no existe, está anulada o ya está en otro pedido, sale el aviso en rojo y no se factura.",
+        demo: "factura-siesa",
+      },
+      {
+        id: "co-cia-puntos",
+        modulo: "Puntos de venta",
+        titulo: "C.O. y CIA de cada punto de venta",
+        resumen: "Cada punto guarda su Centro de operación y su Compañía de Siesa.",
+        puntos: [
+          "Nuevos campos «Centro de operación (C.O.)» y «Compañía (CIA)» al crear o editar un punto.",
+          "Ya quedaron cargados los 15 puntos (CIA 4, 6 y 7).",
+          "Con estos datos Despacho consulta la factura correcta en Siesa.",
+        ],
+        demo: "co-cia-puntos",
+      },
+      {
+        id: "motivo-sin-gestion",
+        modulo: "Despacho",
+        titulo: "«Sin Gestión del Dia» viene seleccionado al anular",
+        resumen: "Al anular un pedido no gestionado, el motivo de anulación ya aparece elegido.",
+        puntos: [
+          "Al activar «Anular pedido», el motivo «Sin Gestión del Dia» queda seleccionado de primero.",
+          "Si aplica otro motivo, se puede cambiar en la lista.",
+        ],
+        demo: "motivo-sin-gestion",
       },
     ],
   },

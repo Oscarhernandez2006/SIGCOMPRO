@@ -37,6 +37,10 @@ export interface PuntoVentaRow {
   drivin_schema_code: string | null;
   /** Localidad/flota de Drivin ("Domiciliarios PDV <localidad>") para BAJAR domiciliarios. */
   drivin_localidad: string | null;
+  /** Centro de operación (C.O.) del punto en el ERP, ej. "405". */
+  centro_operacion: string | null;
+  /** Compañía (CIA) a la que pertenece el punto en el ERP, ej. "4". */
+  compania: string | null;
   activo: boolean;
   creado_en: string;
 }
@@ -46,7 +50,7 @@ export interface PuntoVentaConUsuarios extends PuntoVentaRow {
 }
 
 const COLUMNS =
-  'id, nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, activo, creado_en';
+  'id, nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, centro_operacion, compania, activo, creado_en';
 
 @Injectable()
 export class PuntosVentaService implements OnModuleInit {
@@ -116,6 +120,23 @@ export class PuntosVentaService implements OnModuleInit {
        WHERE drivin_schema_code IS NULL
          AND substring(codigo from '^[0-9]+') IN ('1','2','3','4','5','6','7')`,
     );
+    // Centro de operación (C.O.) y compañía (CIA) del ERP por punto.
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS centro_operacion text`,
+    );
+    await this.pool.query(
+      `ALTER TABLE puntos_venta ADD COLUMN IF NOT EXISTS compania text`,
+    );
+    // Semilla única de C.O./CIA conocidos; no pisa valores ya editados.
+    await this.pool.query(
+      `UPDATE puntos_venta p SET centro_operacion = m.co, compania = COALESCE(p.compania, m.cia)
+       FROM (VALUES (12, '402', '4'), (10, '403', '4'), (3, '405', '4'), (9, '406', '4'),
+                    (2, '407', '4'), (15, '409', '4'), (14, '412', '4'), (1, '413', '4'),
+                    (8, '414', '4'), (13, '415', '4'),
+                    (11, '603', '6'), (4, '605', '6'), (5, '606', '6'),
+                    (7, '701', '7'), (6, '702', '7')) AS m(id, co, cia)
+       WHERE p.id = m.id AND p.centro_operacion IS NULL`,
+    );
   }
 
   /** Lista todos los puntos de venta con su número de usuarios asignados. */
@@ -125,6 +146,7 @@ export class PuntosVentaService implements OnModuleInit {
               p.barrio, p.ciudad, p.lat, p.lng, p.dom_km_base, p.dom_valor_base, p.dom_valor_km,
               p.dom_gratis_desde, p.dom_gratis_margen,
               p.drivin, p.drivin_schema_code, p.drivin_localidad,
+              p.centro_operacion, p.compania,
               p.activo, p.creado_en,
               COUNT(upv.usuario_id)::int AS usuarios
        FROM puntos_venta p
@@ -187,8 +209,8 @@ export class PuntosVentaService implements OnModuleInit {
       }
     }
     const res = await this.pool.query<PuntoVentaRow>(
-      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, activo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      `INSERT INTO puntos_venta (nombre, codigo, direccion, telefono, lista_precio, barrio, ciudad, lat, lng, dom_km_base, dom_valor_base, dom_valor_km, dom_gratis_desde, dom_gratis_margen, drivin, drivin_schema_code, drivin_localidad, centro_operacion, compania, activo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING ${COLUMNS}`,
       [
         dto.nombre.trim(),
@@ -208,6 +230,8 @@ export class PuntosVentaService implements OnModuleInit {
         dto.drivin ?? false,
         dto.drivin_schema_code?.trim() || null,
         dto.drivin_localidad?.trim() || null,
+        dto.centro_operacion?.trim() || null,
+        dto.compania?.trim() || null,
         dto.activo ?? true,
       ],
     );
@@ -298,6 +322,14 @@ export class PuntosVentaService implements OnModuleInit {
     if (dto.drivin_localidad !== undefined) {
       sets.push(`drivin_localidad = $${i++}`);
       valores.push(dto.drivin_localidad.trim() || null);
+    }
+    if (dto.centro_operacion !== undefined) {
+      sets.push(`centro_operacion = $${i++}`);
+      valores.push(dto.centro_operacion.trim() || null);
+    }
+    if (dto.compania !== undefined) {
+      sets.push(`compania = $${i++}`);
+      valores.push(dto.compania.trim() || null);
     }
     if (dto.activo !== undefined) {
       sets.push(`activo = $${i++}`);

@@ -36,6 +36,9 @@ import permisoProductos from "./demos/permiso-productos";
 import botonExtension from "./demos/boton-extension";
 import rechazadosHistoricos from "./demos/rechazados-historicos";
 import estadoAlertaDespacho from "./demos/estado-alerta-despacho";
+import facturaSiesa from "./demos/factura-siesa";
+import coCiaPuntos from "./demos/co-cia-puntos";
+import motivoSinGestion from "./demos/motivo-sin-gestion";
 
 const DEMOS: Record<DemoNovedad, DemoDef> = {
   fundacion,
@@ -68,6 +71,9 @@ const DEMOS: Record<DemoNovedad, DemoDef> = {
   "boton-extension": botonExtension,
   "rechazados-historicos": rechazadosHistoricos,
   "estado-alerta-despacho": estadoAlertaDespacho,
+  "factura-siesa": facturaSiesa,
+  "co-cia-puntos": coCiaPuntos,
+  "motivo-sin-gestion": motivoSinGestion,
 };
 
 type Item = Novedad & { version: string; fecha: string };

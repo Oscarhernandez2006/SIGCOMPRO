@@ -478,4 +478,103 @@ export class SiesaService implements OnModuleInit {
     for (const d of faltan) relacionadas += (await this.sincronizarDia(d)).relacionadas;
     return { dias: faltan, relacionadas };
   }
+
+  /**
+   * Consulta en Siesa (TPV) una factura por número, con la CIA y el C.O. del
+   * punto del pedido, para facturar desde Despacho con el valor real. Acepta el
+   * número completo (933C10565) o solo el consecutivo (10565); en ese caso, si
+   * hay varias cajas con ese consecutivo, desempata por el NIT del cliente.
+   */
+  async consultarFacturaTpv(pedidoId: string, numeroIn: string) {
+    const numero = String(numeroIn ?? '').trim().toUpperCase();
+    if (!pedidoId || !numero) throw new BadRequestException('Indica el pedido y el número de factura.');
+    if (!/^[A-Z0-9-]{1,30}$/.test(numero)) throw new BadRequestException('Número de factura inválido.');
+    if (!this.token) throw new BadRequestException('Falta SIESA_API_TOKEN en el backend.');
+
+    const ped = await this.pool.query<{
+      punto_id: string;
+      nit: string | null;
+      compania: string | null;
+      centro_operacion: string | null;
+      nombre: string | null;
+    }>(
+      `SELECT p.punto_id, p.data->'cliente'->>'nit_cedula' AS nit,
+              pv.compania, pv.centro_operacion, pv.nombre
+         FROM pedidos p LEFT JOIN puntos_venta pv ON pv.id::text = p.punto_id
+        WHERE p.id = $1`,
+      [pedidoId],
+    );
+    const pv = ped.rows[0];
+    if (!pv) throw new NotFoundException('Pedido no encontrado.');
+    const cia = pv.compania?.trim();
+    const co = pv.centro_operacion?.trim();
+    if (!cia || !co) {
+      throw new BadRequestException(
+        `El punto ${pv.nombre ?? pv.punto_id} no tiene C.O. y CIA configurados (Admin → Puntos de venta).`,
+      );
+    }
+
+    const url = new URL(`${this.apiUrl}/ventas/facturas-tpv-sigcompro`);
+    url.searchParams.set('cia', cia);
+    url.searchParams.set('co', co);
+    url.searchParams.set('numero', numero);
+    url.searchParams.set('token', this.token);
+    let filas: Array<Record<string, unknown>>;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as { data?: Array<Record<string, unknown>> };
+      filas = Array.isArray(j.data) ? j.data : [];
+    } catch (e) {
+      this.logger.warn(`Consulta de factura ${numero} (CO ${co}) falló: ${e instanceof Error ? e.message : e}`);
+      throw new BadRequestException('No se pudo consultar la factura en Siesa. Intenta de nuevo.');
+    }
+
+    const num = (f: Record<string, unknown>) => String(f.NUMERO_FACTURA ?? '').trim().toUpperCase();
+    let candidatas = filas.filter((f) => num(f) === numero);
+    if (!candidatas.length) candidatas = filas;
+    if (candidatas.length > 1) {
+      const nit = nitBase(pv.nit);
+      const delCliente = nit ? candidatas.filter((f) => nitBase(f.NIT_CLIENTE) === nit) : [];
+      if (delCliente.length === 1) candidatas = delCliente;
+    }
+    if (!candidatas.length) {
+      throw new NotFoundException(`No se encontró la factura ${numero} en el C.O. ${co}.`);
+    }
+    if (candidatas.length > 1) {
+      throw new BadRequestException(
+        `Hay ${candidatas.length} facturas con ese consecutivo (${candidatas.map(num).join(', ')}). Escribe el número completo.`,
+      );
+    }
+    const f = candidatas[0];
+    const numeroFinal = num(f) || numero;
+    const estado = String(f.ESTADO ?? '');
+    if (/anulad/i.test(estado)) throw new BadRequestException(`La factura ${numeroFinal} está anulada en Siesa.`);
+    const valor = Math.round(Number(f.VALOR_TOTAL) || 0);
+    if (valor <= 0) throw new BadRequestException(`La factura ${numeroFinal} no tiene valor en Siesa.`);
+
+    // Una factura solo puede respaldar un pedido.
+    const usada = await this.pool.query<{ consecutivo: number }>(
+      `SELECT consecutivo FROM pedidos
+        WHERE id <> $1 AND anulado = false AND upper(trim(meta->>'facturaNumero')) = $2
+        LIMIT 1`,
+      [pedidoId, numeroFinal],
+    );
+    if (usada.rows.length) {
+      throw new BadRequestException(
+        `La factura ${numeroFinal} ya está registrada en el pedido #${usada.rows[0].consecutivo}.`,
+      );
+    }
+
+    return {
+      numero: numeroFinal,
+      valor,
+      estado,
+      co: String(f.CO ?? co),
+      pdv: String(f.PDV ?? ''),
+      nit: String(f.NIT_CLIENTE ?? ''),
+      cliente: String(f.CLIENTE ?? ''),
+      fechaHora: (f.FECHA_HORA as string | undefined) ?? null,
+    };
+  }
 }

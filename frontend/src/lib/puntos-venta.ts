@@ -27,6 +27,10 @@ export interface PuntoVenta {
   drivin_schema_code: string | null;
   /** Localidad/flota de Drivin ("Domiciliarios PDV <localidad>") para BAJAR. */
   drivin_localidad: string | null;
+  /** Centro de operación (C.O.) en el ERP, ej. "405". */
+  centro_operacion: string | null;
+  /** Compañía (CIA) en el ERP, ej. "4". */
+  compania: string | null;
   activo: boolean;
   creado_en: string;
   /** Número de usuarios asignados (solo en el listado admin). */
@@ -51,6 +55,8 @@ export interface PuntoVentaInput {
   drivin?: boolean;
   drivin_schema_code?: string;
   drivin_localidad?: string;
+  centro_operacion?: string;
+  compania?: string;
   activo?: boolean;
 }
 
