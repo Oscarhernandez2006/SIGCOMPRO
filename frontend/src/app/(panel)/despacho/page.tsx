@@ -3703,19 +3703,19 @@ export default function DespachoPage() {
             onClick={() => !cargando && setSelectorFactura(null)}
           >
             <div
-              className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl"
+              className="w-fit max-w-[95vw] rounded-2xl bg-white p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <p className="text-[11px] font-bold uppercase tracking-wider text-brand-amber">Facturación</p>
               <h3 className="font-serif text-xl font-bold text-brand-wine">
                 Escoge la factura {selectorFactura.consecutivo}
               </h3>
-              <p className="mt-1 text-sm text-brand-black/70">
+              <p className="mt-1 whitespace-nowrap text-sm text-brand-black/70">
                 Hay {selectorFactura.opciones.length} facturas con ese consecutivo en Siesa
                 {ped ? <> · pedido <b>{ped.comanda}</b> de <b>{ped.cliente?.nombre}</b></> : null}.
               </p>
-              <div className="mt-4 overflow-hidden rounded-xl border border-brand-brown/15">
-                <table className="w-full text-sm">
+              <div className="mt-4 overflow-x-auto rounded-xl border border-brand-brown/15">
+                <table className="w-full whitespace-nowrap text-sm">
                   <thead className="bg-brand-cream/60 text-left text-[11px] uppercase tracking-wider text-brand-black/60">
                     <tr>
                       <th className="px-3 py-2">Factura</th>
@@ -3754,7 +3754,7 @@ export default function DespachoPage() {
                           <td className="whitespace-nowrap px-3 py-2 text-xs">
                             {o.fechaHora ? `${o.fechaHora.slice(8, 10)}/${o.fechaHora.slice(5, 7)}/${o.fechaHora.slice(0, 4)} ${o.fechaHora.slice(11, 16)}` : "—"}
                           </td>
-                          <td className="px-3 py-2 text-right font-semibold">{fmtMoneda(o.valor)}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{fmtMoneda(o.valor)}</td>
                           <td className="px-3 py-2 text-right">
                             {bloqueo ? (
                               <span className="text-xs font-semibold text-red-600">{bloqueo}</span>
