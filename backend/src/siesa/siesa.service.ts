@@ -533,18 +533,32 @@ export class SiesaService implements OnModuleInit {
     const num = (f: Record<string, unknown>) => String(f.NUMERO_FACTURA ?? '').trim().toUpperCase();
     let candidatas = filas.filter((f) => num(f) === numero);
     if (!candidatas.length) candidatas = filas;
-    if (candidatas.length > 1) {
-      const nit = nitBase(pv.nit);
-      const delCliente = nit ? candidatas.filter((f) => nitBase(f.NIT_CLIENTE) === nit) : [];
-      if (delCliente.length === 1) candidatas = delCliente;
-    }
     if (!candidatas.length) {
       throw new NotFoundException(`No se encontró la factura ${numero} en el C.O. ${co}.`);
     }
+    // Solo el consecutivo y hay una factura por caja: el usuario escoge cuál usar.
     if (candidatas.length > 1) {
-      throw new BadRequestException(
-        `Hay ${candidatas.length} facturas con ese consecutivo (${candidatas.map(num).join(', ')}). Escribe el número completo.`,
+      const numeros = candidatas.map(num);
+      const usadas = await this.pool.query<{ numero: string; consecutivo: number }>(
+        `SELECT upper(trim(meta->>'facturaNumero')) AS numero, consecutivo FROM pedidos
+          WHERE id <> $1 AND anulado = false AND upper(trim(meta->>'facturaNumero')) = ANY($2::text[])`,
+        [pedidoId, numeros],
       );
+      const usadaEn = new Map(usadas.rows.map((r) => [r.numero, r.consecutivo]));
+      const nit = nitBase(pv.nit);
+      return {
+        opciones: candidatas.map((f) => ({
+          numero: num(f),
+          valor: Math.round(Number(f.VALOR_TOTAL) || 0),
+          estado: String(f.ESTADO ?? ''),
+          tpv: String(f.TPV ?? ''),
+          nit: String(f.NIT_CLIENTE ?? ''),
+          cliente: String(f.CLIENTE ?? ''),
+          fechaHora: (f.FECHA_HORA as string | undefined) ?? null,
+          delCliente: Boolean(nit) && nitBase(f.NIT_CLIENTE) === nit,
+          usadaEnPedido: usadaEn.get(num(f)) ?? null,
+        })),
+      };
     }
     const f = candidatas[0];
     const numeroFinal = num(f) || numero;

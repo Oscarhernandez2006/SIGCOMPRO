@@ -18,6 +18,7 @@ import {
   descargarExcelDespacho,
   enviarADrivinApi,
   consultarFacturaTpvApi,
+  type OpcionFacturaTpv,
   obtenerComprobanteApi,
   analizarComprobanteApi,
   requiereComprobantePago,
@@ -461,6 +462,11 @@ export default function DespachoPage() {
   const [facturaBorrador, setFacturaBorrador] = useState<Record<string, { numero?: string; valor?: string }>>({});
   const [facturaConsultando, setFacturaConsultando] = useState<Record<string, boolean>>({});
   const [facturaError, setFacturaError] = useState<Record<string, string>>({});
+  const [selectorFactura, setSelectorFactura] = useState<{
+    pedidoId: string;
+    consecutivo: string;
+    opciones: OpcionFacturaTpv[];
+  } | null>(null);
   // Personal de despacho (porcionadores/domiciliarios) por id de punto de venta.
   // Cada pedido usa el de su propio punto (configurable en /admin/configuracion).
   const [personalPorPunto, setPersonalPorPunto] = useState<
@@ -1213,13 +1219,19 @@ export default function DespachoPage() {
    * Facturar con el número digitado: consulta la factura en Siesa (CIA + C.O.
    * del punto), guarda número y valor reales y pasa el pedido a Facturado.
    */
-  const facturarConNumero = async (id: string) => {
-    const numero = (facturaBorrador[id]?.numero ?? "").trim();
+  const facturarConNumero = async (id: string, numeroElegido?: string) => {
+    const numero = (numeroElegido ?? facturaBorrador[id]?.numero ?? "").trim();
     if (!numero || facturaConsultando[id]) return;
     setFacturaError((prev) => ({ ...prev, [id]: "" }));
     setFacturaConsultando((prev) => ({ ...prev, [id]: true }));
     try {
-      const f = await consultarFacturaTpvApi(id, numero);
+      const r = await consultarFacturaTpvApi(id, numero);
+      if ("opciones" in r) {
+        setSelectorFactura({ pedidoId: id, consecutivo: numero, opciones: r.opciones });
+        return;
+      }
+      const f = r;
+      setSelectorFactura(null);
       setFacturaBorrador((prev) => {
         const { numero: _quitado, ...resto } = prev[id] ?? {};
         void _quitado;
@@ -3680,6 +3692,103 @@ export default function DespachoPage() {
           onCerrar={() => setModalReplica(null)}
         />
       )}
+      {/* Varias facturas con el mismo consecutivo (una por caja): escoger cuál usar. */}
+      {selectorFactura && (() => {
+        const ped = pedidos.find((x) => x.id === selectorFactura.pedidoId);
+        const cargando = Boolean(facturaConsultando[selectorFactura.pedidoId]);
+        const error = facturaError[selectorFactura.pedidoId];
+        return (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/50 p-4"
+            onClick={() => !cargando && setSelectorFactura(null)}
+          >
+            <div
+              className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-amber">Facturación</p>
+              <h3 className="font-serif text-xl font-bold text-brand-wine">
+                Escoge la factura {selectorFactura.consecutivo}
+              </h3>
+              <p className="mt-1 text-sm text-brand-black/70">
+                Hay {selectorFactura.opciones.length} facturas con ese consecutivo en Siesa
+                {ped ? <> · pedido <b>{ped.comanda}</b> de <b>{ped.cliente?.nombre}</b></> : null}.
+              </p>
+              <div className="mt-4 overflow-hidden rounded-xl border border-brand-brown/15">
+                <table className="w-full text-sm">
+                  <thead className="bg-brand-cream/60 text-left text-[11px] uppercase tracking-wider text-brand-black/60">
+                    <tr>
+                      <th className="px-3 py-2">Factura</th>
+                      <th className="px-3 py-2">Cliente</th>
+                      <th className="px-3 py-2">NIT</th>
+                      <th className="px-3 py-2">Fecha</th>
+                      <th className="px-3 py-2 text-right">Valor</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectorFactura.opciones.map((o) => {
+                      const anulada = /anulad/i.test(o.estado);
+                      const bloqueo = anulada
+                        ? "Anulada"
+                        : o.usadaEnPedido != null
+                          ? `Usada en #${o.usadaEnPedido}`
+                          : o.valor <= 0
+                            ? "Sin valor"
+                            : "";
+                      return (
+                        <tr
+                          key={o.numero}
+                          className={`border-t border-brand-brown/10 ${o.delCliente ? "bg-green-50" : ""} ${bloqueo ? "opacity-50" : ""}`}
+                        >
+                          <td className="px-3 py-2 font-mono font-semibold">{o.numero}</td>
+                          <td className="px-3 py-2">
+                            {o.cliente}
+                            {o.delCliente && (
+                              <span className="ml-2 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                Cliente del pedido
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">{o.nit}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-xs">
+                            {o.fechaHora ? `${o.fechaHora.slice(8, 10)}/${o.fechaHora.slice(5, 7)}/${o.fechaHora.slice(0, 4)} ${o.fechaHora.slice(11, 16)}` : "—"}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold">{fmtMoneda(o.valor)}</td>
+                          <td className="px-3 py-2 text-right">
+                            {bloqueo ? (
+                              <span className="text-xs font-semibold text-red-600">{bloqueo}</span>
+                            ) : (
+                              <button
+                                disabled={cargando}
+                                onClick={() => void facturarConNumero(selectorFactura.pedidoId, o.numero)}
+                                className="rounded-lg bg-brand-wine px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-wine/90 disabled:opacity-50"
+                              >
+                                Usar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {cargando && <p className="mt-3 text-sm text-brand-black/60">Facturando…</p>}
+              {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
+              <div className="mt-4 flex justify-end">
+                <button
+                  disabled={cargando}
+                  onClick={() => setSelectorFactura(null)}
+                  className="rounded-xl border border-brand-brown/20 px-4 py-2 text-sm font-semibold text-brand-black transition hover:bg-brand-cream disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Resultado del envío a Drivin al despachar (modal central). */}
       {drivinModal && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-brand-black/50 p-4">

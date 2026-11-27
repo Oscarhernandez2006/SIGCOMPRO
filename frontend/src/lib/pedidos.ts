@@ -446,10 +446,31 @@ export interface FacturaTpv {
   fechaHora: string | null;
 }
 
-/** Busca en Siesa la factura digitada (con la CIA y el C.O. del punto del pedido). */
-export function consultarFacturaTpvApi(pedidoId: string, numero: string): Promise<FacturaTpv> {
+/** Opción cuando el consecutivo coincide con varias facturas (una por caja/TPV). */
+export interface OpcionFacturaTpv {
+  numero: string;
+  valor: number;
+  estado: string;
+  tpv: string;
+  nit: string;
+  cliente: string;
+  fechaHora: string | null;
+  /** El NIT de la factura es el del cliente del pedido. */
+  delCliente: boolean;
+  /** Consecutivo del pedido que ya usa esta factura, si aplica. */
+  usadaEnPedido: number | null;
+}
+
+/**
+ * Busca en Siesa la factura digitada (con la CIA y el C.O. del punto del pedido).
+ * Si solo se digitó el consecutivo y hay varias, devuelve `{ opciones }` para escoger.
+ */
+export function consultarFacturaTpvApi(
+  pedidoId: string,
+  numero: string,
+): Promise<FacturaTpv | { opciones: OpcionFacturaTpv[] }> {
   const qs = new URLSearchParams({ pedido_id: pedidoId, numero });
-  return apiFetch<FacturaTpv>(`/siesa/factura-tpv?${qs}`);
+  return apiFetch(`/siesa/factura-tpv?${qs}`);
 }
 
 export function enviarADrivinApi(
